@@ -19,11 +19,14 @@
 // Equilíbrio (scripts/measure-mercado-equilibrio.mts): cada clube compra no
 // máximo 1 vez e vende no máximo 1 vez por janela; nenhum clube compra acima do
 // próprio melhor jogador (starBuyer: +2); estrela (88+) só pra tier 1; quem já
-// tem elenco de elite (top-5 ≥ 86) só repõe, não empilha; o núcleo de um clube
+// tem elenco de elite (top-5 ≥ 85) só repõe, não empilha, e nenhum negócio leva
+// um elenco ao patamar de elite (só a evolução dos jovens chega lá); o núcleo de um clube
 // em alta não está à venda. Quem perde a vaga vai pro mercado livre, onde os
 // clubes menores se reforçam — o talento circula nos dois sentidos.
 //
-// Puro e determinístico: só hashStr sobre (clube, jogador, split, janela).
+// Puro e determinístico: só hashStr sobre (clube, jogador, split, janela) —
+// salgado pela SEMENTE DO SAVE (`seed`, o mundo.seed da Carreira): cada Carreira
+// tem o seu mercado; sem seed, as chaves de sempre (medições e testes antigos).
 
 import type { Player, Role, TeamSeason } from '../../types';
 import type { ClubStrategy, MarketLoan, NeedReason } from './model';
@@ -43,6 +46,8 @@ const roleFits = (p: Player, role: Role) => p.role === role || p.role2 === role;
 const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const round10k = (v: number) => Math.round(v / 10_000) * 10_000;
+/** Chave de hash salgada pela semente do save (sem semente = a chave de sempre). */
+export const seeded = (seed: string | undefined, key: string): string => (seed ? `${seed}:${key}` : key);
 
 export function starters(t: Pick<TeamSeason, 'players'>): Player[] {
   return t.players.slice(0, 5);
@@ -65,7 +70,7 @@ export function mainCountryOf(t: Pick<TeamSeason, 'players'>): string | null {
 const MARKET_MULT: Record<string, number> = {
   sa: 1.5, ae: 1.3, us: 1.15, cn: 1.1, br: 1.1, de: 1.1, gb: 1.1, fr: 1.05, dk: 1.05, se: 1.05, ru: 1.0,
 };
-export interface BudgetCtx { rank: number; form: number; split: number }
+export interface BudgetCtx { rank: number; form: number; split: number; seed?: string }
 export function clubBudget(team: TeamSeason, ctx: BudgetCtx): number {
   const tier = aiTierOf(team);
   const base = tier === 1 ? 1_400_000 : tier === 2 ? 600_000 : 100_000 + Math.max(0, team.teamwork - 55) * 14_000;
@@ -73,7 +78,7 @@ export function clubBudget(team: TeamSeason, ctx: BudgetCtx): number {
   const rankBonus = r <= 5 ? 1_200_000 : r <= 10 ? 750_000 : r <= 20 ? 350_000 : r <= 40 ? 120_000 : 0;
   const prize = Math.min(600_000, 0.04 * team.players.reduce((a, p) => a + (EARNINGS[p.nick] ?? 0), 0));
   const market = MARKET_MULT[team.country] ?? 1;
-  const sponsor = 0.85 + (hashStr(`budget:${team.id}:${ctx.split}`) % 31) / 100; // 0.85..1.15
+  const sponsor = 0.85 + (hashStr(seeded(ctx.seed, `budget:${team.id}:${ctx.split}`)) % 31) / 100; // 0.85..1.15
   const formF = ctx.form < 40 ? 0.8 : ctx.form >= 55 ? 1.1 : 1;
   return round10k((base + rankBonus + prize) * market * sponsor * formF);
 }
@@ -90,14 +95,14 @@ export function rankClubs(teams: TeamSeason[], vrsOf?: (teamId: string) => numbe
 // ─── estratégia ─────────────────────────────────────────────────────────────
 const ACADEMY_RX = /academy|junior|young|youngsters|\bfe\b|\.a$|\bbee\b/i;
 export const SURVIVAL_BUDGET = 110_000;
-export interface StrategyCtx { budget: number; form: number; avgAge: number }
+export interface StrategyCtx { budget: number; form: number; avgAge: number; seed?: string }
 export function clubStrategy(team: TeamSeason, ctx: StrategyCtx): ClubStrategy {
   const tier = aiTierOf(team);
   if (ACADEMY_RX.test(team.team) || ACADEMY_RX.test(team.tag) || ctx.avgAge <= 21.5) return 'youth';
   if (ctx.budget < SURVIVAL_BUDGET || ctx.form < 30) return 'survival';
   if (tier === 1 && ctx.budget >= 2_400_000) return 'starBuyer';
   if (mainCountryOf(team)) return 'national';
-  if (tier >= 2 && hashStr(`moneyball:${team.id}`) % 3 === 0) return 'moneyball';
+  if (tier >= 2 && hashStr(seeded(ctx.seed, `moneyball:${team.id}`)) % 3 === 0) return 'moneyball';
   return 'balanced';
 }
 
@@ -129,15 +134,21 @@ export function clubNeeds(team: TeamSeason, ctx: NeedCtx): ClubNeed[] {
   const weakestBy = (ok: (p: Player) => boolean) => xi.filter((p) => ok(p) && movable(p))
     .sort((a, b) => ovr.get(a.id)! - ovr.get(b.id)! || byId(a, b))[0];
   const out: ClubNeed[] = [];
-  // buraco de função entre os 5. AWP é sempre rotulado na base: sem nenhum
+  // buraco de função entre os 5. No tier 1–2 o AWP é sempre rotulado: sem nenhum
   // titular que jogue de AWP (função ou awp ≥ 80) é URGENTE. IGL não: a base não
   // marca o IGL de metade das lines (ele joga como rifler), então falta de IGL
-  // rotulado é necessidade comum, que entra no sorteio da janela.
+  // rotulado é necessidade comum, que entra no sorteio da janela. Quem já chama
+  // (função/role2 IGL ou igl ≥ 70) cobre. No tier 3 a base quase nunca rotula o
+  // IGL (95 das 97 lines "sem IGL" são tier 3): lá a falta do rótulo é dado, não
+  // buraco — senão metade do mundo "precisa" de IGL toda janela e o mercado vira
+  // uma dança de IGLs (≈ 80% dos movimentos eram AWP/IGL).
   const awpCover = xi.some((p) => roleFits(p, 'AWP') || p.awp >= 80);
-  const iglCover = xi.some((p) => roleFits(p, 'IGL') || p.igl >= 75);
+  const iglCover = aiTierOf(team) === 3 || xi.some((p) => roleFits(p, 'IGL') || p.igl >= 70);
   if (!awpCover) {
     const out1 = weakestBy((p) => !roleFits(p, 'IGL'));
-    if (out1) out.push({ teamId: team.id, role: 'AWP', priority: 90, reason: 'hole', outPlayerId: out1.id, refOvr: ovr.get(out1.id)! });
+    // no tier 3 a base também não rotula o AWP de 32 lines: buraco comum (entra
+    // no sorteio da janela), não urgente — senão ele come a janela inteira
+    if (out1) out.push({ teamId: team.id, role: 'AWP', priority: aiTierOf(team) === 3 ? 60 : 90, reason: 'hole', outPlayerId: out1.id, refOvr: ovr.get(out1.id)! });
   }
   if (!iglCover) {
     const out1 = weakestBy((p) => !roleFits(p, 'AWP'));
@@ -192,16 +203,17 @@ export function sellerAsk(p: Player, seller: { team: TeamSeason; strategy: ClubS
 export function clubsSnapshot(a: {
   teams: TeamSeason[]; split: number; formOf: (teamId: string) => number;
   vrsOf?: (teamId: string) => number; ageOf: (p: Player) => number; budgets?: Record<string, number>;
+  seed?: string;
 }): { budgets: Record<string, number>; strategies: Record<string, ClubStrategy>; ranks: Record<string, number> } {
   const ranks = rankClubs(a.teams, a.vrsOf);
   const budgets: Record<string, number> = {};
   const strategies: Record<string, ClubStrategy> = {};
   for (const t of a.teams) {
     const form = a.formOf(t.id);
-    budgets[t.id] = a.budgets?.[t.id] ?? clubBudget(t, { rank: ranks[t.id], form, split: a.split });
+    budgets[t.id] = a.budgets?.[t.id] ?? clubBudget(t, { rank: ranks[t.id], form, split: a.split, seed: a.seed });
     const xi = starters(t);
     const avgAge = xi.length ? xi.reduce((s, p) => s + a.ageOf(p), 0) / xi.length : 26;
-    strategies[t.id] = clubStrategy(t, { budget: budgets[t.id], form, avgAge });
+    strategies[t.id] = clubStrategy(t, { budget: budgets[t.id], form, avgAge, seed: a.seed });
   }
   return { budgets, strategies, ranks };
 }
@@ -243,6 +255,9 @@ export interface WorldTickArgs {
   /** [fase 4 · juventude] preferência do comprador pelo jogador (ex.: jovem da
    *  própria academia); somada ao score da escolha. Ausente = neutro. */
   affinity?: (buyerId: string, p: Player) => number;
+  /** Semente do save (mundo.seed): cada Carreira tem o seu mercado. Ausente =
+   *  as chaves de hash de sempre (medições e testes antigos). */
+  seed?: string;
 }
 
 export interface WorldTickResult {
@@ -261,6 +276,8 @@ export interface WorldTickResult {
 
 // elenco de elite (média top-5): só repõe, não empilha
 export const ELITE_SQUAD = 85;
+// teto do reforço (upgrade/má fase) acima da média dos 5 do comprador
+export const UPGRADE_OVER_MEAN = 2;
 
 export const WINDOW_MAX_MOVES: Record<WindowKind, number> = { offseason: 16, mid: 6 };
 
@@ -309,7 +326,7 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
 
   const forms: Record<string, number> = {};
   for (const t of a.teams) forms[t.id] = a.formOf(t.id);
-  const snap = clubsSnapshot({ teams: a.teams, split, formOf: (id) => forms[id], vrsOf: a.vrsOf, ageOf, budgets: a.budgets });
+  const snap = clubsSnapshot({ teams: a.teams, split, formOf: (id) => forms[id], vrsOf: a.vrsOf, ageOf, budgets: a.budgets, seed: a.seed });
   const budgets = snap.budgets;
   const strategies = snap.strategies;
   const movable = (p: Player) => a.movableIds.has(p.id) && !protectedIds.has(p.id);
@@ -322,10 +339,15 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
   const queue: ClubNeed[] = [];
   const openNeeds: ClubNeed[] = [];
   for (const t of a.teams) {
-    const need = clubNeeds(view(t.id), needCtx(t.id))[0];
+    const needs = clubNeeds(view(t.id), needCtx(t.id));
+    let need = needs[0];
     if (!need) continue;
     const urgent = need.reason === 'hole' && need.priority >= 80;
-    const roll = hashStr(`mkt:${kind}:${split}:${t.id}`) % 100;
+    // VARIEDADE: sem buraco urgente, o clube sorteia entre as 2 necessidades de
+    // maior prioridade (senão toda janela é "contrata AWP/IGL" e ninguém procura
+    // rifler — o mercado livre enche de quem perdeu a vaga e não volta)
+    if (!urgent && needs[1] && hashStr(seeded(a.seed, `need:${kind}:${split}:${t.id}`)) % 2 === 1) need = needs[1];
+    const roll = hashStr(seeded(a.seed, `mkt:${kind}:${split}:${t.id}`)) % 100;
     if (urgent || roll < actChance(forms[t.id], strategies[t.id], kind)) queue.push({ ...need, depth: 0 });
     else openNeeds.push(need);
   }
@@ -365,7 +387,11 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
     // um salto de patamar (starBuyer vai um pouco além)
     let cap = best + (strategy === 'starBuyer' ? 1 : 3);
     // elenco de elite só REPÕE o veterano (sem subir de patamar): o topo não empilha
-    if (elite && need.reason === 'old') cap = Math.min(cap, need.refOvr + 1);
+    // (vale também para a reposição de quem ele vendeu: vender 84 e comprar 86 empilhava)
+    if (elite && (need.reason === 'old' || need.reason === 'sold')) cap = Math.min(cap, need.refOvr + 1);
+    // reforço/má fase traz alguém do nível do time, não uma estrela: com a
+    // variedade (o clube também sai atrás de reforço) o topo inflava o top 20
+    if (need.reason === 'upgrade' || need.reason === 'slump') cap = Math.min(cap, Math.round(mean) + UPGRADE_OVER_MEAN);
     // no fim da cadeia, o clube que vendeu repõe só no mercado livre (sem nova venda)
     const freeOnly = need.reason === 'sold' && (need.depth ?? 0) >= 2;
     const nat = strategy === 'national' ? mainCountryOf(buyer) : null;
@@ -375,6 +401,10 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
       : need.reason === 'old' ? ref
       : ref + 2;
     const out = need.outPlayerId ? buyer.players.find((p) => p.id === need.outPlayerId) : undefined;
+    // elite não se compra: nenhum negócio leva o elenco (média top-5) a
+    // ELITE_SQUAD ou além (quem já é elite só repõe no mesmo nível ou abaixo)
+    const squadNow = squadOvr(buyer.players);
+    const squadAfter = (p: Player) => squadOvr([...buyer.players.filter((x) => x.id !== out?.id), p]);
 
     type Cand = { p: Player; fromId: string; fee: number; cost: number; score: number; swap: boolean };
     let pick: Cand | null = null;
@@ -383,6 +413,8 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
       const ovr = ovrOf(p);
       if (ovr < minOvr || ovr > cap) return;
       if (ovr >= 88 && aiTierOf(buyer) !== 1) return;
+      const after = squadAfter(p);
+      if (after >= ELITE_SQUAD && after > squadNow) return;
       const age = ageOf(p);
       if (need.reason === 'old' && out && age > ageOf(out) - 4) return;
       let fee = 0;
@@ -422,7 +454,7 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
         default: score -= costF * 15;
       }
       if (a.affinity) score += a.affinity(buyerId, p);
-      score += (hashStr(`pick:${buyerId}:${p.id}:${split}`) % 7) / 10;
+      score += (hashStr(seeded(a.seed, `pick:${buyerId}:${p.id}:${split}`)) % 7) / 10;
       if (!pick || score > pick.score) pick = { p, fromId, fee, cost, score, swap };
     };
     for (const p of free) consider(p, FREE_TEAM_ID);

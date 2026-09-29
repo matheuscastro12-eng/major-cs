@@ -15,14 +15,17 @@
 // mundo (total/contratados/titulares/no top 20), aposentados e o tamanho do
 // bloco de jovens no save.
 //
-//   npx tsx scripts/measure-mundo-10-splits.mts [splits=10] [--no-youth] [--json]
+//   npx tsx scripts/measure-mundo-10-splits.mts [splits=10] [--no-youth] [--json] [--seed=abc,def,ghi]
+//
+// --seed: semente do save (mundo.seed) no mercado, no drift e na leva de jovens —
+// cada semente é uma Carreira diferente; sem ela, as chaves de sempre.
 
 import { CS2_REAL_2026 } from '../src/data/bo3.ts';
 import type { TeamSeason } from '../src/types.ts';
 import { playerOvr } from '../src/engine/ratings.ts';
 import { buildAiWorld, agedFreeAgents, nextAiDrift, aiAgeOf, baseOvrOf } from '../src/engine/career/aiWorld.ts';
 import { computeAllTeamForms, type TeamFormSave } from '../src/engine/career/teamForm.ts';
-import { tickMarketWindow, squadOvr } from '../src/engine/clube/mercadoIA.ts';
+import { tickMarketWindow, squadOvr, type WorldMove } from '../src/engine/clube/mercadoIA.ts';
 import type { MarketLoan } from '../src/engine/clube/model.ts';
 import type { League } from '../src/engine/league.ts';
 import {
@@ -32,7 +35,6 @@ import { isNewgenId, newgenBytes, newgenList, type MundoJuv } from '../src/engin
 
 const BASE = CS2_REAL_2026;
 const NO_SKIP = new Set<string>();
-const SAVE = { org: { name: 'Medição', tag: 'MED' }, split: 1, squad: [] };
 
 export interface MundoSplit {
   split: number;
@@ -62,8 +64,11 @@ function resultsSave(world: TeamSeason[], split: number, aiDrift: Record<string,
 }
 const top5Ids = (t: TeamSeason) => [...t.players].sort((a, b) => playerOvr(b) - playerOvr(a)).slice(0, 5).map((p) => p.id);
 
-export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { rows: MundoSplit[]; mundo: MundoJuv; moves: Record<string, string> } {
+export function simulateMundo(splits = 10, opts: { youth?: boolean; seed?: string; onSplit?: (split: number, world: TeamSeason[]) => void } = {}): { rows: MundoSplit[]; mundo: MundoJuv; moves: Record<string, string>; moveLog: WorldMove[] } {
   const youth = opts.youth !== false;
+  const seed = opts.seed;
+  const SAVE = { org: { name: seed ? `Medição ${seed}` : 'Medição', tag: 'MED' }, split: 1, squad: [] };
+  const moveLog: WorldMove[] = [];
   let moves: Record<string, string> = {};
   let aiDrift: Record<string, number> = {};
   let arrivals: Record<string, number> = {};
@@ -80,6 +85,7 @@ export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { ro
     const base = () => (youth ? withNewgens(BASE, mundo) : BASE);
     const world = () => buildAiWorld({ base: base(), moves, split: s, skip: NO_SKIP, aiDrift, arrivals });
     const w0 = world();
+    opts.onSplit?.(s, w0);
     const ranked = w0.map((t) => ({ t, s: squadOvr(t.players) })).sort((a, b) => b.s - a.s);
     const top = ranked.slice(0, 20);
     const topIds = new Set(top.flatMap((x) => top5Ids(x.t)));
@@ -109,8 +115,9 @@ export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { ro
     const mid = tickMarketWindow({
       teams: w0, freeAgents: agedFreeAgents(base(), moves, s, NO_SKIP), split: s, kind: 'mid',
       formOf: (id) => midForms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s), baseOvrOf, movableIds: movable, affinity,
-      budgets, loans, arrivals,
+      budgets, loans, arrivals, seed,
     });
+    moveLog.push(...mid.log);
     moves = { ...moves, ...mid.moves }; arrivals = { ...arrivals, ...mid.arrivals }; loans = mid.loans;
     // fechamento: forma do split, pré-temporada, drift
     const w1 = world();
@@ -118,10 +125,11 @@ export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { ro
     const off = tickMarketWindow({
       teams: w1, freeAgents: agedFreeAgents(base(), moves, s, NO_SKIP), split: s + 1, kind: 'offseason',
       formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s), baseOvrOf, movableIds: movable, affinity,
-      loans, arrivals,
+      loans, arrivals, seed,
     });
+    moveLog.push(...off.log);
     moves = { ...moves, ...off.moves }; arrivals = { ...arrivals, ...off.arrivals }; loans = off.loans; budgets = off.budgets;
-    aiDrift = nextAiDrift(w1.map((t) => t.id), forms, s, aiDrift);
+    aiDrift = nextAiDrift(w1.map((t) => t.id), forms, s, aiDrift, seed);
     // juventude do fechamento
     if (youth) {
       const r = tickJuventude({ mundo, split: s, base: BASE, moves, arrivals, aiDrift, skip: NO_SKIP, save: SAVE });
@@ -130,7 +138,7 @@ export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { ro
       lastRetirees = r.retirees.length;
     }
   }
-  return { rows, mundo, moves };
+  return { rows, mundo, moves, moveLog };
 }
 
 const f1 = (v: number) => v.toFixed(1);
@@ -145,16 +153,32 @@ export function mundoTable(rows: MundoSplit[]): string {
   return out.join('\n');
 }
 
+/** Perfil dos movimentos: fração AWP/IGL e quantos que perderam a vaga voltaram a ser contratados. */
+export function moveMix(log: WorldMove[]): { awpIgl: number; displaced: number; resigned: number } {
+  const outs = [...new Set(log.filter((m) => m.outPlayerId).map((m) => m.outPlayerId!))];
+  const movedAfter = new Set<string>();
+  log.forEach((m, i) => { if (log.slice(0, i).some((x) => x.outPlayerId === m.playerId)) movedAfter.add(m.playerId); });
+  return {
+    awpIgl: log.length ? log.filter((m) => m.role === 'AWP' || m.role === 'IGL').length / log.length : 0,
+    displaced: outs.length,
+    resigned: outs.length ? outs.filter((id) => movedAfter.has(id)).length / outs.length : 0,
+  };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const n = Number(process.argv.slice(2).find((x) => !x.startsWith('--')) ?? 10);
-  const t0 = Date.now();
-  const { rows, mundo } = simulateMundo(n, { youth: !process.argv.includes('--no-youth') });
-  if (process.argv.includes('--json')) console.log(JSON.stringify(rows, null, 2));
-  else {
-    console.log(`Mundo da Carreira sem o usuário, ${n} splits (${((Date.now() - t0) / 1000).toFixed(1)}s)\n`);
+  const seedArg = process.argv.find((x) => x.startsWith('--seed='))?.slice(7);
+  const seeds: (string | undefined)[] = seedArg ? seedArg.split(',') : [undefined];
+  for (const seed of seeds) {
+    const t0 = Date.now();
+    const { rows, mundo, moveLog } = simulateMundo(n, { youth: !process.argv.includes('--no-youth'), seed });
+    if (process.argv.includes('--json')) { console.log(JSON.stringify(rows, null, 2)); continue; }
+    console.log(`Mundo da Carreira sem o usuário, ${n} splits${seed ? `, semente ${seed}` : ''} (${((Date.now() - t0) / 1000).toFixed(1)}s)\n`);
     console.log(mundoTable(rows));
     const d = rows[rows.length - 1].top20 - rows[0].top20;
-    console.log(`\ntop 20: ${f1(rows[0].top20)} → ${f1(rows[rows.length - 1].top20)} (${d >= 0 ? '+' : ''}${d.toFixed(2)})`);
-    console.log(`jovens vivos: ${Object.keys(mundo.newgens).length} · bloco no save: ${(newgenBytes(mundo) / 1024).toFixed(1)} KB · gerações: ${[...new Set(mundo.intake.map((l) => l.year))].length}`);
+    const mix = moveMix(moveLog);
+    console.log(`\ntop 20: ${f1(rows[0].top20)} → ${f1(rows[rows.length - 1].top20)} (${d >= 0 ? '+' : ''}${d.toFixed(2)}) · elencos ≥86 no fim: ${rows[rows.length - 1].superteams}`);
+    console.log(`movimentos: ${moveLog.length} · AWP/IGL ${Math.round(mix.awpIgl * 100)}% · perderam a vaga ${mix.displaced}, recontratados ${Math.round(mix.resigned * 100)}%`);
+    console.log(`jovens vivos: ${Object.keys(mundo.newgens).length} · bloco no save: ${(newgenBytes(mundo) / 1024).toFixed(1)} KB · gerações: ${[...new Set(mundo.intake.map((l) => l.year))].length}\n`);
   }
 }

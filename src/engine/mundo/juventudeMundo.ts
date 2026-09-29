@@ -12,7 +12,7 @@
 //     nova abre a tela Juventude com a geração do ano).
 import type { Player, TeamSeason } from '../../types';
 import { CS2_REAL_2026 } from '../../data/bo3';
-import { type MacroRegion } from '../../data/regions';
+import { macroRegionOf, type MacroRegion } from '../../data/regions';
 import { ACADEMY_CLUBS } from '../career/academyLeague';
 import { BASE_PLAYER_IDS, agedFreeAgents, aiAgeOf, buildAiWorld, type AiWorldArgs } from '../career/aiWorld';
 import { FREE_TEAM_ID } from '../career/transferAI';
@@ -23,7 +23,7 @@ import type { RetiredSource } from '../gestao/staff';
 import type { MundoState, WorldRetiree } from './model';
 import {
   applyIntake, careerYearOf, evolveNewgens, firstSplitOfYear, generateIntake, hasIntake, isNewgenId,
-  newgenList, newgenOrigin, pruneNewgens, youthSeedFor,
+  newgenId, newgenList, newgenOrigin, pruneNewgens, storeNewgen, youthSeedFor,
   type AcademySource, type MundoJuv, type NewgenStatus,
 } from './juventude';
 
@@ -158,6 +158,48 @@ export function retireeStaffSources(mundo: MundoJuv | null | undefined, base: Te
   });
 }
 
+// ─── vendidos presos no banco ───────────────────────────────────────────────
+type ExtraOnTeam = NonNullable<AiWorldArgs['extraOnTeam']>;
+/** Splits fora dos 5 (desde a chegada) até o vendido voltar ao mercado livre. */
+export const EXTRA_BENCH_SPLITS = 2;
+/**
+ * Vendido seu (extraOnTeam: sem id na base, o mercado da IA não o move) que está
+ * FORA DOS 5 do comprador no split que fecha e chegou há ≥ EXTRA_BENCH_SPLITS
+ * splits volta ao mercado livre como jovem do mundo (newgen): movível pela IA,
+ * evolui e é podado como os outros. Os vendidos entram na frente do elenco
+ * (buildAiWorld), então só cai no banco quem foi empurrado por chegadas novas.
+ */
+export function releaseBenchedExtras<T extends MundoJuv>(a: { mundo: T; extraOnTeam: ExtraOnTeam | undefined; world: TeamSeason[]; split: number }): {
+  mundo: T; extraOnTeam: ExtraOnTeam | undefined; released: { from: string; to: string; teamId: string }[];
+} {
+  const released: { from: string; to: string; teamId: string }[] = [];
+  if (!a.extraOnTeam) return { mundo: a.mundo, extraOnTeam: a.extraOnTeam, released };
+  const indexOf = new Map<string, number>();
+  for (const t of a.world) t.players.forEach((p, i) => indexOf.set(`${t.id}|${p.id}`, i));
+  let mundo = a.mundo;
+  const out: ExtraOnTeam = {};
+  const debut = a.split + 1;
+  for (const [teamId, list] of Object.entries(a.extraOnTeam)) {
+    const keep = list.filter((e) => {
+      const i = indexOf.get(`${teamId}|${e.player.id}`);
+      if (i == null || i < 5 || a.split + 1 - e.arrival < EXTRA_BENCH_SPLITS) return true;
+      const p = e.player;
+      const age = Math.max(16, Math.min(40, aiAgeOf(p, debut)));
+      const region = macroRegionOf(p.country) ?? 'europe';
+      let n = 900;
+      while (mundo.newgens[newgenId(debut, age, region, n)]) n++;
+      const id = newgenId(debut, age, region, n);
+      // sem `age`/`attrs` herdados: a idade sai do id; os atributos do vendido viram os do jovem
+      const { age: _age, attrs: _attrs, ...rest } = p;
+      mundo = storeNewgen(mundo, { ...rest, id, attrs: attrsOf(p) });
+      released.push({ from: p.id, to: id, teamId });
+      return false;
+    });
+    if (keep.length) out[teamId] = keep;
+  }
+  return released.length ? { mundo, extraOnTeam: out, released } : { mundo: a.mundo, extraOnTeam: a.extraOnTeam, released };
+}
+
 // ─── o tick do fechamento do split ──────────────────────────────────────────
 export interface JuventudeTickArgs {
   mundo: MundoJuv;
@@ -196,6 +238,9 @@ export interface JuventudeTickResult {
   news: JuventudeNews[];
   /** jovens que saíram do mundo (poda): tire de `moves` */
   removed: string[];
+  /** vendidos presos no banco que voltaram ao mercado livre: o novo extraOnTeam
+   *  (undefined = nada mudou) */
+  extraOnTeam?: AiWorldArgs['extraOnTeam'];
 }
 
 const RETIREE_LOG = 60;
@@ -235,6 +280,10 @@ export function tickJuventude(a: JuventudeTickArgs): JuventudeTickResult {
   const pr = pruneNewgens(mundo, { split: a.split + 1, statusOf, pinned: (id) => skip.has(id) || exclude.has(id) });
   mundo = pr.mundo;
 
+  // 3b) vendido seu preso no banco do comprador volta ao mercado livre
+  const rel = releaseBenchedExtras({ mundo, extraOnTeam: a.extraOnTeam, world: world0, split: a.split });
+  mundo = rel.mundo;
+
   // 4) aposentados recentes (log curto)
   const retLog = [...retirees, ...(mundo.retirees ?? [])].slice(0, RETIREE_LOG);
   mundo = { ...mundo, retirees: retLog };
@@ -247,7 +296,7 @@ export function tickJuventude(a: JuventudeTickArgs): JuventudeTickResult {
     const n = Object.keys(mundo.newgens).length - n0;
     if (n > 0) news.push({ kind: 'intake', split: a.split + 1, count: n });
   }
-  return { mundo, retirees, news, removed: pr.removed.map((r) => r.id) };
+  return { mundo, retirees, news, removed: pr.removed.map((r) => r.id), ...(rel.released.length ? { extraOnTeam: rel.extraOnTeam } : {}) };
 }
 
 /** Tira de `moves` quem saiu do mundo (poda). */

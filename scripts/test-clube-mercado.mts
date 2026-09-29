@@ -135,7 +135,8 @@ test('cadeia: o clube que vende vai repor (e a manchete conta a história)', () 
 
 test('stand-in na janela curta: buraco sem reposição vira empréstimo do mercado livre até o fim do split, e volta', () => {
   // clube sem AWP e sem caixa: ninguém vende pra ele, mas o mercado livre tem um AWPer
-  const poor = mkTeam('poor', 60, [mkPlayer('p1', 'IGL', 70), mkPlayer('p2', 'Rifler', 70), mkPlayer('p3', 'Entry', 70), mkPlayer('p4', 'Support', 69), mkPlayer('p5', 'Lurker', 68)]);
+  // (tier 2: no tier 3 a falta de AWP rotulado é dado da base, buraco não urgente)
+  const poor = mkTeam('poor', 77, [mkPlayer('p1', 'IGL', 70), mkPlayer('p2', 'Rifler', 70), mkPlayer('p3', 'Entry', 70), mkPlayer('p4', 'Support', 69), mkPlayer('p5', 'Lurker', 68)]);
   const fa = mkPlayer('fa-awp', 'AWP', 73, 'br');
   const movable = new Set(['p1', 'p2', 'p3', 'p4', 'p5', 'fa-awp']);
   const base = { teams: [poor], freeAgents: [fa], formOf: () => 50, ageOf: () => 25, movableIds: movable };

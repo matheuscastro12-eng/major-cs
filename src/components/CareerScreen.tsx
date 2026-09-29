@@ -4142,13 +4142,14 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   });
   // fechamento do split: aposentadorias do mundo, evolução e poda dos jovens e,
   // na virada do ano, a leva nova. Recebe o save JÁ com a janela aplicada.
-  const juventudeClose = (s: CareerSave): { mundo: MundoState; moves: Record<string, string>; news: NewsItem[] } => {
+  const juventudeClose = (s: CareerSave): { mundo: MundoState; moves: Record<string, string>; news: NewsItem[]; extraOnTeam: CareerSave['extraOnTeam'] } => {
     const r = tickJuventude({
       mundo: mundoOf(s), split: s.split, base: editedBase, // [fase 4] base da Carreira (oficial + admin + customizada)
       moves: s.moves, arrivals: s.clube?.market.arrivals, aiDrift: s.aiDrift, takeoverId: s.takeoverId, extraOnTeam: s.extraOnTeam,
       skip: newgenExcludeOf(s), save: s, user: userYouthCtx(s), youthGrowth: staffEffects(s.gestao?.staff).youthGrowth,
     });
-    return { mundo: r.mundo, moves: movesWithout(s.moves, r.removed) ?? s.moves, news: juventudeNewsItems(r.news) };
+    // extraOnTeam: vendidos presos no banco do comprador voltaram ao mercado livre
+    return { mundo: r.mundo, moves: movesWithout(s.moves, r.removed) ?? s.moves, news: juventudeNewsItems(r.news), extraOnTeam: r.extraOnTeam ?? s.extraOnTeam };
   };
   // leva um jovem da SUA geração para a academia (vira prospecto)
   const takeNewgenToAcademy = (id: string) => {
@@ -4341,6 +4342,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       loans: m.loans.filter((l) => l.kind === 'ai'),
       arrivals: m.arrivals,
       maxMoves: opts.maxMoves,
+      seed: mundoOf(s).seed,                  // cada Carreira tem o seu mercado
     });
   };
   // propostas pelos SEUS jogadores (depois dos movimentos da IA)
@@ -4374,6 +4376,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const off = generateIncomingOffers({
       split: offerSplit, kind, squad: squadEntries(s), teams: tick.teams, budgets: tick.budgets, strategies: tick.strategies,
       formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s.split), userTier: s.tier ?? 3, existing: m.incoming,
+      seed: mundoOf(s).seed,
     });
     m = applyWorldTick(m, tick, offerSplit, kind === 'offseason' ? 1 : (s.eventInSplit ?? 1), kind);
     m = withOffers(m, off.offers);
@@ -4405,7 +4408,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   const applyTransferWindow = (s: CareerSave): Pick<CareerSave, 'moves' | 'lastMoves' | 'aiDrift' | 'clube' | 'pendingSales'> & { marketNews: NewsItem[] } => {
     const w = runMarketWindow(s, 'offseason');
     const forms = computeAllTeamForms(s);
-    const aiDrift = nextAiDrift(currentEra.filter((x) => x.id !== s.takeoverId).map((t) => t.id), forms, s.split, s.aiDrift);
+    const aiDrift = nextAiDrift(currentEra.filter((x) => x.id !== s.takeoverId).map((t) => t.id), forms, s.split, s.aiDrift, mundoOf(s).seed);
     return { ...w.patch, aiDrift, marketNews: w.news };
   };
 
@@ -5215,7 +5218,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
     const snap = stored
       ? { budgets: m.budgets, strategies: m.strategies ?? {} }
-      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf: (p) => aiAgeOf(p, save.split) });
+      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf: (p) => aiAgeOf(p, save.split), seed: mundoOf(save).seed });
     const ageOf = (p: Player) => aiAgeOf(p, save.split);
     const rows: RivalRow[] = teams.map((t) => {
       const strategy = snap.strategies[t.id] ?? 'balanced';
@@ -5239,13 +5242,13 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const forms = computeAllTeamForms(save);
     const byId = new Map(teams.map((t) => [t.id, t]));
     const ageOf = (p: Player) => aiAgeOf(p, save.split);
-    const snap = clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf });
+    const snap = clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf, seed: mundoOf(save).seed });
     const win = transferWindowOf({ split: save.split, eventInSplit: save.eventInSplit ?? 1, inMajor: !!save.majorT && save.majorT.phase !== 'done', majorSplit: isMajorSplit(save.split) });
     // na abertura ninguém paga cláusula: o mundo não força venda ao carregar o save
     const squad = squadEntries(save).map((e) => ({ ...e, clause: null }));
     const off = win.rosterLocked
       ? { offers: [], rumors: [] }
-      : generateIncomingOffers({ split: save.split, kind: 'boot', squad, teams, budgets: snap.budgets, strategies: snap.strategies, formOf: (id) => forms[id] ?? 50, ageOf, userTier: save.tier ?? 3, existing: m.incoming, max: 2 });
+      : generateIncomingOffers({ split: save.split, kind: 'boot', squad, teams, budgets: snap.budgets, strategies: snap.strategies, formOf: (id) => forms[id] ?? 50, ageOf, userTier: save.tier ?? 3, existing: m.incoming, max: 2, seed: mundoOf(save).seed });
     let next: MarketState = { ...m, budgets: snap.budgets, strategies: snap.strategies, lastWindow: { split: save.split, event: save.eventInSplit ?? 1, kind: 'boot' }, window: { open: win.open, rosterLocked: win.rosterLocked, label: win.label } };
     next = withOffers(next, off.offers);
     const needs = teams.map((t) => clubNeeds(t, { split: save.split, form: forms[t.id] ?? 50, strategy: snap.strategies[t.id] ?? 'balanced', ageOf, baseOvrOf })[0]).filter((n): n is ClubNeed => !!n);
@@ -6067,7 +6070,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
                   ...evo,
                   ...majorWindowPatch,
                   // [fase 4] jovens + aposentadorias do mundo (K) com o circuito/VRS do Major (J)
-                  mundo: save.mundo ? withCircuit(juvMajor.mundo, withFreshCalendar(mundoOf(save), save.split + 1)) : juvMajor.mundo, moves: juvMajor.moves,
+                  mundo: save.mundo ? withCircuit(juvMajor.mundo, withFreshCalendar(mundoOf(save), save.split + 1)) : juvMajor.mundo, moves: juvMajor.moves, extraOnTeam: juvMajor.extraOnTeam,
                   board: majBoard,
                   boardLog: majBd.boardLog,
                   lastObjective: majObj ? { text: majObj.text, met: !(rmrMiss && majObj.type === 'major'), delta: majBoard - save.board } : null,
@@ -6657,7 +6660,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
                     ...evo,
                     ...windowPatch,
                     // [fase 4] jovens + aposentadorias do mundo (K) com o circuito/VRS fechado (J)
-                    mundo: mundoAfter ? withCircuit(juv.mundo, withFreshCalendar(mundoAfter, save.split + 1)) : juv.mundo, moves: juv.moves,
+                    mundo: mundoAfter ? withCircuit(juv.mundo, withFreshCalendar(mundoAfter, save.split + 1)) : juv.mundo, moves: juv.moves, extraOnTeam: juv.extraOnTeam,
                     ...boardPatch,
                     ...(boardCash ? { board: boardCash.board, boardLog: boardCash.boardLog } : {}),
                     tier: tierResult.tier,
