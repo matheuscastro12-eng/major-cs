@@ -9,11 +9,9 @@ import { playerOvr } from '../ratings';
 import { hashStr } from '../../state/hash';
 import { macroRegionOf, type MacroRegion } from '../../data/regions';
 import { CS2_REAL_2026 } from '../../data/bo3';
-import bo3Ages from '../../data/bo3-ages.json';
 import { FREE_TEAM_ID } from './transferAI';
-import { parseRegenPlayerId } from './signings';
-import { ageFromCareerStart } from './playerAge';
-import { isNewgenId, newgenAge } from '../mundo/juventude';
+import { REAL_AGES, baseAge, effectiveAge, type YouthDebut } from './playerAge';
+import { isNewgenId } from '../mundo/juventude';
 
 export type PlayerPhase = 'rising' | 'prime' | 'declining';
 
@@ -91,23 +89,9 @@ export function backfillPlayers(team: TeamSeason, n: number, start = 0): Player[
   return out;
 }
 
-// idades REAIS do bo3 (196/240) por nick; quem falta recebe uma idade plausível
-// determinística. A idade efetiva sobe ~1 ano a cada 3 splits de carreira.
-export const REAL_AGES = bo3Ages as Record<string, { age: number; born: string }>;
-export function baseAge(p: Pick<Player, 'id' | 'nick' | 'age'>, youthAge?: Record<string, number>): number {
-  // prospecto promovido da academia: idade-base guardada na promoção. Vem ANTES do
-  // lookup por nick (um prospecto pode ter um nick que colide com um pro real).
-  const y = youthAge?.[p.id];
-  if (y != null) return y;
-  // idade editada no CRM (override global): tem prioridade sobre a tabela por nick.
-  if (p.age != null && p.age >= 15 && p.age <= 45) return p.age;
-  const real = REAL_AGES[p.nick]?.age;
-  if (real && real >= 15 && real <= 45) return real;
-  // sem dado: assume AUGE (25-29), não juventude. Um pro de elenco real não pode
-  // virar ct('jovem em ascensão') só por falta de idade na tabela (bug do coldzera/fer).
-  // Jovens de verdade vêm da academia, que grava a idade na promoção (youthAge).
-  return 25 + (hashStr(`age:${p.id}`) % 5);
-}
+// idade-base (REAL_AGES/baseAge) mora em playerAge.ts, junto do relógio da
+// Carreira (effectiveAge); reexportada aqui para os consumidores de sempre.
+export { REAL_AGES, baseAge };
 
 // fase de carreira pela IDADE: jovem sobe, auge oscila, veterano cai.
 export function playerPhase(_pid: string, age: number): PlayerPhase {
@@ -352,13 +336,13 @@ export function nextAiDrift(teamIds: string[], forms: Record<string, number>, sp
   return aiDrift;
 }
 
-// idade de um jogador do mundo da IA no split (regen tem relógio próprio no id)
-export function aiAgeOf(p: Pick<Player, 'id' | 'nick' | 'age'>, split: number): number {
-  const ng = newgenAge(p.id, split);
-  if (ng != null) return ng;
-  const rg = parseRegenPlayerId(p.id);
-  if (rg) return rg.ageAtDebut + Math.floor(Math.max(0, split - rg.debut) / 3);
-  return ageFromCareerStart(baseAge(p), split);
+// idade de um jogador do mundo da IA no split (regen/newgen têm relógio próprio
+// no id). `youthDebut` (save.youthDebut): a base promovida/criada que foi
+// vendida ou emprestada continua no relógio da promoção — sem ele a cópia no
+// comprador (extraOnTeam) caía em baseAge(p.age = idade NA PROMOÇÃO) + anos
+// desde o split 1 e "envelhecia" 7+ anos de uma vez.
+export function aiAgeOf(p: Pick<Player, 'id' | 'nick' | 'age'>, split: number, youthDebut?: Record<string, YouthDebut>): number {
+  return effectiveAge(p, split, undefined, youthDebut);
 }
 
 // OVR de BASE (dataset) de um jogador real — referência pra "está em queda"

@@ -78,7 +78,7 @@ import { isPlayerCommittedForExit, matchesNegotiationFilters, sortMarketEntries,
 import {
   academyAgeAfterSplit,
   ageFromCareerStart,
-  ageFromDebut,
+  effectiveAge,
   legacyYouthBaseAgeAtPromotion,
   youthDebutAtPromotion,
   type YouthDebut,
@@ -1462,23 +1462,8 @@ function worldBaseFor(s: Pick<CareerSave, 'mundo' | 'squad' | 'extraOnTeam' | 'a
   return withNewgens(base, mundoOf(s), newgenExcludeOf(s));
 }
 
-function regenInfo(id: string): { debut: number; a0: number } | null {
-  // [fase 4] jovem gerado (newgen) carrega o mesmo relógio no id
-  const parsed = parseRegenPlayerId(id) ?? parseNewgenId(id);
-  return parsed ? { debut: parsed.debut, a0: parsed.ageAtDebut } : null;
-}
-export function effectiveAge(
-  p: Pick<Player, 'id' | 'nick'>,
-  split: number,
-  youthAge?: Record<string, number>,
-  youthDebut?: Record<string, YouthDebut>,
-): number {
-  const rg = regenInfo(p.id);
-  if (rg) return rg.a0 + Math.floor(Math.max(0, split - rg.debut) / 3);
-  const debut = youthDebut?.[p.id];
-  if (debut) return ageFromDebut(debut, split);
-  return ageFromCareerStart(baseAge(p, youthAge), split);
-}
+// idade efetiva: relógio canônico em engine/career/playerAge.ts (id normalizado)
+export { effectiveAge };
 // potencial = teto de OVR. Jovem bom tem espaço pra crescer (S/A); veterano já
 // está no teto (sem crescimento). Determinístico por jogador.
 // [fase 4 · juventude] a MESMA régua do mundo da IA (aiPotentialOvr): o espaço
@@ -1486,8 +1471,9 @@ export function effectiveAge(
 // jovem gerado tem PA próprio (relatório de olheiro), que vale como teto.
 export function playerPotentialOvr(p: Player, age: number): number {
   const base = playerOvr(p);
-  if (isNewgenId(p.id) && p.attrs) return Math.max(base, ovrFromCa(p.attrs.pa));
-  return aiPotentialOvr(p.id, base, age);
+  const id = playerOrgId(p.id); // perfil/peek passam o id de runtime (user__)
+  if (isNewgenId(id) && p.attrs) return Math.max(base, ovrFromCa(p.attrs.pa));
+  return aiPotentialOvr(id, base, age);
 }
 export type PotTier = 'S' | 'A' | 'B' | 'C';
 export function potentialTier(potOvr: number): PotTier {
@@ -4146,7 +4132,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const r = tickJuventude({
       mundo: mundoOf(s), split: s.split, base: editedBase, // [fase 4] base da Carreira (oficial + admin + customizada)
       moves: s.moves, arrivals: s.clube?.market.arrivals, aiDrift: s.aiDrift, takeoverId: s.takeoverId, extraOnTeam: s.extraOnTeam,
-      skip: newgenExcludeOf(s), save: s, user: userYouthCtx(s), youthGrowth: staffEffects(s.gestao?.staff).youthGrowth,
+      skip: newgenExcludeOf(s), save: s, user: userYouthCtx(s), youthGrowth: staffEffects(s.gestao?.staff).youthGrowth, youthDebut: s.youthDebut,
     });
     return { mundo: r.mundo, moves: movesWithout(s.moves, r.removed) ?? s.moves, news: juventudeNewsItems(r.news) };
   };
@@ -4332,7 +4318,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       kind,
       formOf: (id) => forms[id] ?? 50,
       vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(s, t) : 0; },
-      ageOf: (p) => aiAgeOf(p, s.split),
+      ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut),
       baseOvrOf,
       movableIds: movableIdsWith(mundoOf(s), baseMovable), // [fase 4] jovens gerados também se movem
       affinity: youthAffinity(mundoOf(s)),    // [fase 4] clube prefere o jovem da própria academia
@@ -4373,7 +4359,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const forms = computeAllTeamForms(s);
     const off = generateIncomingOffers({
       split: offerSplit, kind, squad: squadEntries(s), teams: tick.teams, budgets: tick.budgets, strategies: tick.strategies,
-      formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s.split), userTier: s.tier ?? 3, existing: m.incoming,
+      formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut), userTier: s.tier ?? 3, existing: m.incoming,
     });
     m = applyWorldTick(m, tick, offerSplit, kind === 'offseason' ? 1 : (s.eventInSplit ?? 1), kind);
     m = withOffers(m, off.offers);
@@ -5215,8 +5201,8 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
     const snap = stored
       ? { budgets: m.budgets, strategies: m.strategies ?? {} }
-      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf: (p) => aiAgeOf(p, save.split) });
-    const ageOf = (p: Player) => aiAgeOf(p, save.split);
+      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf: (p) => aiAgeOf(p, save.split, save.youthDebut) });
+    const ageOf = (p: Player) => aiAgeOf(p, save.split, save.youthDebut);
     const rows: RivalRow[] = teams.map((t) => {
       const strategy = snap.strategies[t.id] ?? 'balanced';
       const form = forms[t.id] ?? 50;
@@ -5238,7 +5224,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const teams = oppEra.filter((t) => t.id !== save.takeoverId);
     const forms = computeAllTeamForms(save);
     const byId = new Map(teams.map((t) => [t.id, t]));
-    const ageOf = (p: Player) => aiAgeOf(p, save.split);
+    const ageOf = (p: Player) => aiAgeOf(p, save.split, save.youthDebut);
     const snap = clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf });
     const win = transferWindowOf({ split: save.split, eventInSplit: save.eventInSplit ?? 1, inMajor: !!save.majorT && save.majorT.phase !== 'done', majorSplit: isMajorSplit(save.split) });
     // na abertura ninguém paga cláusula: o mundo não força venda ao carregar o save
@@ -7857,7 +7843,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
           const buyerTier = clubs.byId.get(o.fromTeamId)?.tier ?? 3;
           const wage = e?.wage ?? Math.round((o.wageOffered ?? 0) / 1.2);
           return {
-            offer: o, country: e?.player.country ?? '', age: e ? aiAgeOf(e.player, save.split) : 0, wage, value: e ? playerValue(e.player) : o.fee,
+            offer: o, country: e?.player.country ?? '', age: e ? aiAgeOf(e.player, save.split, save.youthDebut) : 0, wage, value: e ? playerValue(e.player) : o.fee,
             willingness: playerWillingness({ wage, wageOffered: o.wageOffered, buyerTier, userTier: save.tier ?? 3, wantsLeave: !!e?.wantsLeave }), buyerTier,
           };
         });
@@ -7876,7 +7862,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
             const sells: TargetRow['sells'] = free || strategy === 'survival' || left === 0 ? 'easy'
               : (bestId === x.player.id && (owner?.form ?? 50) >= 55) || strategy === 'starBuyer' || left >= 2 ? 'hard' : 'normal';
             return {
-              player: x.player, ovr: playerOvr(x.player), age: aiAgeOf(x.player, save.split), teamId: x.from.id,
+              player: x.player, ovr: playerOvr(x.player), age: aiAgeOf(x.player, save.split, save.youthDebut), teamId: x.from.id,
               teamName: free ? ct('Mercado livre') : x.from.team, teamTag: free ? 'FA' : x.from.tag, strategy,
               asking: free ? 0 : askingPrice(x.player, x.from.teamwork), sells,
             };
@@ -7886,7 +7872,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
           teams: oppEra.filter((t) => t.id !== save.takeoverId), freeAgents: agedFreeAgents(worldBase, save.moves, save.split, squadIds),
           strategies: clubs.strategies, exclude, movable: (pl) => movableIds.has(pl.id),
         }).slice(0, 60).map((c) => ({
-          player: c.player, ovr: playerOvr(c.player), age: aiAgeOf(c.player, save.split), teamId: c.team?.id ?? FREE_TEAM_ID,
+          player: c.player, ovr: playerOvr(c.player), age: aiAgeOf(c.player, save.split, save.youthDebut), teamId: c.team?.id ?? FREE_TEAM_ID,
           teamName: c.team?.team ?? ct('Mercado livre'), teamTag: c.team?.tag ?? 'FA', fee: loanFee(c.player, 'in'), bench: !!c.team && c.team.players.indexOf(c.player) >= 5,
         }));
         const setMarket = (next: MarketState, extra?: Partial<CareerSave>) => update({ ...withMarket(save, next), ...extra });
