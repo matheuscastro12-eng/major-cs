@@ -7,6 +7,7 @@ import { regionOf, type RegionKey } from '../../data/regions';
 import { playerOvr } from '../ratings';
 import { attrsOf, legacyOf, refitAttrs, registeredAttrs, legacyFromAttrs, type PlayerAttrs } from '../attrs/model';
 import { rarityFromOvr, rarityInfo, type UltRarity } from './rarities';
+import { CardIndex } from './cardIndex';
 
 // 6 substats faciais estilo FUT (0-99), derivadas dos atributos do nosso Player.
 export interface CardStats {
@@ -138,10 +139,10 @@ export function buildCatalog(dataset: TeamSeason[], specials: SpecialSpec[] = []
 }
 
 // índice key → carta, pra resolver OwnedCard.cardKey rápido.
+// [realismo FM] chave base cuja faixa de OVR mudou resolve para a carta base
+// atual do jogador (ver cardIndex.ts) — a coleção não perde cartas.
 export function catalogIndex(catalog: UltCard[]): Map<string, UltCard> {
-  const m = new Map<string, UltCard>();
-  for (const c of catalog) m.set(c.key, c);
-  return m;
+  return new CardIndex(catalog);
 }
 
 // valor de mercado estimado (portado do BUT: exponencial no OVR × mult da
