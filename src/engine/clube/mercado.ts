@@ -19,7 +19,7 @@ import type { ClubStrategy, IncomingOffer, MarketLoan, MarketState, MarketWindow
 import { playerOvr, playerValue, playerWage, formatMoney } from '../ratings';
 import { hashStr } from '../../state/hash';
 import { ct } from '../../state/career-i18n';
-import { aiTierOf, clubNeeds, starters, type ClubNeed, type WindowKind, type WorldMove, type WorldTickResult } from './mercadoIA';
+import { aiTierOf, clubNeeds, seeded, starters, type ClubNeed, type WindowKind, type WorldMove, type WorldTickResult } from './mercadoIA';
 
 export function defaultMarket(_save?: Record<string, unknown>): MarketState {
   return { v: 1, budgets: {}, incoming: [], rumors: [], loans: [], strategies: {}, arrivals: {}, windows: [], lastWindow: null };
@@ -130,6 +130,8 @@ export interface OffersArgs {
   userTier: number;
   existing: IncomingOffer[];
   max?: number;
+  /** semente do save (mundo.seed) — ausente = as chaves de sempre */
+  seed?: string;
 }
 export type MarketRumor = MarketState['rumors'][number];
 // outPlayerId = quem perde a vaga no comprador (a necessidade que gerou a compra):
@@ -160,7 +162,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
     if (e.committed || openFor.has(e.player.id)) continue;
     const ovr = playerOvr(e.player);
     if (ovr < 72) continue; // só quem joga bem atrai proposta
-    const h = hashStr(`inc:${a.split}:${a.kind}:${e.player.id}`);
+    const h = hashStr(seeded(a.seed, `inc:${a.split}:${a.kind}:${e.player.id}`));
     let chance = clamp(12 + (ovr - 72) * 4, 0, 65);
     if (e.wantsLeave) chance += 15;
     if (a.kind === 'mid') chance = Math.round(chance / 2);
@@ -176,7 +178,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
       if (!need || ovr < need.refOvr + 2) continue;       // não resolve a necessidade dele
       if (ovr >= 88 && aiTierOf(t) !== 1) continue;
       const strategy = a.strategies[t.id] ?? 'balanced';
-      const bump = (hashStr(`incfee:${a.split}:${t.id}:${e.player.id}`) % 36) / 100;
+      const bump = (hashStr(seeded(a.seed, `incfee:${a.split}:${t.id}:${e.player.id}`)) % 36) / 100;
       const fee = round10k(value * (1 + bump + (strategy === 'starBuyer' ? 0.1 : 0) + (need.priority >= 80 ? 0.1 : 0)));
       const budget = a.budgets[t.id] ?? 0;
       if (fee + playerWage(e.player) > budget) { if (!dreamer || aiTierOf(t) < aiTierOf(dreamer)) dreamer = t; continue; }

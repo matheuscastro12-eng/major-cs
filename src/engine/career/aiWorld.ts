@@ -309,18 +309,39 @@ export function orderArrivals(teams: TeamSeason[], moves: Record<string, string>
   });
 }
 
+// VENDIDOS pelo usuário (extraOnTeam: academia, base, FA sem id na base) entram
+// NA FRENTE do elenco, junto com as chegadas do mercado, pela ordem de chegada
+// (mais recente primeiro) — o clube comprou pra jogar. Roda DEPOIS do
+// envelhecimento: o índice de vaga que dá identidade aos regens (aiSlotPlayer)
+// continua o mesmo de sempre.
+export function withExtrasInFront(
+  t: TeamSeason,
+  extras: { player: Player; arrival: number }[] | undefined,
+  moves: Record<string, string> | undefined,
+  arrivals: Record<string, number> | undefined,
+): TeamSeason {
+  if (!extras || extras.length === 0) return t;
+  const have = new Set(t.players.map((p) => p.id));
+  const fresh = extras.filter((e) => !have.has(e.player.id));
+  if (fresh.length === 0) return t;
+  const arrivalOf = (p: Player) => (arrivals?.[p.id] != null && moves?.[p.id] === t.id ? arrivals[p.id] : -1);
+  const all = [
+    ...fresh.map((e) => ({ p: e.player, at: e.arrival })),
+    ...t.players.map((p) => ({ p, at: arrivalOf(p) })),
+  ];
+  // sort estável: empate de split mantém vendido antes e a ordem de sempre do resto
+  all.sort((x, y) => y.at - x.at);
+  return { ...t, players: all.map((x) => x.p) };
+}
+
 export function buildAiWorld(a: AiWorldArgs): TeamSeason[] {
   const moved = orderArrivals(applyMoves(a.base, a.moves), a.moves, a.arrivals);
   return applyAiAging(moved, a.split, a.skip)
     .filter((t) => t.id !== FREE_TEAM_ID && (!t.defunct || t.id === a.takeoverId))
+    // vendidos antes do backfill: o jovem sintético da base só completa o que
+    // o elenco (com os vendidos) não completa
+    .map((t) => withExtrasInFront(t, a.extraOnTeam?.[t.id], a.moves, a.arrivals))
     .map((t) => (t.players.length >= 5 ? t : { ...t, players: [...t.players, ...backfillPlayers(t, 5 - t.players.length)] }))
-    .map((t) => {
-      const extras = a.extraOnTeam?.[t.id];
-      if (!extras || extras.length === 0) return t;
-      const have = new Set(t.players.map((p) => p.id));
-      const fresh = extras.filter((e) => !have.has(e.player.id)).map((e) => e.player);
-      return fresh.length === 0 ? t : { ...t, players: [...t.players, ...fresh] };
-    })
     .map((t) => {
       const d = a.aiDrift?.[t.id];
       if (!d || t.id === a.takeoverId) return t;
@@ -341,10 +362,11 @@ export function agedFreeAgents(base: TeamSeason[], moves: Record<string, string>
 // teamwork conforme a forma REAL de clube + ruído determinístico por split (sem
 // o ruído, forma deriva de drift*4 e o roll viraria moto-perpétuo). Forma alta
 // empurra +1 (até +6), baixa −1 (até −6), neutra decai rumo a 0.
-export function nextAiDrift(teamIds: string[], forms: Record<string, number>, split: number, prev: Record<string, number> | undefined): Record<string, number> {
+export function nextAiDrift(teamIds: string[], forms: Record<string, number>, split: number, prev: Record<string, number> | undefined, seed?: string): Record<string, number> {
   const aiDrift = { ...(prev ?? {}) };
   for (const id of teamIds) {
-    const noise = (hashStr(`drift:${id}:${split}`) % 31) - 15; // -15..+15
+    // semente do save (mundo.seed) salga o ruído: cada Carreira tem o seu drift
+    const noise = (hashStr(seed ? `${seed}:drift:${id}:${split}` : `drift:${id}:${split}`) % 31) - 15; // -15..+15
     const roll = (forms[id] ?? 50) + noise;
     const was = aiDrift[id] ?? 0;
     let next: number;
