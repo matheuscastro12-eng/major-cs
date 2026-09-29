@@ -3219,4 +3219,7 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Veterano: menos portas abertas": { en: "Veteran: fewer doors open", es: "Veterano: menos puertas abiertas" },
   "Insatisfeito: só fica se pagar mais": { en: "Unhappy: only stays for more money", es: "Descontento: solo se queda si le pagan más" },
   "Não aceita ganhar bem menos do que ganha hoje": { en: "Won't take much less than he earns now", es: "No acepta ganar mucho menos de lo que gana hoy" },
+  "sem patrocínio": { en: "no sponsorship", es: "sin patrocinio" },
+  "contrato": { en: "contract", es: "contrato" },
+  "até o split": { en: "until split", es: "hasta el split" },
 };

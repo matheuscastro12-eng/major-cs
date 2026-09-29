@@ -10389,7 +10389,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
             {pendingDeals.map((d) => (
               <div key={d.id} className="nego-deal-row">
                 <span className="nego-deal-in">🤝 <b>{d.inNick}</b></span>
-                <span className="muted small">{formatMoney(d.fee)}{d.outNicks.length > 0 ? ` ${ct('+ troca:')} ${d.outNicks.join(', ')}` : ''}</span>
+                <span className="muted small">{formatMoney(d.fee)}{d.outNicks.length > 0 ? ` ${ct('+ troca:')} ${d.outNicks.join(', ')}` : ''}{d.contract ? ` · ${ct('contrato')} ${formatMoney(d.contract.wage)}/split ${ct('até o split')} ${d.contract.until}${(d.contract.signingBonus ?? 0) > 0 ? ` · ${ct('luvas')} ${formatMoney(d.contract.signingBonus!)}` : ''}` : ''}</span>
                 <button className="btn ghost small" onClick={() => onCancelDeal(d.id)}>{ct('Cancelar')}</button>
               </div>
             ))}

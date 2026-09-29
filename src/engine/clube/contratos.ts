@@ -565,10 +565,12 @@ export function playerNegotiationStep(p: NegoProfile, nego: Negotiation, offerIn
   }
 
   // rodada ruim: gasta paciência (proposta ofensiva gasta mais)
-  let lost = Math.max(6, Math.round((1 - Math.min(r, resv)) * 110));
-  if (r < 0.7) lost += 15;
+  let lost = Math.max(6, Math.round((1 - Math.min(r, resv)) * 100));
+  if (r < 0.7) lost += 12; // proposta ofensiva
   if (clauseBlock || statusBlock) lost = Math.max(lost, 18);
-  if (agent.has && agent.style === 'hard') lost = Math.round(lost * 1.2);
+  if (agent.has && agent.style === 'hard') lost = Math.round(lost * 1.15);
+  // primeira rodada: ele reclama, mas só rompe na hora com proposta abaixo da metade
+  if (nego.round === 1 && r >= 0.5) lost = Math.min(lost, Math.max(10, nego.patience - 10));
   const patience = Math.max(0, nego.patience - lost);
   const nextRound = nego.round + 1;
   if (patience <= 0) {
@@ -581,11 +583,12 @@ export function playerNegotiationStep(p: NegoProfile, nego: Negotiation, offerIn
   // contraproposta: cede parte da distância no salário e nas luvas, até um piso
   const opening = demandFor(p);
   const conc = agent.has ? (agent.style === 'hard' ? 0.15 : 0.22) : 0.3;
-  const wageFloor = round5k(opening.terms.wage * (agent.has ? 0.93 : 0.9));
-  const bonusFloor = round5k((opening.terms.signingBonus ?? 0) * (agent.has ? 0.85 : 0.6));
+  const round1k = (v: number) => Math.round(v / 1000) * 1000; // concessão em passos finos (salário baixo também cede)
+  const wageFloor = round1k(opening.terms.wage * (agent.has ? 0.93 : 0.9));
+  const bonusFloor = round1k((opening.terms.signingBonus ?? 0) * (agent.has ? 0.85 : 0.6));
   const curW = d.terms.wage, curB = d.terms.signingBonus ?? 0;
-  const wage = Math.min(curW, Math.max(wageFloor, round5k(curW - Math.max(0, curW - o.wage) * conc)));
-  const signingBonus = Math.min(curB, Math.max(bonusFloor, round5k(curB - Math.max(0, curB - o.signingBonus) * conc)));
+  const wage = Math.min(curW, Math.max(wageFloor, round1k(curW - Math.max(0, curW - o.wage) * conc)));
+  const signingBonus = Math.min(curB, Math.max(bonusFloor, round1k(curB - Math.max(0, curB - o.signingBonus) * conc)));
   const main = clauseBlock ? 'clause' : statusBlock ? 'status' : issues[0];
   const msg = main ? issueText(main) : ct('Está perto, mas ainda não chega lá.');
   return {

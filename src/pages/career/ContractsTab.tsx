@@ -111,42 +111,18 @@ export function ContractsTab({ save, findSigning, ageOf, sponsorIncome, renewalP
 
   return (
     <div className="em-tab ctr-tab">
-      <Panel icon={<Wallet size={16} />} title={`${ct('Contratos do elenco')} · ${save.org?.name ?? ''}`} tone="accent">
-        <div className="ctr-stats">
-          <Stat label={ct('Folha do elenco / split')} value={formatMoney(folha)} hint={`${ct('mercado')} ${formatMoney(market)}`} />
-          <Stat label={ct('Encargos (dificuldade)')} value={formatMoney(encargos)} hint={diff === 'normal' ? ct('sem encargos') : ct('sobre a folha')} />
-          <Stat label={ct('Comissão técnica')} value={formatMoney(staff)} />
-          <Stat label={ct('Folha total / split')} value={formatMoney(total)} hint={`${Math.round((total / Math.max(1, sponsorIncome)) * 100)}% ${ct('do patrocínio')}`} />
-          <Stat label={ct('Vencem neste split')} value={expiring.length} hint={clauses.length ? `${clauses.length} ${ct('com cláusula ativa')}` : ct('nenhuma cláusula ativa')} />
-        </div>
-        <p className="ctr-note">
-          {ct('O salário é o do contrato: fica fixo até você renovar. Renovação é negociada com o jogador (luvas, duração, cláusula, status). Proposta de outro clube que bate a cláusula não pode ser recusada.')}
-        </p>
-      </Panel>
-
       <div className="ctr-grid">
-        <Panel
-          icon={<FileSignature size={16} />}
-          title={ct('Contratos')}
-          flush
-          actions={(
-            <Segmented<View>
-              label={ct('Visão de colunas')}
-              value={view}
-              onChange={setView}
-              items={[{ value: 'geral', label: ct('Geral') }, { value: 'clausulas', label: ct('Cláusulas e bônus') }]}
-            />
-          )}
-        >
-          <Table<Row>
-            columns={cols}
-            rows={[...rows].sort((a, b) => (a.left ?? 99) - (b.left ?? 99) || b.wage - a.wage)}
-            rowKey={(r) => r.playerId}
-            view={view}
-            caption={ct('Contratos do elenco')}
-            empty={ct('Sem jogadores contratados.')}
-          />
-          <p className="ctr-note ctr-note--pad">{ct('Renovação antecipada: o jogador aceita conversar a partir de')} {RENEWAL_WINDOW} {ct('splits do fim do contrato.')}</p>
+        <Panel icon={<Wallet size={16} />} title={`${ct('Contratos do elenco')} · ${save.org?.name ?? ''}`} tone="accent">
+          <div className="ctr-stats">
+            <Stat label={ct('Folha do elenco / split')} value={formatMoney(folha)} hint={`${ct('mercado')} ${formatMoney(market)}`} />
+            <Stat label={ct('Encargos (dificuldade)')} value={formatMoney(encargos)} hint={diff === 'normal' ? ct('sem encargos') : ct('sobre a folha')} />
+            <Stat label={ct('Comissão técnica')} value={formatMoney(staff)} />
+            <Stat label={ct('Folha total / split')} value={formatMoney(total)} hint={sponsorIncome > 0 ? `${Math.round((total / sponsorIncome) * 100)}% ${ct('do patrocínio')}` : ct('sem patrocínio')} />
+            <Stat label={ct('Vencem neste split')} value={expiring.length} hint={clauses.length ? `${clauses.length} ${ct('com cláusula ativa')}` : ct('nenhuma cláusula ativa')} />
+          </div>
+          <p className="ctr-note">
+            {ct('O salário é o do contrato: fica fixo até você renovar. Renovação é negociada com o jogador (luvas, duração, cláusula, status). Proposta de outro clube que bate a cláusula não pode ser recusada.')}
+          </p>
         </Panel>
 
         <Panel icon={<CalendarClock size={16} />} title={ct('Vencimentos')}>
@@ -163,6 +139,30 @@ export function ContractsTab({ save, findSigning, ageOf, sponsorIncome, renewalP
           )}
         </Panel>
       </div>
+
+      <Panel
+        icon={<FileSignature size={16} />}
+        title={ct('Contratos')}
+        flush
+        actions={(
+          <Segmented<View>
+            label={ct('Visão de colunas')}
+            value={view}
+            onChange={setView}
+            items={[{ value: 'geral', label: ct('Geral') }, { value: 'clausulas', label: ct('Cláusulas e bônus') }]}
+          />
+        )}
+      >
+        <Table<Row>
+          columns={cols}
+          rows={[...rows].sort((a, b) => (a.left ?? 99) - (b.left ?? 99) || b.wage - a.wage)}
+          rowKey={(r) => r.playerId}
+          view={view}
+          caption={ct('Contratos do elenco')}
+          empty={ct('Sem jogadores contratados.')}
+        />
+        <p className="ctr-note ctr-note--pad">{ct('Renovação antecipada: o jogador aceita conversar a partir de')} {RENEWAL_WINDOW} {ct('splits do fim do contrato.')}</p>
+      </Panel>
 
       {talk && talkProfile && (
         <ContractNegotiationModal

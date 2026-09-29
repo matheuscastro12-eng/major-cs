@@ -58,11 +58,12 @@ export function ContractNegotiationModal({
   const [reply, setReply] = useState<PlayerReply | null>(null);
   const demand = currentDemand(profile, nego);
   const isRenewal = profile.kind === 'renewal';
-  // proposta inicial: salário de mercado (renovação: o atual), duração pedida, sem extras
+  // proposta inicial: abaixo do pedido (renovação: o salário atual), duração pedida
   const [offer, setOffer] = useState<Offer>(() => ({
-    wage: r5k(isRenewal && profile.current?.wage ? profile.current.wage : profile.marketWage),
+    wage: Math.max(20_000, r5k(isRenewal && profile.current?.wage ? profile.current.wage : Math.min(profile.marketWage, opened.demand.terms.wage) * 0.95)),
     term: Math.max(minTerm, opened.demand.term),
-    signingBonus: 0,
+    // renovação: começa com 1 salário de luvas (o custo normal de renovar)
+    signingBonus: isRenewal ? r5k(profile.current?.wage || profile.marketWage) : 0,
     releaseClause: null,
     statusPromise: opened.demand.wantedStatus,
     loyaltyBonus: 0,
