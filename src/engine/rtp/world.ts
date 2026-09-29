@@ -6,6 +6,7 @@
 //
 // Escada: academy → access → challenger → elite (→ Major, futuro).
 
+import { attrsOf, legacyOf, ovrFromLegacy } from '../attrs/model';
 import { CS2_REAL_2026 } from '../../data/bo3';
 import { ACADEMY_CLUBS, academyParentLogoUrl } from '../career/academyLeague';
 import { buildAcademyOpponentTeam } from '../career/academyMatch';
@@ -41,9 +42,9 @@ function realTier(teamwork: number): Tier {
   return 'access';
 }
 
-function ovrOf(p: Pick<Player, 'aim' | 'consistency' | 'clutch' | 'awp' | 'igl'>): number {
-  const spec = Math.max(p.awp, p.igl, p.aim);
-  return Math.round(p.aim * 0.45 + p.consistency * 0.18 + p.clutch * 0.12 + spec * 0.25);
+// [realismo FM] OVR pelos atributos (a mesma fórmula do jogo, via ponte legada)
+function ovrOf(p: Pick<Player, 'aim' | 'consistency' | 'clutch' | 'awp' | 'igl' | 'attrs'>): number {
+  return ovrFromLegacy(legacyOf(p));
 }
 
 function realToTPlayer(p: Player, runtimeId: string): TPlayer {
@@ -192,7 +193,8 @@ export function joinTeam(team: WorldTeam, heroRole: Role): TPlayer[] {
     // ninguém na sua função → tira o de menor OVR
     dropIdx = players.reduce((min, p, i, arr) => (p.ovr < arr[min].ovr ? i : min), 0);
   }
-  return players.filter((_, i) => i !== dropIdx).slice(0, 4);
+  // [realismo FM] os 4 colegas entram no save com os atributos gravados (estáveis)
+  return players.filter((_, i) => i !== dropIdx).slice(0, 4).map((p) => (p.attrs ? p : { ...p, attrs: attrsOf(p) }));
 }
 
 // TODOS os clubes de academia (de todas as regiões) como WorldTeam. O pool de

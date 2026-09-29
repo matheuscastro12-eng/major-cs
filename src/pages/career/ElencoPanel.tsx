@@ -7,7 +7,8 @@ import { useState } from 'react';
 import { ArrowLeftRight, Users } from 'lucide-react';
 import { Panel, Table, Segmented, AttrValue, Ovr, RoleChip, Avatar, type Column } from '../../components/ds/index';
 import { openCompare } from '../../components/CompareHost';
-import { playerAttributes, type AttrKey } from '../../engine/attributes';
+import type { AttrKey } from '../../engine/attributes';
+import { attrsOf } from '../../engine/attrs/model';
 import { playerOvr, playerValue, playerWage, formatMoney } from '../../engine/ratings';
 import { formStatus } from '../../engine/career/form';
 import { ct } from '../../state/career-i18n';
@@ -33,7 +34,8 @@ type View = 'geral' | 'attrs' | 'contracts' | 'perf';
 export function ElencoPanel({ rows, onOpen }: { rows: ElencoRow[]; onOpen: (p: Player) => void }) {
   const [view, setView] = useState<View>('geral');
   const [picked, setPicked] = useState<string[]>([]);
-  const attrs = new Map(rows.map((r) => [r.oid, playerAttributes({ id: r.oid, aim: r.p.aim, clutch: r.p.clutch, consistency: r.p.consistency, awp: r.p.awp, igl: r.p.igl, role: r.p.role })]));
+  // [realismo FM] atributos da fonte da verdade (base + evolução do elenco)
+  const attrs = new Map(rows.map((r) => [r.oid, attrsOf({ ...r.p, id: r.oid }).a]));
   const a = (r: ElencoRow, k: AttrKey) => attrs.get(r.oid)?.[k] ?? 10;
   const attrCol = (k: AttrKey, label: string, views: View[]): Column<ElencoRow> => ({
     key: k, header: label, num: true, views, sort: (r) => a(r, k), cell: (r) => <AttrValue value={a(r, k)} />,

@@ -5,7 +5,9 @@
 import type { Player, Role, TeamSeason } from '../../types';
 import { regionOf, type RegionKey } from '../../data/regions';
 import { playerOvr } from '../ratings';
+import { attrsOf, legacyOf, refitAttrs, registeredAttrs, legacyFromAttrs, type PlayerAttrs } from '../attrs/model';
 import { rarityFromOvr, rarityInfo, type UltRarity } from './rarities';
+import { CardIndex } from './cardIndex';
 
 // 6 substats faciais estilo FUT (0-99), derivadas dos atributos do nosso Player.
 export interface CardStats {
@@ -35,7 +37,9 @@ const clampStat = (n: number): number => Math.max(1, Math.min(99, Math.round(n))
 
 // deriva as 6 substats do nosso modelo (aim/clutch/consistency/awp/igl + role).
 // AWP puxa `tiro` pra cima; Entry ganha `reflexo`; IGL/Support ganham `visao`/`util`.
-export function deriveStats(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl' | 'role' | 'role2'>): CardStats {
+// [realismo FM] os 5 números vêm dos atributos (legacyOf) quando o jogador os tem.
+export function deriveStats(src: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl' | 'role' | 'role2' | 'attrs'>): CardStats {
+  const p = { ...legacyOf(src), role: src.role, role2: src.role2 };
   const isAwp = p.role === 'AWP' || p.role2 === 'AWP';
   const isEntry = p.role === 'Entry' || p.role2 === 'Entry';
   const isIgl = p.role === 'IGL' || p.role2 === 'IGL';
@@ -64,6 +68,27 @@ function cardFrom(p: Player, team: TeamSeason, rarity: UltRarity, ovr: number): 
     ovr: Math.max(1, Math.min(99, Math.round(ovr))),
     stats: deriveStats(p),
   };
+}
+
+// [realismo FM] atributos de uma carta: os do jogador na base (registrados pela
+// fonte de dados); carta especial (OVR acima do base) leva o mesmo perfil com os
+// 5 números subidos pelo boost. Fora da base (ícones, legado do RtP), deriva de
+// uma aproximação dos números a partir da face da carta.
+export function cardAttrs(card: Pick<UltCard, 'playerId' | 'role' | 'ovr' | 'stats'>): PlayerAttrs {
+  const base = registeredAttrs(card.playerId);
+  if (base) {
+    const l = legacyFromAttrs(base);
+    const boost = card.ovr - playerOvr(l);
+    if (boost <= 0) return base;
+    const up = (v: number) => Math.min(99, v + boost);
+    return refitAttrs(base, { aim: up(l.aim), awp: up(l.awp), igl: up(l.igl), clutch: up(l.clutch), consistency: up(l.consistency) });
+  }
+  const st = card.stats;
+  return attrsOf({
+    id: card.playerId, role: card.role,
+    aim: st.tiro, clutch: st.clutch, consistency: Math.round((st.mira + st.util) / 2),
+    awp: card.role === 'AWP' ? st.tiro : Math.max(30, st.tiro - 30), igl: st.visao,
+  });
 }
 
 // carta BASE de um jogador (raridade pela faixa de OVR).
@@ -114,10 +139,10 @@ export function buildCatalog(dataset: TeamSeason[], specials: SpecialSpec[] = []
 }
 
 // índice key → carta, pra resolver OwnedCard.cardKey rápido.
+// [realismo FM] chave base cuja faixa de OVR mudou resolve para a carta base
+// atual do jogador (ver cardIndex.ts) — a coleção não perde cartas.
 export function catalogIndex(catalog: UltCard[]): Map<string, UltCard> {
-  const m = new Map<string, UltCard>();
-  for (const c of catalog) m.set(c.key, c);
-  return m;
+  return new CardIndex(catalog);
 }
 
 // valor de mercado estimado (portado do BUT: exponencial no OVR × mult da

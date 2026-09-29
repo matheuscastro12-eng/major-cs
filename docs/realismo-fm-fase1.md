@@ -54,4 +54,53 @@ Assinaturas são contrato. Precisou mudar? Registre em "Mudanças de contrato" n
 - Ordem de integração prevista: A (dados) → B (atributos) → C (motor).
 
 ## Mudanças de contrato
-(nenhuma ainda)
+
+### Frente B (atributos), branch `motor/atributos`
+Assinaturas originais mantidas; mudanças compatíveis:
+- `AttrsSource` ganhou campos OPCIONAIS: `age?` (entra no PA e no perfil),
+  `role2?` (versatilidade) e `sourcePlayerId?` (TPlayer acha os atributos da base).
+- `legacyFromAttrs`: grupos passaram a ser DISJUNTOS e com pesos inteiros
+  (`LEGACY_GROUPS`: mira = aim, aimMovement, tap, spray, headshot, crosshair,
+  preAim; AWP = awp×4 + reaction; IGL = leadership, communication, gameSense,
+  decisions, vision; clutch = clutch×2 + composure, anticipation, offAngles;
+  consistência = consistency×2 + concentration, discipline, positioning). É o
+  agrupamento que o Road to Pro já usava, e permite a volta EXATA:
+  `legacyFromAttrs(deriveAttrs(p))` devolve os 5 números de `p` (1198/1198 da base).
+- `caFromAttrs(a, role)`: CA = OVR do jogo na escala FM (OVR 40 → 1, 99 → 200),
+  para estrelas e OVR contarem a mesma história (`caFromOvr`/`ovrFromCa`).
+- `attrsOf(p)`: ordem de resolução = atributos próprios → BASE REGISTRADA
+  (`registerAttrs`, preenchida por `data/playerAttrs.ts` por id/sourcePlayerId)
+  → derivação. Se os 5 números do objeto divergirem dos atributos (código
+  antigo mexeu só nos números: drift da IA, edição do admin), os atributos são
+  reajustados com o menor movimento (`refitAttrs`) — números e atributos nunca
+  divergem. Jogadores da base NÃO carregam `attrs` no objeto (saves enxutos).
+- Novos exports em `model.ts`: `legacyOf`, `withAttrs`, `refitAttrs`,
+  `fitAttrsToLegacy`, `ovrFromLegacy`, `ovrFromAttrs`, `caFromOvr`, `ovrFromCa`,
+  `potentialOvrFor`, `deriveHiddenAttrs`, `registerAttrs`, `registeredAttrs`,
+  `LEGACY_GROUPS`, `LEGACY_GROUP_OF`.
+
+Para a frente A: `data/playerAttrs.ts` carrega `src/data/player-attrs-2026.json`
+(Vite: `import.meta.glob`; Node: disco), valida cada entrada e, para quem tem
+atributos reais, REESCREVE os 5 números a partir deles. O impacto no OVR/preço
+se mede com `npx tsx scripts/measure-attrs-impact.mts src/data/player-attrs-2026.json`.
+Depois de integrar, rode `npm run gen:ult-catalog` (o snapshot do servidor
+compara byte a byte). Chaves base de carta que mudarem de faixa são apelidadas
+para a carta base atual (`engine/ultimate/cardIndex.ts`, cliente e servidor).
+
+Para a frente C: `attrsOf(tplayer)` já resolve TPlayers de torneio pela base
+registrada (`sourcePlayerId`); o elenco da Carreira (`findSigning`) chega com
+`attrs` próprios (evoluídos); cartas do Ultimate têm `cardAttrs(card)` (só o
+boost de carta especial entra nos atributos; a evolução de cópia e a edição da
+temporada NÃO — sem contagem dupla com o bônus de força). Números mexidos por
+código antigo são reconciliados por `attrsOf`.
+- Herói do RtP: `proToTPlayer` NÃO leva `attrs` (os 28 do RtP ficam ~20 OVR abaixo
+  da escala do mundo e o buildUserTeam alinha mira/consistência). Para o v2 ler o
+  perfil real, use `heroEngineAttrs(player)` (OVR legado = OVR exibido; núcleo a
+  ≤ 1 ponto de colegas de mesmo OVR — `scripts/test-rtp-migration.mts`) no lugar
+  do alinhamento +13/+14, e os 5 números = `legacyFromAttrs` dele.
+- Distribuição dos atributos de chamada (média por função, derivação antiga →
+  nova; composto `igl` do motor v2): IGL 15,5 → 16,0; AWP 11,6 → 10,2; Rifler
+  11,1 → 9,7; Entry 11,2 → 9,8; Support 10,9 → 9,4; Lurker 11,2 → 9,6. A
+  derivação antiga inflava game sense/decisões de quem não é IGL (misturava
+  clutch); a nova amarra o grupo ao número legado de IGL. Recalibrar a carga de
+  chamada na junção se o caller de times sem IGL de função pesar.

@@ -13,7 +13,7 @@ import type { PlayerPersonality } from '../career/personality';
 import type {
   ArchetypeDef, ArchetypeKind, ProPlayer, RoadToProSave, TeamContext,
 } from './types';
-import { coreStatsFromAttrs, proOvr } from './coreStats';
+import { coreStatsFromAttrs, heroHidden, proOvr } from './coreStats';
 import { buildCircuit, computeObjective } from './circuit';
 import { computeWorldRank } from './standing';
 import { startTeam, startTeamForTier, joinTeam } from './world';
@@ -27,7 +27,7 @@ import { defaultRecords } from './records';
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes de início (academia)
 
-export const RTP_SAVE_VERSION = 16;
+export const RTP_SAVE_VERSION = 17;
 const START_MONEY = 2_000;       // moleque de academia: bolso curto
 const START_WAGE = 800;          // R$/semana
 const CONTRACT_WEEKS = 52;
@@ -201,6 +201,7 @@ export function createRtpSave(input: CreateRtpInput): RoadToProSave {
     ovr,
     progression: defaultProgression(),   // RTP v8 — nível 1, sem perks/traits ainda
   };
+  player.hidden = heroHidden(player); // [realismo FM] ocultos estáveis desde a criação
 
   // Entra num time REAL da sua região. Com a peneira, no TIER definido pelo
   // desempenho (elite/challenger/access/academy). Sem peneira (legado), no tier

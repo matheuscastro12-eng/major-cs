@@ -17,6 +17,8 @@ import { buildCircuit, computeObjective } from '../engine/rtp/circuit';
 import { computeWorldRank } from '../engine/rtp/standing';
 import { deriveRecords } from '../engine/rtp/records';
 import { ALL_ATTRS } from '../engine/attributes';
+import { heroHidden } from '../engine/rtp/coreStats';
+import { attrsOf, type AttrsSource } from '../engine/attrs/model';
 import type { RoadToProSave, RtpSlotSummary, Tier, CareerLog } from '../engine/rtp/types';
 
 export const RTP_KEY = 'rtm-rtp-v1';
@@ -178,6 +180,30 @@ const RTP_MIGRATIONS: Record<number, RtpMigration> = {
     lifestyle: save.lifestyle ?? STARTER_LIFESTYLE(),
     _v: 16,
   }),
+  // v16 → v17 (realismo FM, atributos como fonte da verdade): grava os OCULTOS
+  // do protagonista (pressão, temperamento, profissionalismo… — plausíveis pelos
+  // atributos + personalidade) e os `attrs` dos 4 colegas de time (snapshots do
+  // elenco real). Os 28 atributos treinados já eram a verdade do herói; os 5
+  // números dele passam a sair da ponte do contrato (diferença medida < 0,4 OVR).
+  // Idempotente: só preenche o que falta.
+  16: (save) => {
+    const player = save.player as Record<string, unknown> | undefined;
+    const hasAttrs = !!player && !!player.attrs && typeof player.attrs === 'object';
+    const nextPlayer = hasAttrs && !player!.hidden
+      ? { ...player, hidden: heroHidden(player as unknown as Parameters<typeof heroHidden>[0]) }
+      : player;
+    const team = save.team as Record<string, unknown> | undefined;
+    const mates = Array.isArray(team?.teammates) ? (team!.teammates as Record<string, unknown>[]) : null;
+    const nextTeam = mates
+      ? {
+        ...team,
+        teammates: mates.map((m) => (m && typeof m === 'object' && !(m.attrs as { v?: number } | undefined)?.v && typeof m.aim === 'number'
+          ? { ...m, attrs: attrsOf(m as unknown as AttrsSource) }
+          : m)),
+      }
+      : team;
+    return { ...save, player: nextPlayer, team: nextTeam, _v: 17 };
+  },
 };
 
 // Save gravado por um client MAIS NOVO (ex.: nuvem sincronizada de outro
