@@ -64,7 +64,12 @@ const AI_EDGE = envNum('AI_EDGE', 4);
 const MAP_SWING = envNum('MAP_SWING_V2', 3);
 const RESIDUAL_CAP = 40;       // guarda contra valores absurdos; o RtP força placar com até +32
 const HALF_BUY_MONEY = 1800; // caixa (antes da compra) que paga colete + pistola melhor no eco
-const CALL_LOAD = 3.0;       // pontos de atributo que o IGL perde no duelo por chamar o jogo
+// pontos de atributo que quem CHAMA o jogo perde no duelo (a concentração
+// amortece). IGL de verdade (função ou composto de chamada ≥ 16) carrega
+// CALL_LOAD; num elenco sem ninguém que saiba chamar, o improvisado carrega mais
+// (chama pior E duela pior) — além do caos de time sem IGL (−1,5/−1,8 de força).
+const CALL_LOAD = envNum('CALL_LOAD_V2', 3.5);
+const CALL_LOAD_IMPROVISED = envNum('CALL_LOAD_IMPROVISED_V2', 4.0);
 
 // lado do mapa (logit de duelo; + = favorece o CT). Calibrado contra
 // docs/calibration-targets.json (CT% por mapa).
@@ -196,7 +201,7 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       const fatigue = mapIndex > 0 ? -mapIndex * ((20 - pr.stamina) / 19) * 0.45 : 0;
       // quem CHAMA o jogo divide a cabeça entre a mira e a call: o IGL duela
       // pior (a concentração amortece) — mas o time ganha a leitura dele.
-      const callLoad = k === iglSlot ? -CALL_LOAD * clamp(1.35 - pr.concentration / 20, 0.5, 1.2) : 0;
+      const callLoad = k === iglSlot ? -(hasIgl ? CALL_LOAD : CALL_LOAD_IMPROVISED) * clamp(1.35 - pr.concentration / 20, 0.5, 1.2) : 0;
       fixedMod[k] = form + swing + big + fatigue + callLoad + fin(duelMods[players[k].id], 0);
     }
     const tw = fin(t.teamwork, 70);

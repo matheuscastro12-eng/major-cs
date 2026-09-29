@@ -21,7 +21,8 @@ export const envStr = (k: string): string | undefined => {
 };
 export const envNum = (k: string, def: number): number => {
   const v = envStr(k);
-  return v != null ? Number(v) : def;
+  const n = v != null ? Number(v) : def;
+  return Number.isFinite(n) ? n : def; // env malformada nunca vira NaN no motor
 };
 
 export function emptyLine(): PlayerLine {

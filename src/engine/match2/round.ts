@@ -46,7 +46,7 @@ export const DUEL = {
   E_SMG: -0.6,
   E_ECO: -2.3,         // eco seco (pistola, sem colete)
   E_HALF: -1.35,       // meia-compra (colete + pistola melhor) — o eco do 2º round
-  E_AWP_HOLD: 0.34,    // AWP segurando ângulo (CT, ou T no pós-plant)
+  E_AWP_HOLD: 0.22,    // AWP segurando ângulo (CT, ou T no pós-plant)
   E_AWP_PEEK: -0.02,   // AWP tendo que ir no duelo
   // troca
   TRADE_BASE: 0.22,
