@@ -100,15 +100,24 @@ export function substituteInjured(
   standIns: StandIn[],
   // [fase 3 · vestiário] reservas do SEU banco: entram antes da base, com o id
   // do elenco (contam tempo de jogo e estatística). Sem banco, como antes.
-  bench: StandIn[] = [],
+  // [fase 3 · integração] também aceita FAIXAS em ordem de prioridade (banco da
+  // escalação → stand-in emprestado → reserva do elenco): a faixa seguinte só
+  // entra quando a anterior não tem ninguém. Ninguém aparece em duas faixas.
+  bench: StandIn[] | StandIn[][] = [],
 ): { team: TTeam; subs: { out: string; in: string }[] } {
   if (!team.isUser || injured.size === 0) return { team, subs: [] };
   const out = team.players.filter((p) => injured.has(oidOf(p.id)));
   if (!out.length) return { team, subs: [] };
   const inTeam = (id: string) => team.players.some((p) => oidOf(p.id) === id || p.sourcePlayerId === id);
-  const benchPool = bench.filter((s) => !inTeam(s.id) && !injured.has(s.id));
-  const benchIds = new Set(benchPool.map((s) => s.id));
-  const pool = standIns.filter((s) => !inTeam(s.id) && !benchIds.has(s.id));
+  const rawTiers: StandIn[][] = bench.length > 0 && Array.isArray(bench[0]) ? (bench as StandIn[][]) : [bench as StandIn[]];
+  const seenIds = new Set<string>();
+  const tiers = rawTiers.map((tier) => tier.filter((s) => {
+    if (inTeam(s.id) || injured.has(s.id) || seenIds.has(s.id)) return false;
+    seenIds.add(s.id);
+    return true;
+  }));
+  const benchIds = seenIds;
+  const pool = standIns.filter((s) => !inTeam(s.id) && !benchIds.has(s.id) && !injured.has(s.id));
   const used = new Set<string>();
   const subs: { out: string; in: string }[] = [];
   const skill = (s: StandIn) => s.aim * 0.6 + s.consistency * 0.25 + s.clutch * 0.15;
@@ -121,7 +130,8 @@ export function substituteInjured(
   };
   for (const p of team.players) {
     if (!injured.has(oidOf(p.id))) { players.push(p); continue; }
-    const fromBench = pickFrom(benchPool, p.role);
+    let fromBench: StandIn | undefined;
+    for (const tier of tiers) { fromBench = pickFrom(tier, p.role); if (fromBench) break; }
     const pick = fromBench ?? pickFrom(pool, p.role);
     if (!pick) { subs.push({ out: p.nick, in: '' }); continue; }
     used.add(pick.id);
