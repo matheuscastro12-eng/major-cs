@@ -41,6 +41,21 @@ export function defaultCondition(legacyFatigue?: number): PlayerCondition {
   return { fitness: Math.round(100 - f), sharpness: 70, injury: null };
 }
 
+/**
+ * [integração · fase 3] Quem ENTRA no elenco (contratação, promoção da base,
+ * stand-in) ganha a condição padrão na entrada — as telas e o treino passam a
+ * ver o jogador desde o primeiro dia. Quem já tem condição não muda; devolve
+ * null quando não há nada a gravar (idempotente).
+ */
+export function withEntryCondition(condition: Record<string, PlayerCondition> | undefined, squadIds: string[]): Record<string, PlayerCondition> | null {
+  const cur = condition ?? {};
+  const missing = squadIds.filter((id) => !cur[id]);
+  if (!missing.length) return null;
+  const out = { ...cur };
+  for (const id of missing) out[id] = defaultCondition();
+  return out;
+}
+
 // ─── Sessões ───────────────────────────────────────────────────────────────
 export const SESSIONS: TrainingSession[] = ['aim', 'utility', 'tactics', 'vod', 'scrim', 'physical', 'mental', 'rest'];
 

@@ -90,27 +90,55 @@ export const STANDIN_TEAMWORK_COST = 0.8; // força perdida por reserva (entrosa
  * (mesma régua da montagem do time) e cada reserva custa um pouco de
  * entrosamento. Devolve o time e quem entrou.
  */
+// [fase 3 · vestiário] o reserva do BANCO (6º/7º do elenco) treina com o time:
+// entra custando bem menos entrosamento que o jovem da base.
+export const BENCH_TEAMWORK_COST = 0.3;
+
 export function substituteInjured(
   team: TTeam,
   injured: ReadonlySet<string>,
   standIns: StandIn[],
+  // [fase 3 · vestiário] reservas do SEU banco: entram antes da base, com o id
+  // do elenco (contam tempo de jogo e estatística). Sem banco, como antes.
+  // [fase 3 · integração] também aceita FAIXAS em ordem de prioridade (banco da
+  // escalação → stand-in emprestado → reserva do elenco): a faixa seguinte só
+  // entra quando a anterior não tem ninguém. Ninguém aparece em duas faixas.
+  bench: StandIn[] | StandIn[][] = [],
 ): { team: TTeam; subs: { out: string; in: string }[] } {
   if (!team.isUser || injured.size === 0) return { team, subs: [] };
   const out = team.players.filter((p) => injured.has(oidOf(p.id)));
   if (!out.length) return { team, subs: [] };
-  const pool = standIns.filter((s) => !team.players.some((p) => oidOf(p.id) === s.id || p.sourcePlayerId === s.id));
+  const inTeam = (id: string) => team.players.some((p) => oidOf(p.id) === id || p.sourcePlayerId === id);
+  const rawTiers: StandIn[][] = bench.length > 0 && Array.isArray(bench[0]) ? (bench as StandIn[][]) : [bench as StandIn[]];
+  const seenIds = new Set<string>();
+  const tiers = rawTiers.map((tier) => tier.filter((s) => {
+    if (inTeam(s.id) || injured.has(s.id) || seenIds.has(s.id)) return false;
+    seenIds.add(s.id);
+    return true;
+  }));
+  const benchIds = seenIds;
+  const pool = standIns.filter((s) => !inTeam(s.id) && !benchIds.has(s.id) && !injured.has(s.id));
   const used = new Set<string>();
   const subs: { out: string; in: string }[] = [];
   const skill = (s: StandIn) => s.aim * 0.6 + s.consistency * 0.25 + s.clutch * 0.15;
   const players: TPlayer[] = [];
+  let benchIn = 0;
+  const pickFrom = (cands: StandIn[], role: TPlayer['role']) => {
+    const free = cands.filter((s) => !used.has(s.id));
+    return free.filter((s) => s.role === role).sort((a, b) => skill(b) - skill(a))[0]
+      ?? free.sort((a, b) => skill(b) - skill(a))[0];
+  };
   for (const p of team.players) {
     if (!injured.has(oidOf(p.id))) { players.push(p); continue; }
-    const cands = pool.filter((s) => !used.has(s.id));
-    const same = cands.filter((s) => s.role === p.role).sort((a, b) => skill(b) - skill(a))[0];
-    const pick = same ?? cands.sort((a, b) => skill(b) - skill(a))[0];
+    let fromBench: StandIn | undefined;
+    for (const tier of tiers) { fromBench = pickFrom(tier, p.role); if (fromBench) break; }
+    const pick = fromBench ?? pickFrom(pool, p.role);
     if (!pick) { subs.push({ out: p.nick, in: '' }); continue; }
     used.add(pick.id);
-    const tp = toTPlayer({ ...pick, role: pick.role } as Player, { runtimeId: `stand__${pick.id}`, fromTeam: 'Academia' });
+    const tp = fromBench
+      ? toTPlayer({ ...pick, role: pick.role } as Player, { runtimeId: `user__${pick.id}`, fromTeam: p.fromTeam })
+      : toTPlayer({ ...pick, role: pick.role } as Player, { runtimeId: `stand__${pick.id}`, fromTeam: 'Academia' });
+    if (fromBench) benchIn++;
     players.push({ ...tp, form: 1 });
     subs.push({ out: p.nick, in: pick.nick });
   }
@@ -121,7 +149,8 @@ export function substituteInjured(
     : withFullRoster({ ...team, players: withFullRoster({ ...team, players: [out[0]], bench: [] }).players.slice(1), bench: [] });
   for (const s of subs) if (!s.in) s.in = 'reserva';
   const tw = num(team.teamwork, 70);
-  const delta = teamStrengthFromPlayers(full.players, tw) - teamStrengthFromPlayers(team.players, tw) - STANDIN_TEAMWORK_COST * out.length;
+  const delta = teamStrengthFromPlayers(full.players, tw) - teamStrengthFromPlayers(team.players, tw)
+    - STANDIN_TEAMWORK_COST * (out.length - benchIn) - BENCH_TEAMWORK_COST * benchIn;
   return { team: { ...team, players: full.players, strength: team.strength + delta }, subs };
 }
 

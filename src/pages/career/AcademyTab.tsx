@@ -12,6 +12,7 @@
 //     por seed (split + prospectId), 35% chance pra prospect com OVR >= 72.
 //     Aceitar adiciona caixa + remove prospect. Recusar mantém na Academia.
 
+import { SQUAD_MAX } from '../../engine/clube/vestiario';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashCard } from '../../components/ds';
 import { CareerIcon } from '../../components/career/CareerIcon';
@@ -206,7 +207,7 @@ export function AcademyTab({
     update({ academy, academyTeam, ...(youth ? { youth } : {}) });
   };
   const full = aca.length >= ACADEMY_MAX;
-  const squadFull = save.squad.length >= 5;
+  const squadFull = save.squad.length >= SQUAD_MAX; // [fase 3] elenco de até 7 (5 + banco)
   // Nível atual da facility de treino (0-3) — influencia evolução esperada.
   const trainingLv = Math.max(0, Math.min(3, Math.floor(save.facilities?.training ?? 0)));
   const acaTeam = save.academyTeam ?? [];

@@ -10,8 +10,10 @@
 //   extension — "vou renovar seu contrato" → cumpre se o contrato foi estendido
 //   signing   — "vou trazer reforço"       → cumpre se entrou jogador novo no elenco
 //   workload  — "vou aliviar sua carga"    → cumpre se a fadiga caiu pra <40
+//   playtime  — "você vai jogar mais"      → [fase 3 · vestiário] cumpre se, no
+//               fechamento, ele jogou o que o status dele no elenco promete
 
-export type PlayerPromiseKind = 'extension' | 'signing' | 'workload';
+export type PlayerPromiseKind = 'extension' | 'signing' | 'workload' | 'playtime';
 
 export interface PlayerPromise {
   kind: PlayerPromiseKind;
@@ -29,6 +31,7 @@ export const PLAYER_PROMISE_LABEL: Record<PlayerPromiseKind, string> = {
   extension: 'Prometo renovar seu contrato',
   signing: 'Prometo trazer reforço pro time',
   workload: 'Prometo aliviar sua carga de jogo',
+  playtime: 'Prometo mais tempo de jogo',
 };
 
 // efeitos (moral, vínculo)
@@ -41,6 +44,8 @@ export interface PromiseJudgeCtx {
   contractUntil: (pid: string) => number | null;
   squadIds: string[];
   fatigue: (pid: string) => number;
+  // [fase 3 · vestiário] jogou o que o status promete neste split? (sem o dado: não cumpre)
+  playTimeMet?: (pid: string) => boolean;
 }
 
 // [W4] madeAtSplit/deadlineSplit viajam junto pra newsroom citar a decisão antiga
@@ -60,6 +65,8 @@ function isFulfilled(pid: string, p: PlayerPromise, ctx: PromiseJudgeCtx): boole
     }
     case 'workload':
       return ctx.fatigue(pid) < 40;
+    case 'playtime':
+      return !!ctx.playTimeMet?.(pid);
   }
 }
 
