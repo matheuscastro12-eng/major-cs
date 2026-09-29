@@ -19,7 +19,7 @@ import type { ClubStrategy, IncomingOffer, MarketLoan, MarketState, MarketWindow
 import { playerOvr, playerValue, playerWage, formatMoney } from '../ratings';
 import { hashStr } from '../../state/hash';
 import { ct } from '../../state/career-i18n';
-import { aiTierOf, clubNeeds, starters, type ClubNeed, type WindowKind, type WorldMove, type WorldTickResult } from './mercadoIA';
+import { aiTierOf, clubNeeds, seeded, starters, type ClubNeed, type WindowKind, type WorldMove, type WorldTickResult } from './mercadoIA';
 
 export function defaultMarket(_save?: Record<string, unknown>): MarketState {
   return { v: 1, budgets: {}, incoming: [], rumors: [], loans: [], strategies: {}, arrivals: {}, windows: [], lastWindow: null };
@@ -130,9 +130,13 @@ export interface OffersArgs {
   userTier: number;
   existing: IncomingOffer[];
   max?: number;
+  /** semente do save (mundo.seed) — ausente = as chaves de sempre */
+  seed?: string;
 }
 export type MarketRumor = MarketState['rumors'][number];
-export type SaleEntry = { playerId: string; nick: string; fee: number; toTag: string; toId: string };
+// outPlayerId = quem perde a vaga no comprador (a necessidade que gerou a compra):
+// na janela ele vai pro mercado livre, como nas compras da IA (mercadoIA)
+export type SaleEntry = { playerId: string; nick: string; fee: number; toTag: string; toId: string; outPlayerId?: string };
 export interface OffersResult {
   offers: IncomingOffer[];  // novas (abertas, aceitas por cláusula ou recusadas pelo jogador)
   sales: SaleEntry[];       // cláusula paga + jogador topou: vira venda na janela
@@ -158,7 +162,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
     if (e.committed || openFor.has(e.player.id)) continue;
     const ovr = playerOvr(e.player);
     if (ovr < 72) continue; // só quem joga bem atrai proposta
-    const h = hashStr(`inc:${a.split}:${a.kind}:${e.player.id}`);
+    const h = hashStr(seeded(a.seed, `inc:${a.split}:${a.kind}:${e.player.id}`));
     let chance = clamp(12 + (ovr - 72) * 4, 0, 65);
     if (e.wantsLeave) chance += 15;
     if (a.kind === 'mid') chance = Math.round(chance / 2);
@@ -174,7 +178,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
       if (!need || ovr < need.refOvr + 2) continue;       // não resolve a necessidade dele
       if (ovr >= 88 && aiTierOf(t) !== 1) continue;
       const strategy = a.strategies[t.id] ?? 'balanced';
-      const bump = (hashStr(`incfee:${a.split}:${t.id}:${e.player.id}`) % 36) / 100;
+      const bump = (hashStr(seeded(a.seed, `incfee:${a.split}:${t.id}:${e.player.id}`)) % 36) / 100;
       const fee = round10k(value * (1 + bump + (strategy === 'starBuyer' ? 0.1 : 0) + (need.priority >= 80 ? 0.1 : 0)));
       const budget = a.budgets[t.id] ?? 0;
       if (fee + playerWage(e.player) > budget) { if (!dreamer || aiTierOf(t) < aiTierOf(dreamer)) dreamer = t; continue; }
@@ -217,7 +221,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
       playerId: p.id, fromTeamId: c.team.id, fee, wageOffered, viaReleaseClause,
       split: a.split, expiresSplit: a.split, status: 'open',
       nick: p.nick, ovr: playerOvr(p), role: p.role, fromTag: c.team.tag, fromName: c.team.team,
-      reason: c.need.reason, strategy,
+      reason: c.need.reason, strategy, outPlayerId: c.need.outPlayerId,
     };
     if (viaReleaseClause) {
       // a multa foi paga: o clube não decide mais, o JOGADOR decide
@@ -227,7 +231,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
         o.playerRefused = true;
       } else {
         o.status = 'accepted';
-        sales.push({ playerId: p.id, nick: p.nick, fee, toTag: c.team.tag, toId: c.team.id });
+        sales.push({ playerId: p.id, nick: p.nick, fee, toTag: c.team.tag, toId: c.team.id, outPlayerId: c.need.outPlayerId });
       }
     }
     offers.push(o);
@@ -258,7 +262,7 @@ export function acceptOffer(m: MarketState, offerId: string): { market: MarketSt
   const incoming = m.incoming.map((x) => (x.id === offerId ? { ...x, status: 'accepted' as const } : x));
   return {
     market: { ...m, incoming },
-    sale: { playerId: o.playerId, nick: o.nick ?? o.playerId, fee: o.fee, toTag: o.fromTag ?? '', toId: o.fromTeamId },
+    sale: { playerId: o.playerId, nick: o.nick ?? o.playerId, fee: o.fee, toTag: o.fromTag ?? '', toId: o.fromTeamId, outPlayerId: o.outPlayerId },
   };
 }
 
@@ -285,7 +289,7 @@ export function counterOffer(m: MarketState, offerId: string, ask: number, ctx: 
   if (ask <= max) {
     const fee = Math.max(o.fee, round10k(ask));
     const market = { ...m, incoming: put({ status: 'accepted', fee, askedFee: ask }) };
-    return { market, outcome: 'accepted', fee, sale: { playerId: o.playerId, nick: o.nick ?? o.playerId, fee, toTag: o.fromTag ?? '', toId: o.fromTeamId } };
+    return { market, outcome: 'accepted', fee, sale: { playerId: o.playerId, nick: o.nick ?? o.playerId, fee, toTag: o.fromTag ?? '', toId: o.fromTeamId, outPlayerId: o.outPlayerId } };
   }
   if (ask <= max * 1.2) {
     return { market: { ...m, incoming: put({ status: 'countered', fee: max, askedFee: ask }) }, outcome: 'countered', fee: max, sale: null };

@@ -81,7 +81,10 @@ export function quickPlayoffs8(rng: Rng, seeds: QTeam[], pairing: [number, numbe
  */
 export function quickGslEvent(rng: Rng, teams0: QTeam[]): QEventResult {
   const teams = [...teams0].sort((a, b) => b.s - a.s);
-  const nGroups = Math.max(2, Math.floor(teams.length / 4));
+  // grupos de ATÉ 4 (ceil): com floor, 15 times viravam 3 grupos de 5 e o 5º de
+  // cada grupo (e 2 segundos colocados) saíam do evento sem colocação — todo
+  // evento em segundo plano tem 15 (a 16ª vaga é a do usuário)
+  const nGroups = Math.max(2, Math.ceil(teams.length / 4));
   const groups: QTeam[][] = Array.from({ length: nGroups }, () => []);
   teams.forEach((t, i) => {
     const row = Math.floor(i / nGroups);
@@ -110,14 +113,19 @@ export function quickGslEvent(rng: Rng, teams0: QTeam[]): QEventResult {
   // cross-seed da Carreira: 1A×2B, 1C×2D | 1B×2A, 1D×2C
   const s = [...firsts, ...seconds];
   if (s.length >= 8) {
-    const po = quickPlayoffs8(rng, s, [[0, 5], [2, 7], [1, 4], [3, 6]]);
-    return { placements: [...po.placements, ...placements], series: [...series, ...po.series] };
+    const po = quickPlayoffs8(rng, s.slice(0, 8), [[0, 5], [2, 7], [1, 4], [3, 6]]);
+    // mais de 4 grupos (field > 16): classificado sem vaga nos playoffs fecha em 9º
+    const extra = s.slice(8).map((t) => ({ teamId: t.id, place: 9 }));
+    return { placements: [...po.placements, ...extra, ...placements], series: [...series, ...po.series] };
   }
-  // 2 grupos (8 times): semis diretas
+  // menos de 8 classificados (field curto): semis diretas entre os 4 primeiros;
+  // quem se classificou além deles fecha em 5º (ninguém sai sem colocação)
   const sf = [play(s[0], s[3] ?? s[1], 3), play(s[1], s[2] ?? s[0], 3)];
   const fin = play(sf[0][0], sf[1][0], 5);
+  const top = [{ teamId: fin[0].id, place: 1 }, { teamId: fin[1].id, place: 2 }, { teamId: sf[0][1].id, place: 3 }, { teamId: sf[1][1].id, place: 3 }];
+  const inTop = new Set(top.map((p) => p.teamId));
   return {
-    placements: [{ teamId: fin[0].id, place: 1 }, { teamId: fin[1].id, place: 2 }, { teamId: sf[0][1].id, place: 3 }, { teamId: sf[1][1].id, place: 3 }, ...placements],
+    placements: [...top, ...s.slice(4).filter((t) => !inTop.has(t.id)).map((t) => ({ teamId: t.id, place: 5 })), ...placements],
     series,
   };
 }

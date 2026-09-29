@@ -18,9 +18,10 @@ import {
 } from '../src/engine/mundo/mundoSim.ts';
 import {
   simulateEtapaWorld, leaguePlacements, majorFieldFromVrs, majorRouteOf, majorResults, seedWorld, userRecordsFromHistory,
-  worldHeadlines, splitEtapaOf, closeWorld, USER_ID,
+  worldHeadlines, splitEtapaOf, closeWorld, graftPlacement, USER_ID,
 } from '../src/engine/mundo/mundoCarreira.ts';
-import { buildEtapaEvents, etapaTime, RMR_SLOTS, MAJOR_S1 } from '../src/engine/mundo/circuito.ts';
+import { buildEtapaEvents, etapaTime, isMajorSplit, RMR_SLOTS, MAJOR_S1, EVENTS_PER_SPLIT } from '../src/engine/mundo/circuito.ts';
+import { T1_EVENTS, T2_EVENTS, MAJOR_NAMES, t1EventName } from '../src/data/tournaments.ts';
 import { computeVrs, publishVrs } from '../src/engine/mundo/vrs.ts';
 import { aiPool, strengthMap } from './measure-circuito.mts';
 import type { MundoState } from '../src/engine/mundo/model.ts';
@@ -59,6 +60,18 @@ test('formatos: GSL 16 → playoffs 8 (colocações reais) e suíço de 16 (3-x)
   assert.equal(g.placements.length, 16);
   assert.deepEqual([count(1), count(2), count(3), count(5), count(9), count(13)], [1, 1, 2, 4, 4, 4]);
   assert.equal(new Set(g.placements.map((x) => x.teamId)).size, 16);
+  // qualquer tamanho de field: TODO time sai com colocação (o segundo plano roda
+  // com 15 — a 16ª vaga é a do usuário — e antes 5 times sumiam do evento)
+  for (let n = 4; n <= 20; n++) {
+    for (let k = 0; k < 25; k++) {
+      const field = Array.from({ length: n }, (_, i) => ({ id: `f${i}`, s: 88 - i * 0.7 }));
+      const r = quickGslEvent(seedRng(`gsl:${n}:${k}`), field);
+      assert.equal(r.placements.length, n, `${n} times: ${r.placements.length} colocados`);
+      assert.equal(new Set(r.placements.map((x) => x.teamId)).size, n, `${n} times: colocação duplicada`);
+      assert.equal(r.placements.filter((x) => x.place === 1).length, 1, `${n} times: um campeão`);
+      assert.equal(r.placements.filter((x) => x.place === 2).length, 1, `${n} times: um vice`);
+    }
+  }
   const sw = quickSwiss(seedRng('sw'), teams);
   assert.equal(sw.order.length, 16);
   for (const id of sw.order.slice(0, 8)) assert.equal(sw.record[id][0], 3, `${id} classificado com 3 vitórias`);
@@ -117,14 +130,16 @@ test('etapa em segundo plano: determinística, pula o SEU evento, e é rápida (
   assert.ok(all.every((r) => r.t === etapaTime(2, 1) && r.prizePool! > 0 && r.placements.length === r.field));
   // desempenho: etapa inteira (8 eventos) + publicar o VRS, e o Major completo
   let m: MundoState = { v: 1, calendar: [], results: [], vrs: {}, newgens: {}, intake: [], databaseId: null };
-  const t0 = performance.now();
+  // tempo de CPU (não de relógio): máquina/CI carregados não derrubam o teste
+  const cpuMs = (u: NodeJS.CpuUsage) => (u.user + u.system) / 1000;
+  const t0 = process.cpuUsage();
   for (let split = 1; split <= 6; split++) {
     for (let e = 1; e <= 3; e++) m = closeWorld(m, simulateEtapaWorld(buildEtapaEvents(pool, split, e, m.vrs), split, e, sOf), etapaTime(split, e)).mundo;
   }
-  const perEtapa = (performance.now() - t0) / 18;
-  const t1 = performance.now();
+  const perEtapa = cpuMs(process.cpuUsage(t0)) / 18;
+  const t1 = process.cpuUsage();
   for (let i = 0; i < 10; i++) completeMajor(majorFieldFromVrs(m.vrs, pool, null), sOf, `perf${i}`);
-  const perMajor = (performance.now() - t1) / 10;
+  const perMajor = cpuMs(process.cpuUsage(t1)) / 10;
   console.log(`  etapa em segundo plano + VRS: ${perEtapa.toFixed(2)} ms · Major completo: ${perMajor.toFixed(2)} ms`);
   assert.ok(perEtapa < 25, `etapa lenta: ${perEtapa} ms`);
   assert.ok(perMajor < 25, `Major lento: ${perMajor} ms`);
@@ -160,7 +175,9 @@ test('semeadura: o mundo nasce com passado, ranking e (no takeover) a sua posiç
   const s = seedWorld({ pool, strengthOf: sOf, now: 0 });
   assert.ok(Object.keys(s.vrs).length >= 80, 'ranking com o mundo inteiro');
   assert.ok(s.results.some((r) => r.kind === 'major'), 'o Major passado está no histórico');
-  assert.equal(s.vrsAt, -1);
+  // o split 0 é de Major: o Major semeado (majorTime = −0,5) já passou, então o
+  // ranking semeado é publicado depois dele
+  assert.equal(s.vrsAt, -0.5);
   const strong = [...pool].sort((a, b) => b.teamwork - a.teamwork)[0];
   const tk = seedWorld({ pool, strengthOf: sOf, now: 0, takeoverId: strong.id });
   assert.ok(tk.vrs[USER_ID] && !tk.vrs[strong.id], 'assumir um time herda a posição dele');
@@ -176,6 +193,52 @@ test('semeadura: o mundo nasce com passado, ranking e (no takeover) a sua posiç
   assert.ok(mig.results.filter((r) => r.placements.some((p) => p.teamId === USER_ID)).length >= 3);
   assert.deepEqual(splitEtapaOf(etapaTime(5, 2)), { split: 5, etapa: 2 });
   assert.deepEqual(splitEtapaOf(-1), { split: 0, etapa: 3 });
+});
+
+test('semeadura de save migrado: enxerto empurra as colocações (um só campeão)', () => {
+  const ev = Array.from({ length: 16 }, (_, i) => ({ teamId: `a${i}`, place: [1, 2, 3, 3, 5, 5, 5, 5, 9, 9, 9, 9, 13, 13, 13, 13][i] }));
+  const g = graftPlacement(ev, USER_ID, 1);
+  assert.equal(g.length, 16, 'o field não cresce');
+  assert.deepEqual(g.filter((p) => p.place === 1).map((p) => p.teamId), [USER_ID], 'um só campeão');
+  assert.equal(g.find((p) => p.teamId === 'a0')!.place, 2, 'o campeão simulado vira vice');
+  assert.equal(g.find((p) => p.teamId === 'a1')!.place, 3);
+  assert.ok(!g.some((p) => p.teamId === 'a15'), 'o último sai');
+  assert.deepEqual(g.map((p) => p.place).sort((a, b) => a - b), ev.map((p) => p.place));
+  const mid = graftPlacement(ev, USER_ID, 5);
+  assert.equal(mid.find((p) => p.teamId === USER_ID)!.place, 5);
+  assert.equal(mid.filter((p) => p.place === 1).length, 1);
+  assert.equal(mid.find((p) => p.teamId === 'a0')!.place, 1, 'acima de você nada muda');
+  // o Major do histórico vira a sua colocação real
+  const recs = userRecordsFromHistory([
+    { split: 3, circuit: 'x', position: 3 }, { split: 4, circuit: 'x', position: 1 }, { split: 4, circuit: 'x', position: 1, major: { placement: 'champion' } },
+  ], 12, () => 1);
+  assert.deepEqual(recs[0].major, { split: 4, place: 1 });
+  assert.equal(recs[1].major, undefined);
+});
+
+test('save migrado dominante (6 últimos T1 + último Major): #1 em qualquer etapa, #2 da IA < 1700', () => {
+  const tierOf = (name: string): 1 | 2 | 3 => (T1_EVENTS.includes(name) || MAJOR_NAMES.includes(name) ? 1 : T2_EVENTS.includes(name) ? 2 : 3);
+  for (const [split, etapa] of [[21, 1], [21, 2], [21, 3], [20, 3], [22, 2]] as const) {
+    const pool = aiPool(split);
+    const str = strengthMap(pool);
+    const sOf = (id: string) => str.get(id) ?? 75;
+    const history: { split: number; circuit: string; position: number; major?: { placement: string } }[] = [];
+    for (let s = 1; s <= split; s++) {
+      for (let e = 1; e <= EVENTS_PER_SPLIT && (s < split || e < etapa); e++) {
+        history.push({ split: s, circuit: t1EventName(s, e), position: 1, ...(e === EVENTS_PER_SPLIT && isMajorSplit(s) ? { major: { placement: 'champion' } } : {}) });
+      }
+    }
+    const now = etapaTime(split, etapa);
+    const seeded = seedWorld({ pool, strengthOf: sOf, now, userRecords: userRecordsFromHistory(history, now, tierOf) });
+    const order = Object.values(seeded.vrs).sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
+    assert.equal(order[0].teamId, USER_ID, `split ${split} etapa ${etapa}: #1 é ${order[0].teamId}`);
+    assert.ok(order[1].points < 1700, `split ${split} etapa ${etapa}: #2 da IA com ${order[1].points}`);
+    for (const r of seeded.results.filter((x) => x.placements.some((p) => p.teamId === USER_ID))) {
+      assert.equal(r.placements.filter((p) => p.place === 1).length, 1, `${r.eventId}: um só campeão`);
+    }
+    const major = seeded.results.find((r) => r.kind === 'major' && r.split === 20);
+    if (major && now - 6 <= 59) assert.equal(major.placements.find((p) => p.place === 1)?.teamId, USER_ID, 'o Major que você venceu é seu');
+  }
 });
 
 test('manchetes do mundo: campeões do tier 1, zebra e resumo do tier 2 (no máximo 3)', () => {

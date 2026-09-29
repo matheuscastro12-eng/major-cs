@@ -64,7 +64,7 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
               disabled={off}
               onClick={() => setPicked(o.id)}
               style={oppChipStyle(isPicked, off)}
-              title={off ? AVAIL_LABEL[o.avail] : `Força ${o.strength} (${o.diff >= 0 ? '+' : ''}${o.diff} vs você)`}
+              title={off ? AVAIL_LABEL[o.avail] : `Força ${o.strength} (${o.diff >= 0 ? '+' : ''}${o.diff} vs você)${o.offBand ? ' · fora da sua banda de força: rende menos química' : ''}`}
             >
               <TeamBadge tag={o.tag} colors={o.colors} size={18} logoUrl={o.logoUrl} />
               <span style={{ fontWeight: 700, fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.tag}</span>
@@ -79,7 +79,7 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
         })}
         {opponents.length === 0 && (
           <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem', fontStyle: 'italic' }}>
-            Sem sparrings na sua banda de força (complete o elenco).
+            Complete o elenco (5 titulares e técnico) para marcar scrims.
           </span>
         )}
       </div>

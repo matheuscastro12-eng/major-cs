@@ -9,11 +9,10 @@ import { playerOvr } from '../ratings';
 import { hashStr } from '../../state/hash';
 import { macroRegionOf, type MacroRegion } from '../../data/regions';
 import { CS2_REAL_2026 } from '../../data/bo3';
-import bo3Ages from '../../data/bo3-ages.json';
 import { FREE_TEAM_ID } from './transferAI';
-import { parseRegenPlayerId } from './signings';
-import { ageFromCareerStart } from './playerAge';
-import { isNewgenId, newgenAge } from '../mundo/juventude';
+import { REAL_AGES, baseAge, effectiveAge, type YouthDebut } from './playerAge';
+import { isNewgenId } from '../mundo/juventude';
+import { RETIRED_TEAM_ID } from '../mundo/editor';
 
 export type PlayerPhase = 'rising' | 'prime' | 'declining';
 
@@ -91,23 +90,9 @@ export function backfillPlayers(team: TeamSeason, n: number, start = 0): Player[
   return out;
 }
 
-// idades REAIS do bo3 (196/240) por nick; quem falta recebe uma idade plausível
-// determinística. A idade efetiva sobe ~1 ano a cada 3 splits de carreira.
-export const REAL_AGES = bo3Ages as Record<string, { age: number; born: string }>;
-export function baseAge(p: Pick<Player, 'id' | 'nick' | 'age'>, youthAge?: Record<string, number>): number {
-  // prospecto promovido da academia: idade-base guardada na promoção. Vem ANTES do
-  // lookup por nick (um prospecto pode ter um nick que colide com um pro real).
-  const y = youthAge?.[p.id];
-  if (y != null) return y;
-  // idade editada no CRM (override global): tem prioridade sobre a tabela por nick.
-  if (p.age != null && p.age >= 15 && p.age <= 45) return p.age;
-  const real = REAL_AGES[p.nick]?.age;
-  if (real && real >= 15 && real <= 45) return real;
-  // sem dado: assume AUGE (25-29), não juventude. Um pro de elenco real não pode
-  // virar ct('jovem em ascensão') só por falta de idade na tabela (bug do coldzera/fer).
-  // Jovens de verdade vêm da academia, que grava a idade na promoção (youthAge).
-  return 25 + (hashStr(`age:${p.id}`) % 5);
-}
+// idade-base (REAL_AGES/baseAge) mora em playerAge.ts, junto do relógio da
+// Carreira (effectiveAge); reexportada aqui para os consumidores de sempre.
+export { REAL_AGES, baseAge };
 
 // fase de carreira pela IDADE: jovem sobe, auge oscila, veterano cai.
 export function playerPhase(_pid: string, age: number): PlayerPhase {
@@ -187,6 +172,11 @@ export function driftFrom(pid: string, baseOvr: number, a0: number, debut: numbe
   return Math.round(Math.max(-12, Math.min(12, cur - baseOvr)));
 }
 
+/** Faixa do OVR de estreia do jovem que assume uma vaga (ele cresce depois, pelo
+ *  relógio da vaga): teto 80; piso 66, o nível do jovem de reposição da base. */
+export const REGEN_DEBUT_CAP = 80;
+export const REGEN_DEBUT_FLOOR = 66;
+const NO_SKIP: Set<string> = new Set();
 // jovem da base que assume a vaga de um titular aposentado. OVR de estreia abaixo
 // do nível do time (cru, com espaço pra crescer). Determinístico por time/vaga/geração.
 export function regenYouth(team: TeamSeason, slot: number, gen: number, debut: number, a0: number, orig: Player): Player {
@@ -197,11 +187,18 @@ export function regenYouth(team: TeamSeason, slot: number, gen: number, debut: n
   // polonês aleatório. orig.country > país do time (cobre imports do elenco).
   const ident = prospectIdentity(seed, region, orig.country || team.country);
   const h = hashStr(seed);
-  // herda o PERFIL do titular que saiu (mesma função/estilo) e entra um pouco abaixo:
-  // quanto mais forte a vaga, menor o gap — o time mantém a firepower ao renovar.
+  // herda o PERFIL do titular original da vaga (mesma função/estilo), mas o NÍVEL
+  // de estreia sai de quem está SAINDO agora — o veterano já em declínio (ou o
+  // regen anterior), não o OVR do dataset — e tem teto de estreia: a vaga de uma
+  // estrela não gera outra estrela pronta aos 17 (antes o substituto do ZywOo
+  // estreava com ~89 e devolvia o time ao topo). Determinístico: quem sai é
+  // refeito pelo mesmo relógio da vaga (aiSlotPlayer um split antes da estreia).
   const anchor = playerOvr(orig);
-  const gap = (anchor >= 90 ? 4 : anchor >= 86 ? 5 : anchor >= 82 ? 6 : 8) + (h % 2);
-  const at = (v: number) => Math.max(40, Math.min(95, v - gap));
+  const leaving = debut > 1 ? playerOvr(aiSlotPlayer(orig, team, slot, debut - 1, NO_SKIP)) : anchor;
+  const gap = (leaving >= 90 ? 4 : leaving >= 86 ? 5 : leaving >= 82 ? 6 : 8) + (h % 2);
+  const target = Math.max(REGEN_DEBUT_FLOOR, Math.min(REGEN_DEBUT_CAP, leaving - gap));
+  const shift = anchor - target;
+  const at = (v: number) => Math.max(40, Math.min(95, v - shift));
   return {
     id: `${team.id}~rg${slot}.${gen}.${debut}.${a0}`,
     nick: ident.nick, name: ident.name, country: ident.country, role: orig.role,
@@ -249,11 +246,19 @@ export function applyMoves(teams: TeamSeason[], moves: Record<string, string> | 
   if (!moves || Object.keys(moves).length === 0) return teams;
   const all: { p: Player; orig: string }[] = [];
   for (const t of teams) for (const p of t.players) all.push({ p, orig: t.id });
-  // time extinto (defunct) não recebe ninguém: o jogador volta ao time da base
+  // time extinto (defunct) não recebe ninguém. O jogador que tinha ido pra ele
+  // (venda sua, movimento da IA) fica SEM CLUBE — o clube acabou, não é motivo
+  // pra voltar ao time da base (bug: a base set/2026 extinguiu 21 clubes e as
+  // vendas antigas pra eles "voltavam pro time de origem" cobrando taxa). A
+  // exceção é o time dos aposentados: move pra lá segue caindo na origem.
   const valid = new Set(teams.filter((t) => !t.defunct).map((t) => t.id));
+  const hasFree = valid.has(FREE_TEAM_ID);
+  const defunct = new Set(teams.filter((t) => t.defunct && t.id !== RETIRED_TEAM_ID).map((t) => t.id));
   const teamOf = (pid: string, orig: string) => {
     const m = moves[pid];
-    return m && valid.has(m) ? m : orig;
+    if (!m) return orig;
+    if (valid.has(m)) return m;
+    return hasFree && defunct.has(m) ? FREE_TEAM_ID : orig;
   };
   return teams.map((t) => ({ ...t, players: all.filter((ap) => teamOf(ap.p.id, ap.orig) === t.id).map((ap) => ap.p) }));
 }
@@ -304,18 +309,39 @@ export function orderArrivals(teams: TeamSeason[], moves: Record<string, string>
   });
 }
 
+// VENDIDOS pelo usuário (extraOnTeam: academia, base, FA sem id na base) entram
+// NA FRENTE do elenco, junto com as chegadas do mercado, pela ordem de chegada
+// (mais recente primeiro) — o clube comprou pra jogar. Roda DEPOIS do
+// envelhecimento: o índice de vaga que dá identidade aos regens (aiSlotPlayer)
+// continua o mesmo de sempre.
+export function withExtrasInFront(
+  t: TeamSeason,
+  extras: { player: Player; arrival: number }[] | undefined,
+  moves: Record<string, string> | undefined,
+  arrivals: Record<string, number> | undefined,
+): TeamSeason {
+  if (!extras || extras.length === 0) return t;
+  const have = new Set(t.players.map((p) => p.id));
+  const fresh = extras.filter((e) => !have.has(e.player.id));
+  if (fresh.length === 0) return t;
+  const arrivalOf = (p: Player) => (arrivals?.[p.id] != null && moves?.[p.id] === t.id ? arrivals[p.id] : -1);
+  const all = [
+    ...fresh.map((e) => ({ p: e.player, at: e.arrival })),
+    ...t.players.map((p) => ({ p, at: arrivalOf(p) })),
+  ];
+  // sort estável: empate de split mantém vendido antes e a ordem de sempre do resto
+  all.sort((x, y) => y.at - x.at);
+  return { ...t, players: all.map((x) => x.p) };
+}
+
 export function buildAiWorld(a: AiWorldArgs): TeamSeason[] {
   const moved = orderArrivals(applyMoves(a.base, a.moves), a.moves, a.arrivals);
   return applyAiAging(moved, a.split, a.skip)
     .filter((t) => t.id !== FREE_TEAM_ID && (!t.defunct || t.id === a.takeoverId))
+    // vendidos antes do backfill: o jovem sintético da base só completa o que
+    // o elenco (com os vendidos) não completa
+    .map((t) => withExtrasInFront(t, a.extraOnTeam?.[t.id], a.moves, a.arrivals))
     .map((t) => (t.players.length >= 5 ? t : { ...t, players: [...t.players, ...backfillPlayers(t, 5 - t.players.length)] }))
-    .map((t) => {
-      const extras = a.extraOnTeam?.[t.id];
-      if (!extras || extras.length === 0) return t;
-      const have = new Set(t.players.map((p) => p.id));
-      const fresh = extras.filter((e) => !have.has(e.player.id)).map((e) => e.player);
-      return fresh.length === 0 ? t : { ...t, players: [...t.players, ...fresh] };
-    })
     .map((t) => {
       const d = a.aiDrift?.[t.id];
       if (!d || t.id === a.takeoverId) return t;
@@ -336,10 +362,11 @@ export function agedFreeAgents(base: TeamSeason[], moves: Record<string, string>
 // teamwork conforme a forma REAL de clube + ruído determinístico por split (sem
 // o ruído, forma deriva de drift*4 e o roll viraria moto-perpétuo). Forma alta
 // empurra +1 (até +6), baixa −1 (até −6), neutra decai rumo a 0.
-export function nextAiDrift(teamIds: string[], forms: Record<string, number>, split: number, prev: Record<string, number> | undefined): Record<string, number> {
+export function nextAiDrift(teamIds: string[], forms: Record<string, number>, split: number, prev: Record<string, number> | undefined, seed?: string): Record<string, number> {
   const aiDrift = { ...(prev ?? {}) };
   for (const id of teamIds) {
-    const noise = (hashStr(`drift:${id}:${split}`) % 31) - 15; // -15..+15
+    // semente do save (mundo.seed) salga o ruído: cada Carreira tem o seu drift
+    const noise = (hashStr(seed ? `${seed}:drift:${id}:${split}` : `drift:${id}:${split}`) % 31) - 15; // -15..+15
     const roll = (forms[id] ?? 50) + noise;
     const was = aiDrift[id] ?? 0;
     let next: number;
@@ -352,13 +379,13 @@ export function nextAiDrift(teamIds: string[], forms: Record<string, number>, sp
   return aiDrift;
 }
 
-// idade de um jogador do mundo da IA no split (regen tem relógio próprio no id)
-export function aiAgeOf(p: Pick<Player, 'id' | 'nick' | 'age'>, split: number): number {
-  const ng = newgenAge(p.id, split);
-  if (ng != null) return ng;
-  const rg = parseRegenPlayerId(p.id);
-  if (rg) return rg.ageAtDebut + Math.floor(Math.max(0, split - rg.debut) / 3);
-  return ageFromCareerStart(baseAge(p), split);
+// idade de um jogador do mundo da IA no split (regen/newgen têm relógio próprio
+// no id). `youthDebut` (save.youthDebut): a base promovida/criada que foi
+// vendida ou emprestada continua no relógio da promoção — sem ele a cópia no
+// comprador (extraOnTeam) caía em baseAge(p.age = idade NA PROMOÇÃO) + anos
+// desde o split 1 e "envelhecia" 7+ anos de uma vez.
+export function aiAgeOf(p: Pick<Player, 'id' | 'nick' | 'age'>, split: number, youthDebut?: Record<string, YouthDebut>): number {
+  return effectiveAge(p, split, undefined, youthDebut);
 }
 
 // OVR de BASE (dataset) de um jogador real — referência pra "está em queda"
