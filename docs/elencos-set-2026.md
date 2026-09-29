@@ -5,7 +5,7 @@ Gerado por `scripts/update-rosters-2026.mts` (não edite à mão; rode de novo).
 
 ## Resumo
 
-- Times: **213** disputáveis (126 da base anterior, 108 novos), 21 extintos (mantidos com `defunct: true`), mais os virtuais `__free__` e `__retired__`.
+- Times: **213** disputáveis (105 da base anterior, 108 novos), 21 extintos (mantidos com `defunct: true`), mais os virtuais `__free__` e `__retired__`.
 - Jogadores em times ou free agents: **1219**; free agents: **94**; aposentados/inativos fora dos times: **17**.
 - Transferências detectadas (jogador da base que mudou de time, virou free agent ou saiu de cena): **220**.
 - Jogadores novos na base: **518** (id `bo3_<id do bo3>`).

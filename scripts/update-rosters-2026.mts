@@ -267,7 +267,7 @@ export function updateRosters(base: Team[], stats: Stats, attrs: Record<string, 
   lines.push('Gerado por `scripts/update-rosters-2026.mts` (não edite à mão; rode de novo). Datas entre parênteses são as que a API registra (última movimentação do jogador em `player_transfers`, ou `joined_team_at`).', '');
   const totalPlayers = teamsOut.reduce((s, t) => s + (t.id === RETIRED ? 0 : t.players.length), 0);
   lines.push('## Resumo', '');
-  lines.push(`- Times: **${teamsOut.filter((t) => !t.defunct && t.id !== FREE).length}** disputáveis (${base.length - 1} da base anterior, ${newTeams.length} novos), ${defunct.length} extintos (mantidos com \`defunct: true\`), mais os virtuais \`${FREE}\` e \`${RETIRED}\`.`);
+  lines.push(`- Times: **${teamsOut.filter((t) => !t.defunct && t.id !== FREE).length}** disputáveis (${base.length - 1 - defunct.length} da base anterior, ${newTeams.length} novos), ${defunct.length} extintos (mantidos com \`defunct: true\`), mais os virtuais \`${FREE}\` e \`${RETIRED}\`.`);
   lines.push(`- Jogadores em times ou free agents: **${totalPlayers}**; free agents: **${free.players.length}**; aposentados/inativos fora dos times: **${retired.players.length}**.`);
   lines.push(`- Transferências detectadas (jogador da base que mudou de time, virou free agent ou saiu de cena): **${moved.length}**.`);
   lines.push(`- Jogadores novos na base: **${[...seen.keys()].filter((id) => !baseIds.has(id)).length}** (id \`bo3_<id do bo3>\`).`, '');
