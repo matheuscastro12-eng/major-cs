@@ -55,7 +55,7 @@ function profile(p: Player, clubTier: number, kind: NegoProfile['kind'], split =
 }
 const costPerSplit = (o: Offer) => o.wage + o.signingBonus / o.term;
 
-/** Barganha simples: abre em 88% do salário pedido (resto igual à exigência), sobe 3% por rodada. */
+/** Barganha simples: abre em 88% do salário pedido (resto igual à exigência), sobe 3% por rodada (passos de R$ 1k). */
 export function haggle(p: NegoProfile): { offer: Offer; rounds: number; outcome: string } {
   const opened = openPlayerNegotiation(p);
   if (opened.refused) return { offer: offerFromDemand(opened.demand, p.split), rounds: 0, outcome: 'refused' };
@@ -64,7 +64,7 @@ export function haggle(p: NegoProfile): { offer: Offer; rounds: number; outcome:
   for (let i = 0; i < 8; i++) {
     const d = demandFor(p);
     const base = offerFromDemand(d, p.split);
-    const offer: Offer = { ...base, wage: Math.round((nego.demand.wage ?? d.terms.wage) * wageF / 5000) * 5000, signingBonus: nego.demand.signingBonus ?? base.signingBonus };
+    const offer: Offer = { ...base, wage: Math.round((nego.demand.wage ?? d.terms.wage) * wageF / 1000) * 1000, signingBonus: nego.demand.signingBonus ?? base.signingBonus };
     const r = playerNegotiationStep(p, nego, offer);
     nego = r.nego;
     if (r.reply.kind === 'accept') return { offer, rounds: i + 1, outcome: 'accept' };

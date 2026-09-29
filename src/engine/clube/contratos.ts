@@ -472,12 +472,12 @@ export function initialPatience(p: NegoProfile): number {
   return Math.round(clamp(v, 30, 95));
 }
 
-/** Fração mínima do valor exigido que ele aceita na rodada (cai um pouco a cada rodada). */
+/** Fração mínima da exigência de ABERTURA que ele aceita na rodada (cai um pouco a cada rodada, até 90%). */
 export function reservation(p: NegoProfile, round: number): number {
   const a = agentOf(p.playerId, p.ovr);
   let base = 0.97 + (a.has ? (a.style === 'hard' ? 0.03 : 0.015) : 0) + (p.hidden.ambition - 10) * 0.002;
   if (p.kind === 'renewal') base -= (p.hidden.loyalty - 10) * 0.004;
-  return clamp(base - 0.025 * (Math.max(1, round) - 1), 0.85, 1.02);
+  return clamp(base - 0.02 * (Math.max(1, round) - 1), 0.9, 1.02);
 }
 
 // ─── Negociação com o jogador (rodadas) ───────────────────────────────────
@@ -556,16 +556,24 @@ export function playerNegotiationStep(p: NegoProfile, nego: Negotiation, offerIn
   const offerTerms = termsFromOffer(o, p.split);
   const clauseBlock = d.maxClause != null && (o.releaseClause == null || o.releaseClause > d.maxClause);
   const statusBlock = statusGap(o, d.wantedStatus) <= -2 && p.hidden.ambition >= 12;
-  const r = offerValue(p, d, o) / Math.max(1, offerValue(p, d, offerFromDemand(d, p.split)));
+  // Aceita se a proposta vale ao menos o MENOR entre a exigência atual (o que
+  // a tela mostra — igualar sempre fecha) e a reserva da rodada aplicada à
+  // exigência de ABERTURA (a reserva cai a cada rodada, até ~90%).
+  const opening = demandFor(p);
+  const v = offerValue(p, d, o);
+  const vCur = Math.max(1, offerValue(p, d, offerFromDemand(d, p.split)));
+  const vOpen = Math.max(1, offerValue(p, opening, offerFromDemand(opening, p.split)));
   const resv = reservation(p, nego.round);
+  const need = Math.min(vCur, resv * vOpen);
+  const r = v / vCur; // distância da exigência mostrada (mede o quanto a rodada irrita)
 
-  if (!clauseBlock && !statusBlock && r >= resv) {
+  if (!clauseBlock && !statusBlock && v >= need - 1) {
     const msg = agent.has ? ct('O agente aceitou os termos. Contrato pronto para assinar.') : ct('Ele aceitou os termos. Contrato pronto para assinar.');
     return { nego: { ...nego, offer: offerTerms, status: 'accepted' }, reply: { kind: 'accept', msg, issues: [], patienceLost: 0 } };
   }
 
   // rodada ruim: gasta paciência (proposta ofensiva gasta mais)
-  let lost = Math.max(6, Math.round((1 - Math.min(r, resv)) * 100));
+  let lost = Math.max(6, Math.round((1 - Math.min(r, 1)) * 100));
   if (r < 0.7) lost += 12; // proposta ofensiva
   if (clauseBlock || statusBlock) lost = Math.max(lost, 18);
   if (agent.has && agent.style === 'hard') lost = Math.round(lost * 1.15);
@@ -581,10 +589,9 @@ export function playerNegotiationStep(p: NegoProfile, nego: Negotiation, offerIn
     return { nego: { ...nego, offer: offerTerms, patience, status: 'expired' }, reply: { kind: 'expired', msg: ct('Acabaram as rodadas: ele vai ouvir outras propostas.'), issues, patienceLost: lost } };
   }
   // contraproposta: cede parte da distância no salário e nas luvas, até um piso
-  const opening = demandFor(p);
   const conc = agent.has ? (agent.style === 'hard' ? 0.15 : 0.22) : 0.3;
   const round1k = (v: number) => Math.round(v / 1000) * 1000; // concessão em passos finos (salário baixo também cede)
-  const wageFloor = round1k(opening.terms.wage * (agent.has ? 0.93 : 0.9));
+  const wageFloor = round1k(opening.terms.wage * (agent.has ? 0.95 : 0.92));
   const bonusFloor = round1k((opening.terms.signingBonus ?? 0) * (agent.has ? 0.85 : 0.6));
   const curW = d.terms.wage, curB = d.terms.signingBonus ?? 0;
   const wage = Math.min(curW, Math.max(wageFloor, round1k(curW - Math.max(0, curW - o.wage) * conc)));

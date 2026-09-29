@@ -183,7 +183,7 @@ export function ContractNegotiationModal({
               </div>
               {row(ct('Salário por split'), `${ct('mercado')} ${formatMoney(profile.marketWage)}`,
                 <div className="cn-money">
-                  <input type="range" min={20_000} max={wageMax} step={5000} value={clampN(offer.wage, 20_000, wageMax)} disabled={closed}
+                  <input type="range" min={20_000} max={wageMax} step={1000} value={clampN(offer.wage, 20_000, wageMax)} disabled={closed}
                     aria-label={ct('Salário por split')} onChange={(e) => set({ wage: Number(e.target.value) })} />
                   <b className="cn-num">{formatMoney(offer.wage)}</b>
                 </div>,
