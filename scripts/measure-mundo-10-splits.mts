@@ -62,7 +62,7 @@ function resultsSave(world: TeamSeason[], split: number, aiDrift: Record<string,
 }
 const top5Ids = (t: TeamSeason) => [...t.players].sort((a, b) => playerOvr(b) - playerOvr(a)).slice(0, 5).map((p) => p.id);
 
-export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { rows: MundoSplit[]; mundo: MundoJuv; moves: Record<string, string> } {
+export function simulateMundo(splits = 10, opts: { youth?: boolean; onWorld?: (split: number, world: TeamSeason[]) => void } = {}): { rows: MundoSplit[]; mundo: MundoJuv; moves: Record<string, string> } {
   const youth = opts.youth !== false;
   let moves: Record<string, string> = {};
   let aiDrift: Record<string, number> = {};
@@ -80,6 +80,7 @@ export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { ro
     const base = () => (youth ? withNewgens(BASE, mundo) : BASE);
     const world = () => buildAiWorld({ base: base(), moves, split: s, skip: NO_SKIP, aiDrift, arrivals });
     const w0 = world();
+    opts.onWorld?.(s, w0);
     const ranked = w0.map((t) => ({ t, s: squadOvr(t.players) })).sort((a, b) => b.s - a.s);
     const top = ranked.slice(0, 20);
     const topIds = new Set(top.flatMap((x) => top5Ids(x.t)));

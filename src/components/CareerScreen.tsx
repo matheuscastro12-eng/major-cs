@@ -2594,7 +2594,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   const doScrimVs = (oppId: string) => {
     const me = buildTeam(save);
     if (!me) { toast.error(ct('Elenco incompleto (precisa 5 titulares)')); return; }
-    const oppSeason = currentEra.find((t) => t.id === oppId);
+    const oppSeason = oppEra.find((t) => t.id === oppId && t.id !== save.takeoverId);
     if (!oppSeason) return;
     const starterIds = save.squad.map((s) => s.playerId);
     const stateArg = {
@@ -3499,12 +3499,14 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
 
   // #6: sparrings elegíveis pro scrim (banda de força + disponibilidade
   // determinística por split/uso). Depende de buildTeam — fica declarado aqui.
+  // Sparrings saem do oppEra (sem o time que você assumiu e sem os SEUS
+  // jogadores nos elencos rivais); a lista nunca fica vazia com elenco completo.
   const scrimOpponents = useMemo(() => {
     const me = buildTeam(save);
     if (!me) return [];
-    return listScrimOpponents(me.strength, currentEra.map(teamSeasonToTTeam), save.split, save.scrimsThisSplit ?? 0);
+    return listScrimOpponents(me.strength, oppEra.map(teamSeasonToTTeam), save.split, save.scrimsThisSplit ?? 0, [save.takeoverId]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [save.squad, save.scrimsThisSplit, save.split, currentEra]);
+  }, [save.squad, save.scrimsThisSplit, save.split, save.takeoverId, save.coachFromId, save.customCoach, save.clube, save.mapTraining, save.playbook, save.playbookXp, currentEra, oppEra]);
 
   // [fase 4 · circuito] VISTO pra LAN: chance pequena de negação por região (no
   // máximo um por evento); o jogador não viaja e o stand-in entra (banco →
