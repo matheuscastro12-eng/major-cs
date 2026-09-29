@@ -9,6 +9,7 @@ import {
 } from './matchShared';
 // Motor v2 (duelos) e a flag MATCH_ENGINE que escolhe entre v1 e v2.
 import { createMapSimV2 } from './match2/engine';
+import { conditionForm } from './gestao/condicao';
 import { resolveEngine, type MatchEngine } from './match2/flag';
 
 // API pública estável: os consumidores continuam importando de engine/match.
@@ -110,7 +111,8 @@ function compFlags(team: TTeam): CompFlags {
 
 // fase dos jogadores afeta a força do time na série (±~2 pontos no extremo)
 function formBoost(team: TTeam): number {
-  const avg = team.players.reduce((s, p) => s + (p.form ?? 1), 0) / team.players.length;
+  // forma + condição (fase 2 · treino: ritmo e cansaço; sem `cond` = só a forma)
+  const avg = team.players.reduce((s, p) => s + conditionForm(p), 0) / team.players.length;
   return (avg - 1) * 20;
 }
 
@@ -537,7 +539,7 @@ export function createMapSimV1(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
         (p) =>
           Math.pow(p.aim / 70, 2.6) *
           (KILL_ROLE_MULT[p.role] ?? 1) *
-          Math.pow(p.form ?? 1, 2.2) *
+          Math.pow(Math.max(0.5, conditionForm(p)), 2.2) *
           killStyleMult(p, sd, sm),
       );
       for (let k = 0; k < nKills; k++) {

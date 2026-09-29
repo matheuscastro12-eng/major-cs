@@ -80,6 +80,13 @@ export interface EvolveContext {
   focusGroup?: keyof LegacyStats | null;
   /** Multiplicador extra de crescimento (estrutura do CT, convite, personalidade). */
   growthMul?: number;
+  /**
+   * [fase 2 · treino] Multiplicador POR ATRIBUTO vindo do treino semanal do
+   * split (`gestao/treino.ts#trainingGrowthMul`: agenda × intensidade × foco
+   * individual × comissão; 1 = agenda padrão). Treinar mais um atributo também
+   * segura um pouco o declínio dele. Ausente = neutro.
+   */
+  trainMul?: Partial<Record<AttrKey, number>>;
 }
 
 export interface EvolveResult {
@@ -130,10 +137,13 @@ export function evolveAttrs(x: PlayerAttrs, ctx: EvolveContext): EvolveResult {
     g *= cls === 'mental' || cls === 'leadership' ? 0.4 + 0.6 * play : 0.7 + 0.3 * play;
     if (ctx.focusPlayer) g *= 1.35;
     if (ctx.focusGroup) g *= LEGACY_GROUP_OF[k] === ctx.focusGroup ? 1.8 : 0.9;
+    const tm = ctx.trainMul?.[k] ?? 1;
+    g *= tm;
     // teto: sem espaço, o crescimento só entra para repor declínio (via trim)
     g *= headroom > 0 ? roomF : 0.5;
     let d = classDecline(cls, effAge) * profDecline;
     if (ctx.focusPlayer) d *= 0.6; // veterano em foco treina pra perder menos
+    if (tm !== 1) d *= Math.max(0.8, Math.min(1.1, 1.15 - 0.15 * tm)); // treinar o atributo segura a queda
     const step = roll(g, `evo:${ctx.playerId}:${ctx.split}:${k}:g`) - roll(d, `evo:${ctx.playerId}:${ctx.split}:${k}:d`);
     if (!step) continue;
     const nv = Math.max(1, Math.min(20, a[k] + step));

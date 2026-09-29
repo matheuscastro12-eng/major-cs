@@ -40,13 +40,31 @@ export interface TrainingState {
   intensity: TrainingIntensity;
   focus: Record<string, IndividualFocus>; // playerId → foco
   mapFocus: MapId[];                // mapas priorizados nas sessões de tática/scrim (até 3)
+  // [frente D · mudança de contrato] campos opcionais (o `defaultTrainingState` os preenche):
+  progress?: Record<string, Partial<Record<AttrKey, number>>>; // playerId → pontos de treino por atributo no split
+  weeks?: number;                   // semanas de treino contadas no split (zera na virada)
+  weekNo?: number;                  // contador global de semanas (semente dos sorteios)
+  leaks?: Record<string, number>;   // teamId → estratégia vazada em scrim (0–1, decai por semana)
+  lastWeek?: TrainingWeekReport | null; // relatório da última semana (tela e caixa de entrada)
+}
+
+export type InjuryKind = 'wrist' | 'tendon' | 'back' | 'burnout' | 'illness';
+
+// Relatório de uma semana de treino (o que a tela e a caixa de entrada mostram).
+export interface TrainingWeekReport {
+  weekNo: number;
+  split: number;
+  injuries: { playerId: string; nick: string; kind: InjuryKind; weeks: number }[];
+  recovered: { playerId: string; nick: string }[];
+  leak?: { teamId: string; level: number } | null;
+  familiarity: { map: MapId; points: number }[];
 }
 
 // Condição física/mental por jogador (0–100). O motor lê `fitness` e `sharpness`.
 export interface PlayerCondition {
   fitness: number;     // cansaço físico/mental acumulado (100 = descansado)
   sharpness: number;   // ritmo de jogo (cai sem jogar/treinar tática)
-  injury?: { kind: 'wrist' | 'tendon' | 'back' | 'burnout' | 'illness'; weeksLeft: number } | null;
+  injury?: { kind: InjuryKind; weeksLeft: number } | null;
 }
 
 // ─── Tática ────────────────────────────────────────────────────────────────

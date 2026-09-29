@@ -51,6 +51,7 @@ import {
 import { econOf, identityRoundDelta, type IdentityAction } from '../career/teamIdentity';
 import { ct } from '../../state/career-i18n';
 import { duelProfile, type DuelProfile } from './profile';
+import { conditionDuelMod, conditionStaminaMul } from '../gestao/condicao';
 import { DUEL, playRound, winProbT, type RoundPlay, type RoundSpec, type SideSpec, type WeaponClass } from './round';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -211,11 +212,14 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       const sigma = 1.25 * clamp(1.5 - 0.05 * (0.6 * pr.consistencyHidden + 0.4 * pr.consistency), 0.55, 1.45);
       const swing = gauss(rng) * sigma;
       const big = bigMatch ? ((pr.bigMatch - 11) / 9) * 0.8 : 0;
-      const fatigue = mapIndex > 0 ? -mapIndex * ((20 - pr.stamina) / 19) * 0.45 : 0;
+      // condição do jogador (fase 2 · treino): ritmo e cansaço entram no duelo, e
+      // o cansaço amplia o desgaste de mapa a mapa. Sem `cond` (IA) = 0.
+      const cond = players[k].cond;
+      const fatigue = mapIndex > 0 ? -mapIndex * ((20 - pr.stamina) / 19) * 0.45 * conditionStaminaMul(cond) : 0;
       // quem CHAMA o jogo divide a cabeça entre a mira e a call: o IGL duela
       // pior (a concentração amortece) — mas o time ganha a leitura dele.
       const callLoad = k === iglSlot ? -(hasIgl ? CALL_LOAD : CALL_LOAD_IMPROVISED) * clamp(1.35 - pr.concentration / 20, 0.5, 1.2) : 0;
-      fixedMod[k] = form + swing + big + fatigue + callLoad + fin(duelMods[players[k].id], 0);
+      fixedMod[k] = form + swing + big + fatigue + callLoad + conditionDuelMod(cond) + fin(duelMods[players[k].id], 0);
     }
     const tw = fin(t.teamwork, 70);
     return {
