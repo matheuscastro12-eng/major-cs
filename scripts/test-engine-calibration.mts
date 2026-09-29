@@ -35,18 +35,18 @@ test('desempenho: ≤ 5 ms por mapa simulado no Node', () => {
   const teams = realTeams();
   // aquece o JIT
   for (let i = 0; i < 30; i++) { const s = createMapSimV2(makeRng(i + 1), teams[i], teams[i + 1], 'mirage', -1); while (!s.step()) { /* */ } }
-  const times: number[] = [];
-  for (let i = 0; i < 300; i++) {
-    const t0 = performance.now();
+  // Tempo de CPU do próprio processo, não de relógio: com a máquina ou o runner
+  // do CI carregados (test:sim roda arquivos em paralelo) o relógio infla sem o
+  // motor ficar mais lento, e o teste virava flaky.
+  const N = 300;
+  const c0 = process.cpuUsage();
+  for (let i = 0; i < N; i++) {
     const s = createMapSimV2(makeRng(1000 + i), teams[i % teams.length], teams[(i * 5 + 3) % teams.length], MAP_POOL[i % MAP_POOL.length] as MapId, -1);
     while (!s.step()) { /* */ }
-    times.push(performance.now() - t0);
   }
-  times.sort((x, y) => x - y);
-  const mean = times.reduce((s, t) => s + t, 0) / times.length;
-  const p95 = times[Math.floor(times.length * 0.95)];
-  assert.ok(mean <= 5, `média ${mean.toFixed(2)} ms/mapa`);
-  assert.ok(p95 <= 10, `p95 ${p95.toFixed(2)} ms/mapa`);
+  const c = process.cpuUsage(c0);
+  const cpuMsPerMap = (c.user + c.system) / 1000 / N;
+  assert.ok(cpuMsPerMap <= 5, `CPU ${cpuMsPerMap.toFixed(2)} ms/mapa`);
 });
 
 test('balanceamento: a curva força→vitória do v2 acompanha a do v1 (dificuldade dos modos)', () => {
