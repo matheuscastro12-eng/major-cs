@@ -37,7 +37,16 @@ const { freeLocalSpace } = await import('../src/state/storageQuota.ts');
 const { buildSaveBackup, backupFileName } = await import('../src/state/saveRecovery.ts');
 cloud.setCloudEnabled(true);
 
-const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+// Espera o trabalho assíncrono do sync terminar. Só setImmediate não basta em
+// runner lento (CI): o push em voo vazava para o teste seguinte. Intercala
+// rodadas de setImmediate com macrotarefas curtas — os timers de retry do sync
+// (30 s) não disparam nessa janela.
+const settle = async () => {
+  for (let round = 0; round < 6; round++) {
+    for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setTimeout(r, 5));
+  }
+};
 const flushNow = async () => { handlers.get('pagehide')?.(); await settle(); };
 
 test('413 no push: o slot para de tentar, avisa e não reagenda', async () => {
