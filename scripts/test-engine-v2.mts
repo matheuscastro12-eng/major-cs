@@ -19,13 +19,17 @@ import {
 import { createMapSimV2 } from '../src/engine/match2/engine.ts';
 import { playRound, winProbT, type RoundSpec, type SideSpec } from '../src/engine/match2/round.ts';
 import { makeRng } from '../src/engine/rng.ts';
-import { attrsOf, type PlayerAttrs } from '../src/engine/attrs/model.ts';
+import { attrsOf, withAttrs as materialize, type PlayerAttrs } from '../src/engine/attrs/model.ts';
 import { realTeams } from './calibrate-engine.mts';
 import { identityLabel, type IdentityMod } from '../src/engine/career/teamIdentity.ts';
 import { createSession, normalizeSession, advanceSession, viewSession } from '../src/engine/ultimate/matchSession.ts';
 import { heroDuelMod, heroSeriesOpts } from '../src/engine/rtp/matchSim.ts';
 import { createRoom, currentMoment, lockIn, advance, roomOdds, finishSeries } from '../src/engine/rtp/room.ts';
 import { dailyChallengeOf } from '../src/engine/rtp/dailySeries.ts';
+import { cardMatchPlayer, specialCardForPlayer, baseCardForPlayer } from '../src/engine/ultimate/cards.ts';
+import { prepareUltimateTeam } from '../src/engine/ultimate/squadAnalysis.ts';
+import { teamStrengthFromPlayers } from '../src/engine/ratings.ts';
+import { CS2_REAL_2026 } from '../src/data/bo3.ts';
 import type { MapId, PlayerLine, TPlayer, TTeam } from '../src/types.ts';
 
 const TEAMS = realTeams();
@@ -179,10 +183,12 @@ test('v2: killfeed e stats contam a mesma história (nada distribuído depois)',
 function cloneTeam(t: TTeam, tag: string, edit?: (p: TPlayer, i: number) => TPlayer): TTeam {
   return { ...t, id: `${t.id}-${tag}`, players: t.players.map((p, i) => { const q = { ...p, id: `${p.id}-${tag}` }; return edit ? edit(q, i) : q; }) };
 }
+// muda atributos do jogador pelo contrato: `withAttrs` do model grava os attrs E
+// reescreve os 5 números a partir deles (senão o attrsOf reconcilia de volta).
 function withAttrs(p: TPlayer, f: (x: PlayerAttrs) => void): TPlayer {
   const x = structuredClone(attrsOf(p));
   f(x);
-  return { ...p, attrs: x };
+  return materialize(p, x);
 }
 function kprOf(lines: PlayerLine[]): number { const m = mergeLines(lines); return m.kills / Math.max(1, m.rounds); }
 
@@ -295,4 +301,32 @@ test('v2 Ultimate: a sessão casual replaya no motor em que nasceu', () => {
   const ref2 = createMapSimV2(makeRng(99), a, b, 'nuke', -1);
   for (let i = 0; i < 5; i++) ref2.step();
   assert.deepEqual(withEngine('v1', () => viewSession(s2)).roundLog, ref2.roundLog());
+});
+
+test('v2 Ultimate: carta especial entra no duelo pela carta; sem contagem dupla na força', () => {
+  const ts = CS2_REAL_2026[4];
+  const picks = ts.players.slice(0, 5);
+  const baseFive = picks.map((p) => ({ player: cardMatchPlayer(p, baseCardForPlayer(p, ts)), from: ts }));
+  // carta base = o próprio jogador (mesma referência)
+  baseFive.forEach((x, i) => assert.equal(x.player, picks[i]));
+  const special = picks.map((p) => cardMatchPlayer(p, specialCardForPlayer(p, ts, 'tots', 3)));
+  for (let i = 0; i < 5; i++) {
+    assert.ok(special[i].aim > picks[i].aim, 'o boost da carta especial não subiu os números');
+    assert.notDeepEqual(attrsOf(special[i]).a, attrsOf(picks[i]).a, 'o boost da carta especial não chegou aos atributos');
+  }
+  const specFive = special.map((p) => ({ player: p, from: ts }));
+  const tb = prepareUltimateTeam({ name: 'b', picks: baseFive, idPrefix: 'ut-b' });
+  const tsp = prepareUltimateTeam({ name: 's', picks: specFive, idPrefix: 'ut-s' });
+  // a força cresce pelos jogadores — o que NÃO é jogador (resíduo) fica igual
+  const residual = (t: TTeam) => t.strength - teamStrengthFromPlayers(t.players, t.teamwork);
+  assert.ok(tsp.strength > tb.strength);
+  assert.ok(Math.abs(residual(tsp) - residual(tb)) < 1e-9, 'contagem dupla: o boost entrou no resíduo');
+  // e o time de cartas especiais vence mais no motor v2
+  const opp = prepareUltimateTeam({ name: 'o', picks: CS2_REAL_2026[5].players.slice(0, 5).map((p) => ({ player: p, from: CS2_REAL_2026[5] })), idPrefix: 'ut-o' });
+  let wb = 0, ws = 0;
+  for (let s = 1; s <= 150; s++) {
+    if (withEngine('v2', () => simulateSeries(makeRng(s), tb, opp, MAPS3, 1)).winner === 0) wb++;
+    if (withEngine('v2', () => simulateSeries(makeRng(s), tsp, opp, MAPS3, 1)).winner === 0) ws++;
+  }
+  assert.ok(ws > wb, `cartas especiais não renderam no duelo (${ws} × ${wb})`);
 });

@@ -5,7 +5,7 @@
 import type { Player, Role, TeamSeason } from '../../types';
 import { regionOf, type RegionKey } from '../../data/regions';
 import { playerOvr } from '../ratings';
-import { attrsOf, legacyOf, refitAttrs, registeredAttrs, legacyFromAttrs, type PlayerAttrs } from '../attrs/model';
+import { attrsOf, legacyOf, refitAttrs, registeredAttrs, legacyFromAttrs, withAttrs, type PlayerAttrs } from '../attrs/model';
 import { rarityFromOvr, rarityInfo, type UltRarity } from './rarities';
 import { CardIndex } from './cardIndex';
 
@@ -89,6 +89,19 @@ export function cardAttrs(card: Pick<UltCard, 'playerId' | 'role' | 'ovr' | 'sta
     aim: st.tiro, clutch: st.clutch, consistency: Math.round((st.mira + st.util) / 2),
     awp: card.role === 'AWP' ? st.tiro : Math.max(30, st.tiro - 30), igl: st.visao,
   });
+}
+
+// [realismo FM · motor v2] O jogador que ENTRA NA PARTIDA com uma carta: os
+// atributos da carta (cardAttrs — o boost de carta especial sobe o perfil; a
+// evolução de cópia NÃO, ela já vai no multiplicador de força do time) e os 5
+// números reescritos a partir deles. Força do time e duelos contam a mesma
+// carta, sem contagem dupla. Fora da base registrada (ícones, legado do RtP) o
+// jogador segue com o próprio perfil.
+export function cardMatchPlayer<P extends Player>(p: P, card: Pick<UltCard, 'playerId' | 'role' | 'ovr' | 'stats'>): P {
+  const base = registeredAttrs(p.id);
+  if (!base || card.playerId !== p.id) return p;
+  const x = cardAttrs(card);
+  return x === base ? p : withAttrs(p, x);
 }
 
 // carta BASE de um jogador (raridade pela faixa de OVR).
