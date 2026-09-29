@@ -371,6 +371,7 @@ const PROMISE_KIND_TEXT: Record<PlayerPromiseKind, string> = {
   extension: 'renovar o contrato',
   signing: 'trazer reforço',
   workload: 'aliviar a carga de jogo',
+  playtime: 'mais tempo de jogo',
 };
 
 export function storyPromiseCalledBack(seed: string, nick: string, splitPromised: number, splitNow: number, kind: PlayerPromiseKind, kept: boolean): Story {

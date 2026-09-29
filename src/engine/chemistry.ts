@@ -86,6 +86,9 @@ export function tickPairChemAfterMatch(
   starterIds: string[],
   won: boolean,
   personalityBonus?: (playerId: string) => number,
+  // [fase 3 · vestiário] multiplicador por PAR (grupo social: mesmo idioma
+  // entrosa mais rápido; par em conflito entrosa menos). Sem ele, 1.0.
+  pairBonus?: (a: string, b: string) => number,
 ): Record<string, number> {
   const out: Record<string, number> = { ...(state.pairChem ?? {}) };
   const baseGain = GAIN_PER_MATCH + (won ? WIN_BONUS : 0);
@@ -97,7 +100,8 @@ export function tickPairChemAfterMatch(
       const bonus = personalityBonus
         ? (personalityBonus(starterIds[i]) + personalityBonus(starterIds[j])) / 2
         : 1;
-      out[k] = Math.max(MIN_PAIR, Math.min(MAX_PAIR, cur + baseGain * bonus));
+      const social = pairBonus ? pairBonus(starterIds[i], starterIds[j]) : 1;
+      out[k] = Math.max(MIN_PAIR, Math.min(MAX_PAIR, cur + baseGain * bonus * social));
     }
   }
   return out;

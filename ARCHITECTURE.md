@@ -98,7 +98,7 @@ com backfill (nada é removido).
 
 | Save | Constante | Arquivo | Chave no localStorage |
 |---|---|---|---|
-| Carreira | `SAVE_VERSION = 28` | `src/state/saveMigrations.ts` | `rtm-career-v1` (+ slots `__s2..s5`) |
+| Carreira | `SAVE_VERSION = 29` | `src/state/saveMigrations.ts` | `rtm-career-v1` (+ slots `__s2..s5`) |
 | Road to Pro | `RTP_SAVE_VERSION = 17` | `src/engine/rtp/createSave.ts` | `rtm-rtp-v1` |
 | Ultimate | `ULTIMATE_VERSION = 1` | `src/engine/ultimate/state.ts` | `rtm-ultimate-v1` |
 | Draft (campanha) | `DRAFT_SESSION_VERSION = 2` | `src/state/draftSession.ts` | `major-session-v3` |
@@ -106,6 +106,10 @@ com backfill (nada é removido).
 Migração nova na Carreira: `SAVE_VERSION += 1` em `saveMigrations.ts`, registre
 a função `vN → vN+1`, cubra em `scripts/test-save-migration.mts` e atualize a
 tabela acima.
+
+Realismo FM fase 3 (pessoas e mercado): Carreira v29 grava o bloco `clube` (vestiário com
+status/banco/escalação, contratos completos, negociações em rodadas e mercado da IA) —
+contrato em `src/engine/clube/model.ts`.
 
 Realismo FM fase 2 (gestão do time): Carreira v28 grava o bloco `gestao` (treino semanal,
 tática por mapa, comissão técnica e condição por jogador) — contrato em `src/engine/gestao/model.ts`.

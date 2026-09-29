@@ -18,7 +18,7 @@ import type { GestaoState, IndividualFocus, PlayerCondition, TrainingIntensity, 
 import {
   DEFAULT_WEEK, INJURY_LABEL, INTENSITY, ROLE_FOCUS_ATTRS, SESSIONS, SESSION_INFO, LEGACY_FOCUS_ATTR,
   previewGrowthMul, weekFitnessDelta, weekSharpGain, weeklyInjuryRisk, weekFamiliarityPoints, leakAgainst,
-  LEAK_CHANCE_REAL, LEAK_CHANCE_SESSION,
+  LEAK_CHANCE_REAL, LEAK_CHANCE_SESSION, defaultCondition,
 } from '../../engine/gestao/treino';
 import { mapTacticOf } from '../../engine/gestao/tatica';
 import { isInjured } from '../../engine/gestao/condicao';
@@ -141,7 +141,7 @@ export function TrainingTab({
   const activePreset = PRESETS.find((p) => p.week.every((s, i) => t.week[i] === s))?.id;
 
   const rows: Row[] = players.map((p) => {
-    const cond = gestao.condition[p.id] ?? { fitness: 100, sharpness: 70, injury: null };
+    const cond = gestao.condition[p.id] ?? defaultCondition(); // [integração] mesmo padrão da entrada
     const focus = t.focus[p.id];
     const mul = previewGrowthMul(t, focus, staff);
     // o que a agenda + o foco mudam para ESTE jogador: até 2 que sobem e 1 que cede

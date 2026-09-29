@@ -28,12 +28,15 @@ import {
 import type { YouthDebut } from '../../engine/career/playerAge';
 import type { PlayerCondition, TacticsState } from '../../engine/gestao/model';
 import { mapTacticOf } from '../../engine/gestao/tatica';
+import { defaultCondition } from '../../engine/gestao/treino';
 import { fatigueBand } from '../../engine/career/fatigue';
 import { formStatus } from '../../engine/career/form';
 import { activeStint as activeCoachStint } from '../../engine/coachCareer';
 import { playerOrgId } from '../../state/career-player-route';
 import { ct } from '../../state/career-i18n';
 import { playerOvr, playerWage, formatMoney } from '../../engine/ratings';
+import { contractUntilOf, contractWageOf } from '../../engine/clube/contratos';
+import type { ClubeState } from '../../engine/clube/model';
 import { teamChemistry } from '../../engine/chemistry';
 import { ElencoPanel, type ElencoRow } from './ElencoPanel';
 import { Panel, Bar } from '../../components/ds/index';
@@ -87,6 +90,12 @@ interface Props {
   mySquadIds: Set<string>;
   /** [fase 2] tela "Plano de jogo" (tática por mapa) — renderizada na seção 'pl' */
   gamePlan?: ReactNode;
+  /** [fase 3 · vestiário] escalação e banco (seção 'sq') */
+  lineup?: ReactNode;
+  /** [fase 3 · vestiário] dinâmica do vestiário (seção 'dy') */
+  dinamica?: ReactNode;
+  /** [fase 3 · vestiário] status/escalação/valor por jogador na tabela do Elenco */
+  squadInfo?: Record<string, { status: string; slot: 'starter' | 'bench'; valueMul: number }>;
 }
 
 export function SquadTab({
@@ -101,6 +110,9 @@ export function SquadTab({
   seasonStats,
   mySquadIds,
   gamePlan,
+  lineup,
+  dinamica,
+  squadInfo,
 }: Props) {
   const rows = save.squad.map((sig) => findSigning(sig)?.player).filter(Boolean) as Player[];
   const hasAwp = rows.some((p) => p.role === 'AWP' || p.role2 === 'AWP');
@@ -123,22 +135,26 @@ export function SquadTab({
   const elencoRows: ElencoRow[] = rows.map((p) => {
     const rid = `user__${p.id}`;
     const st = seasonStats.find((x) => x.id === rid);
-    const until = (save.contracts as Record<string, number> | undefined)?.[p.id];
+    const until = contractUntilOf(save as { clube?: ClubeState }, p.id);
     const mor = save.morale?.[p.id] ?? MORALE_DEFAULT;
     return {
       p, oid: p.id,
       age: effectiveAge(p, save.split, save.youthAge, save.youthDebut),
       morale: mor, moraleLabel: moraleInfo(mor).label,
       fatigue: save.fatigue?.[p.id] ?? 0,
-      cond: condition?.[p.id] ?? null,
+      cond: condition?.[p.id] ?? defaultCondition(), // [integração] sem condição gravada: o padrão
       contractLeft: until != null ? until - save.split + 1 : null,
+      wage: contractWageOf(save as { clube?: ClubeState }, p.id, () => playerWage(p)),
       rating: st?.rating, maps: st?.maps, kd: st?.kd, adr: st?.adr,
       recent: save.recentRatings?.[p.id],
+      status: squadInfo?.[p.id]?.status,
+      slot: squadInfo?.[p.id]?.slot,
+      valueMul: squadInfo?.[p.id]?.valueMul,
     };
   });
   const chemAvg = teamChemistry({ pairChem: save.pairChem }, rows.map((p) => playerOrgId(p.id)));
   const chemLabel = chemAvg >= 80 ? ct('Excelente') : chemAvg >= 60 ? ct('Boa') : chemAvg >= 40 ? ct('Regular') : ct('Fraca');
-  const payroll = rows.reduce((sum, p) => sum + playerWage(p), 0);
+  const payroll = rows.reduce((sum, p) => sum + contractWageOf(save as { clube?: ClubeState }, p.id, () => playerWage(p)), 0);
   // [fase 2] domínio do mapa = familiaridade do plano (Plano de jogo)
   const tacticsNow = (save.gestao as { tactics?: TacticsState } | undefined)?.tactics;
   const mapsSorted = [...MAP_POOL].map((m) => ({ m, fam: mapTacticOf(tacticsNow, m).familiarity })).sort((x, y) => y.fam - x.fam);
@@ -147,6 +163,7 @@ export function SquadTab({
     <div className={`em-tab em-squad em-squad--${section}`}>
       {section === 'sq' && (
         <>
+          {lineup}
           <ElencoPanel rows={elencoRows} onOpen={openPlayerProfile} />
           <div className="squad-trio">
             <Panel icon={<Sparkles size={16} />} title={ct('Química')}>
@@ -185,6 +202,7 @@ export function SquadTab({
 
       {section === 'dy' && (
         <>
+      {dinamica}
       {/* T3.4: matriz de química do elenco */}
       {rows.length >= 2 && (
         <ChemistryMatrix

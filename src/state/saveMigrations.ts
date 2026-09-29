@@ -19,8 +19,9 @@
 
 import { migrateCareerAttrs } from './careerAttrsMigration';
 import { migrateGestao } from '../engine/gestao/gestaoMigration';
+import { migrateClube } from '../engine/clube/clubeMigration';
 
-export const SAVE_VERSION = 28;
+export const SAVE_VERSION = 29;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -269,6 +270,9 @@ const MIGRATIONS: Record<number, Migration> = {
   // v27 → v28 (realismo FM fase 2): bloco `gestao` — treino semanal, tática por
   // mapa, comissão técnica e condição por jogador, com os padrões de cada frente.
   27: (save) => ({ ...migrateGestao(save), _v: 28 }),
+  // v28 → v29 (realismo FM fase 3): bloco `clube` — vestiário (status, banco,
+  // escalação), contratos completos, negociações em rodadas e mercado da IA.
+  28: (save) => ({ ...migrateClube(save), _v: 29 }),
 };
 
 // Versão atual de um save. Save legado (sem `_v`) é tratado como v1.
