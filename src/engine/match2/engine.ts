@@ -201,6 +201,8 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
   for (const p of [...a0.players, ...b0.players, ...a.players, ...b.players]) stats[p.id] ??= emptyStats();
   const mapIndex = Math.max(0, opts?.mapIndex ?? 0);
   const bigMatch = !!opts?.bigMatch;
+  // [fase 4 · circuito] LAN/Major pesam o oculto bigMatch com peso parcial (online = 0: motor de antes)
+  const pressure = bigMatch ? 1 : Math.max(0, Math.min(1, opts?.pressure ?? 0));
   const duelMods = opts?.duelMods ?? {};
 
   // tática por mapa de cada time (null = sem tática)
@@ -238,7 +240,7 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       // variância de mapa a mapa: consistência visível + oculta (mais constante = menos swing)
       const sigma = 1.25 * clamp(1.5 - 0.05 * (0.6 * pr.consistencyHidden + 0.4 * pr.consistency), 0.55, 1.45);
       const swing = gauss(rng) * sigma;
-      const big = bigMatch ? ((pr.bigMatch - 11) / 9) * 0.8 : 0;
+      const big = pressure > 0 ? ((pr.bigMatch - 11) / 9) * 0.8 * pressure : 0;
       // condição do jogador (fase 2 · treino): ritmo e cansaço entram no duelo, e
       // o cansaço amplia o desgaste de mapa a mapa. Sem `cond` (IA) = 0.
       const cond = players[k].cond;
