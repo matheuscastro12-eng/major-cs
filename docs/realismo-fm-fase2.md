@@ -41,4 +41,14 @@ Princípio: **a simulação decide, a interface mostra** — e tudo visível com
 - Telas: capture 1440×900 e 390×844 (Playwright em `/private/tmp/claude-501/-Users-matheuscastro-orca-major-cs/3774674b-38bb-4228-8c79-6903e36bc699/scratchpad/video/cap/node_modules`, `chromium.launch({ channel: 'chrome' })`; dev server em porta livre própria) e confira você mesmo.
 
 ## Mudanças de contrato
-(nenhuma ainda)
+### Frente D (treino)
+- `TrainingState` ganhou campos OPCIONAIS (o `defaultTrainingState` preenche): `progress` (pontos de treino por jogador/atributo no split), `weeks`, `weekNo`, `leaks` (teamId → vazamento 0–1) e `lastWeek: TrainingWeekReport`. Tipos novos em `model.ts`: `InjuryKind`, `TrainingWeekReport`.
+- `defaultCondition(legacyFatigue?)`: parâmetro opcional (fadiga antiga → fitness).
+- `TPlayer.cond?: { fitness; sharpness }` (types.ts): a condição da partida. Ausente = neutro (IA, calibração intacta). Lida pelo v2 (`fixedMod`) e pelo v1 (forma equivalente) via `engine/gestao/condicao.ts`.
+- `EvolveContext.trainMul?: Partial<Record<AttrKey, number>>` (attrs/progression.ts): multiplicador por atributo vindo do treino do split (agenda padrão = 1).
+- Familiaridade: o treino chama `gainFamiliarity(tactics: TacticsState, map: MapId, points: number): TacticsState` — **a frente E exporta de `gestao/tatica.ts`**. Até lá, `gainFamiliarityLocal` em `treino.ts` (stub com a mesma assinatura: cria o `MapTactic` padrão se faltar e soma, teto 100). Integração: trocar a constante `gainFamiliarity` em `treino.ts` pelo import.
+- Vazamento de scrim: `leakAgainst(training, oppId)` (0–1) e `scrimLeakReadiness(readiness, leak)` (`condicao.ts`) — a frente E aplica no `antiStrat.readiness`. Hoje o vazamento já pesa: −1,5 de força × vazamento contra ESSE adversário (`applyScrimLeak`).
+- `gestaoMigration.ts`: `training: trainingFromLegacy(save)` (foco antigo de 5 atributos → foco por atributo; `mapFocus` antigo → mapas priorizados) e `defaultCondition(fadiga antiga)`.
+- `CareerSave.gestao?: GestaoState` e `updateGestao` na Carreira; `gestaoOf(save)` (treino.ts) lê o bloco com padrões (carreira nova sem bloco).
+- Fadiga: `save.fatigue` deixou de ser gravado; a fonte é `gestao.condition[id].fitness` (fadiga = 100 − fitness, `fatigueView`). `applyFatigueForm`/`recoverFatigue` saíram (viraram `applyConditionToTeam`/`recoverCondition`).
+- `ScrimMatchReport.map` (scrim.ts); a scrim marcada não reduz mais fadiga (ritmo +6, condição −4, familiaridade no mapa, vazamento).
