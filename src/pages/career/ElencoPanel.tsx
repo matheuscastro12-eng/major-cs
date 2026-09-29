@@ -26,6 +26,8 @@ export interface ElencoRow {
   /** [fase 2 · treino] condição (fitness, ritmo, lesão) */
   cond?: PlayerCondition | null;
   contractLeft: number | null;
+  /** [fase 3] salário do contrato (sem: o de mercado) */
+  wage?: number;
   rating?: number;
   maps?: number;
   kd?: number;
@@ -88,7 +90,7 @@ export function ElencoPanel({ rows, onOpen }: { rows: ElencoRow[]; onOpen: (p: P
       cell: (r) => { const f = formStatus(r.recent); return <span style={{ color: f.color }}>{f.avg != null ? f.avg.toFixed(2).replace('.', ',') : '—'}</span>; },
     },
     { key: 'value', header: ct('Valor'), num: true, views: ['geral', 'contracts'], sort: (r) => playerValue(r.p), cell: (r) => <b>{formatMoney(playerValue(r.p))}</b> },
-    { key: 'wage', header: ct('Salário/split'), num: true, views: ['contracts'], sort: (r) => playerWage(r.p), cell: (r) => formatMoney(playerWage(r.p)) },
+    { key: 'wage', header: ct('Salário/split'), num: true, views: ['contracts'], sort: (r) => r.wage ?? playerWage(r.p), cell: (r) => formatMoney(r.wage ?? playerWage(r.p)) },
     {
       key: 'contract', header: ct('Contrato'), num: true, views: ['contracts'], sort: (r) => r.contractLeft ?? 99,
       cell: (r) => r.contractLeft == null ? '—' : <span className={r.contractLeft <= 1 ? 'elenco-warn' : undefined}>{r.contractLeft <= 0 ? ct('vencido') : `${r.contractLeft} split${r.contractLeft > 1 ? 's' : ''}`}</span>,

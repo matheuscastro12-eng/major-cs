@@ -45,4 +45,13 @@ O que já existe e esta fase APROFUNDA E UNIFICA (não duplique — substitua/ev
 - Telas em 1440×900 e 390×844 (Playwright em `/private/tmp/claude-501/-Users-matheuscastro-orca-major-cs/3774674b-38bb-4228-8c79-6903e36bc699/scratchpad/video/cap/node_modules`, `chromium.launch({ channel: 'chrome' })`, porta própria) em `.../scratchpad/fase3-shots/<frente>-*`; confira você mesmo. Textos novos com en/es em `career-strings.ts`.
 
 ## Mudanças de contrato
-(nenhuma ainda)
+### Frente H (contratos) — `fase3/contratos`
+- **`contracts` antigo removido do `CareerSave`.** A única fonte é `save.clube.contracts` (`ContractTerms` completos). A hidratação dobra no bloco novo qualquer `contracts` legado que ainda apareça e apaga o campo. Leitores em `clube/contratos.ts`: `contractOf`, `contractUntilOf` (o mesmo número do `contracts[pid]` antigo), `contractUntilMap` (mapa para telas), `contractWageOf`, `contractPayroll`, `contractsOf`. Escrita: `signContract`, `withContract`, `withoutContracts`, `keepContracts`.
+- **Salário pendente na migração:** `defaultContracts` grava `wage: 0` (`WAGE_PENDING`), porque a migração não resolve jogadores; a Carreira materializa com `materializeContracts` no primeiro render (salário = `playerWage` do jogador atual, a folha fica idêntica). Quem ler salário deve usar `contractWageOf` (cai no de mercado enquanto está pendente), nunca `contract.wage` cru.
+- **Para a frente I:** `releaseClauseOf(save, playerId): number | null`. Proposta da IA ≥ cláusula não pode ser recusada. Contratos novos nascem sem cláusula; ela aparece quando você a concede na negociação (ou quando o jogador exige: ambicioso em clube abaixo do nível dele).
+- **Para a frente G:** `signContract` grava `clube.dressing.status[playerId] = statusPromise` quando o contrato promete status. A renovação lê `clube.dressing.status[playerId]` como status atual: se ficou abaixo do prometido, o jogador não renova. `statusPlayTimeExpectation(status)` é uma função LOCAL em `contratos.ts` com a mesma semântica da régua de tempo de jogo da frente G; na integração, trocar pela de G.
+- `Signing.contract?` e `PendingDeal.contract?` (transitórios): termos negociados que viram `clube.contracts` ao fechar o elenco / na janela. As luvas (`signingBonus`) saem do caixa nesse momento.
+- `clube.negotiations`: conversa com `status` `rejected`/`expired` bloqueia o mesmo jogador × parte (`player`/`club`) até o próximo split (`negotiationBlock`). `recordNegotiation` poda splits antigos.
+- `loyaltyBonus` é pago no fechamento do split em que o contrato termina, a quem continua no elenco (`loyaltyPayouts`).
+- Demissão/novo clube zera `clube.contracts` e `clube.negotiations` (o resto do bloco `clube` fica com as outras frentes).
+
