@@ -212,7 +212,7 @@ export function simulateAiSeries(t: Tournament, pairing: Pairing, rng: Rng): Ser
   const b = getTeam(t, pairing.b);
   const bo = pairingBestOf(t, pairing);
   const maps = autoVeto([a, b], rng, bo);
-  return simulateSeries(rng, a, b, maps, bo);
+  return t.pressure ? simulateSeries(rng, a, b, maps, bo, { pressure: t.pressure }) : simulateSeries(rng, a, b, maps, bo);
 }
 
 // Retrospecto do usuário por mapa ao longo do torneio (vitórias/derrotas)

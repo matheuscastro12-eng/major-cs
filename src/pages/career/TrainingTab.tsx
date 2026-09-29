@@ -6,6 +6,7 @@
 // mapas priorizados (familiaridade, via frente de tática); departamento médico
 // e relatório da última semana; scrim marcada (com risco de vazamento) e
 // bootcamp. A simulação decide (engine/gestao/treino.ts); a tela só mostra.
+import { formatMoney } from '../../engine/ratings';
 import type { CSSProperties } from 'react';
 import {
   Activity, Bandage, BedDouble, Bomb, Brain, CalendarDays, ClipboardList, Crosshair, Dumbbell, Eye, Map as MapIcon,
@@ -107,11 +108,13 @@ export interface TrainingTabProps {
   doScrimVs: (oppId: string) => void;
   onBootcamp?: () => void;
   bootcampUsed?: boolean;
+  /** [fase 4 · circuito] bootcamp antes de LAN: evento em curso, viagem, custo e efeitos */
+  bootcamp?: { event: string | null; lan: boolean; travel: boolean; cost: number; chem: number; familiarity: number; played: boolean; ok: boolean };
 }
 
 export function TrainingTab({
   budget, players, gestao, updateGestao, openPlayerProfile, nextOpp, teamTag,
-  scrimsThisSplit, scrimOpponents, scrimReport, doScrimVs, onBootcamp, bootcampUsed = false,
+  scrimsThisSplit, scrimOpponents, scrimReport, doScrimVs, onBootcamp, bootcampUsed = false, bootcamp,
 }: TrainingTabProps) {
   const t = gestao.training;
   const staff = staffEffects(gestao.staff);
@@ -416,15 +419,25 @@ export function TrainingTab({
         {onBootcamp && (
           <Panel icon={<Tent size={16} />} title={ct('Bootcamp do time')}>
             <p className="tr-muted" style={{ marginTop: 0 }}>
-              {ct('Duas semanas de imersão: +5 de moral pra todo o elenco e 30 de condição física recuperada. Uma vez por split: chegue inteiro no momento decisivo.')}
+              {ct('Antes de uma LAN: o time viaja antes e treina perto da sede. +5 de moral, 30 de condição recuperada, química entre os titulares e familiaridade nos mapas do plano. Uma vez por evento LAN, antes da primeira partida.')}
             </p>
+            {bootcamp && (
+              <p className="tr-muted">
+                {bootcamp.event ? <><b>{bootcamp.event}</b> · {bootcamp.lan ? ct('LAN') : ct('online')}{bootcamp.lan && bootcamp.travel ? ` · ${ct('fora do continente (viagem mais cara)')}` : ''}</> : ct('Sem evento em curso.')}
+                {bootcamp.lan && <> · +{bootcamp.chem} {ct('química')} · +{bootcamp.familiarity} {ct('familiaridade')}</>}
+              </p>
+            )}
             <Button
               variant="primary"
-              disabled={bootcampUsed || budget < 60_000}
+              disabled={bootcamp ? !bootcamp.ok : bootcampUsed || budget < 60_000}
               onClick={onBootcamp}
-              title={bootcampUsed ? ct('Bootcamp já usado neste split.') : undefined}
+              title={bootcampUsed ? ct('Bootcamp já feito para este evento.') : undefined}
             >
-              {bootcampUsed ? ct('Bootcamp concluído neste split') : `${ct('Fazer bootcamp')} · R$ 60 mil`}
+              {bootcampUsed
+                ? ct('Bootcamp feito para este evento')
+                : bootcamp && !bootcamp.lan ? ct('Evento online: sem bootcamp')
+                  : bootcamp?.played ? ct('O evento já começou')
+                    : `${ct('Fazer bootcamp')} · ${formatMoney(bootcamp?.cost ?? 60_000)}`}
             </Button>
           </Panel>
         )}

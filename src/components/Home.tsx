@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   CalendarDays, ChevronRight, Crosshair, Flame, Heart, Layers, LayoutDashboard, Newspaper, Play,
-  Shuffle, Sparkles, Star, Swords, Trophy, TriangleAlert, UserRound, Crown, Globe, Lock, Medal,
+  Shuffle, Sparkles, Star, Swords, Trophy, TriangleAlert, UserRound, Crown, Globe, Lock, Medal, PencilRuler,
 } from 'lucide-react';
 import { type Difficulty, type TournamentPool } from '../types';
 import { setCheckoutSrc, trackPaywallView, trackUltFunnel } from '../state/track';
@@ -52,6 +52,8 @@ interface Props {
   ultimateLocked?: boolean;
   onLeaderboard?: () => void;
   onCareer?: () => void;
+  /** [fase 4] editor de base (jogadores, times, elencos) */
+  onEditor?: () => void;
   account?: Account | null;
   accountReady?: boolean;
   onAccount?: () => void;
@@ -83,7 +85,7 @@ export function Home(props: Props) {
   const {
     onStart, onDonate, teamCount, onUltimate, onRoadToPro, onDaily, premiumLocked, ultimateLocked, onCareer,
     account, accountReady, onAccount, onCreateAccount, onUpgrade, onLogout, onAdmin, savedCampaign, onResume,
-    onDiscardCampaign, shellNav, onShellNav, viewReq, onAchievements, onOpenRanking,
+    onDiscardCampaign, shellNav, onShellNav, viewReq, onAchievements, onOpenRanking, onEditor,
   } = props;
   const { t } = useLang();
   const [view, setView] = useState<'menu' | 'draft'>(viewReq?.view ?? 'menu');
@@ -310,6 +312,9 @@ export function Home(props: Props) {
           <ModeRow mode="major" icon={<Layers size={20} />} title="Draft" kicker={ct('Partida rápida')} desc={ct('Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.')} meta={ct('1 jogador · ~15 min')} cta={ct('Montar')} onGo={() => setView('draft')} />
           {onDaily && (
             <ModeRow mode="diario" icon={<CalendarDays size={20} />} title={ct('Diário')} kicker={ct('Todo dia')} desc={ct('Quatro desafios por dia — o mesmo pra todo mundo. Grátis, sem conta.')} meta={ct('1 jogador · 2 min')} cta={ct('Jogar o de hoje')} onGo={onDaily} />
+          )}
+          {onEditor && (
+            <ModeRow mode="carreira" icon={<PencilRuler size={20} />} title={ct('Editor de base')} kicker={ct('Estilo FM')} desc={ct('Edite jogadores (atributos, ocultos, CA/PA), times e elencos, crie os seus e comece uma carreira com a sua base.')} meta={ct('Exporte e importe em JSON')} cta={ct('Abrir')} onGo={onEditor} />
           )}
           {onUltimate && !ultimateLocked && (
             <ModeRow mode="online" icon={<Globe size={20} />} title="Online" kicker={ct('Ranqueada')} desc={ct('Ranqueada contra outros managers, duelo privado com amigos e o Major da Semana.')} meta={ct('Com o seu squad do Ultimate')} cta={ct('Competir')} onGo={onUltimate} />

@@ -13,6 +13,7 @@ import bo3Ages from '../../data/bo3-ages.json';
 import { FREE_TEAM_ID } from './transferAI';
 import { parseRegenPlayerId } from './signings';
 import { ageFromCareerStart } from './playerAge';
+import { isNewgenId, newgenAge } from '../mundo/juventude';
 
 export type PlayerPhase = 'rising' | 'prime' | 'declining';
 
@@ -114,41 +115,70 @@ export function playerPhase(_pid: string, age: number): PlayerPhase {
   if (age <= 27) return 'prime';
   return 'declining';
 }
-// delta da janela: por idade. Rising sobe rumo ao potencial e estabiliza ao
-// atingir o teto; declínio cai mais forte com a idade. Determinístico por split.
+
+// ─── CURVA DE ENVELHECIMENTO DA IA (fase 4 · frente K, recalibrada) ─────────
+// Antes: o jovem subia +1..+3 por split até o teto, o auge ficava parado e o
+// declínio só começava aos 31–35 — o OVR médio do top 20 inflava ≈ +4 em 10
+// splits (scripts/measure-mundo-10-splits.mts). Agora a curva é a do CS real:
+//   - CRESCIMENTO (até o teto de potencial): forte até ~21, some aos ~26;
+//   - PICO ~22–26; DECLÍNIO a partir dos ~28, acelerando depois dos 31;
+//   - a LONGEVIDADE (−1..+3 anos, mesmo eixo de `longevityShift` da evolução
+//     por atributo) adia a queda de quem envelhece bem (lendas tipo karrigan).
+// É a MESMA régua em OVR que a evolução por atributo produz (reflexos caem
+// primeiro, leitura de jogo segura até os 30+): os 5 números da IA movem juntos,
+// então a curva aqui é a média ponderada das classes.
+// Média por split (3 splits = 1 ano); o sorteio por hash vira inteiro.
+export const AI_GROWTH_BY_AGE: [maxAge: number, mean: number][] = [[19, 0.9], [21, 0.6], [23, 0.3], [26, 0.12], [99, 0]];
+export const AI_DECLINE_BY_AGE: [maxAge: number, mean: number][] = [[25, 0], [26, 0.1], [27, 0.2], [28, 0.35], [30, 0.55], [32, 0.85], [34, 1.15], [99, 1.45]];
+const bandOf = (table: [number, number][], age: number) => (table.find(([max]) => age <= max) ?? table[table.length - 1])[1];
+/** Anos que a longevidade adia o declínio: −1..+3 (determinístico por jogador). */
+export function aiLongevity(pid: string): number {
+  return Math.floor((hashStr(`long:${pid}`) % 100) / 20) - 1;
+}
+const rollMean = (mean: number, r: number) => {
+  const m = Math.abs(mean);
+  const whole = Math.floor(m);
+  return Math.sign(mean) * (whole + (r < (m - whole) * 100 ? 1 : 0));
+};
+// delta da janela: cresce rumo ao teto (parado no teto) e cai pela idade efetiva.
 export function evoDelta(pid: string, split: number, age: number, atCeiling: boolean): number {
-  const phase = playerPhase(pid, age);
   const r = hashStr(`evo:${pid}:${split}`) % 100;
-  if (phase === 'rising') {
-    if (atCeiling) return r < 70 ? 0 : 1; // já chegou no potencial: quase parado
-    return r < 40 ? 3 : r < 80 ? 2 : 1; // +1..+3
-  }
-  if (phase === 'prime') return r < 22 ? 1 : r < 82 ? 0 : -1; // -1..+1
-  // DECLÍNIO (28+): NÃO é universal. A longevidade (determinística por jogador)
-  // define quem segura o nível na casa dos 30 (lendas tipo s1mple/karrigan) e
-  // quem cai cedo. O declínio também é mais suave que antes (acabou o -3 fixo).
-  const longevity = hashStr(`long:${pid}`) % 100;        // 0-99 (maior = envelhece melhor)
-  const declineFrom = 31 + Math.floor(longevity / 20);   // 31..35: idade em que o declínio realmente começa
-  if (age < declineFrom) return r < 82 ? 0 : -1;         // "prime estendido": quase sempre estável, raríssimo -1
-  const over = age - declineFrom;                        // anos desde o início do declínio
-  if (over === 0) return r < 50 ? 0 : -1;               // 1º ano de declínio: metade segura
-  if (over <= 2) return r < 55 ? -1 : 0;               // declínio brando
-  return r < 55 ? -2 : -1;                              // declínio tardio, mais firme (mas nunca -3)
+  const q = hashStr(`evd:${pid}:${split}`) % 100;
+  const grow = atCeiling ? 0 : rollMean(bandOf(AI_GROWTH_BY_AGE, age), r);
+  const decline = rollMean(bandOf(AI_DECLINE_BY_AGE, age - aiLongevity(pid)), q);
+  return grow - decline;
 }
 
-// idade em que um jogador da IA se aposenta (determinístico, mesmo eixo de
-// longevidade do evoDelta): a maioria sai por volta de 35-38.
-export function aiRetireAge(pid: string): number {
-  return 35 + Math.floor((hashStr(`long:${pid}`) % 100) / 25); // 35..38
+// idade em que um jogador da IA se aposenta (determinístico): longevidade,
+// NÍVEL (quem está em queda num tier baixo para mais cedo; estrela segue) e
+// MOTIVAÇÃO (a vontade de competir varia). Faixa 29–37, a maioria 31–34.
+export function aiRetireAge(pid: string, ovr?: number): number {
+  const long = Math.floor((hashStr(`long:${pid}`) % 100) / 25); // 0..3 (mesmo eixo da longevidade)
+  const level = ovr == null ? 1 : ovr >= 86 ? 3 : ovr >= 82 ? 2 : ovr >= 76 ? 1 : 0;
+  const drive = (hashStr(`drive:${pid}`) % 3) - 1; // −1..+1
+  return 30 + long + level + drive;
 }
+
+// TETO de OVR de um jogador da IA pela idade de estreia. O espaço de
+// crescimento da idade (a mesma régua de `potentialRoom`) é COMPRIMIDO no topo
+// da escala: um jovem de 70 ainda tem os +9 inteiros, um de 88 quase não sobe —
+// o topo da cena é relativo (senão o top 20 inteiro "amadurece" e infla).
+export function aiPotentialOvr(pid: string, baseOvr: number, a0: number): number {
+  const room = a0 <= 18 ? 9 : a0 <= 20 ? 7 : a0 <= 22 ? 4 : a0 <= 24 ? 2 : a0 <= 26 ? 1 : 0;
+  const talent = room > 0 ? hashStr(`pot:${pid}`) % 4 : 0;
+  const squeeze = Math.max(0.2, Math.min(1, (AI_POT_TOP - baseOvr) / AI_POT_SPAN));
+  return Math.min(99, baseOvr + Math.round((room + talent) * squeeze));
+}
+export const AI_POT_TOP = 88;
+export const AI_POT_SPAN = 18;
 
 // drift de OVR entre o split de estreia e o atual, pelo relógio de idade próprio
 // do jogador (serve tanto pro titular original quanto pro jovem da base).
 export function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, split: number, potCap?: number): number {
   if (split <= debut) return 0;
-  const room = a0 <= 18 ? 9 : a0 <= 20 ? 7 : a0 <= 22 ? 4 : a0 <= 24 ? 2 : a0 <= 26 ? 1 : 0;
-  const talent = room > 0 ? hashStr(`pot:${pid}`) % 4 : 0;
-  const pot = Math.min(99, potCap ?? 99, baseOvr + room + talent);
+  // jovem da base (regen) mira o nível da vaga que herdou (teto = titular que
+  // saiu + 0..2); os demais, o teto da idade comprimido no topo da escala
+  const pot = potCap != null ? Math.min(99, potCap - (hashStr(`rgpot:${pid}`) % 3)) : aiPotentialOvr(pid, baseOvr, a0);
   let cur = baseOvr;
   for (let s = debut; s < split; s++) {
     const age = a0 + Math.floor((s - debut) / 3);
@@ -187,7 +217,10 @@ export function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split
   const anchor = playerOvr(orig); // nível da vaga: a base entra perto disso
   let curPlayer = orig, curId = orig.id, curBaseOvr = anchor, curA0 = baseAge(orig), debut = 1, gen = 0, isYouth = false;
   for (let guard = 0; guard < 8; guard++) {
-    const need = aiRetireAge(curId) - curA0;
+    // [fase 4] veterano que já passou da idade de parar quando a Carreira começa
+    // joga mais 2–4 anos (a despedida se espalha; nada de onda no split 2)
+    const grace = gen === 0 ? 2 + (hashStr(`grace:${curId}`) % 3) : 0;
+    const need = Math.max(aiRetireAge(curId, curBaseOvr) - curA0, grace);
     const retireSplit = need <= 0 ? debut + 1 : debut + 3 * need;
     if (split < retireSplit) break; // titular atual ainda em atividade
     gen++; debut = retireSplit;
@@ -205,7 +238,9 @@ export function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split
 
 export function applyAiAging(teams: TeamSeason[], split: number, skip: Set<string>): TeamSeason[] {
   if (split <= 1) return teams;
-  return teams.map((t) => ({ ...t, players: t.players.map((p, i) => (skip.has(p.id) ? p : aiSlotPlayer(p, t, i, split, skip))) }));
+  // [fase 4 · juventude] jovem gerado (newgen) já vem no estado atual (evolui
+  // atributo a atributo no fechamento do split): não passa pelo relógio da vaga
+  return teams.map((t) => ({ ...t, players: t.players.map((p, i) => (skip.has(p.id) || isNewgenId(p.id) ? p : aiSlotPlayer(p, t, i, split, skip))) }));
 }
 
 // reconstrói os elencos aplicando as transferências acumuladas (playerId -> teamId).
@@ -319,6 +354,8 @@ export function nextAiDrift(teamIds: string[], forms: Record<string, number>, sp
 
 // idade de um jogador do mundo da IA no split (regen tem relógio próprio no id)
 export function aiAgeOf(p: Pick<Player, 'id' | 'nick' | 'age'>, split: number): number {
+  const ng = newgenAge(p.id, split);
+  if (ng != null) return ng;
   const rg = parseRegenPlayerId(p.id);
   if (rg) return rg.ageAtDebut + Math.floor(Math.max(0, split - rg.debut) / 3);
   return ageFromCareerStart(baseAge(p), split);
