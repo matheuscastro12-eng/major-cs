@@ -22,16 +22,32 @@ export class AppSecretMissingError extends Error {
   }
 }
 
+// HOTFIX 2026-09-29: a produção nunca teve APP_SECRET e todos os tokens de conta
+// (e referências de pagamento) em circulação foram assinados com o reserva
+// legado `fallback:${DATABASE_URL}`. A falha fechada derrubou o login de todo
+// mundo no lançamento. Enquanto APP_SECRET não estiver configurada, volta o
+// reserva legado — mesma segurança de antes do lançamento, sessões preservadas.
+// Sem APP_SECRET E sem DATABASE_URL continua falha fechada. Configurar
+// APP_SECRET = o valor do reserva mantém as sessões; um valor novo desloga todos.
+function legacyFallbackSecret(): string {
+  const db = cleanEnv(process.env.DATABASE_URL);
+  return db ? `fallback:${db}` : '';
+}
+let warnedFallback = false;
+
 export function appSecretConfigured(): boolean {
-  return cleanEnv(process.env.APP_SECRET).length > 0;
+  return cleanEnv(process.env.APP_SECRET).length > 0 || legacyFallbackSecret().length > 0;
 }
 
-// Lança AppSecretMissingError sem a env. Quem chama num caminho público deve
-// checar appSecretConfigured() antes e responder 500 (ver respondMissingSecret).
+// Lança AppSecretMissingError sem APP_SECRET e sem o reserva. Quem chama num
+// caminho público deve checar appSecretConfigured() antes (ver respondMissingSecret).
 export function appSecret(): string {
   const secret = cleanEnv(process.env.APP_SECRET);
-  if (!secret) throw new AppSecretMissingError();
-  return secret;
+  if (secret) return secret;
+  const legacy = legacyFallbackSecret();
+  if (!legacy) throw new AppSecretMissingError();
+  if (!warnedFallback) { warnedFallback = true; console.warn('app_secret_legacy_fallback'); }
+  return legacy;
 }
 
 // Resposta padrão da falha fechada. Devolve true quando respondeu (a rota para).
