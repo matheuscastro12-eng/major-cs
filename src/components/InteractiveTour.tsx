@@ -184,7 +184,7 @@ export function InteractiveTour({ steps, onClose }: Props) {
               letterSpacing: '1px',
               textTransform: 'uppercase',
               color: 'var(--em-gold)',
-              fontFamily: '"JetBrains Mono", monospace',
+              fontFamily: 'var(--font-num)',
             }}
           >
             Passo {i + 1} / {steps.length}

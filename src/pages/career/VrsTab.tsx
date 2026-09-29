@@ -107,6 +107,7 @@ export function VrsTab({
         </div>
       </div>
       {vrsMode === 'geral' ? (
+        <div className="vrs-table-wrap">
         <table className="stats vrs-geral">
           <tbody>
             {vrsAll.map((t, i) => (
@@ -143,6 +144,7 @@ export function VrsTab({
             ))}
           </tbody>
         </table>
+        </div>
       ) : (
         <div className="vrs-regions">
           {vrsByRegion.map((g) => (

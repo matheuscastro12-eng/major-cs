@@ -5,6 +5,9 @@
     "api/bo3-edits.ts": { "memory": 256, "maxDuration": 10 },
     "api/*.ts": { "memory": 128, "maxDuration": 10 }
   },
+  "crons": [
+    { "path": "/api/cron?job=wl-settle", "schedule": "5 3 * * 0" }
+  ],
   "rewrites": [
     { "source": "/jogar", "destination": "/" },
     { "source": "/criar-manager", "destination": "/" },
@@ -21,9 +24,10 @@
     { "source": "/road-to-pro", "destination": "/" },
     { "source": "/diario", "destination": "/" },
     { "source": "/carreira", "destination": "/" },
-    { "source": "/carreira/saves", "destination": "/" },
+    { "source": "/carreira/:path*", "destination": "/" },
     { "source": "/hall", "destination": "/" },
     { "source": "/banners", "destination": "/" },
+    { "source": "/design", "destination": "/" },
     { "source": "/jogo/:path*", "destination": "/" },
     { "source": "/admin", "destination": "/" },
     { "source": "/admin/:path*", "destination": "/" }
@@ -48,6 +52,16 @@
     {
       "source": "/ads/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800, s-maxage=2592000, stale-while-revalidate=86400" }]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), usb=(), browsing-topics=()" },
+        { "key": "Content-Security-Policy-Report-Only", "value": "default-src 'self'; script-src 'self' https://platform.twitter.com https://cdn.syndication.twimg.com https://www.googletagmanager.com https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' data: blob: https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://vercel.live; frame-src https://platform.twitter.com https://syndication.twitter.com https://vercel.live; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/error?csp=1" }
+      ]
     }
   ]
 }

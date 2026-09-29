@@ -1,18 +1,20 @@
 // "Major da Semana" — Weekend League do Ultimate (fase A: servidor).
 // Torneio semanal (qua 00:00 → sáb 23:59 America/Sao_Paulo): registro
 // por janela, até 10 partidas com reports PAREADOS (mesma filosofia anti-fraude
-// da ranqueada — resultado só conta quando os dois lados batem) e recompensa
-// por faixa de vitórias paga pela economia server-authoritative (ledger
-// idempotente, op_id wl:<windowId>). Lógica pura em server/weekend-league.ts.
-// Ações (POST body.action): status | register | report | claim. Só conta PAGA.
+// da ranqueada — resultado só conta quando os dois lados batem) e prêmio por
+// COLOCAÇÃO no top 10 pago pelo admin (settle) na economia server-authoritative
+// (ledger idempotente, op_id wl:<windowId>). Lógica pura em server/weekend-league.ts.
+// Ações (POST body.action): status | register | report | settleAck [O0-22]. Só conta PAGA.
+// [O0-08] a ação legada 'claim' (faixa de vitórias) saiu — ver server.
 import { neon } from '@neondatabase/serverless';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { requireAdmin } from '../server/admin-auth.js';
+import type { RateSql } from '../server/rate-limit.js';
 import {
   wlSchemaQueries,
   wlStatus,
   wlRegister,
   wlReport,
-  wlClaim,
   wlBoard,
   wlSettle,
   weekendWindowFor,
@@ -21,10 +23,10 @@ import {
 } from '../server/weekend-league.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
 import { bumpCommunityContrib, communityGoalSchemaQueries } from '../server/communityGoal.js'; // [URG-5]
+import { wlLastSettleFor, wlSettleAck } from '../server/wlSettleCron.js'; // [O0-22]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
-const APP_SECRET = () => clean(process.env.APP_SECRET) || `fallback:${clean(process.env.DATABASE_URL) ?? 'dev'}`;
 
 const rlBuckets = new Map<string, { count: number; resetAt: number }>();
 let schemaReady = false;
@@ -47,27 +49,19 @@ function clientIp(headers?: Record<string, string | string[] | undefined>): stri
   return value.split(',')[0].trim() || 'unknown';
 }
 
-function verifyToken(token: string): string | null {
-  const [b64, sig] = (token ?? '').split('.');
-  if (!b64 || !sig) return null;
-  const body = Buffer.from(b64, 'base64url').toString();
-  const expect = createHmac('sha256', APP_SECRET()).update(body).digest('base64url');
-  const sb = Buffer.from(sig); const eb = Buffer.from(expect);
-  if (sb.length !== eb.length || !timingSafeEqual(sb, eb)) return null;
-  const [email, exp] = body.split('|');
-  if (!email || Number(exp) < Math.floor(Date.now() / 1000)) return null;
-  return email;
-}
+// token de conta: server/auth.ts (falha fechada sem APP_SECRET).
+const verifyToken = verifyAccountToken;
 
 const WINDOW_ID_RE = /^wl-\d{4}-\d{2}-\d{2}$/;
 // limites por conta/minuto: report é o hot path da run; claim/register são raros.
-const ACTION_LIMITS: Record<string, number> = { status: 60, register: 10, report: 30, claim: 10 };
+const ACTION_LIMITS: Record<string, number> = { status: 60, register: 10, report: 30, settleAck: 10 };
 
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
+  if (respondMissingSecret(res)) return; // falha fechada (SEGU-10)
   const ip = clientIp(req.headers);
   if (rateLimited(`ip:${ip}`, 180)) {
     res.setHeader('Retry-After', '60');
@@ -86,11 +80,10 @@ export default async function handler(
   // adminBoard = ranking completo com e-mails; settle = FECHAR E PREMIAR o top 10
   // por colocação (idempotente — op_id wl:<windowId> por e-mail no ledger).
   if (action === 'adminBoard' || action === 'settle') {
-    const adminPass = clean(process.env.ADMIN_PASSWORD);
-    if (!adminPass || String(body.password ?? '').trim() !== adminPass) { res.status(401).json({ error: 'admin' }); return; }
     const adbUrl = clean(process.env.DATABASE_URL);
     if (!adbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
     const asql = neon(adbUrl) as unknown as SqlTag;
+    if (!(await requireAdmin(asql as unknown as RateSql, body, req, res, { error: 'admin' }))) return; // O0-16
     if (!schemaReady) {
       for (const q of [...ultEconomySchemaQueries(asql), ...wlSchemaQueries(asql)]) await q;
       schemaReady = true;
@@ -131,7 +124,19 @@ export default async function handler(
   const now = new Date();
 
   if (action === 'status') {
-    res.status(200).json(await wlStatus(sql, email, now));
+    // [O0-22] + colocação/prêmio da última janela fechada (banner no Hub)
+    res.status(200).json({ ...(await wlStatus(sql, email, now)), lastSettle: await wlLastSettleFor(sql, email, now) });
+    return;
+  }
+
+  // [O0-22] coleta do prêmio de colocação no save (banner do Hub). Idempotente
+  // pelo ledger: replayed=true ⇒ já coletado, o cliente não credita de novo.
+  if (action === 'settleAck') {
+    const windowId = String(body.windowId ?? '').trim();
+    if (!WINDOW_ID_RE.test(windowId)) { res.status(400).json({ error: 'windowId inválido' }); return; }
+    const r = await wlSettleAck(sql, email, windowId, now);
+    if (!r.ok) { res.status(r.error === 'bad_window' ? 400 : 404).json({ error: r.error }); return; }
+    res.status(200).json(r);
     return;
   }
 
@@ -165,19 +170,6 @@ export default async function handler(
     // [URG-5] meta comunitária: report ACEITO (não duplicado) do Major da Semana conta 1 partida
     if (r.outcome !== 'duplicate') await bumpCommunityContrib(sql, now.getTime(), email);
     res.status(200).json({ ok: true, outcome: r.outcome, entry: r.entry });
-    return;
-  }
-
-  if (action === 'claim') {
-    const windowId = String(body.windowId ?? '').trim();
-    if (!WINDOW_ID_RE.test(windowId)) { res.status(400).json({ error: 'windowId inválido' }); return; }
-    const r = await wlClaim(sql, email, windowId, now);
-    if (!r.ok) {
-      const status = r.error === 'bad_window' ? 400 : r.error === 'not_registered' ? 403 : 409;
-      res.status(status).json({ error: r.error });
-      return;
-    }
-    res.status(200).json({ ok: true, replayed: r.replayed, tier: r.tier, wins: r.wins, credits: r.credits });
     return;
   }
 

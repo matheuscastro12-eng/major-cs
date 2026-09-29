@@ -34,7 +34,7 @@ export interface Moment {
 
 export interface MomentOutcome {
   result: MomentResult;
-  value: number;        // 0..1 (peso no momentScore)
+  value: number;        // ~0..1.1 (peso no momentScore; o sucesso agressivo vale 1.1)
   frags: number;
   deaths: number;
   openings: number;
@@ -276,14 +276,81 @@ export function generateLastRoundHalf(role: Role): Moment {
 // ─────────────────────────────────────────────────────────────────────────────
 // Resolução de um momento
 
-const STYLE_MOD: Record<MomentStyle, { chance: number; winFrags: number; winOpen: number; failDeath: number }> = {
-  // aggro: ceiling alto (mais frags/aberturas), mas falha custa morte
-  aggro: { chance: -0.06, winFrags: 2, winOpen: 1, failDeath: 1 },
-  // safe: alta taxa de sucesso, impacto modesto, raramente morre
-  safe: { chance: +0.10, winFrags: 1, winOpen: 0, failDeath: 0 },
-  // smart: equilibrado, recompensa leitura
-  smart: { chance: +0.02, winFrags: 1, winOpen: 0, failDeath: 0 },
+// O1-44 (ENGI-06): antes safe tinha +0.10 e aggro −0.06 com o MESMO value no
+// sucesso — 16 pontos de graça e nenhum custo; o Monte Carlo de 200 Séries do
+// Dia dava safe 37% de vitória contra 17% do aggro, e rating maior também. Agora
+// o estilo é uma troca: safe ganha mais rounds, aggro faz mais frags/aberturas
+// (que viram rating no finishSeries) e a POSTURA do adversário (abaixo) decide
+// qual estilo vale mais em cada beat.
+const STYLE_MOD: Record<MomentStyle, { chance: number; winFrags: number; winOpen: number; failDeath: number; winValue: number; failValue: number }> = {
+  // aggro: ceiling alto (mais frags/aberturas, round vencido vale mais no
+  // embalo), mas falha custa morte e quase nada no placar
+  aggro: { chance: -0.02, winFrags: 2, winOpen: 1, failDeath: 1, winValue: 1.1, failValue: 0.05 },
+  // safe: alta taxa de sucesso, impacto modesto, raramente morre (a falha
+  // ainda preserva a arma/o round seguinte)
+  safe: { chance: +0.015, winFrags: 1, winOpen: 0, failDeath: 0, winValue: 0.95, failValue: 0.15 },
+  // smart: equilibrado, recompensa leitura (o acerto pega o 1º abate da jogada)
+  smart: { chance: 0, winFrags: 1, winOpen: 1, failDeath: 0, winValue: 1, failValue: 0.1 },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POSTURA do adversário — o contra-jogo (O1-44). Em cada beat o adversário
+// joga de um jeito, sorteado pelo seed da série com o viés do elenco dele (o
+// mesmo que o scouting descreve). Mesmo vocabulário dos estilos:
+//   aggro = vêm pra cima (rush/duelo)   safe = jogam passivo (tempo/ângulo)
+//   smart = armaram o setup (crossfire/utilitário)
+// Pedra-papel-tesoura: cada estilo seu vence uma postura e perde pra outra.
+//   seguro  × rush     → segura o ângulo e troca a agressão deles      (+)
+//   agressivo × passivo → toma o espaço que eles entregam               (+)
+//   inteligente × setup → lê o setup e desmonta                         (+)
+//   agressivo × setup  → corre pro crossfire                            (−)
+//   seguro  × passivo  → dois times parados: o tempo e o util são deles (−)
+//   inteligente × rush → sem tempo pra ler, atropelado                  (−)
+// A Leitura tática REVELA a postura do beat: as odds passam a usar o confronto
+// exato. Sem leitura, as odds usam o confronto ESPERADO pela tendência (a média
+// ponderada) — nos dois casos o % mostrado é o % rolado.
+
+export type OppPosture = MomentStyle;
+
+export const COUNTER_DELTA = 0.12;
+
+const STYLE_VS_POSTURE: Record<MomentStyle, Record<OppPosture, number>> = {
+  aggro: { aggro: 0, safe: +1, smart: -1 },
+  safe: { aggro: +1, safe: -1, smart: 0 },
+  smart: { aggro: -1, safe: 0, smart: +1 },
+};
+
+// o estilo que vence cada postura (o "contra").
+export function counterOf(posture: OppPosture): MomentStyle {
+  return (Object.keys(STYLE_VS_POSTURE) as MomentStyle[]).find((st) => STYLE_VS_POSTURE[st][posture] > 0)!;
+}
+
+export const POSTURE_LABEL: Record<OppPosture, string> = {
+  aggro: 'vêm pra cima', safe: 'jogam passivo', smart: 'armaram o setup',
+};
+export const POSTURE_TELL: Record<OppPosture, string> = {
+  aggro: 'eles vão forçar o duelo — segure o ângulo e troque',
+  safe: 'eles vão sentar no ângulo e jogar o tempo — tome o espaço',
+  smart: 'eles armaram crossfire no site — leia antes de entrar',
+};
+
+export type PostureWeights = Record<OppPosture, number>;
+export const EVEN_POSTURE: PostureWeights = { aggro: 1 / 3, safe: 1 / 3, smart: 1 / 3 };
+
+// delta de chance do confronto: postura conhecida → exato; senão, o esperado
+// pela tendência (pesos normalizados).
+export function counterDeltaOf(style: MomentStyle, posture: OppPosture | null, lean: PostureWeights = EVEN_POSTURE): number {
+  if (posture) return STYLE_VS_POSTURE[style][posture] * COUNTER_DELTA;
+  const tot = lean.aggro + lean.safe + lean.smart || 1;
+  return (Object.keys(lean) as OppPosture[]).reduce((a, p) => a + (lean[p] / tot) * STYLE_VS_POSTURE[style][p], 0) * COUNTER_DELTA;
+}
+
+// chance de SUCESSO — a fórmula única que resolveMoment e explainOdds usam.
+function successChanceOf(effAttr: number, style: MomentStyle, oppStrength: number, counter: number): number {
+  const skill = clamp(effAttr / 20, 0, 1);
+  const oppPenalty = (oppStrength - 55) / 150;   // adversário forte dificulta (v10: ~1.5× + centro mais baixo → tiers altos punem de verdade)
+  return clamp(0.22 + skill * 0.62 + STYLE_MOD[style].chance + counter - oppPenalty, 0.05, 0.92);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Narrativa por SITUAÇÃO — cada `kind` de momento (entry, retake, eco, call de
@@ -394,11 +461,10 @@ export function resolveMoment(
   effAttr: number,         // atributo EFETIVO (1-20) já com modificadores off-game
   oppStrength: number,     // ~48-80
   rng: Rng,
+  counter = 0,             // O1-44: delta do confronto com a postura (counterDeltaOf)
 ): MomentOutcome {
-  const skill = clamp(effAttr / 20, 0, 1);
   const style = STYLE_MOD[option.style];
-  const oppPenalty = (oppStrength - 55) / 150;   // adversário forte dificulta (v10: ~1.5× + centro mais baixo → tiers altos punem de verdade)
-  const successChance = clamp(0.22 + skill * 0.62 + style.chance - oppPenalty, 0.05, 0.92);
+  const successChance = successChanceOf(effAttr, option.style, oppStrength, counter);
 
   const roll = rng();
   // A banda de "partial" cabe DENTRO do resto (1 - successChance), reservando um
@@ -415,7 +481,7 @@ export function resolveMoment(
   let value: number;
 
   if (result === 'success') {
-    value = 1;
+    value = style.winValue;
     frags = style.winFrags + (isClutch ? 1 : 0);
     openings = style.winOpen + (moment.kind === 'duel' && option.style === 'aggro' ? 0 : 0);
     if (moment.kind === 'pistol' && option.style === 'aggro') openings += 1;
@@ -424,7 +490,7 @@ export function resolveMoment(
     value = 0.55;
     frags = 1;
   } else {
-    value = 0.1;
+    value = style.failValue;
     deaths = 1 + (option.style === 'aggro' ? style.failDeath : 0);
   }
 
@@ -441,7 +507,7 @@ export const STYLE_LABEL: Record<MomentStyle, string> = {
   aggro: 'Agressivo', safe: 'Seguro', smart: 'Inteligente',
 };
 
-export interface OddsSeg { label: string; pct: number; kind: 'base' | 'skill' | 'style' | 'opp'; }
+export interface OddsSeg { label: string; pct: number; kind: 'base' | 'skill' | 'style' | 'opp' | 'read'; }
 
 export interface OddsBreakdown {
   total: number;                 // 0..1 — == successChance do resolveMoment
@@ -461,17 +527,21 @@ export function explainOdds(
   effAttr: number,
   oppStrength: number,
   factors: { label: string; delta: number }[],
+  // O1-44: confronto com a postura — delta de chance + rótulo (lida/esperada).
+  counter: { delta: number; label: string } | null = null,
 ): OddsBreakdown {
   const skill = clamp(effAttr / 20, 0, 1);
   const style = STYLE_MOD[opt.style];
   const oppPenalty = (oppStrength - 55) / 150;   // espelha resolveMoment (v10)
-  const total = clamp(0.22 + skill * 0.62 + style.chance - oppPenalty, 0.05, 0.92);
+  const total = successChanceOf(effAttr, opt.style, oppStrength, counter?.delta ?? 0);
+  const cPct = Math.round((counter?.delta ?? 0) * 100);
   return {
     total,
     segments: [
       { label: 'Base', pct: 22, kind: 'base' },
       { label: ATTR_LABEL[opt.attr], pct: Math.round(skill * 0.62 * 100), kind: 'skill' },
       { label: STYLE_LABEL[opt.style], pct: Math.round(style.chance * 100), kind: 'style' },
+      ...(counter && cPct !== 0 ? [{ label: counter.label, pct: cPct, kind: 'read' as const }] : []),
       { label: `vs ${Math.round(oppStrength)} OVR`, pct: -Math.round(oppPenalty * 100), kind: 'opp' },
     ],
     attr: opt.attr,
@@ -485,6 +555,15 @@ export function explainOdds(
 
 // Resumo agregado dos momentos (pra UI e pro boost na simulação). execAvg =
 // média das EXECUÇÕES nos minigames (null se nenhum momento-chave foi jogado).
+// IMPACTO por beat (O1-44): frags pesam cheio, aberturas um pouco, mortes
+// descontam — a moeda do rating que o estilo agressivo compra com risco. Vira
+// OVR no finishSeries ao lado do momentBoost; IMPACT_REF é o impacto de um beat
+// "médio" (neutro), medido no Monte Carlo da Série do Dia.
+export const IMPACT_REF = 0.55;
+export function impactPerBeat(s: { frags: number; deaths: number; openings: number }, beats: number): number {
+  return beats > 0 ? (s.frags + s.openings * 0.3 - s.deaths * 0.4) / beats : IMPACT_REF;
+}
+
 export function summarizeMoments(outcomes: MomentOutcome[]): {
   score: number; frags: number; deaths: number; openings: number; clutches: number; execAvg: number | null;
 } {

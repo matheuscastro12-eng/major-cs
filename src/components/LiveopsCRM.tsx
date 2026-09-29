@@ -20,7 +20,7 @@ import {
 type Kind = 'promo' | 'sbc' | 'notice' | 'event';
 
 const KIND_LABEL: Record<Kind, string> = { promo: 'Promo', sbc: 'SBC', notice: 'Aviso', event: 'Evento' };
-const KIND_TONE: Record<Kind, string> = { promo: '#f472b6', sbc: '#c792ea', notice: '#7aa2f7', event: '#29c47a' };
+const KIND_TONE: Record<Kind, string> = { promo: '#f472b6', sbc: '#c792ea', notice: '#7aa2f7', event: 'var(--c-win)' };
 
 // espelha LIVEOPS_RARITIES do servidor (raridades válidas de recompensa de SBC)
 const RARITY_OPTIONS = ['bronze', 'silver', 'gold', 'rareGold', 'elite', 'legendary', 'icon', 'tots', 'major', 'promo'] as const;
@@ -243,7 +243,7 @@ export function LiveopsCRM({ onExit }: { onExit: () => void }) {
                     <tr key={r.id}>
                       <td style={{ fontFamily: 'monospace' }}>{r.id}</td>
                       <td>
-                        <span style={{ fontSize: '0.7rem', fontWeight: 900, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 999, background: `${KIND_TONE[r.kind]}22`, border: `1px solid ${KIND_TONE[r.kind]}66`, color: KIND_TONE[r.kind] }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 900, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 999, background: `color-mix(in srgb, ${KIND_TONE[r.kind]} 13%, transparent)`, border: `1px solid color-mix(in srgb, ${KIND_TONE[r.kind]} 40%, transparent)`, color: KIND_TONE[r.kind] }}>
                           {ct(KIND_LABEL[r.kind])}
                         </span>
                       </td>
@@ -349,7 +349,7 @@ export function LiveopsCRM({ onExit }: { onExit: () => void }) {
                     {/* preview do card da Loja */}
                     <div className="field" style={{ marginTop: 8 }}>
                       <label>{ct('Prévia do card')}</label>
-                      <div style={{ maxWidth: 320, borderRadius: 14, padding: '14px 16px', color: '#fff', background: `linear-gradient(155deg, ${form.color} 0%, ${form.color}dd 55%, ${form.color}aa 100%)` }}>
+                      <div style={{ maxWidth: 320, borderRadius: 14, padding: '14px 16px', color: '#fff', background: `linear-gradient(155deg, ${form.color} 0%, color-mix(in srgb, ${form.color} 87%, transparent) 55%, color-mix(in srgb, ${form.color} 67%, transparent) 100%)` }}>
                         <div style={{ fontWeight: 900 }}>✨ {ct('Pacote Promo')} · {form.name || '—'}</div>
                         <div style={{ fontSize: '0.78rem', opacity: 0.92, marginTop: 4 }}>{form.desc || ct('(descrição)')}</div>
                         <div style={{ fontSize: '0.78rem', fontWeight: 800, marginTop: 6 }}>🪙 {Number(form.packCost || 0).toLocaleString('pt-BR')} · +{form.ovrBoost || '?'} OVR</div>

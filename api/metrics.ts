@@ -1,11 +1,15 @@
 // Painel de métricas do admin: acessos, jogos, conversão e dificuldade real.
 import { neon } from '@neondatabase/serverless';
 import { communityWeekId } from '../src/engine/ultimate/communityGoal.js'; // [URG-5]
+import { requireAdmin } from '../server/admin-auth.js';
+import { parseJsonBody } from '../server/http.js';
+import { internalError } from '../server/internalError.js';
+import type { RateSql } from '../server/rate-limit.js';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: {
     status: (code: number) => { json: (body: unknown) => void };
     setHeader: (k: string, v: string) => void;
@@ -17,19 +21,16 @@ export default async function handler(
     return;
   }
   const url = clean(process.env.DATABASE_URL);
-  const expected = clean(process.env.ADMIN_PASSWORD);
-  if (!url || !expected) {
+  if (!url) {
     res.status(500).json({ error: 'env não configurada' });
     return;
   }
-  const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as { password?: string };
-  if ((body.password ?? '').trim() !== expected) {
-    res.status(401).json({ ok: false });
-    return;
-  }
+  const body = parseJsonBody(req.body);
+  if (!body) { res.status(400).json({ ok: false, error: 'JSON inválido' }); return; }
+  const sql = neon(url);
+  if (!(await requireAdmin(sql as unknown as RateSql, body, req, res))) return; // O0-16
 
   try {
-    const sql = neon(url);
     await sql`
       CREATE TABLE IF NOT EXISTS online_sessions (
         sid text PRIMARY KEY,
@@ -199,6 +200,6 @@ export default async function handler(
       communityGoal,
     });
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    internalError(res, 'metrics', e);
   }
 }

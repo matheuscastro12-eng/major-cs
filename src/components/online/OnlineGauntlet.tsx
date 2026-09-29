@@ -128,7 +128,7 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
         <BackBar onHub={onHub} onExit={onExit} />
         <div style={{ textAlign: 'center', marginBottom: '8px' }}>
           <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>{ct('Sequência atual · time')} {myOvr} OVR</div>
-          <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '70px', fontWeight: 800, color: 'var(--rtm-green-bright)', lineHeight: 1, textShadow: '0 0 36px rgba(111,208,111,.35)' }}>{streak}</div>
+          <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '70px', fontWeight: 800, color: 'var(--rtm-green-bright)', lineHeight: 1, textShadow: '0 0 36px color-mix(in srgb, var(--c-win) 35%, transparent)' }}>{streak}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '16px', borderRadius: '10px', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', marginBottom: '16px' }}>
           <div style={{ textAlign: 'center' }}>
@@ -168,7 +168,7 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
   return (
     <div style={{ maxWidth: '520px', margin: '40px auto 0', textAlign: 'center' }}>
       <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>{ct('Fim da corrida')}</div>
-      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '80px', fontWeight: 800, color: 'var(--rtm-green-bright)', lineHeight: 1, textShadow: '0 0 40px rgba(111,208,111,.4)' }}>{streak}</div>
+      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '80px', fontWeight: 800, color: 'var(--rtm-green-bright)', lineHeight: 1, textShadow: '0 0 40px color-mix(in srgb, var(--c-win) 40%, transparent)' }}>{streak}</div>
       <div style={{ fontSize: '15px', color: 'var(--rtm-dim)' }}>{ct('vitórias seguidas')}</div>
       {record && <div style={{ marginTop: '12px', display: 'inline-block', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '5px 14px', borderRadius: '999px' }}>{ct('★ Novo recorde pessoal')}</div>}
       <p style={{ color: 'var(--rtm-faint)', fontSize: '13px', marginTop: '16px' }}>{ct('Seu recorde pessoal agora é')} {stats.bestStreak} {ct('vitórias.')}</p>

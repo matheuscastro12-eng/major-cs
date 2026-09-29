@@ -155,7 +155,7 @@ export function LogoBuilder({ initial, onSave, onCancel }: Props) {
               color: 'var(--em-text)',
               border: '1px solid var(--em-border)',
               borderRadius: 4,
-              fontFamily: '"JetBrains Mono", monospace',
+              fontFamily: 'var(--font-num)',
               fontSize: '1.1rem',
               fontWeight: 800,
               letterSpacing: '0.2em',

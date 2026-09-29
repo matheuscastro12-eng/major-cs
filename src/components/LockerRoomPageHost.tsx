@@ -22,6 +22,11 @@ export function openLockerRoom(data: LockerRoomData, onReady?: () => void): void
   setAll({ data, onReady });
 }
 
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+export function closeLockerRoom(): void {
+  setAll(null);
+}
+
 export function LockerRoomPageHost() {
   const [state, setState] = useState<State | null>(current);
 

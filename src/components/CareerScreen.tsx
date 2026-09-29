@@ -70,27 +70,41 @@ import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 // FutCard: usado pela SquadTab; import movido pra page.
 import { DashCard } from './career/DashCard';
 import { CareerShell, CareerDashFrame } from './career/CareerShell';
-import { CareerPlayerPage } from './career/CareerPlayerPage';
+import { AnalystReportCard } from './AnalystReportCard';
+import { generateAnalystReport } from '../engine/analystReport';
+import type { SquadSection } from '../pages/career/SquadTab';
+import type { PaletteItem, ShellNavGroup, ShellNext, ShellPending, ShellTab, ShellTool } from './ds/shell/types';
+import { scoreMatch } from './ds/shell/CommandPalette';
+import { usePeekResolver, peekFromPlayer, type PeekData } from './ds/shell/PlayerPeek';
+import {
+  ArrowLeftRight, Binoculars, BookOpen, Building2, CalendarCheck, CalendarDays, ChartColumn, ChartNoAxesColumn,
+  CircleHelp, Crosshair, DoorOpen, FileSignature, Globe, GraduationCap, House, Inbox, Layers, ListOrdered, LogOut,
+  Medal, Network, PenLine, RotateCcw, ScrollText, Search, Shield, ShieldHalf, Sparkles, Star, Swords, Target,
+  Trophy, UserRound, Users, Wallet,
+} from 'lucide-react';
+import { CareerPlayerPage, PLAYER_TABS, type PlayerTab } from './career/CareerPlayerPage';
 import { CareerTeamPage } from './career/CareerTeamPage';
 // PlayerLink: usado pela SquadTab; import movido pra page.
 import { playerOrgId, playerRuntimeId } from '../state/career-player-route';
 import {
-  canCareerGoBack,
   careerHistoryBack,
-  careerHistoryForward,
   initCareerNav,
+  isCareerPlayerPath,
+  isCareerTeamPath,
   navigateCareerHub,
   navigateCareerPlayer,
   navigateCareerTeam,
   parseCareerPlayerId,
   parseCareerTeamId,
 } from '../state/career-nav';
+import { useSectionHistory } from '../state/app-history';
 // buildDashboardTasks + CareerOverview + RecentMatchRow: usados pela OverviewTab; imports movidos pra page.
 import { CareerIcon, type CareerIconName } from './career/CareerIcon';
 import { CareerConfirmProvider, useCareerConfirm } from './career/ConfirmModal';
 // OrgFlag: usado pelas pages (WorldTab/VrsTab); import removido daqui.
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
+import { careerMatchSeed } from '../engine/career/matchSeed';
 import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits, applyBo3PlayerEdit, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
@@ -102,7 +116,7 @@ import { getActiveSlot } from '../state/careerSaves';
 import { useGame, type Hydrator } from '../state/gameStore';
 import type { VersionedSave } from '../state/saveMigrations';
 import bo3Ages from '../data/bo3-ages.json';
-import { useAccount } from '../state/account';
+import { getToken, useAccount } from '../state/account';
 import { CustomRosterBuilder } from './CustomRosterBuilder';
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
@@ -961,7 +975,7 @@ function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {(['normal', 'hard', 'legend'] as Difficulty[]).map((d) => {
           const on = value === d;
-          const tone = d === 'normal' ? '#5ed88a' : d === 'hard' ? '#e8c170' : '#e58a8a';
+          const tone = d === 'normal' ? 'var(--c-win)' : d === 'hard' ? '#e8c170' : 'var(--c-loss)';
           return (
             <button
               key={d}
@@ -971,7 +985,7 @@ function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d
                 flex: '1 1 180px', textAlign: 'left', cursor: 'pointer', padding: '8px 12px',
                 borderRadius: 8, fontFamily: 'inherit',
                 border: `1px solid ${on ? tone : 'var(--em-border,#2a3340)'}`,
-                background: on ? `${tone}1f` : 'transparent',
+                background: on ? `color-mix(in srgb, ${tone} 12%, transparent)` : 'transparent',
                 boxShadow: on ? `0 0 0 1px ${tone}` : 'none',
               }}
             >
@@ -2513,6 +2527,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setSave((s) => { const n = { ...s, majorT: t, ...patch }; persist(n); return n; });
   };
   const [hubTab, setHubTab] = useState<HubTab>(() => (loadSave().majorT ? 'major' : 'overview'));
+  // subseções da sidebar estilo FM que vivem dentro de uma aba (Elenco, Finanças)
+  const [squadSec, setSquadSec] = useState<string>('sq');
+  const [finSec, setFinSec] = useState<string>('fi');
+  // peek de jogador (hover card): refs "career:<id>" resolvidos pelo hub da
+  // liga (a função é preenchida lá embaixo, quando a liga existe)
+  const peekFnRef = useRef<(id: string) => PeekData | null>(() => null);
+  usePeekResolver((ref) => (ref.startsWith('career:') ? peekFnRef.current(ref.slice(7)) : null));
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
   const [showOnb, setShowOnb] = useState(() => { try { return !localStorage.getItem('rtm-onboarded-v1'); } catch { return false; } });
@@ -2520,7 +2541,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const [promoting, setPromoting] = useState<string | null>(null); // prospecto escolhendo quem sai do elenco
   const [playerRouteId, setPlayerRouteId] = useState<string | null>(() => parseCareerPlayerId());
   const [teamRouteId, setTeamRouteId] = useState<string | null>(() => parseCareerTeamId());
-  const [canNavBack, setCanNavBack] = useState(() => canCareerGoBack());
+  // aba do perfil de jogador (subnav do shell); volta pra "Perfil" a cada jogador
+  const [ppTabFor, setPpTabFor] = useState<{ id: string | null; tab: PlayerTab }>({ id: null, tab: 'profile' });
+  const ppTab: PlayerTab = ppTabFor.id === playerRouteId ? ppTabFor.tab : 'profile';
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
   const [newsCat, setNewsCat] = useState<NewsCat | 'all'>('all'); // filtro da Inbox
   const [vrsMode, setVrsMode] = useState<'regiao' | 'geral'>('geral'); // ranking VRS: por região ou geral
@@ -2840,7 +2863,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const syncRoutes = () => {
       setPlayerRouteId(parseCareerPlayerId());
       setTeamRouteId(parseCareerTeamId());
-      setCanNavBack(canCareerGoBack());
     };
     window.addEventListener('popstate', syncRoutes);
     syncRoutes();
@@ -2852,7 +2874,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       navigateCareerHub();
       setPlayerRouteId(null);
       setTeamRouteId(null);
-      setCanNavBack(canCareerGoBack());
     }
   };
 
@@ -2865,7 +2886,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const routeId = isOwn ? playerRuntimeId(p.id) : baseId;
     navigateCareerPlayer(routeId);
     setPlayerRouteId(routeId);
-    setCanNavBack(canCareerGoBack());
   };
 
   const closePlayerProfile = () => {
@@ -2875,7 +2895,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const openTeamProfile = (teamId: string) => {
     navigateCareerTeam(teamId);
     setTeamRouteId(teamId);
-    setCanNavBack(canCareerGoBack());
   };
 
   const closeTeamProfile = () => {
@@ -2911,6 +2930,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
     const user = tournament.teams.find((team) => team.id === 'user');
     if (!user) return;
+    // [O0-36] o Hall exige conta: sem login, não registra (e não mostra erro).
+    const token = getToken();
+    if (!token) return;
     const champion = tournament.championId
       ? tournament.teams.find((team) => team.id === tournament.championId)?.name
       : majorResult.champion ? save.org.name : ct('Campanha encerrada');
@@ -2921,6 +2943,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        token,
         player: getManager()?.nick || save.org.tag,
         teamName: save.org.name,
         pool: 'world',
@@ -3093,14 +3116,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     });
     return () => { alive = false; };
   }, []);
-  // BUG FIX (caça-bugs): quando o App restaura o save da nuvem (login pago com a
-  // carreira já aberta), re-hidrata o store a partir do disco já atualizado —
-  // senão o próximo autosave sobrescreve o save da nuvem com o estado velho.
-  useEffect(() => {
-    const onRestored = () => setSave(loadSave());
-    window.addEventListener('rtm:cloud-restored', onRestored);
-    return () => window.removeEventListener('rtm:cloud-restored', onRestored);
-  }, [setSave]);
+  // Restore da nuvem / lápide / outra aba: o App relê o store do disco e REMONTA
+  // esta tela (key={epoch} do gameStore). Antes só o save era re-hidratado e
+  // stage/majorT/hubTab ficavam do save velho e eram gravados de volta [O0-28].
   const currentEra = useMemo(
     // aplica as transferências já realizadas (save.moves) por cima da base, e o
     // ENVELHECIMENTO da IA por split (pulando seus jogadores, que evoluem pelo evo).
@@ -4224,7 +4242,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!p || !save.league) return;
     const m = poUserMatch(p);
     if (!m) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `po:${p.circuit}:${m.a}:${m.b}`));
     const pair = prepareTeams(leagueTeam(save.league, m.a), leagueTeam(save.league, m.b));
     if (!pair) return; // save corrompido (team id no match não está em league.teams)
     const [a, b] = pair;
@@ -4266,7 +4284,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!p || !save.league) return;
     const live = poUserMatch(p);
     if (!live) { applyPlayoff(structuredClone(p)); return; }
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `po:${p.circuit}:${live.a}:${live.b}`));
     const pair = prepareTeams(leagueTeam(save.league, live.a), leagueTeam(save.league, live.b));
     if (!pair) { applyPlayoff(structuredClone(p)); return; }
     const [a, b] = pair;
@@ -4293,7 +4311,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const l = structuredClone(save.league);
     const m = userLeagueMatch(l);
     if (!m) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `lg:${l.name}:${l.current}:${m.a}:${m.b}`));
     const pair = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
     if (!pair) return;
     const [a, b] = pair;
@@ -4312,7 +4330,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const simWholeSplit = () => {
     if (!save.league) return;
     const l = structuredClone(save.league);
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `split:${l.name}:${l.current}`));
     let guard = 0;
     const simulated: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string }[] = [];
     if (l.gsl) {
@@ -4354,7 +4372,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const playMajor = (s: CareerSave) => {
     const user = buildTeam(s);
     if (!user) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(s, 'major'));
     const rng = rngRef.current;
     // Major real (32 times, 3 stages de Swiss + playoffs). O field é ordenado por
     // VRS; o usuário entra no STAGE do seu tier: top 8 = Stage 3, 9-16 = Stage 2,
@@ -4510,7 +4528,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!pair) return;
     const [a, b] = pair;
     const bo = up.bestOf ?? 3;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `mj:${majorT.name}:${majorT.phase}:${majorT.swissRound}:${up.a}:${up.b}`));
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
     setQuickSim({
       series, teams: [a, b], userIdx: up.a === 'user' ? 0 : 1,
@@ -4681,6 +4699,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     upsellWorld1Ref.current = true;
     window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'world-1' } }));
   }, [myVrsRankEarly]);
+  // Voltar/Avançar (shell, Alt+←/→ e navegador) passam pelas seções: cada
+  // troca de seção/aba é uma entrada do histórico do app (state/app-history).
+  // Hook: fica antes dos early returns, como os de cima.
+  useSectionHistory(
+    'carreira',
+    hubTab === 'squad' ? `squad:${squadSec}` : hubTab === 'finance' ? `finance:${finSec}` : hubTab,
+    (v) => {
+      const [tab, sub] = v.split(':') as [HubTab, string | undefined];
+      setSelSeries(null);
+      if (tab === 'squad' && sub) setSquadSec(sub);
+      if (tab === 'finance' && sub) setFinSec(sub);
+      setHubTab(tab);
+    },
+    (path) => path === '/carreira' || isCareerPlayerPath(path) || isCareerTeamPath(path),
+  );
 
   // overlay de simulação rápida (mini partida acelerada), sobrepõe qualquer tela
   if (quickSim) {
@@ -4828,7 +4861,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     </div>
                     {!rejected && (
                       <>
-                        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: o.chance >= 0.55 ? 'var(--em-green)' : o.chance >= 0.3 ? 'var(--em-gold)' : 'var(--em-red)' }}>
+                        <b style={{ fontFamily: 'var(--font-num)', color: o.chance >= 0.55 ? 'var(--em-green)' : o.chance >= 0.3 ? 'var(--em-gold)' : 'var(--em-red)' }}>
                           {Math.round(o.chance * 100)}%
                         </b>
                         <Button variant="primary" size="sm" onClick={() => tryApply(o)}>{ct('Candidatar-se')}</Button>
@@ -6106,6 +6139,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       );
     }
     return (
+      <CareerDashFrame title={`${matchCtx.teams[0].tag} × ${matchCtx.teams[1].tag} · ${matchCtx.phaseLabel}`} onExit={onExit} immersive>
       <MatchScreen
         teams={matchCtx.teams}
         maps={matchCtx.maps!}
@@ -6120,6 +6154,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         // Update funcional (roda DEPOIS do commitDecided no mesmo lote) — não perde o resultado travado.
         onCalls={(calls) => setSave((s) => { const next = { ...s, identity: closeMatchIdentity(s.identity, calls) }; persist(next); return next; })}
       />
+      </CareerDashFrame>
     );
   }
 
@@ -6165,7 +6200,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const myMatch = userLeagueMatch(league);
   const playMine = () => {
     if (!myMatch) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `lg:${league.name}:${league.current}:${myMatch.a}:${myMatch.b}`));
     const pair = prepareTeams(leagueTeam(league, myMatch.a), leagueTeam(league, myMatch.b));
     if (!pair) {
       // save com referência morta a um team que não está em league.teams.
@@ -6207,29 +6242,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const expiringCount = expiringContracts.length;
 
   const unread = save.unread ?? 0;
-  // navegação em 2 níveis: grupos no topo + sub-abas do grupo ativo. Reduz a
-  // confusão de 15 abas planas pra ~5 grupos com 1-5 itens cada.
-  const TAB_LABEL: Record<HubTab, string> = {
-    overview: ct('Visão geral'), major: 'Major', calendar: ct('Calendário'), results: ct('Resultados'),
-    standings: ct('Classificação'), bracket: ct('Chave'), squad: ct('Elenco'), academy: ct('Academia'),
-    market: ct('Negociações'), finance: ct('Finanças'), vrs: ct('Ranking VRS'), top20: 'Top 20 HLTV',
-    world: ct('Cena mundial'), inbox: ct('Notícias DRAFT5'), history: ct('História da org'),
-    stats: ct('Geral'),
-  };
-  const HUB_GROUPS: { id: string; label: string; tabs: HubTab[] }[] = [
-    { id: 'dashboard', label: 'Dashboard', tabs: ['overview', 'inbox'] },
-    { id: 'team', label: ct('Meu time'), tabs: ['squad', 'academy'] },
-    { id: 'ingame', label: ct('Em jogo'), tabs: [...(majorActive ? ['major' as HubTab] : []), 'bracket', 'results', 'standings'] },
-    { id: 'transfers', label: ct('Transferências'), tabs: ['market', 'finance'] },
-    { id: 'news', label: 'DRAFT5', tabs: ['inbox'] },
-    { id: 'stats', label: ct('Estatísticas'), tabs: ['stats', 'vrs', 'top20', 'world', 'history'] },
-  ];
-  const tabAlert = (id: HubTab) => (id === 'finance' && expiringCount > 0) || (id === 'inbox' && unread > 0);
-  const tabLabelFull = (id: HubTab) =>
-    id === 'inbox' && unread > 0 ? `${ct('Notícias DRAFT5')} (${unread})`
-    : id === 'finance' && expiringCount > 0 ? `${ct('Finanças')} (${expiringCount})`
-    : TAB_LABEL[id];
-  const activeGroup = HUB_GROUPS.find((g) => g.tabs.includes(hubTab)) ?? HUB_GROUPS[0];
 
   const vrsByRegion = vrsByRegionMemo;
   const vrsAll = vrsAllMemo;
@@ -6257,7 +6269,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   };
 
   const userVrs = vrsAll.find((t) => t.isUser)?.vrs ?? save.vrs ?? 0;
-  const dateLabel = `Split ${save.split} · ${save.circuit?.name?.split(' ').slice(0, 2).join(' ') ?? '2026'}`;
 
   const resolvePlayerById = (id: string): Player | null => {
     const baseId = playerOrgId(id);
@@ -6328,42 +6339,26 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     resilient: { label: ct('Resiliente'), desc: ct('Recupera-se melhor da pressão e acumula menos fadiga.') },
   };
 
-  return (
-    <>
-    <CareerShell
-      groups={HUB_GROUPS}
-      activeGroupId={activeGroup.id}
-      activeTab={hubTab}
-      tabLabel={(id) => tabLabelFull(id as HubTab)}
-      tabAlert={(id) => tabAlert(id as HubTab)}
-      onGroupChange={(_gid, tab) => { setHubTab(tab as HubTab); setSelSeries(null); }}
-      onTabChange={(id) => {
-        setHubTab(id as HubTab);
-        setSelSeries(null);
-        if (id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 });
-      }}
-      orgTag={save.org?.tag ?? ''}
-      orgColors={save.org?.colors ?? ['#101820', '#3a3a3a']}
-      orgLogo={save.org?.logo}
-      onExit={onExit}
-      onReset={resetCareer}
-      onContinue={myMatch ? playMine : undefined}
-      dateLabel={dateLabel}
-      showOnboarding={() => setShowOnb(true)}
-      onSearch={() => setHubTab('squad')}
-      onBeforeNav={closeCareerOverlays}
-      onHistoryBack={careerHistoryBack}
-      onHistoryForward={careerHistoryForward}
-      canGoBack={canNavBack}
-      budgetLabel={formatMoney(save.budget)}
-      unreadCount={save.unread ?? 0}
-      onOpenInbox={() => {
-        setHubTab('inbox');
-        setSelSeries(null);
-        if ((save.unread ?? 0) > 0) update({ unread: 0 });
-      }}
-      onHowToPlay={openHowToPlay}
-      onOpenLogoBuilder={save.org ? () => {
+  peekFnRef.current = (id: string) => {
+    const p = resolvePlayerById(id);
+    if (!p) return null;
+    const oid = playerOrgId(p.id);
+    const mine = save.squad.some((sg) => sg.playerId === oid);
+    const recent = save.recentRatings?.[oid] ?? [];
+    const lt = save.league?.teams.find((t) => t.players.some((pl) => (pl.sourcePlayerId ?? pl.id) === oid || pl.id === oid));
+    return peekFromPlayer({ ...p, role: (save.roles?.[oid] ?? p.role) as Role }, {
+      ovr: playerOvr(p),
+      age: mine ? effectiveAge(p, save.split, save.youthAge, save.youthDebut) : p.age,
+      team: mine ? save.org?.tag : lt?.tag,
+      rating: recent.length ? (recent.reduce((a, b) => a + b, 0) / recent.length).toFixed(2) : undefined,
+      extra: mine ? [{ label: ct('Moral'), value: String(save.morale?.[oid] ?? MORALE_DEFAULT) }] : undefined,
+      onOpen: () => openPlayerProfile(p),
+      openLabel: ct('Abrir perfil'),
+    });
+  };
+
+  // ── ferramentas da topbar (⋯) e lançadores da sidebar ──
+  const openLogoBuilderTool = (save.org ? () => {
         // T7.2: abre o LogoBuilder pré-povoado com cores e tag da org atual.
         // Ao salvar, persiste no save.org.logo (data URL SVG).
         const orgNow = save.org!;
@@ -6377,8 +6372,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             update({ org: { ...orgNow, logo: dataUrl } });
           },
         });
-      } : undefined}
-      onOpenLockerRoom={(() => {
+      } : undefined);
+  const openLockerRoomTool = ((() => {
         // T10.2: só plugamos o handler se de fato existe próxima partida não-jogada
         // do user no split atual. Sem ela, o botão nem aparece (CareerShell omite
         // o ícone quando o prop é undefined).
@@ -6418,8 +6413,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             mapName: mapPickFav,
           });
         };
-      })()}
-      onOpenInfrastructure={() => {
+      })());
+  const openInfrastructureTool = (() => {
         // T10.1: abre modal de infraestrutura. Handler `onUpgrade` debita custo
         // e aplica o nível. Reusa engine `facilityUpgradeCost` + `normalizeFacilities`.
         const openWithCurrent = () => {
@@ -6447,8 +6442,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           });
         };
         openWithCurrent();
-      }}
-      onOpenMeta={() => {
+      });
+  const openMetaTool = (() => {
         // T9.2: monta agregados on-demand. top20 já é memo do CareerScreen;
         // worldScene roda em cima de oppEra; mapPicks deriva do league.rounds.
         const scene = worldScene(oppEra, save.split);
@@ -6474,16 +6469,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           userTrophies: { circuits: orgAg.circuitTitles, majors: orgAg.majorTitles },
           currentSplit: save.split,
         });
-      }}
-      onOpenTrophies={() => {
+      });
+  const openTrophiesTool = (() => {
         // Brasval gap: Sala de Troféus — lê save.history (pure-read, sem migração).
         openTrophyRoom({
           history: save.history as unknown as Parameters<typeof openTrophyRoom>[0]['history'],
           orgName: save.org?.name ?? 'Sua org',
           currentSplit: save.split,
         });
-      }}
-      onOpenCoach={() => {
+      });
+  const openCoachTool = (() => {
         // Brasval gap: Perfil de carreira do treinador — lê save.coachStints.
         const active = activeCoachStint(save.coachStints ?? []);
         openCoachProfile({
@@ -6491,8 +6486,168 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           activeCoachNick: active?.coachNick,
           scars: save.scars, split: save.split, // [W4]
         });
+      });
+
+  // ── navegação estilo FM: seção da sidebar ↔ aba interna (hubTab + subseção) ──
+  const SQUAD_SECS = ['sq', 'dy', 'pl', 'tr', 'st', 'an', 'sc'];
+  const activeSection: string =
+    hubTab === 'squad' ? squadSec
+      : hubTab === 'finance' ? finSec
+        : ({ overview: 'ov', inbox: 'in', calendar: 'ag', stats: 'dh', market: 'tf', academy: 'ac', history: 'hi', major: 'mj', standings: 'cl', bracket: 'cl', results: 'cl', vrs: 'vr', top20: 'vr', world: 'vr' } as Record<HubTab, string>)[hubTab] ?? 'ov';
+  const goSection = (id: string) => {
+    closeCareerOverlays();
+    setSelSeries(null);
+    if (id === 'x-inf') { openInfrastructureTool(); return; }
+    if (id === 'x-lr') { openLockerRoomTool?.(); return; }
+    if (id === 'x-tr') { openTrophiesTool(); return; }
+    if (SQUAD_SECS.includes(id)) { setSquadSec(id); setHubTab('squad'); return; }
+    if (id === 'fi' || id === 'ct') { setFinSec(id); setHubTab('finance'); return; }
+    const map: Record<string, HubTab> = { ov: 'overview', in: 'inbox', ag: 'calendar', dh: 'stats', tf: 'market', ac: 'academy', hi: 'history', mj: 'major', cl: 'standings', vr: 'vrs' };
+    const tab = map[id];
+    if (!tab) return;
+    setHubTab(tab);
+    if (tab === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 });
+  };
+  const NAV: ShellNavGroup[] = [
+    { id: 'principal', label: ct('Principal'), items: [
+      { id: 'ov', label: ct('Início'), icon: House },
+      { id: 'in', label: ct('Caixa de entrada'), short: ct('Caixa'), icon: Inbox, badge: unread || undefined },
+      { id: 'ag', label: ct('Agenda'), icon: CalendarDays },
+    ] },
+    { id: 'time', label: ct('Time'), items: [
+      { id: 'sq', label: ct('Elenco'), icon: Users },
+      { id: 'dy', label: ct('Dinâmica'), icon: Sparkles },
+      { id: 'pl', label: ct('Plano de jogo'), icon: Target },
+      { id: 'tr', label: ct('Treinos e scrims'), icon: Crosshair },
+      { id: 'st', label: ct('Comissão técnica'), icon: ShieldHalf },
+    ] },
+    { id: 'dados', label: ct('Dados'), items: [
+      { id: 'dh', label: ct('Central de dados'), icon: ChartNoAxesColumn },
+      { id: 'an', label: ct('Relatório do analista'), icon: Binoculars, disabled: !opp },
+      { id: 'sc', label: ct('Olheiros'), icon: Search },
+    ] },
+    { id: 'mercado', label: ct('Mercado'), items: [
+      { id: 'tf', label: ct('Transferências'), icon: ArrowLeftRight },
+      { id: 'ct', label: ct('Contratos'), icon: FileSignature, badge: expiringCount || undefined, badgeTone: 'warn' },
+      { id: 'ac', label: ct('Academia'), icon: GraduationCap },
+    ] },
+    { id: 'clube', label: ct('Clube'), items: [
+      { id: 'fi', label: ct('Finanças'), icon: Wallet },
+      { id: 'x-inf', label: ct('Instalações'), icon: Building2 },
+      ...(openLockerRoomTool ? [{ id: 'x-lr', label: ct('Vestiário'), icon: DoorOpen }] : []),
+      { id: 'x-tr', label: ct('Sala de troféus'), icon: Trophy },
+      { id: 'hi', label: ct('História da org'), icon: ScrollText },
+    ] },
+    { id: 'comp', label: ct('Competições'), items: [
+      { id: 'mj', label: 'Major', icon: Trophy, disabled: !majorT, alert: majorActive },
+      { id: 'cl', label: ct('Classificação e chave'), short: ct('Tabela'), icon: Layers },
+      { id: 'vr', label: ct('Ranking VRS'), icon: ChartNoAxesColumn },
+    ] },
+  ];
+  const activeGroupNav = NAV.find((g) => g.items.some((it) => it.id === activeSection));
+  const shellTabs: ShellTab[] = activeSection === 'cl'
+    ? [{ id: 't:standings', label: ct('Classificação'), icon: ListOrdered }, { id: 't:bracket', label: ct('Chave'), icon: Network }, { id: 't:results', label: ct('Resultados'), icon: CalendarCheck }]
+    : activeSection === 'vr'
+      ? [{ id: 't:vrs', label: 'VRS', icon: ChartNoAxesColumn }, { id: 't:top20', label: 'Top 20 HLTV', icon: Star }, { id: 't:world', label: ct('Cena mundial'), icon: Globe }]
+      : (activeGroupNav?.items ?? []).filter((it) => !it.id.startsWith('x-') && !it.disabled).map((it) => ({ id: it.id, label: it.label, icon: it.icon, badge: it.badge }));
+  const shellActiveTab = activeSection === 'cl' || activeSection === 'vr' ? `t:${hubTab}` : activeSection;
+  const onShellTab = (id: string) => {
+    if (id.startsWith('t:')) { setSelSeries(null); setHubTab(id.slice(2) as HubTab); }
+    else goSection(id);
+  };
+  const shellPending: ShellPending[] = [
+    ...(unread > 0 ? [{ id: 'inbox', label: `${unread} ${ct('mensagem(ns) nova(s) na caixa')}`, icon: Inbox, tone: 'info' as const, onGo: () => goSection('in') }] : []),
+    ...(expiringCount > 0 ? [{ id: 'contracts', label: `${expiringCount} ${ct('contrato(s) vencendo')}`, icon: FileSignature, tone: 'warn' as const, onGo: () => goSection('ct') }] : []),
+  ];
+  const shellNext: ShellNext = myMatch && opp
+    ? { label: ct('Continuar'), detail: `${ct('Partida vs')} ${opp.tag || opp.name} · MD${myMatch.bo ?? LEAGUE_BO}`, onGo: playMine, pending: shellPending }
+    : majorActive
+      ? { label: ct('Continuar'), detail: ct('Major em andamento'), onGo: () => goSection('mj'), pending: shellPending }
+      : { label: ct('Continuar'), detail: ct('Sem partida agendada'), disabled: true, pending: shellPending };
+  const careerSearch = (q: string): PaletteItem[] => {
+    const out: PaletteItem[] = [];
+    const seen = new Set<string>();
+    const pushP = (p: Player, team: string) => {
+      if (seen.has(p.id) || out.length > 10) return;
+      if (!scoreMatch(q, p.nick) && !scoreMatch(q, p.name ?? '')) return;
+      seen.add(p.id);
+      out.push({ id: `p-${p.id}`, label: p.nick, sub: `${p.role} · ${team} · OVR ${playerOvr(p)}`, group: ct('Jogadores'), icon: UserRound, peek: `career:${p.id}`, run: () => openPlayerProfile(p) });
+    };
+    for (const sig of save.squad) { const f = findSigning(sig); if (f) pushP(f.player, save.org?.tag ?? ct('Seu time')); }
+    for (const t of league.teams) {
+      if (scoreMatch(q, t.name) || scoreMatch(q, t.tag)) out.push({ id: `t-${t.id}`, label: t.name, sub: `${t.tag} · ${ct('Time')}`, group: ct('Times'), icon: Shield, run: () => openTeamProfile(t.id) });
+      for (const pl of t.players) pushP({ id: pl.sourcePlayerId ?? pl.id, nick: pl.nick, name: pl.name, country: pl.country, role: pl.role, role2: pl.role2, aim: pl.aim, clutch: pl.clutch, consistency: pl.consistency, awp: pl.awp, igl: pl.igl }, t.tag);
+    }
+    return out.slice(0, 12);
+  };
+  // Perfil de jogador/time aberto: a sidebar, o breadcrumb e a subnav refletem
+  // o perfil, não a seção de onde se veio. Jogador do elenco → Time › Elenco;
+  // da academia → Mercado › Academia; de outro time → Mercado › Transferências.
+  // Time → Competições › Classificação e chave.
+  const routePlayer = playerRouteId ? resolvePlayerById(playerRouteId) : null;
+  const routeTeam = !playerRouteId && teamRouteId ? resolveTeamById(teamRouteId) : null;
+  const routeSection: string | null = (() => {
+    if (routePlayer) {
+      const oid = playerOrgId(routePlayer.id);
+      if (save.academy?.some((a) => a.id === oid) || save.academyTeam?.some((a) => a.id === oid)) return 'ac';
+      const own = save.squad.some((sig) => { const f = findSigning(sig); return !!f && (f.player.id === oid || sig.playerId === oid); }) || !!save.youth?.[oid];
+      return own ? 'sq' : 'tf';
+    }
+    return routeTeam ? 'cl' : null;
+  })();
+  const routeNav = routeSection ? NAV.flatMap((g) => g.items.map((it) => ({ it, g }))).find((x) => x.it.id === routeSection) : undefined;
+  const routeCrumbs = routeNav ? [{ label: routeNav.g.label }, { label: routeNav.it.label, onGo: () => goSection(routeNav.it.id) }] : undefined;
+  const careerTools: ShellTool[] = [
+    { id: 'howto', label: ct('Como jogar'), icon: BookOpen, onClick: openHowToPlay },
+    { id: 'tour', label: ct('Tutorial'), icon: CircleHelp, onClick: () => setShowOnb(true) },
+    { id: 'meta', label: ct('Meta da temporada'), icon: ChartColumn, onClick: openMetaTool },
+    { id: 'coach', label: ct('Perfil do treinador'), icon: Medal, onClick: openCoachTool },
+    ...(openLogoBuilderTool ? [{ id: 'logo', label: ct('Editar logo'), icon: PenLine, onClick: openLogoBuilderTool }] : []),
+    { id: 'reset', label: ct('Recomeçar carreira'), icon: RotateCcw, onClick: resetCareer },
+    { id: 'exit', label: ct('Sair da carreira'), icon: LogOut, onClick: onExit },
+  ];
+
+  return (
+    <>
+    <CareerShell
+      identity={{
+        title: save.org?.name ?? ct('Carreira'),
+        subtitle: `${save.org?.tag ?? ''} · Split ${save.split}`,
+        badge: save.org ? <TeamBadge tag={save.org.tag} colors={save.org.colors} size={40} logoUrl={save.org.logo} /> : undefined,
+        colors: save.org?.colors,
       }}
-      formStreak={formStreak}
+      nav={NAV}
+      active={routeSection ?? activeSection}
+      crumbs={routeCrumbs}
+      title={routePlayer?.nick ?? routeTeam?.name}
+      onNav={goSection}
+      tabs={routePlayer ? PLAYER_TABS.map((t) => ({ id: t.id, label: ct(t.label), icon: t.icon })) : routeTeam ? undefined : shellTabs}
+      activeTab={routePlayer ? ppTab : shellActiveTab}
+      onTab={routePlayer ? (id) => setPpTabFor({ id: playerRouteId, tab: id as PlayerTab }) : onShellTab}
+      mobileNav={['ov', 'in', 'sq', 'cl']}
+      next={shellNext}
+      search={careerSearch}
+      searchPlaceholder={ct('Buscar jogador, time…')}
+      tools={careerTools}
+      bell={{ label: ct('Caixa de entrada'), count: unread, onClick: () => goSection('in') }}
+      meta={(
+        <>
+          {formStreak.length > 0 && (
+            <span className="gs-form" aria-label={`${ct('Forma')}: ${formStreak.slice(-5).join(' ')}`}>
+              {formStreak.slice(-5).map((r, i) => <i key={i} data-r={r}>{r === 'W' ? 'V' : 'D'}</i>)}
+            </span>
+          )}
+          <span className="gs-chip"><Wallet size={15} aria-hidden /> {formatMoney(save.budget)}</span>
+          <span className="gs-when"><b>Split {save.split}</b><small>{save.circuit?.name?.split(' ').slice(0, 2).join(' ') ?? '2026'}</small></span>
+        </>
+      )}
+      sideWidget={myMatch && opp ? (
+        <button type="button" className="gs-widget" onClick={playMine}>
+          <span className="gs-widget__kicker"><Swords size={13} aria-hidden /> {ct('Próximo jogo')}</span>
+          <span className="gs-widget__main">{save.org?.tag ?? ct('Você')} <span className="gs-widget__vs">vs</span> {opp.tag || opp.name}</span>
+          <span className="gs-widget__sub">{league.name.split(' · ')[0]} · MD{myMatch.bo ?? LEAGUE_BO}</span>
+        </button>
+      ) : undefined}
     >
       {playerRouteId && (() => {
         const p = resolvePlayerById(playerRouteId);
@@ -6689,6 +6844,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               igl: p.igl,
               role: (save.roles?.[oid] ?? p.role) as Role,
             })}
+            tab={ppTab}
+            onTab={(t) => setPpTabFor({ id: playerRouteId, tab: t })}
           />
         );
       })()}
@@ -6749,6 +6906,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           unread={save.unread ?? 0}
           onMarkAllRead={() => update({ unread: 0 })}
           orgName={save.org?.name}
+          onAction={(sec) => goSection(sec)}
         />
       )}
 
@@ -6860,6 +7018,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         // CareerSave é interface fechada (sem index signature); FinanceTab usa
         // shape broad — cast via unknown pra reconciliar.
         <FinanceTab
+          section={finSec === 'ct' ? 'contracts' : 'money'}
           save={save as unknown as Parameters<typeof FinanceTab>[0]['save']}
           findSigning={findSigning}
           update={update as unknown as Parameters<typeof FinanceTab>[0]['update']}
@@ -6867,8 +7026,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       )}
 
       {/* T1.4: aba Squad extraída em src/pages/career/SquadTab.tsx */}
-      {hubTab === 'squad' && (
+      {hubTab === 'squad' && squadSec === 'an' && opp && (() => {
+        const me = resolveTeamById('user');
+        return me ? <AnalystReportCard report={generateAnalystReport(opp, me)} oppName={opp.name} oppTag={opp.tag} /> : null;
+      })()}
+      {hubTab === 'squad' && squadSec !== 'an' && (
         <SquadTab
+          section={squadSec as SquadSection}
           save={save as unknown as Parameters<typeof SquadTab>[0]['save']}
           findSigning={findSigning}
           update={update as unknown as Parameters<typeof SquadTab>[0]['update']}
@@ -7478,7 +7642,7 @@ function TeamDetail({ team, league, form, onClose }: { team: TTeam; league?: Lea
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* hero do time */}
           <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-border)', boxShadow: 'var(--rtm-shadow-banner)' }}>
-            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${team.colors[0]}33, rgba(13,17,22,.92))` }} />
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, color-mix(in srgb, ${team.colors[0]} 20%, transparent), rgba(13,17,22,.92))` }} />
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '20px 22px', flexWrap: 'wrap' }}>
               <TeamBadge tag={team.tag} colors={team.colors} logoUrl={team.logoUrl} size={64} />
               <div style={{ flex: 1, minWidth: 180 }}>
@@ -7535,15 +7699,16 @@ export interface SeasonStat { id: string; nick: string; teamTag: string; country
 function seasonPlayerStats(l: League): SeasonStat[] {
   const meta = new Map<string, { nick: string; teamTag: string; country: string; role: string }>();
   for (const t of l.teams) for (const p of t.players) meta.set(p.id, { nick: p.nick, teamTag: t.tag, country: p.country, role: p.role });
-  const agg = new Map<string, { k: number; d: number; a: number; dmg: number; kast: number; r: number }>();
+  const agg = new Map<string, { k: number; d: number; a: number; dmg: number; kast: number; r: number; maps: number }>();
   for (const round of l.rounds) {
     for (const m of round) {
       if (!m.result) continue;
       for (const map of m.result.maps) {
         for (const [id, st] of Object.entries(map.stats)) {
-          const cur = agg.get(id) ?? { k: 0, d: 0, a: 0, dmg: 0, kast: 0, r: 0 };
+          const cur = agg.get(id) ?? { k: 0, d: 0, a: 0, dmg: 0, kast: 0, r: 0, maps: 0 };
           cur.k += st.both.kills; cur.d += st.both.deaths; cur.a += st.both.assists;
           cur.dmg += st.both.dmg; cur.kast += st.both.kastRounds; cur.r += st.both.rounds;
+          cur.maps += 1; // mesmo critério do accumulateCareerStats: 1 por mapa jogado
           agg.set(id, cur);
         }
       }
@@ -7558,7 +7723,7 @@ function seasonPlayerStats(l: League): SeasonStat[] {
     const rating = Math.max(0, 0.0073 * kast * 100 + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.0032 * adr + 0.1587);
     const md = meta.get(id);
     if (!md) continue;
-    out.push({ id, nick: md.nick, teamTag: md.teamTag, country: md.country, role: md.role, rating, kd: s.d ? s.k / s.d : s.k, adr, maps: 0 });
+    out.push({ id, nick: md.nick, teamTag: md.teamTag, country: md.country, role: md.role, rating, kd: s.d ? s.k / s.d : s.k, adr, maps: s.maps });
   }
   return out.sort((a, b) => b.rating - a.rating);
 }
@@ -8072,9 +8237,9 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             onClick={() => setAll('keep')}
             style={{
               padding: '6px 12px',
-              background: 'rgba(94,216,138,0.12)',
-              color: '#5ed88a',
-              border: '1px solid rgba(94,216,138,0.45)',
+              background: 'color-mix(in srgb, var(--c-win) 12%, transparent)',
+              color: 'var(--c-win)',
+              border: '1px solid color-mix(in srgb, var(--c-win) 45%, transparent)',
               borderRadius: 4,
               fontFamily: 'inherit',
               fontSize: '0.74rem',
@@ -8089,9 +8254,9 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             onClick={() => setAll('drop')}
             style={{
               padding: '6px 12px',
-              background: 'rgba(229,138,138,0.10)',
-              color: '#e58a8a',
-              border: '1px solid rgba(229,138,138,0.45)',
+              background: 'color-mix(in srgb, var(--c-loss) 10%, transparent)',
+              color: 'var(--c-loss)',
+              border: '1px solid color-mix(in srgb, var(--c-loss) 45%, transparent)',
               borderRadius: 4,
               fontFamily: 'inherit',
               fontSize: '0.74rem',
@@ -8114,7 +8279,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             const v = decided[r.playerId];
             const isKeep = v === 'keep';
             const isDrop = v === 'drop';
-            const accent = isKeep ? '#5ed88a' : isDrop ? '#e58a8a' : 'var(--em-border)';
+            const accent = isKeep ? 'var(--c-win)' : isDrop ? 'var(--c-loss)' : 'var(--em-border)';
             return (
               <div
                 key={r.playerId}
@@ -8137,7 +8302,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
                     <Flag cc={r.country} /> {r.nick}
                     <span className={`role-pill ${r.role}`}>{r.role}</span>
                   </div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 3, fontSize: '0.74rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 3, fontSize: '0.74rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
                     <span>OVR <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{r.ovr}</b></span>
                     <span>{ct('salário')} <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{formatMoney(r.wage)}</b></span>
                   </div>
@@ -8148,9 +8313,9 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
                     onClick={() => set(r.playerId, 'keep')}
                     style={{
                       padding: '7px 14px',
-                      background: isKeep ? '#5ed88a' : 'transparent',
-                      color: isKeep ? '#0a1a0c' : '#5ed88a',
-                      border: `1px solid ${isKeep ? '#5ed88a' : 'rgba(94,216,138,0.45)'}`,
+                      background: isKeep ? 'var(--c-win)' : 'transparent',
+                      color: isKeep ? '#0a1a0c' : 'var(--c-win)',
+                      border: `1px solid ${isKeep ? 'var(--c-win)' : 'color-mix(in srgb, var(--c-win) 45%, transparent)'}`,
                       borderRadius: 4,
                       fontFamily: 'inherit',
                       fontSize: '0.78rem',
@@ -8167,8 +8332,8 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
                     style={{
                       padding: '7px 14px',
                       background: isDrop ? '#c0392b' : 'transparent',
-                      color: isDrop ? '#fff' : '#e58a8a',
-                      border: `1px solid ${isDrop ? '#c0392b' : 'rgba(229,138,138,0.45)'}`,
+                      color: isDrop ? '#fff' : 'var(--c-loss)',
+                      border: `1px solid ${isDrop ? '#c0392b' : 'color-mix(in srgb, var(--c-loss) 45%, transparent)'}`,
                       borderRadius: 4,
                       fontFamily: 'inherit',
                       fontSize: '0.78rem',
@@ -8210,7 +8375,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {ct('Custo renovações')}
             </span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? '#e58a8a' : 'var(--em-text)', fontSize: '1.05rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: 'var(--font-num)', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.05rem', fontWeight: 900 }}>
               {formatMoney(cost)}
             </b>
           </div>
@@ -8219,7 +8384,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {ct('Caixa')}
             </span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '1.05rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)', fontSize: '1.05rem', fontWeight: 900 }}>
               {formatMoney(budget)}
             </b>
           </div>
@@ -8229,7 +8394,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             </span>
           )}
           {overBudget && (
-            <span style={{ color: '#e58a8a', fontSize: '0.78rem', marginLeft: 8 }}>
+            <span style={{ color: 'var(--c-loss)', fontSize: '0.78rem', marginLeft: 8 }}>
               ⚠ {ct('Estourou')} {formatMoney(cost - budget)}
             </span>
           )}
@@ -8324,7 +8489,7 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
             <div style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--em-text)' }}>
               {offer.nick}
             </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+            <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
               OVR <b style={{ color: 'var(--em-gold)', fontWeight: 900 }}>{offer.ovr}</b>
             </div>
           </div>
@@ -8335,15 +8500,15 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
             flexDirection: 'column',
             justifyContent: 'center',
             padding: '14px 16px',
-            background: 'rgba(94,216,138,0.10)',
-            border: '1px solid rgba(94,216,138,0.45)',
+            background: 'color-mix(in srgb, var(--c-win) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--c-win) 45%, transparent)',
             borderRadius: 6,
           }}
         >
           <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
             {ct('Valor da proposta')}
           </div>
-          <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '1.5rem', fontWeight: 900, marginTop: 2 }}>
+          <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)', fontSize: '1.5rem', fontWeight: 900, marginTop: 2 }}>
             {formatMoney(offer.fee)}
           </b>
         </div>
@@ -8362,7 +8527,7 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
           lineHeight: 1.55,
         }}
       >
-        <b>{offer.orgName}</b> {ct('(org de elite) ofereceu')} <b style={{ color: '#5ed88a' }}>{formatMoney(offer.fee)}</b> {ct('pelo seu')} <b>{offer.nick}</b>.
+        <b>{offer.orgName}</b> {ct('(org de elite) ofereceu')} <b style={{ color: 'var(--c-win)' }}>{formatMoney(offer.fee)}</b> {ct('pelo seu')} <b>{offer.nick}</b>.
         {' '}
         {ct('Vender enche o caixa, mas você fica com 4 e precisa repor no mercado. Segurar mantém a')} <b>{orgName}</b> {ct('forte.')}
       </div>
@@ -8767,7 +8932,7 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid,
                 {ct(e.blurb)}
               </div>
               <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8 }}>
-                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: '#5ed88a', fontWeight: 800 }}>
+                <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
                   💰 {formatMoney(e.budget)}
                 </span>
                 <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>{ct('Assumir')} →</span>
@@ -8875,7 +9040,7 @@ function TeamPickCard({
         </div>
         <div style={{ textAlign: 'right', lineHeight: 1.1 }}>
           <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>OVR</div>
-          <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.1rem', color: 'var(--em-gold)', fontWeight: 900 }}>
+          <div style={{ fontFamily: 'var(--font-num)', fontSize: '1.1rem', color: 'var(--em-gold)', fontWeight: 900 }}>
             {ovr}
           </div>
         </div>
@@ -8895,7 +9060,7 @@ function TeamPickCard({
                 color: 'var(--em-text)',
                 border: '1px solid var(--em-border)',
                 borderRadius: 8,
-                fontFamily: '"JetBrains Mono", monospace',
+                fontFamily: 'var(--font-num)',
                 fontSize: '0.62rem',
                 fontWeight: 800,
                 padding: '0 4px',
@@ -8910,7 +9075,7 @@ function TeamPickCard({
 
       {/* Footer: budget + CTA */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 2 }}>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.88rem', color: '#5ed88a', fontWeight: 800 }}>
+        <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.88rem', color: 'var(--c-win)', fontWeight: 800 }}>
           💰 {formatMoney(budget)}
         </span>
         <span style={{ fontSize: '0.72rem', color: 'var(--em-gold)', fontWeight: 700 }}>
@@ -9050,7 +9215,7 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: 
                           <span style={{ ...tierBadgeStyle(tier), padding: '1px 6px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.5px' }}>
                             TIER {tier}
                           </span>
-                          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.74rem', color: 'var(--em-muted)' }}>
+                          <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.74rem', color: 'var(--em-muted)' }}>
                             OVR {ovr}
                           </span>
                         </div>
@@ -9092,7 +9257,7 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: 
 
                     {/* Footer: budget + CTA */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 'auto' }}>
-                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: '#5ed88a', fontWeight: 800 }}>
+                      <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
                         💰 {formatMoney(budget)}
                       </span>
                       <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>
@@ -9302,7 +9467,7 @@ function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNull
                     </button>
                   )}
                 </div>
-                {logoErr && <div style={{ marginTop: 4, fontSize: '0.74rem', color: '#e58a8a' }}>{logoErr}</div>}
+                {logoErr && <div style={{ marginTop: 4, fontSize: '0.74rem', color: 'var(--c-loss)' }}>{logoErr}</div>}
                 {customLogo && <div style={{ marginTop: 4, fontSize: '0.72rem', color: 'var(--em-muted)' }}>{ct('Logo enviada — redimensionada pra 128px.')}</div>}
               </FoundField>
             ) : (
@@ -9340,7 +9505,7 @@ function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNull
             <div style={{ fontSize: '1rem', fontWeight: 900, color: '#fff', textAlign: 'center' }}>
               {name || ct('Sua Organização')}
             </div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '1px', color: c2, fontFamily: '"JetBrains Mono", monospace' }}>
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '1px', color: c2, fontFamily: 'var(--font-num)' }}>
               {(tag || 'ORG').toUpperCase()}
             </div>
           </div>
@@ -9502,7 +9667,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
               <span className={`role-pill ${player.role}`}>{player.role}</span>
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', marginTop: 2 }}>
-              {ct('Negociando com')} <b style={{ color: 'var(--em-text)' }}>{from.team}</b> · OVR <b style={{ color: 'var(--em-gold)', fontFamily: '"JetBrains Mono", monospace' }}>{playerOvr(player)}</b>
+              {ct('Negociando com')} <b style={{ color: 'var(--em-text)' }}>{from.team}</b> · OVR <b style={{ color: 'var(--em-gold)', fontFamily: 'var(--font-num)' }}>{playerOvr(player)}</b>
             </div>
           </div>
         </header>
@@ -9511,7 +9676,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           <NegoFigure label={ct('Valor mercado')} value={formatMoney(mkt)} />
           <NegoFigure label={ct('Pedida do clube')} value={formatMoney(ask)} accent="#e8c170" />
-          <NegoFigure label={ct('Salário / split')} value={formatMoney(wage)} accent="#e58a8a" />
+          <NegoFigure label={ct('Salário / split')} value={formatMoney(wage)} accent="var(--c-loss)" />
         </div>
 
         {/* #37/#38: avisos de contexto — cláusula segura o preço, infeliz derruba */}
@@ -9556,7 +9721,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
                     }}
                   >
                     <Flag cc={p.country} /> {p.nick}
-                    <span style={{ color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace', fontSize: '0.7rem' }}>
+                    <span style={{ color: 'var(--em-muted)', fontFamily: 'var(--font-num)', fontSize: '0.7rem' }}>
                       {formatMoney(playerValue(p))}
                     </span>
                   </button>
@@ -9565,7 +9730,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
             </div>
             {swapValue > 0 && (
               <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--em-muted)' }}>
-                {ct('Valor da troca:')} <b style={{ color: '#5ed88a', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b>
+                {ct('Valor da troca:')} <b style={{ color: 'var(--c-win)', fontFamily: 'var(--font-num)' }}>{formatMoney(swapValue)}</b>
               </div>
             )}
           </div>
@@ -9599,16 +9764,16 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
           />
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, fontSize: '0.86rem', flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--em-muted)' }}>{ct('Dinheiro:')}</span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? '#e58a8a' : 'var(--em-text)', fontSize: '1.1rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: 'var(--font-num)', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.1rem', fontWeight: 900 }}>
               {formatMoney(offer)}
             </b>
             {swapValue > 0 && (
               <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem' }}>
-                + troca <b style={{ color: '#5ed88a', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b> = oferta total <b style={{ color: 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(effectiveOffer)}</b>
+                + troca <b style={{ color: 'var(--c-win)', fontFamily: 'var(--font-num)' }}>{formatMoney(swapValue)}</b> = oferta total <b style={{ color: 'var(--em-text)', fontFamily: 'var(--font-num)' }}>{formatMoney(effectiveOffer)}</b>
               </span>
             )}
             {overBudget && (
-              <span style={{ color: '#e58a8a', fontSize: '0.76rem', fontWeight: 700 }}>· {ct('sem caixa')}</span>
+              <span style={{ color: 'var(--c-loss)', fontSize: '0.76rem', fontWeight: 700 }}>· {ct('sem caixa')}</span>
             )}
           </div>
         </div>
@@ -9619,18 +9784,18 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
             style={{
               padding: '10px 14px',
               background:
-                reply.kind === 'accept' ? 'rgba(94,216,138,0.12)' :
+                reply.kind === 'accept' ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' :
                 reply.kind === 'counter' ? 'rgba(232,193,112,0.12)' :
-                'rgba(229,138,138,0.12)',
+                'color-mix(in srgb, var(--c-loss) 12%, transparent)',
               border: `1px solid ${
-                reply.kind === 'accept' ? 'rgba(94,216,138,0.45)' :
+                reply.kind === 'accept' ? 'color-mix(in srgb, var(--c-win) 45%, transparent)' :
                 reply.kind === 'counter' ? 'rgba(232,193,112,0.45)' :
-                'rgba(229,138,138,0.45)'
+                'color-mix(in srgb, var(--c-loss) 45%, transparent)'
               }`,
               borderLeft: `3px solid ${
-                reply.kind === 'accept' ? '#5ed88a' :
+                reply.kind === 'accept' ? 'var(--c-win)' :
                 reply.kind === 'counter' ? '#e8c170' :
-                '#e58a8a'
+                'var(--c-loss)'
               }`,
               borderRadius: 4,
               fontSize: '0.84rem',
@@ -9714,7 +9879,7 @@ function NegoFigure({ label, value, accent }: { label: string; value: string; ac
       <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
         {label}
       </div>
-      <b style={{ fontFamily: '"JetBrains Mono", monospace', color: accent ?? 'var(--em-text)', fontSize: '0.96rem', fontWeight: 800 }}>
+      <b style={{ fontFamily: 'var(--font-num)', color: accent ?? 'var(--em-text)', fontSize: '0.96rem', fontWeight: 800 }}>
         {value}
       </b>
     </div>
@@ -10187,8 +10352,8 @@ function MarketScreen({
         <div
           style={{
             padding: '10px 14px',
-            background: 'rgba(229,138,138,0.10)',
-            border: '1px solid rgba(229,138,138,0.35)',
+            background: 'color-mix(in srgb, var(--c-loss) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--c-loss) 35%, transparent)',
             borderRadius: 4,
             color: 'var(--em-text)',
             fontSize: '0.86rem',
@@ -10231,14 +10396,14 @@ function MarketScreen({
                     alignItems: 'center',
                     gap: 6,
                     padding: '4px 10px',
-                    background: isUp ? 'rgba(94,216,138,0.12)' : isDown ? 'rgba(229,138,138,0.12)' : 'var(--em-panel-2)',
-                    border: `1px solid ${isUp ? 'rgba(94,216,138,0.4)' : isDown ? 'rgba(229,138,138,0.4)' : 'var(--em-border)'}`,
+                    background: isUp ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : isDown ? 'color-mix(in srgb, var(--c-loss) 12%, transparent)' : 'var(--em-panel-2)',
+                    border: `1px solid ${isUp ? 'color-mix(in srgb, var(--c-win) 40%, transparent)' : isDown ? 'color-mix(in srgb, var(--c-loss) 40%, transparent)' : 'var(--em-border)'}`,
                     borderRadius: 4,
                     fontSize: '0.78rem',
                     color: 'var(--em-text)',
                   }}
                 >
-                  <b style={{ color: isUp ? '#5ed88a' : isDown ? '#e58a8a' : 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+                  <b style={{ color: isUp ? 'var(--c-win)' : isDown ? 'var(--c-loss)' : 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
                     {isUp ? '▲' : isDown ? '▼' : '▬'} {e.nick}
                   </b>
                   <i style={{ color: 'var(--em-muted)', fontSize: '0.72rem', fontStyle: 'normal' }}>
@@ -10639,10 +10804,10 @@ function MarketScreen({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.82rem', color: 'var(--em-muted)' }}>
           {squad.length < 5 && <span>⚠ {ct('Faltam')} <b style={{ color: 'var(--em-text)' }}>{5 - squad.length}</b> {ct('jogador(es)')}</span>}
-          {squad.length === 5 && unresolvedCount > 0 && <span style={{ color: '#e58a8a' }}>⚠ {unresolvedCount} {ct('jogador(es) com vaga vazia — remova e escolha outro')}</span>}
+          {squad.length === 5 && unresolvedCount > 0 && <span style={{ color: 'var(--c-loss)' }}>⚠ {unresolvedCount} {ct('jogador(es) com vaga vazia — remova e escolha outro')}</span>}
           {squad.length === 5 && !coachId && <span>⚠ {ct('Escolha um coach')}</span>}
-          {budgetLeft < 0 && <span style={{ color: '#e58a8a' }}>⚠ {ct('Orçamento estourado')}</span>}
-          {ready && <span style={{ color: '#5ed88a', fontWeight: 700 }}>✓ {ct('Pronto pra fechar')}</span>}
+          {budgetLeft < 0 && <span style={{ color: 'var(--c-loss)' }}>⚠ {ct('Orçamento estourado')}</span>}
+          {ready && <span style={{ color: 'var(--c-win)', fontWeight: 700 }}>✓ {ct('Pronto pra fechar')}</span>}
         </div>
         <button
           type="button"
@@ -10691,8 +10856,8 @@ function MarketScreen({
 
 function HudPill({ label, value, tone, mono }: { label: string; value: string; tone: 'green' | 'red' | 'neutral'; mono?: boolean }) {
   const colors: Record<string, { fg: string; bg: string; border: string }> = {
-    green:   { fg: '#5ed88a', bg: 'rgba(94,216,138,0.12)',  border: 'rgba(94,216,138,0.4)' },
-    red:     { fg: '#e58a8a', bg: 'rgba(229,138,138,0.12)', border: 'rgba(229,138,138,0.4)' },
+    green:   { fg: 'var(--c-win)', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
+    red:     { fg: 'var(--c-loss)', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];
@@ -10712,7 +10877,7 @@ function HudPill({ label, value, tone, mono }: { label: string; value: string; t
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: mono ? '"JetBrains Mono", monospace' : 'inherit' }}>
+      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: mono ? 'var(--font-num)' : 'inherit' }}>
         {value}
       </b>
     </div>
@@ -10736,7 +10901,7 @@ function SquadRow({
   disabledHint?: string;
   onClick: () => void;
 }) {
-  const accent = tone === 'promote' ? '#5ed88a' : '#e8a93b';
+  const accent = tone === 'promote' ? 'var(--c-win)' : '#e8a93b';
   return (
     <button
       type="button"
@@ -10765,7 +10930,7 @@ function SquadRow({
       <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.86rem', fontWeight: 700 }}>
           <Flag cc={player.country} /> {player.nick}
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem', color: accent, fontWeight: 800 }}>
+          <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.78rem', color: accent, fontWeight: 800 }}>
             {playerOvr(player)}
           </span>
         </div>
@@ -10774,7 +10939,7 @@ function SquadRow({
         </div>
       </div>
       <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem', color: 'var(--em-text)', fontWeight: 700 }}>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.78rem', color: 'var(--em-text)', fontWeight: 700 }}>
           {rightLabel}
         </div>
         {rightHint && (
@@ -10836,10 +11001,10 @@ function CoachRow({
         </div>
       </div>
       <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.92rem', color: selected ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.92rem', color: selected ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>
           {rating}
         </div>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.7rem', color: 'var(--em-muted)' }}>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.7rem', color: 'var(--em-muted)' }}>
           {formatMoney(fee)}
         </div>
       </div>

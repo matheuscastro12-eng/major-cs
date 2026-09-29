@@ -1,5 +1,5 @@
 import type { KillEvent, MapId, MapResult, Playbook, Playstyle, PlayerLine, PlayerMapStats, SeriesResult, TPlayer, TTeam } from '../types';
-import { derivePlaystyle } from '../types';
+import { derivePlaystyle, MAP_POOL } from '../types';
 import type { Rng } from './rng';
 import { weightedIndex } from './rng';
 import { ct } from '../state/career-i18n';
@@ -169,6 +169,9 @@ const BUY_PENALTY: Record<BuyTier, number> = {
   force: -2.6,
   eco: -7,
 };
+
+// caixa de cada half da prorrogação no CS2 (mp_overtime_startmoney).
+export const OT_START_MONEY = 12500;
 
 interface EcoState {
   money: number;
@@ -341,8 +344,12 @@ export interface SiteRound {
 export interface MapSim {
   step: (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call, siteCall?: SiteCall) => boolean; // joga 1 round; true quando o mapa terminou
   // estimativa read-only da prob de vitória do round ATUAL pra `forTeam`, com
-  // stance/call hipotéticos. Pro HUD de decisão (mostra impacto ao vivo).
-  peekWinProb: (forTeam: 0 | 1, stance?: { team: 0 | 1; mode: Stance }, call?: Call) => number;
+  // stance/call/timeout hipotéticos. Pro HUD de decisão (mostra impacto ao vivo).
+  // É a % MOSTRADA (pShown): a leitura de site da defesa é informação oculta.
+  peekWinProb: (forTeam: 0 | 1, stance?: { team: 0 | 1; mode: Stance }, call?: Call, boostTeam?: 0 | 1 | null) => number;
+  // [O1-47] a % contra a qual o dado do ÚLTIMO round rolou de verdade (pRolled),
+  // já com timeout E leitura de site. null antes do 1º round.
+  lastRollP: (forTeam: 0 | 1) => number | null;
   // momentum atual: qual time está embalado e o tamanho da sequência. Pro HUD
   // de momento da partida (medidor visual). -1 = ninguém embalado.
   momentum: () => { team: 0 | 1 | -1; len: number };
@@ -359,10 +366,65 @@ export interface MapSim {
   result: () => MapResult; // disponível quando done()
 }
 
-export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 0 | 1 | -1, opts?: MapSimOpts): MapSim {
+// ---------------- elenco (O1-48) ----------------
+// O motor modela SEMPRE 5 contra 5 (mortes, savers, dano e pickVictims contam
+// 5). Antes (ENGI-09) um time com 4 jogadores derrubava a partida com "Cannot
+// read properties of undefined" e só a UI protegia, em pontos espalhados. Agora
+// a entrada normaliza: corta o excedente, completa com o banco e, faltando
+// ainda, com reservas genéricos derivados do próprio elenco (um degrau abaixo
+// da média). Sem NENHUM jogador não há de quem derivar: erro tipado.
+
+export class RosterError extends Error {
+  readonly code = 'roster_incompleto' as const;
+  readonly teamId: string;
+  readonly count: number;
+  constructor(teamId: string, count: number) {
+    super(`roster_incompleto: ${teamId} tem ${count} jogador(es)`);
+    this.name = 'RosterError';
+    this.teamId = teamId;
+    this.count = count;
+  }
+}
+
+export const LINEUP_SIZE = 5;
+const RESERVE_DROP = 6;   // reserva genérico: 6 pontos abaixo da média do elenco
+
+export function withFullRoster(team: TTeam): TTeam {
+  const players = team.players.slice(0, LINEUP_SIZE);
+  if (players.length === LINEUP_SIZE && team.players.length === LINEUP_SIZE) return team;
+  for (const p of team.bench ?? []) {
+    if (players.length >= LINEUP_SIZE) break;
+    if (!players.some((q) => q.id === p.id)) players.push(p);
+  }
+  if (!players.length) throw new RosterError(team.id, 0);
+  const avg = (k: 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl' | 'skill' | 'ovr') =>
+    Math.max(1, Math.round(players.reduce((acc, p) => acc + p[k], 0) / players.length) - RESERVE_DROP);
+  const base = players[0];
+  for (let i = 0; players.length < LINEUP_SIZE; i++) {
+    players.push({
+      id: `${team.id}-reserva-${i + 1}`,
+      sourcePlayerId: `${team.id}-reserva-${i + 1}`,
+      nick: `reserva${i + 1}`,
+      name: `Reserva ${i + 1}`,
+      country: team.country,
+      role: 'Rifler',
+      playstyle: base.playstyle,
+      aim: avg('aim'), clutch: avg('clutch'), consistency: avg('consistency'),
+      awp: avg('awp'), igl: avg('igl'), skill: avg('skill'), ovr: avg('ovr'),
+      form: 1,
+    });
+  }
+  return { ...team, players };
+}
+
+export function createMapSim(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, pickedBy: 0 | 1 | -1, opts?: MapSimOpts): MapSim {
+  const a = withFullRoster(a0);
+  const b = withFullRoster(b0);
   const stats: Record<string, PlayerMapStats> = {};
   const identityMods = opts?.identity ?? []; // [W5] vazio = nada muda
-  for (const p of [...a.players, ...b.players]) stats[p.id] = emptyStats();
+  // stats também pros que ficaram de fora do corte (consumidores leem stats[p.id]
+  // pelo elenco original — nunca undefined).
+  for (const p of [...a0.players, ...b0.players, ...a.players, ...b.players]) stats[p.id] ??= emptyStats();
 
   let scoreA = 0;
   let scoreB = 0;
@@ -406,14 +468,20 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
   const momentumDelta = (): number =>
     streakTeam < 0 || streakLen < 2 ? 0 : MOMENTUM_BY_LEN[Math.min(streakLen, 4)];
 
-  // lado (CT/T) de cada time num dado round, considerando halves e OT
+  // lado (CT/T) de cada time num dado round (0-based), considerando halves e OT.
+  // Prorrogação (regra do CS2/Valve): o 1º half da OT segue no lado do 2º half
+  // do tempo normal, troca no intervalo da OT, e a OT seguinte começa SEM trocar
+  // (fica no lado em que terminou). Antes (ENGI-12) o bloco 0 da OT voltava pro
+  // lado do 1º half — uma troca que não existe.
   const sideOf = (r: number): ['ct' | 't', 'ct' | 't'] => {
+    const first: 'ct' | 't' = aStartsCt ? 'ct' : 't';
+    const second: 'ct' | 't' = aStartsCt ? 't' : 'ct';
     let aSide: 'ct' | 't';
-    if (r < 12) aSide = aStartsCt ? 'ct' : 't';
-    else if (r < 24) aSide = aStartsCt ? 't' : 'ct';
+    if (r < 12) aSide = first;
+    else if (r < 24) aSide = second;
     else {
-      const block = Math.floor((r - 24) / 3);
-      aSide = block % 2 === 0 ? (aStartsCt ? 'ct' : 't') : aStartsCt ? 't' : 'ct';
+      const h = Math.floor((r - 24) / 3);   // half da OT (0-based, contando todas as OTs)
+      aSide = Math.floor((h + 1) / 2) % 2 === 0 ? second : first;
     }
     return [aSide, aSide === 'ct' ? 't' : 'ct'];
   };
@@ -518,15 +586,20 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
   // Estimativa read-only da prob de vitória do round ATUAL pra `forTeam`, dado um
   // stance/call hipotético. Alimenta o HUD de decisão (mostra o impacto AO VIVO
   // da escolha, antes de jogar o round). Não muta nada.
+  // O timeout (boostTeam) entra aqui (O1-47): antes a % da tela omitia o +2,0
+  // do timeout que o round real aplicava. A leitura de site segue FORA — é
+  // informação oculta de propósito; o que rolou de verdade sai do lastRollP.
   const peekWinProb = (
     forTeam: 0 | 1,
     stance?: { team: 0 | 1; mode: Stance },
     call?: Call,
+    boostTeam?: 0 | 1 | null,
   ): number => {
     if (finished) return forTeam === 0 ? (scoreA >= scoreB ? 1 : 0) : (scoreB > scoreA ? 1 : 0);
-    const { pA } = roundEffect(stance, call);
+    const { pA } = roundEffect(stance, call, boostTeam);
     return forTeam === 0 ? pA : 1 - pA;
   };
+  let lastPA: number | null = null;
 
   const step = (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call, siteCall?: SiteCall): boolean => {
     if (finished) return true;
@@ -559,6 +632,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     }
     siteLog.push({ round, tSite, ctStack, correct: siteCorrect });
     const { pA, buys, aSide, bSide } = roundEffect(stance, call, boostTeam, siteDelta);
+    lastPA = pA;
     buyLog.push(buys);
     eco[0].money = Math.max(0, eco[0].money - buyCost(buys[0]));
     eco[1].money = Math.max(0, eco[1].money - buyCost(buys[1]));
@@ -623,7 +697,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
 
     const pickVictims = (teamIdx: 0 | 1, deaths: number) => {
       const ps = teamPlayers[teamIdx];
-      const idxs = [0, 1, 2, 3, 4];
+      const idxs = ps.map((_, i) => i);
       const weights = ps.map((p) => (DEATH_ROLE_MULT[p.role] ?? 1) * (110 - p.consistency) * deathStyleMult(p));
       const chosen: number[] = [];
       for (let d = 0; d < deaths; d++) {
@@ -743,6 +817,16 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     // simulador (roundLog nunca passa de 43).
     if (round >= 43) finished = true;
 
+    // PRORROGAÇÃO: cada half da OT (rounds 25, 28, 31… — índices 24, 27, 30)
+    // começa com $12.500 pros dois times e loss bonus zerado, como no CS2. Antes
+    // (ENGI-12) o caixa da regulamentação seguia e quem saiu quebrado do round
+    // 24 jogava eco no 25. Feito aqui (fim do round) pra que a compra prevista
+    // do próximo round (nextBuys) e o money() do HUD já reflitam o reset.
+    if (!finished && round >= 24 && (round - 24) % 3 === 0) {
+      eco[0] = { money: OT_START_MONEY, lossStreak: 0 };
+      eco[1] = { money: OT_START_MONEY, lossStreak: 0 };
+    }
+
     if (!finished) nextBuys = computeBuys();
     return finished;
   };
@@ -750,6 +834,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
   return {
     step,
     peekWinProb,
+    lastRollP: (forTeam) => (lastPA == null ? null : forTeam === 0 ? lastPA : 1 - lastPA),
     momentum: () => ({ team: streakTeam, len: streakLen }),
     done: () => finished,
     score: () => [scoreA, scoreB],
@@ -791,6 +876,14 @@ export function simulateSeries(
   bestOf: 1 | 3 | 5 = 3,
 ): SeriesResult {
   const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2, BO5 -> 3
+  // O1-48 (ENGI-13): série com menos mapas que o formato (pool curto, veto de
+  // evento especial) dava vitória fantasma 0-0 ao time A. Completa com o
+  // MAP_POOL (decider sem pick) até bestOf mapas.
+  if (maps.length < bestOf) {
+    const used = new Set(maps.map((m) => m.map));
+    const extra = MAP_POOL.filter((m) => !used.has(m)).slice(0, bestOf - maps.length);
+    maps = [...maps, ...extra.map((m) => ({ map: m as MapId, pickedBy: -1 as const }))];
+  }
   const results: MapResult[] = [];
   let winsA = 0;
   let winsB = 0;

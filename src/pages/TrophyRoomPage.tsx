@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react';
 import { CareerIcon } from '../components/career/CareerIcon';
+import { formatMoney as fmtMoney } from '../engine/ratings';
 
 interface TrophyEntry {
   kind: 'major' | 'circuit';
@@ -42,13 +43,6 @@ const MAJOR_NAMES = [
   'PGL Major', 'BLAST.tv Major', 'IEM Major', 'ESL One Major', 'Perfect World Major',
 ];
 const majorName = (split: number) => MAJOR_NAMES[(split - 1) % MAJOR_NAMES.length];
-
-const fmtMoney = (n: number) => {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 2)}M`;
-  if (abs >= 1_000) return `$${Math.round(n / 1_000)}k`;
-  return `$${n}`;
-};
 
 const PLACEMENT_LABEL: Record<string, string> = {
   champion: '1º · Campeão',
@@ -166,7 +160,7 @@ export function TrophyRoomPage({ history, orgName, currentSplit, onClose }: Prop
 
 function TrophyCard({ t }: { t: TrophyEntry }) {
   const isMajor = t.kind === 'major';
-  const accent = isMajor ? '#e8c170' : '#5ed88a';
+  const accent = isMajor ? '#e8c170' : 'var(--c-win)';
   return (
     <div
       style={{
@@ -174,8 +168,8 @@ function TrophyCard({ t }: { t: TrophyEntry }) {
         flexDirection: 'column',
         gap: 8,
         padding: 14,
-        background: `linear-gradient(160deg, ${accent}1a 0%, var(--em-panel) 70%)`,
-        border: `1px solid ${accent}66`,
+        background: `linear-gradient(160deg, color-mix(in srgb, ${accent} 10%, transparent) 0%, var(--em-panel) 70%)`,
+        border: `1px solid color-mix(in srgb, ${accent} 40%, transparent)`,
         borderRadius: 8,
       }}
     >
@@ -199,7 +193,7 @@ function TrophyCard({ t }: { t: TrophyEntry }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid var(--em-border)', paddingTop: 8, fontSize: '0.74rem' }}>
         <span style={{ color: 'var(--em-muted)' }}>Split {t.split}</span>
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a' }}>{fmtMoney(t.prize)}</b>
+        <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)' }}>{fmtMoney(t.prize)}</b>
       </div>
     </div>
   );
@@ -220,7 +214,7 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
 }
 
 function Counter({ label, value, tone, icon }: { label: string; value: number | string; tone: 'gold' | 'green' | 'neutral'; icon: 'trophy' | 'medal' | 'coin' }) {
-  const colors: Record<string, string> = { gold: '#e8c170', green: '#5ed88a', neutral: 'var(--em-text)' };
+  const colors: Record<string, string> = { gold: '#e8c170', green: 'var(--c-win)', neutral: 'var(--em-text)' };
   return (
     <div
       style={{
@@ -230,7 +224,7 @@ function Counter({ label, value, tone, icon }: { label: string; value: number | 
     >
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: colors[tone] }}>
         <CareerIcon name={icon} size={14} />
-        <b style={{ fontSize: '1.1rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace' }}>{value}</b>
+        <b style={{ fontSize: '1.1rem', fontWeight: 900, fontFamily: 'var(--font-num)' }}>{value}</b>
       </span>
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
     </div>

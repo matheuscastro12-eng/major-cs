@@ -5,7 +5,7 @@
 // (wlMirrorReport) e só conta quando os dois lados batem — aqui é leitura.
 import { useCallback, useEffect, useState } from 'react';
 import { Panel, Button } from '../ds';
-import type { Account } from '../../state/account';
+import { useAccountStore, type Account } from '../../state/account';
 import {
   fetchWlStatus, wlRegister, WL_MAX_MATCHES,
   type WlStatus,
@@ -51,12 +51,14 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
 
   // funil: conta grátis jogando o Major da Semana vê o convite de vitalícia
   // (tela ficou 100% grátis pra todos — mas nunca tinha CTA nem instrumentação)
-  useEffect(() => { if (account && !account.paid) trackPaywallView('wl-free'); }, [account]);
+  // [O0-11] só depois do /me: antes disso o pagante ainda parece grátis
+  const accountReady = useAccountStore((s) => s.ready);
+  useEffect(() => { if (accountReady && account && !account.paid) trackPaywallView('wl-free'); }, [accountReady, account]);
   // funil: visitante SEM conta (ex.: guest do Ultimate) chega aqui direto pelo
   // convite abaixo — mas nunca tinha instrumentação nem src próprio, então essa
   // ponta do funil ficava invisível (0 paywall_view/checkout_open registrados,
   // mesmo com tráfego real vindo do modo convidado). Mede como 'wl-guest'.
-  useEffect(() => { if (!account) trackPaywallView('wl-guest'); }, [account]);
+  useEffect(() => { if (accountReady && !account) trackPaywallView('wl-guest'); }, [accountReady, account]);
 
   // relógio do countdown (30s de passo é suficiente pra "fecha em Xh Ymin")
   useEffect(() => {
@@ -175,8 +177,8 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
             <h1 style={{ margin: '2px 0', fontFamily: 'inherit', fontSize: '26px', fontWeight: 800, color: '#f2f5f9' }}>{ct('Major da Semana')}</h1>
             <div style={{ fontSize: '12.5px', color: '#c2cad4' }}>{ct('Até 10 ranqueadas 1v1 de quarta a sábado. Quanto mais vitórias, maior a recompensa.')}</div>
           </div>
-          <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: '8px', background: 'rgba(9,12,16,.72)', border: `1px solid ${win.open ? '#29c47a' : 'var(--em-border-strong)'}` }}>
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', fontWeight: 800, color: win.open ? '#29c47a' : '#c2cad4' }}>
+          <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: '8px', background: 'rgba(9,12,16,.72)', border: `1px solid ${win.open ? 'var(--c-win)' : 'var(--em-border-strong)'}` }}>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', fontWeight: 800, color: win.open ? 'var(--c-win)' : '#c2cad4' }}>
               {win.open ? ct('Janela aberta') : ct('Janela fechada')}
             </div>
             <div style={{ fontFamily: 'inherit', fontWeight: 800, fontSize: '17px', color: '#f2f5f9', whiteSpace: 'nowrap' }}>
@@ -191,7 +193,7 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
       </div>
 
       {error && (
-        <div style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--em-red, #c0392b)', background: 'rgba(192,57,43,.08)', color: 'var(--em-text)', fontSize: '12.5px' }}>{error}</div>
+        <div style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--em-red, #c0392b)', background: 'color-mix(in srgb, var(--c-loss) 8%, transparent)', color: 'var(--em-text)', fontSize: '12.5px' }}>{error}</div>
       )}
 
       {/* convite pra vitalícia — só conta grátis (não trava nada aqui, o Major da
@@ -219,7 +221,7 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {entry ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              {([[ct('Partidas'), `${games}/${WL_MAX_MATCHES}`, 'var(--em-text)'], [ct('Vitórias'), String(entry.wins), '#29c47a'], [ct('Derrotas'), String(entry.losses), 'var(--em-red, #c0392b)'], [ct('Saldo (SR)'), (entry.roundBalance >= 0 ? '+' : '') + entry.roundBalance, entry.roundBalance >= 0 ? '#29c47a' : 'var(--em-red, #c0392b)'], [ct('Divisão'), entry.division || '—', 'var(--em-gold)']] as [string, string, string][]).map(([k, v, c]) => (
+              {([[ct('Partidas'), `${games}/${WL_MAX_MATCHES}`, 'var(--em-text)'], [ct('Vitórias'), String(entry.wins), 'var(--c-win)'], [ct('Derrotas'), String(entry.losses), 'var(--em-red, #c0392b)'], [ct('Saldo (SR)'), (entry.roundBalance >= 0 ? '+' : '') + entry.roundBalance, entry.roundBalance >= 0 ? 'var(--c-win)' : 'var(--em-red, #c0392b)'], [ct('Divisão'), entry.division || '—', 'var(--em-gold)']] as [string, string, string][]).map(([k, v, c]) => (
                 <div key={k} style={{ textAlign: 'center', padding: '8px 16px', borderRadius: '6px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)' }}>
                   <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>{k}</div>
                   <div style={{ fontFamily: 'inherit', fontWeight: 800, fontSize: '17px', color: c }}>{v}</div>
@@ -298,7 +300,7 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
                     </td>
                     <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'inherit', fontWeight: 800, fontSize: '12.5px', color: 'var(--em-gold)', whiteSpace: 'nowrap' }}>{prize > 0 ? `${fmtCredits(prize)} 🪙` : ''}</td>
                     <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'inherit', fontWeight: 800, fontSize: '14.5px', color: 'var(--em-text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                      <span style={{ color: '#29c47a' }}>{r.wins}V</span> <span style={{ color: 'var(--rtm-faint)' }}>–</span> <span style={{ color: 'var(--em-red, #c0392b)' }}>{r.losses}D</span> <span title={ct('Saldo de rounds (desempate)')} style={{ color: 'var(--rtm-faint)', fontSize: '11px', fontWeight: 700 }}>· {r.roundBalance >= 0 ? '+' : ''}{r.roundBalance}</span>
+                      <span style={{ color: 'var(--c-win)' }}>{r.wins}V</span> <span style={{ color: 'var(--rtm-faint)' }}>–</span> <span style={{ color: 'var(--em-red, #c0392b)' }}>{r.losses}D</span> <span title={ct('Saldo de rounds (desempate)')} style={{ color: 'var(--rtm-faint)', fontSize: '11px', fontWeight: 700 }}>· {r.roundBalance >= 0 ? '+' : ''}{r.roundBalance}</span>
                     </td>
                   </tr>
                 );

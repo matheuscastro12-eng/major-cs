@@ -12,7 +12,7 @@
 //
 // Não usa Context — registro funciona de qualquer lugar (módulo, hook, classe).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
 export interface Shortcut {
   // tecla principal (key.toLowerCase()). Ex.: 'n', 'enter', '?', 'escape'.
@@ -41,10 +41,15 @@ interface RegisteredShortcut extends Shortcut {
 
 let seq = 1;
 const REGISTRY: RegisteredShortcut[] = [];
+// cópia imutável pra quem renderiza a lista: o REGISTRY é mutado no lugar e
+// mantém a mesma referência, então quem memoizava em cima dele (useMemo do
+// KeyboardHelpOverlay) nunca recalculava e a janela saía vazia (BUG-06)
+let SNAPSHOT: readonly RegisteredShortcut[] = [];
 type ChangeListener = () => void;
 const changeListeners = new Set<ChangeListener>();
 
 function notifyChange(): void {
+  SNAPSHOT = REGISTRY.slice();
   for (const l of changeListeners) l();
 }
 
@@ -62,9 +67,9 @@ export function registerShortcut(s: Shortcut): () => void {
   };
 }
 
-// Snapshot dos atalhos atuais (pro overlay).
+// Snapshot dos atalhos atuais (pro overlay). Referência nova a cada mudança.
 export function getShortcuts(): readonly RegisteredShortcut[] {
-  return REGISTRY;
+  return SNAPSHOT;
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -113,14 +118,10 @@ export function useKeyboardShortcuts(): void {
 }
 
 // Hook auxiliar pro KeyboardHelpOverlay: rerender quando o registry muda.
+function subscribeShortcuts(l: ChangeListener): () => void {
+  changeListeners.add(l);
+  return () => { changeListeners.delete(l); };
+}
 export function useShortcutsSnapshot(): readonly RegisteredShortcut[] {
-  const [, force] = useState(0);
-  useEffect(() => {
-    const l: ChangeListener = () => force((n) => n + 1);
-    changeListeners.add(l);
-    return () => {
-      changeListeners.delete(l);
-    };
-  }, []);
-  return REGISTRY;
+  return useSyncExternalStore(subscribeShortcuts, getShortcuts, getShortcuts);
 }

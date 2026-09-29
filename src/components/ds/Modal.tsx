@@ -7,15 +7,13 @@
 //     footer={<><Button onClick={close}>Cancelar</Button><Button variant="primary" onClick={confirm}>Confirmar</Button></>}>
 //     Texto do corpo
 //   </Modal>
-import { useCallback, useEffect, useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, type MouseEvent, type ReactNode } from 'react';
+import { useOverlay } from './useOverlay';
 
 export type ModalSize = 'sm' | 'md' | 'lg';
 
-// BUG FIX (caça-bugs): pilha module-level de modais abertos. Cada Modal tinha
-// seu próprio listener global de ESC, então abrir um modal sobre outro e apertar
-// ESC fechava TODOS de uma vez. Agora só o modal no TOPO da pilha responde ao ESC.
-const modalStack: symbol[] = [];
-
+// ESC do topo da pilha, trava de scroll, auto-foco, focus-trap e retorno de
+// foco vivem em useOverlay (dividido com o Sheet).
 export function Modal({
   open,
   onClose,
@@ -35,57 +33,7 @@ export function Modal({
   closeOnBackdrop?: boolean;
   hideClose?: boolean;
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const returnFocusTo = useRef<HTMLElement | null>(null);
-
-  // BUG FIX (teclado fecha a cada tecla): este effect NÃO pode depender de
-  // `onClose`. Quem consome o Modal costuma passar uma função recriada a cada
-  // render (ex.: AccountModal → requestClose); se `onClose` estivesse nas deps,
-  // cada tecla digitada num input re-rodava o effect, e o queueMicrotask abaixo
-  // roubava o foco de volta pro primeiro campo — no mobile isso fecha o teclado.
-  // Solução: só rodar em [open]; o handler de ESC lê o onClose atual via ref.
-  const onCloseRef = useRef(onClose);
-  useEffect(() => { onCloseRef.current = onClose; });
-
-  // ESC global + lock no scroll do body enquanto aberto + retorna foco no close
-  useEffect(() => {
-    if (!open) return;
-    returnFocusTo.current = (document.activeElement as HTMLElement) ?? null;
-    // entra na pilha; só o topo responde ao ESC (evita fechar modais empilhados)
-    const id = Symbol('modal');
-    modalStack.push(id);
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape' && modalStack[modalStack.length - 1] === id) onCloseRef.current();
-    };
-    document.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    // auto-foco no primeiro tabbable do modal
-    queueMicrotask(() => {
-      const first = ref.current?.querySelector<HTMLElement>(FOCUSABLE);
-      first?.focus();
-    });
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      const idx = modalStack.lastIndexOf(id);
-      if (idx >= 0) modalStack.splice(idx, 1);
-      // só libera o scroll do body quando NENHUM modal continua aberto
-      if (modalStack.length === 0) document.body.style.overflow = prevOverflow;
-      returnFocusTo.current?.focus?.();
-    };
-  }, [open]);
-
-  // focus-trap: ao apertar Tab/Shift+Tab no primeiro/último foco, faz wrap
-  const onKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Tab' || !ref.current) return;
-    const nodes = ref.current.querySelectorAll<HTMLElement>(FOCUSABLE);
-    if (nodes.length === 0) return;
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
-    const active = document.activeElement as HTMLElement | null;
-    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
-  }, []);
+  const { ref, onKeyDown } = useOverlay<HTMLDivElement>(open, onClose);
 
   const onBackdrop = useCallback((e: MouseEvent<HTMLDivElement>) => {
     if (!closeOnBackdrop) return;
@@ -120,11 +68,3 @@ export function Modal({
   );
 }
 
-const FOCUSABLE = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',');

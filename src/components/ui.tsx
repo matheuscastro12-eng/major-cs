@@ -13,7 +13,7 @@ const PLAYER_PALETTES: { from: string; to: string; fg: string; accent: string }[
   { from: '#3d1e5f', to: '#1d0d2e', fg: '#b389e8', accent: '#9b6fe8' }, // roxo claro
   { from: '#5f1e3a', to: '#2e0d1b', fg: '#e89bc7', accent: '#e8709f' }, // rosa profundo
   { from: '#5f3a1e', to: '#2e1b0d', fg: '#e8c170', accent: '#d8a93b' }, // âmbar
-  { from: '#1e5f3a', to: '#0d2e1b', fg: '#7ce8a3', accent: '#5ed88a' }, // verde
+  { from: '#1e5f3a', to: '#0d2e1b', fg: '#7ce8a3', accent: 'var(--c-win)' }, // verde
   { from: '#3a5f1e', to: '#1b2e0d', fg: '#bce870', accent: '#a3d83b' }, // verde-amarelado
   { from: '#5f1e1e', to: '#2e0d0d', fg: '#e89b9b', accent: '#e87070' }, // vermelho
   { from: '#1e5f5f', to: '#0d2e2e', fg: '#7ce8e8', accent: '#5ed8d8' }, // teal
@@ -103,7 +103,7 @@ export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string;
           fontWeight: 800,
           letterSpacing: '0.04em',
           textShadow: '0 1px 2px rgba(0,0,0,0.35)',
-          fontFamily: '"JetBrains Mono", monospace',
+          fontFamily: 'var(--font-num)',
         }}
       >
         {initials}

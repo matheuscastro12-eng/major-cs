@@ -95,6 +95,12 @@ export interface UltimateProfile {
   club?: { name: string; logo: import('../../lib/logoBuilder').LogoConfig | null } | null;
   frames?: string[];
   equippedFrame?: string | null;
+  // [O0-46/O0-37] créditos do SERVIDOR já absorvidos neste save (sincroniza
+  // com a nuvem junto do resto): vouchers pagos ('coins:<corr>', 'pass:<n>')
+  // e listagens do mercado já processadas ('sold:<id>', 'back:<id>'). É o que
+  // impede o mesmo crédito de entrar 2x em outro aparelho ou depois de limpar
+  // o storage. Opcional — save antigo abre sem.
+  srvSeen?: string[];
 }
 
 export const ULTIMATE_VERSION = 1;
@@ -368,6 +374,7 @@ function uid(): string {
     if (c?.randomUUID) return c.randomUUID();
   } catch { /* sem crypto */ }
   _uidCounter += 1;
+  // eslint-disable-next-line no-restricted-properties -- fallback de id sem crypto; o id não entra em nenhuma simulação
   return `u_${_uidCounter.toString(36)}_${Math.floor(Math.random() * 1e9).toString(36)}`;
 }
 
@@ -400,6 +407,7 @@ export function grantCard(
     cardKey,
     serial,
     acquiredVia: via,
+    // eslint-disable-next-line no-restricted-properties -- carimbo de aquisição (metadado de exibição); tests e servidor passam `at`
     acquiredAt: opts?.at ?? Date.now(),
     locked: null,
     ...(opts?.ev ? { ev: opts.ev } : {}),
@@ -431,6 +439,32 @@ export function sellCard(
   const inventory = state.inventory.filter((o) => o.id !== ownedId);
   const profile = { ...state.profile, credits: state.profile.credits + credited };
   return { state: { ...state, inventory, profile }, ok: true, credited };
+}
+
+// ── [O0-46/O0-37] créditos do servidor já absorvidos (srvSeen) ─────────────
+// Tags de mercado ('sold:'/'back:') são muitas e só as ~30 listagens mais
+// recentes voltam no mktMine → cap nelas. Vouchers pagos ('coins:'/'pass:')
+// são poucos e NUNCA saem da lista (sair = o próximo claim creditaria de novo).
+export const SRV_SEEN_MARKET_CAP = 200;
+const isMarketTag = (t: string) => t.startsWith('sold:') || t.startsWith('back:');
+
+export function capSrvSeen(tags: string[]): string[] {
+  const uniq = [...new Set(tags)];
+  const market = uniq.filter(isMarketTag);
+  if (market.length <= SRV_SEEN_MARKET_CAP) return uniq;
+  const drop = new Set(market.slice(0, market.length - SRV_SEEN_MARKET_CAP));
+  return uniq.filter((t) => !drop.has(t));
+}
+
+export function hasSrvSeen(state: UltimateState, tag: string): boolean {
+  return (state.profile.srvSeen ?? []).includes(tag);
+}
+
+export function markSrvSeen(state: UltimateState, tags: string[]): UltimateState {
+  const cur = state.profile.srvSeen ?? [];
+  const add = tags.filter((t) => !cur.includes(t));
+  if (!add.length) return state;
+  return { ...state, profile: { ...state.profile, srvSeen: capSrvSeen([...cur, ...add]) } };
 }
 
 export function addCredits(state: UltimateState, n: number): UltimateState {
@@ -475,6 +509,7 @@ export function migrateUltimate(raw: unknown): UltimateState {
     club: normalizeClub(p.club), // [U10]
     frames: mergeFrames([], Array.isArray(p.frames) ? p.frames.filter((f): f is string => typeof f === 'string') : []), // [U10]
     equippedFrame: typeof p.equippedFrame === 'string' && frameById(p.equippedFrame) ? p.equippedFrame : null, // [U10]
+    srvSeen: capSrvSeen(Array.isArray(p.srvSeen) ? p.srvSeen.filter((x): x is string => typeof x === 'string') : []), // [O0-46/O0-37]
     season: p.season && typeof p.season === 'object' && typeof p.season.startedAt === 'number'
       ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0), peak: num(p.season.peak, STARTING_ELO), claimed: Array.isArray(p.season.claimed) ? p.season.claimed.filter((x): x is string => typeof x === 'string') : [], n: Math.max(1, num(p.season.n, 1)), w: Math.max(0, num(p.season.w, 0)) }
       : null,

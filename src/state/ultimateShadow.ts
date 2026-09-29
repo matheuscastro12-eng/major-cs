@@ -1,12 +1,20 @@
 // Ultimate Squad — espelho "sombra" da economia (fase 3a) + FLIP (fase 3b).
 // O save local/cloud-save continua sendo a FONTE DA VERDADE pro jogador; este
-// módulo reflete cada mutação de credits/cartas como uma transação idempotente
-// em /api/ultimate-economy (action 'tx'), pra que o ledger no Neon convirja.
-// A fase 3b (aqui) vira os caminhos cheat-críticos pro servidor:
+// módulo reflete as SAÍDAS de credits/cartas como transações idempotentes em
+// /api/ultimate-economy (action 'tx'). A fase 3b vira os caminhos
+// cheat-críticos pro servidor:
 //   - pack open de conta paga rola NO SERVIDOR (openPackOnServer, action
 //     'packOpen') com op_id crash-safe — fallback local se a rede falhar;
-//   - no boot, reconciliação defensiva servidor↔local (reconcileFlip):
-//     LOCAL VENCE e o servidor é trazido até ele via tx 'admin' auditável.
+//   - no boot, leitura servidor↔local (reconcileFlip) — só diagnóstico.
+//
+// [O0-02] A rota `tx` só aceita do cliente spend/pack/sbc/quicksell, sem
+// op:'add' e sem crédito positivo (o quicksell é valorado no servidor).
+// Então o espelho manda SÓ a perna de saída (serverBoundTx): prêmios locais
+// (daily, streak, meta, missões, Draft, evento…) e cartas ganhas no cliente
+// ficam só no save até o O1-01 (vouchers do servidor). A reconciliação não
+// sobe mais diferença nenhuma ("LOCAL VENCE" desligado) e a migração v1 (que
+// mandava 'grant' com a coleção inteira) saiu. Crédito PAGO nasce no servidor
+// (O0-46 — ver paidClaim.ts).
 //
 // Regras de ouro:
 //   - NUNCA bloqueia nem lança pro caminho da UI (tudo fire-and-forget + try/catch);
@@ -20,9 +28,10 @@ import { cloudEnabled } from './cloud';
 import { captureError } from './errlog';
 import type { UltimateState } from '../engine/ultimate/state';
 
-// kinds aceitos pela rota (subset de ULT_TX_KINDS do servidor). 'admin' entrou
-// na fase 3b: é o kind da tx de reconciliação (meta {src:'reconcile-3b'}).
+// kinds que o STORE usa pra rotular mutações. Só os de SERVER_KINDS saem pra
+// rede ('grant'/'reward'/'admin' ficam locais desde o O0-02).
 export type UltShadowKind = 'grant' | 'spend' | 'pack' | 'quicksell' | 'sbc' | 'reward' | 'admin';
+const SERVER_KINDS: readonly UltShadowKind[] = ['spend', 'pack', 'sbc', 'quicksell']; // espelho de ULT_TX_CLIENT_KINDS
 
 export interface ShadowCardOp {
   op: 'add' | 'remove';
@@ -45,7 +54,8 @@ const DRIFT_KEY = 'rtm-ultimate-shadow-drift'; // '1' = perdemos txs → ledger 
 const PENDING_OPEN_KEY = 'rtm-ult-pending-open-v1'; // pack open server em voo (crash-safety do op_id)
 const FLIP_DRIFT_KEY = 'rtm-ult-flip-drift'; // '1' = fallback/saldo divergente no flip → reconciliar no boot
 const PACK_OPEN_TIMEOUT_MS = 10_000; // acima disso o jogador não espera: cai pro roll local
-const MIGRATED_PREFIX = 'rtm-ultimate-shadow-migrated-v1:'; // + email (cache local; o guard real é o op_id)
+const FROZEN_KEY = 'rtm-ult-frozen-msg'; // [O0-02] mensagem de carteira congelada (vem do state)
+const DIVERGE_LOG_KEY = 'rtm-ult-diverge-log-at'; // último log de divergência (1×/semana por aparelho)
 const LOCAL_SAVE_KEY = 'rtm-ultimate-v1'; // espelho de KEY em ultimate.ts (só LEITURA aqui)
 const QUEUE_CAP = 500; // acima disso derruba o mais antigo + marca drift
 const TX_MAX_CARDS = 200; // espelho de ULT_TX_MAX_CARDS da rota
@@ -75,10 +85,13 @@ function saveQueue(): void {
   try { localStorage.setItem(QKEY, JSON.stringify(queue ?? [])); } catch { /* storage cheio — fila só em memória */ }
 }
 
-function markDrift(reason: string): void {
+// quiet: divergência ESPERADA desde o O0-02 (o save gasta prêmio que só existe
+// nele → o servidor responde saldo insuficiente). Só anota a flag, sem errlog —
+// senão todo jogador com prêmio local viraria um erro por gasto.
+function markDrift(reason: string, quiet = false): void {
   // txs foram descartadas → o ledger do servidor NÃO reflete mais o save local.
-  // A fase 3b usa esta flag pra saber que precisa de reconciliação completa.
   try { localStorage.setItem(DRIFT_KEY, '1'); } catch { /* best-effort */ }
+  if (quiet) return;
   captureError(new Error(`ultimate-shadow drift: ${reason}`), 'ult-shadow');
 }
 
@@ -94,16 +107,17 @@ function makeOpId(): string {
   return `sh-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-// e-mail da conta logada, decodificado do próprio token (base64url("email|exp").sig)
-// — só pra chavear a flag local de migração; o servidor re-verifica a assinatura.
-function shadowEmail(): string | null {
-  const t = getToken();
-  if (!t) return null;
-  try {
-    const body = atob(t.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'));
-    const email = body.split('|')[0];
-    return email || null;
-  } catch { return null; }
+// [O0-02] Recorta uma mutação local na parte que a rota aceita do cliente:
+// kind de saída, só op:'remove', creditsDelta ≤ 0 (quicksell: ≥ 0 e só
+// informativo — o servidor recalcula pelo card_key). null = nada a mandar
+// (mutação 100% local: prêmio, carta ganha no cliente…).
+export function serverBoundTx(kind: UltShadowKind, creditsDelta: number, cards: ShadowCardOp[]): { creditsDelta: number; cards: ShadowCardOp[] } | null {
+  if (!SERVER_KINDS.includes(kind)) return null;
+  const removes = cards.filter((c) => c.op === 'remove').map((c) => ({ op: 'remove' as const, cardId: c.cardId }));
+  if (kind === 'quicksell') return removes.length ? { creditsDelta: Math.max(0, creditsDelta), cards: removes } : null;
+  const delta = Math.min(0, creditsDelta);
+  if (delta === 0 && removes.length === 0) return null;
+  return { creditsDelta: delta, cards: removes };
 }
 
 // -------------------------------------------------------------------- rede
@@ -122,7 +136,7 @@ async function postTx(tx: { opId: string; kind: string; creditsDelta: number; ca
   } catch { return 0; }
 }
 
-async function fetchServerState(): Promise<{ credits: number; cards: { cardId: string; cardKey: string }[]; ledgerTail: unknown[] } | null> {
+async function fetchServerState(): Promise<{ credits: number; cards: { cardId: string; cardKey: string }[]; ledgerTail: unknown[]; frozenMessage: string | null } | null> {
   const token = getToken();
   if (!token) return null;
   try {
@@ -146,6 +160,7 @@ async function fetchServerState(): Promise<{ credits: number; cards: { cardId: s
       credits: Number(d.credits ?? 0),
       cards,
       ledgerTail: Array.isArray(d.ledgerTail) ? d.ledgerTail : [],
+      frozenMessage: d.frozen === true && typeof d.frozenMessage === 'string' ? d.frozenMessage : null,
     };
   } catch { return null; }
 }
@@ -175,11 +190,15 @@ export async function flushShadowQueue(): Promise<void> {
     const q = loadQueue();
     while (q.length > 0) {
       const entry = q[0];
+      // fila persistida por uma versão anterior pode ter 'grant'/'admin'/add:
+      // recorta na regra do O0-02; se não sobrar nada, é só local — descarta.
+      const bound = serverBoundTx(entry.kind, entry.creditsDelta, entry.cards);
+      if (!bound) { q.shift(); saveQueue(); continue; }
       const status = await postTx({
         opId: entry.opId,
         kind: entry.kind,
-        creditsDelta: entry.creditsDelta,
-        cards: entry.cards,
+        creditsDelta: bound.creditsDelta,
+        cards: bound.cards,
         meta: entry.meta,
       });
       if (status >= 200 && status < 300) {
@@ -189,11 +208,12 @@ export async function flushShadowQueue(): Promise<void> {
         continue;
       }
       if (status === 400 || status === 409) {
-        // replay de op_id devolve 200; 409 aqui é insufficient_credits — o ledger
-        // divergiu do save local (spend antes da migração etc.). Não tem retry útil.
+        // replay de op_id devolve 200; 409 aqui é insufficient_credits/not_owner —
+        // o ledger diverge do save (esperado até o O1-01: prêmio só local). Não
+        // tem retry útil. 400 = forma inválida (bug) → vai pro errlog.
         q.shift();
         saveQueue();
-        markDrift(`tx dropped status=${status} kind=${entry.kind}`);
+        markDrift(`tx dropped status=${status} kind=${entry.kind}`, status === 409);
         continue;
       }
       if (status === 401 || status === 403) return; // sem conta paga — fila espera
@@ -213,7 +233,9 @@ export async function flushShadowQueue(): Promise<void> {
 export function shadowTx(kind: UltShadowKind, creditsDelta: number, cards: ShadowCardOp[] = [], meta?: Record<string, unknown>): void {
   try {
     if (!cloudEnabled()) return;
-    if (creditsDelta === 0 && cards.length === 0) return;
+    const bound = serverBoundTx(kind, creditsDelta, cards);
+    if (!bound) return; // [O0-02] mutação só local (prêmio / carta ganha no cliente)
+    ({ creditsDelta, cards } = bound);
     const q = loadQueue();
     // a rota aceita ≤200 card-ops por tx → fatia em várias txs (credits só na 1ª)
     for (let i = 0; i < Math.max(1, Math.ceil(cards.length / TX_MAX_CARDS)); i++) {
@@ -260,10 +282,8 @@ export function mirrorUltimateChange(prev: UltimateState, next: UltimateState, k
     for (const o of prev.inventory) {
       if (!nextIds.has(o.id)) cards.push({ op: 'remove', cardId: o.id });
     }
-    // desbloqueio do Passe Premium PAGO (R$ 30,00): não muda credits nem
-    // cartas, mas o ledger PRECISA registrar a compra (auditoria de dinheiro
-    // real — meta carrega o orderId do pedido pass-s<N>).
-    if (creditsDelta === 0 && cards.length === 0 && meta?.src !== 'pass-premium-paid') return;
+    // (o desbloqueio do Passe Premium PAGO não passa mais por aqui: o servidor
+    // grava pass:<season> no passClaim — O0-46)
     shadowTx(kind, creditsDelta, cards, meta);
   } catch (e) {
     captureError(e, 'ult-shadow');
@@ -272,76 +292,20 @@ export function mirrorUltimateChange(prev: UltimateState, next: UltimateState, k
 
 // --------------------------------------------------------------- migração
 
-// Upload ONE-TIME da coleção existente pro ledger do servidor. Roda no boot
-// (depois da reconciliação com o cloud-save, então o local já é o save "real").
-//   - servidor NÃO-vazio → alguém já migrou (ou já operou lá): só grava a flag;
-//   - save local virgem → nada a migrar (não grava flag: pode onboardar depois);
-//   - senão manda a coleção em chunks de ≤200 cartas com op_ids DETERMINÍSTICOS
-//     'migrate-v1:0', 'migrate-v1:1', … (credits só no chunk 0). Re-rodar é
-//     seguro: o UNIQUE (email, op_id) faz o replay ser no-op no servidor.
-// NUNCA modifica o save local nem o cloud-save.
-export async function migrateIfNeeded(): Promise<'done' | 'skipped' | 'failed'> {
-  try {
-    if (!cloudEnabled()) return 'skipped';
-    const email = shadowEmail();
-    if (!email) return 'skipped';
-    const flagKey = MIGRATED_PREFIX + email;
-    try { if (localStorage.getItem(flagKey) === '1') return 'skipped'; } catch { /* segue sem cache */ }
-
-    const server = await fetchServerState();
-    if (!server) return 'failed'; // offline/erro — tenta de novo no próximo boot
-    if (server.credits > 0 || server.cards.length > 0 || server.ledgerTail.length > 0) {
-      try { localStorage.setItem(flagKey, '1'); } catch { /* best-effort */ }
-      return 'skipped';
-    }
-
-    // lê o save local direto do storage (nunca escreve nele)
-    let local: UltimateState | null = null;
-    try {
-      const raw = localStorage.getItem(LOCAL_SAVE_KEY);
-      local = raw ? (JSON.parse(raw) as UltimateState) : null;
-    } catch { local = null; }
-    if (!local || !local.profile) return 'skipped';
-    // virgem (nunca onboardou, sem cartas nem partidas) → nada a migrar ainda
-    const pristine = !local.profile.onboarded && local.inventory.length === 0 && (local.profile.w + local.profile.l) === 0;
-    if (pristine) return 'skipped';
-
-    const inv = local.inventory;
-    const chunks = Math.max(1, Math.ceil(inv.length / TX_MAX_CARDS));
-    for (let i = 0; i < chunks; i++) {
-      const slice = inv.slice(i * TX_MAX_CARDS, (i + 1) * TX_MAX_CARDS);
-      const status = await postTx({
-        opId: `migrate-v1:${i}`, // determinístico → replay idempotente por chunk
-        kind: 'grant',
-        creditsDelta: i === 0 ? Math.max(0, Math.trunc(local.profile.credits) || 0) : 0,
-        cards: slice.map((o) => ({
-          op: 'add' as const,
-          cardId: o.id,
-          cardKey: o.cardKey,
-          meta: { via: o.acquiredVia, ...(o.boost ? { boost: o.boost } : {}), ...(o.serial != null ? { serial: o.serial } : {}), ...(o.ed != null ? { ed: o.ed } : {}), ...(o.ev ? { ev: o.ev } : {}) }, // [URG-1] ed vai no JSON de meta (sem coluna nova)
-        })),
-        meta: { migrate: 'v1', chunk: i, of: chunks },
-      });
-      // 2xx (aplicou ou replay) segue; qualquer outra coisa aborta — o próximo
-      // boot recomeça do zero e os chunks já gravados viram replays no-op.
-      if (!(status >= 200 && status < 300)) return 'failed';
-    }
-    try { localStorage.setItem(flagKey, '1'); } catch { /* best-effort */ }
-    return 'done';
-  } catch (e) {
-    captureError(e, 'ult-shadow');
-    return 'failed';
-  }
-}
+// [O0-02] A migração v1 (upload one-time da coleção como 'grant' com
+// op_ids 'migrate-v1:<i>') saiu: a rota não aceita mais crédito nem carta do
+// cliente. A coleção antiga continua no save; o servidor conhece só o que
+// nasceu nele (packOpen, mercado, compras, prêmios do servidor).
 
 // ------------------------------------------- fase 3b: pack open no servidor
 
 // Flag de drift do FLIP: setada quando um packOpen server-side caiu pro
 // fallback local (o servidor PODE ter aplicado a tx) ou quando o saldo
-// devolvido divergiu do esperado. Puramente informativa — a reconciliação do
-// boot roda sempre e converge; a flag só é limpa quando os lados batem.
-export function markFlipDrift(reason: string): void {
+// devolvido divergiu do esperado. Puramente informativa; a flag só é limpa
+// quando os lados batem. quiet = divergência esperada (O0-02), sem errlog.
+export function markFlipDrift(reason: string, quiet = false): void {
   try { localStorage.setItem(FLIP_DRIFT_KEY, '1'); } catch { /* best-effort */ }
+  if (quiet) return;
   captureError(new Error(`ult-flip drift: ${reason}`), 'ult-flip');
 }
 
@@ -416,8 +380,8 @@ export async function openPackOnServer(packId: string): Promise<ServerPackResult
     if (!cloudEnabled()) return null;
     let pending = readPendingOpen();
     // pendente de OUTRO pack (crash antigo + jogador mudou de pack): descarta.
-    // Se o servidor tiver aplicado aquela tx, a reconciliação do boot desfaz
-    // (local vence) — não seguramos o jogador refém de um registro velho.
+    // Se o servidor tiver aplicado aquela tx, fica como divergência só-log
+    // (O0-02) — não seguramos o jogador refém de um registro velho.
     if (pending && pending.packId !== packId) { clearPendingOpen(); pending = null; }
     let opId = pending?.opId ?? makeOpId();
     writePendingOpen({ opId, packId, t: Date.now() });
@@ -444,7 +408,7 @@ export async function openPackOnServer(packId: string): Promise<ServerPackResult
       clearPendingOpen();
       if (!cards.length) {
         // 2xx sem cartas aproveitáveis: o servidor aplicou algo que não dá pra
-        // reproduzir localmente → fallback local + drift (o boot reconcilia).
+        // reproduzir localmente → fallback local + drift (só diagnóstico).
         markFlipDrift('packOpen 2xx sem cartas');
         return null;
       }
@@ -455,14 +419,14 @@ export async function openPackOnServer(packId: string): Promise<ServerPackResult
         cards,
       };
     }
-    // Falha de rede/timeout (0), 5xx/429, 401/403 ou 409 de saldo: NUNCA
-    // bloqueia — o chamador cai pro roll local (que espelha via shadow, como
-    // sempre). O servidor PODE ter aplicado a tx (timeout) ou estar divergido
-    // (409 insufficient): marca o drift e deixa a reconciliação do boot
-    // convergir. O pendente é limpo: esta op não será re-tentada — o roll
-    // local que sai agora é a versão que vale.
+    // Falha de rede/timeout (0), 5xx/429, 401/403, 409 de saldo ou 423
+    // (carteira congelada): NUNCA bloqueia — o chamador cai pro roll local
+    // (cartas só no save). O servidor PODE ter aplicado a tx (timeout) ou estar
+    // divergido (409 insufficient — esperado desde o O0-02 quando o save tem
+    // prêmio só local): marca o drift. O pendente é limpo: esta op não será
+    // re-tentada — o roll local que sai agora é a versão que vale.
     clearPendingOpen();
-    markFlipDrift(`packOpen fallback status=${r.status}`);
+    markFlipDrift(`packOpen fallback status=${r.status}`, r.status === 423 || (r.status === 409 && r.data?.error === 'insufficient_credits'));
     return null;
   } catch (e) {
     captureError(e, 'ult-flip');
@@ -473,91 +437,67 @@ export async function openPackOnServer(packId: string): Promise<ServerPackResult
 
 // ---------------------------------------------- fase 3b: reconciliação boot
 
-// Política v1 (defensiva): LOCAL VENCE, reconciliando o servidor PRA CIMA.
-// Racional: o shadow/ledger acabou de nascer e NÃO teve tempo de "assar" — o
-// servidor tem, na melhor hipótese, dias de dados; o save local (sincronizado
-// via cloud-save há meses) é a fonte madura. Divergiu → enfileira UMA tx
-// 'admin' (meta {src:'reconcile-3b'}) com o diff exato (delta de credits +
-// add/remove de cartas) que traz o servidor até o local. O ledger continua
-// append-only e auditável — nada é apagado nem reescrito.
-// Guardas defensivos:
-//   - fila-sombra não drenada → pula (as txs pendentes ainda vão mudar o
-//     servidor; comparar agora geraria um diff falso/duplicado — o próximo
-//     boot, com a fila vazia, reconcilia);
-//   - save local virgem → pula (default de boot não "vence" nada);
-//   - servidor inacessível → pula (tenta no próximo boot).
+// [O0-02] Política atual: SÓ LEITURA. O "LOCAL VENCE" (tx 'admin' com o diff
+// inteiro) transformava localStorage editado em crédito no servidor (ECON-02)
+// e, com o O0-46, poderia até APAGAR crédito pago (local < servidor → delta
+// negativo). Até o O1-01/O0-03 os dois lados divergem por desenho: prêmios
+// ganhos no cliente ficam só no save. Aqui só:
+//   - lê o state (e o aviso de carteira congelada, se houver);
+//   - limpa a flag de drift do flip quando os lados batem;
+//   - registra divergência (só TAMANHOS) no errlog no máximo 1×/semana por
+//     aparelho, pra triagem — nunca manda tx.
 async function reconcileFlip(): Promise<void> {
   try {
     if (!cloudEnabled()) return;
     if (loadQueue().length > 0) return;
     const server = await fetchServerState();
     if (!server) return;
+    try {
+      if (server.frozenMessage) localStorage.setItem(FROZEN_KEY, server.frozenMessage);
+      else localStorage.removeItem(FROZEN_KEY);
+    } catch { /* best-effort */ }
     let local: UltimateState | null = null;
     try {
       const raw = localStorage.getItem(LOCAL_SAVE_KEY);
       local = raw ? (JSON.parse(raw) as UltimateState) : null;
     } catch { local = null; }
     if (!local || !local.profile || !Array.isArray(local.inventory)) return;
-    const pristine = !local.profile.onboarded && local.inventory.length === 0 && (local.profile.w + local.profile.l) === 0;
-    if (pristine) return;
-
     const localCredits = Math.max(0, Math.trunc(local.profile.credits) || 0);
     const serverIds = new Set(server.cards.map((c) => c.cardId));
     const localIds = new Set(local.inventory.map((o) => o.id));
     const creditsDelta = localCredits - server.credits;
-    const adds: ShadowCardOp[] = local.inventory
-      .filter((o) => !serverIds.has(o.id))
-      .map((o) => ({
-        op: 'add' as const,
-        cardId: o.id,
-        cardKey: o.cardKey,
-        meta: { via: o.acquiredVia, ...(o.boost ? { boost: o.boost } : {}), ...(o.serial != null ? { serial: o.serial } : {}), ...(o.ed != null ? { ed: o.ed } : {}), ...(o.ev ? { ev: o.ev } : {}) }, // [URG-1] ed vai no JSON de meta (sem coluna nova)
-      }));
-    const removes: ShadowCardOp[] = server.cards
-      .filter((c) => !localIds.has(c.cardId))
-      .map((c) => ({ op: 'remove' as const, cardId: c.cardId }));
-
-    if (creditsDelta === 0 && adds.length === 0 && removes.length === 0) {
-      clearFlipDrift(); // convergiu — qualquer drift anotado já foi absorvido
+    const onlyLocal = local.inventory.filter((o) => !serverIds.has(o.id)).length;
+    const onlyServer = server.cards.filter((c) => !localIds.has(c.cardId)).length;
+    if (creditsDelta === 0 && onlyLocal === 0 && onlyServer === 0) {
+      clearFlipDrift();
       return;
     }
-    // Guarda anti-wipe (incidente Coala, 2026-08-10): um aparelho que bootou com
-    // save VELHO (PWA ressuscitada de background, localStorage evicted etc.)
-    // passa em todos os guards acima — não é pristine, a fila está vazia — e o
-    // "local vence" rebaixaria o servidor em dezenas de cartas/dezenas de
-    // milhares de coins de progresso real (foi -121k coins + 86 cartas).
-    // Downgrade GRANDE nunca é um jogador jogando: spend/quicksell/sbc chegam
-    // pela fila-sombra, não pela reconciliação. Acima dos limiares, NÃO aplica:
-    // mantém o servidor rico, registra pra triagem manual e deixa a flag de
-    // drift de pé (o próximo boot com o save certo reconcilia e limpa).
-    if (removes.length >= 10 || creditsDelta <= -20_000) {
-      captureError(
-        new Error(`ult-flip guard: downgrade bloqueado creditsΔ=${creditsDelta} removes=${removes.length} local=${localIds.size} server=${serverIds.size}`),
-        'ult-flip-guard',
-      );
-      return;
-    }
-    // log só com TAMANHOS (nunca despeja cartas/coleção no errlog)
+    let last = 0;
+    try { last = Number(localStorage.getItem(DIVERGE_LOG_KEY) ?? 0) || 0; } catch { /* segue */ }
+    if (Date.now() - last < 7 * 24 * 3600_000) return;
+    try { localStorage.setItem(DIVERGE_LOG_KEY, String(Date.now())); } catch { /* best-effort */ }
     captureError(
-      new Error(`ult-flip divergência: creditsΔ=${creditsDelta} adds=${adds.length} removes=${removes.length} local=${localIds.size} server=${serverIds.size}`),
+      new Error(`ult-flip divergência (só log): creditsΔ=${creditsDelta} soLocal=${onlyLocal} soServidor=${onlyServer}`),
       'ult-flip-reconcile',
     );
-    // shadowTx fatia >200 card-ops em várias txs e já dispara o flush
-    shadowTx('admin', creditsDelta, [...adds, ...removes], { src: 'reconcile-3b' });
-    clearFlipDrift();
   } catch (e) {
     captureError(e, 'ult-flip-reconcile');
   }
 }
 
-// Boot do espelho: migração one-time (se preciso), drena a fila que sobrou de
-// sessões anteriores e roda a reconciliação defensiva da fase 3b (servidor é
-// trazido até o local — ver reconcileFlip). Fire-and-forget — chamado após a
-// reconciliação do slot 'ultimate' com a nuvem, nunca bloqueia a UI.
+// [O0-02] Carteira congelada pelo admin: mensagem padrão (7 dias pra
+// contestar) lida no último boot. null = carteira ativa.
+export function ultFrozenNotice(): string | null {
+  try { return localStorage.getItem(FROZEN_KEY); } catch { return null; }
+}
+
+// Boot do espelho: drena a fila que sobrou de sessões anteriores e roda a
+// leitura servidor↔local (só diagnóstico — ver reconcileFlip). Fire-and-forget
+// — chamado após a reconciliação do slot 'ultimate' com a nuvem, nunca
+// bloqueia a UI.
 export function bootUltimateShadow(): void {
   void (async () => {
     try {
-      await migrateIfNeeded();
       await flushShadowQueue();
       await reconcileFlip();
     } catch (e) {

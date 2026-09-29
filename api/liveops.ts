@@ -15,6 +15,8 @@ import {
   type SqlTag,
 } from '../server/liveops.js';
 import { mergeWeekendEvent, serverWeekendCatalog } from '../server/weekendEvent.js'; // [URG-2]
+import { requireAdmin } from '../server/admin-auth.js';
+import type { RateSql } from '../server/rate-limit.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -87,8 +89,7 @@ export default async function handler(
 
   // ------------------------------------------------------------------ admin
   res.setHeader('Cache-Control', 'no-store');
-  const adminPass = clean(process.env.ADMIN_PASSWORD);
-  if (!adminPass || String(body.password ?? '').trim() !== adminPass) { res.status(401).json({ ok: false }); return; }
+  if (!(await requireAdmin(sql as unknown as RateSql, body, req, res))) return; // O0-16
 
   if (action === 'list') {
     const rows = await listLiveops(sql);

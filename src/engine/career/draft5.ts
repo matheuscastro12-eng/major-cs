@@ -73,6 +73,7 @@ const FEED_TTL_MS = 15 * 60_000;
 export const draft5ArticleUrl = (slug: string, link = DRAFT5_META.link) => `${link}/noticia/${slug}`;
 
 export async function fetchDraft5Feed(amount = 5): Promise<{ items: Draft5FeedItem[]; link: string }> {
+  // eslint-disable-next-line no-restricted-properties -- TTL do cache HTTP do feed, não é simulação
   const now = Date.now();
   if (feedCache && feedCache.expiresAt > now) return feedCache;
   try {

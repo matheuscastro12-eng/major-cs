@@ -15,6 +15,10 @@ import {
   PASS_PRICE_CENTS,
 } from './payments.js';
 
+// accountReference assina com APP_SECRET, que agora é obrigatória (falha
+// fechada, SEGU-10) — sem ela o módulo lança em vez de cair num fallback.
+process.env.APP_SECRET ??= 'test-app-secret';
+
 const session = (overrides: Partial<Stripe.Checkout.Session> = {}): Stripe.Checkout.Session => ({
   id: 'cs_test_123',
   mode: 'payment',

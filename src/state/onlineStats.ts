@@ -13,7 +13,7 @@
 // aparelho antigo e depois salvar num mais novo descarta os incrementos do
 // antigo. É o modelo da casa (carreira/RtP/Ultimate); aceitável pro perfil.
 
-import { cloudEnabled, cloudOnLocalSave, markSavedAt, syncSlot } from './cloud';
+import { cloudEnabled, cloudOnLocalSave, markSavedAt, syncSlot, type SyncResult } from './cloud';
 import { captureError } from './errlog';
 
 export interface OnlineStats { mmr: number; w: number; l: number; majorPts: number; bestStreak: number; gamesMajor: number; }
@@ -78,7 +78,7 @@ function isPristine(s: OnlineStats): boolean {
 
 // Reconcilia o perfil online com a nuvem no boot (após a conta carregar).
 // 'restored'/'deleted' pedem que o consumidor recarregue via loadStats().
-export async function syncOnlineStatsFromCloud(): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
+export async function syncOnlineStatsFromCloud(): Promise<SyncResult> {
   if (!cloudEnabled()) return 'none';
   // Perfil virgem persistido no boot NÃO pode vencer o perfil real da nuvem
   // por timestamp (zeraria MMR/pontos do jogador num aparelho novo).

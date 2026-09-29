@@ -12,7 +12,6 @@ import {
 } from '../../components/career/CareerOverview';
 import {
   GamePlanPicker,
-  MORALE_DEFAULT,
   eventMeta,
   scoutOppPlayerStats,
   effectiveAge,
@@ -31,6 +30,8 @@ import { rivalryLabel, rivalryScore } from '../../engine/career/rivalries';
 import { GSL_ROUND_LABELS } from '../../engine/gsl';
 import { leagueTeam, type League, type LeagueMatch } from '../../engine/league';
 import { formatMoney, playerOvr, playerWage } from '../../engine/ratings';
+import { teamChemistry } from '../../engine/chemistry';
+import { playerOrgId } from '../../state/career-player-route';
 import { MAP_LABELS } from '../../types';
 import { ct } from '../../state/career-i18n';
 import type { Player, TTeam } from '../../types';
@@ -45,6 +46,7 @@ interface OverviewTabSave {
   squad: Signing[];
   morale?: Record<string, number>;
   playbookXp?: number;
+  pairChem?: Record<string, number>;
   rivalries?: Record<string, number>;
   contracts?: Record<string, number>;
   youthAge?: Record<string, number>;
@@ -103,15 +105,10 @@ export function OverviewTab({
     ? Math.round(squadPlayers.reduce((a, p) => a + playerOvr(p), 0) / squadPlayers.length)
     : 0;
   const form = clubForm(league);
-  const moraleVals = squadPlayers.map((p) => save.morale?.[p.id] ?? MORALE_DEFAULT);
-  const avgMorale = moraleVals.length
-    ? Math.round(moraleVals.reduce((a, b) => a + b, 0) / moraleVals.length)
-    : 70;
   const fam = save.playbookXp ?? 0;
-  const hasAwp = squadPlayers.some((p) => p.role === 'AWP' || p.role2 === 'AWP');
-  const hasIgl = squadPlayers.some((p) => p.role === 'IGL' || p.role2 === 'IGL');
-  const roleOk = (hasAwp ? 1 : 0) + (hasIgl ? 1 : 0);
-  const chem = Math.round(0.45 * avgMorale + 0.35 * fam + 0.2 * (roleOk / 2) * 100);
+  // Química = a mesma do Elenco (pairChem dos titulares). Antes era uma fórmula
+  // própria (moral + entrosamento + funções) com o mesmo rótulo e outro número.
+  const chem = teamChemistry({ pairChem: save.pairChem }, squadPlayers.map((p) => playerOrgId(p.id)));
   const nextRivalryScore = opp ? rivalryScore(save.rivalries, opp.id) : 0;
   const nextRivalry = rivalryLabel(nextRivalryScore);
   const roundLabel = league.gsl

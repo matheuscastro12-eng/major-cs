@@ -1,13 +1,12 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { makeRng } from '../../engine/rng';
-import { hashStr } from '../../state/hash';
-import type { MomentOption, MomentOutcome, OddsBreakdown } from '../../engine/rtp/moments';
+import { POSTURE_LABEL, POSTURE_TELL, EVEN_POSTURE, type MomentOption, type MomentOutcome, type OddsBreakdown } from '../../engine/rtp/moments';
 import { feedForOutcome, outcomePills, type FeedRow } from '../../engine/rtp/roundModel';
 import {
   createRoom, currentBeat, currentMoment, currentCtx, inClutchOf, isLastBeat, pressureOf,
   spotlightOf, execSeedOf, roomOdds, winProbOf, liveRatingOf, partialBandOf,
   useRead as roomUseRead, lockIn as roomLockIn, advance as roomAdvance, skipRest as roomSkipRest,
-  execBoostOf, EXEC_NEUTRAL,
+  execBoostOf, EXEC_NEUTRAL, currentPosture,
   type RoomState, type ResolvedBeat, type ClosedMap,
 } from '../../engine/rtp/room';
 import { tierDifficulty } from '../../engine/rtp/minigames';
@@ -77,18 +76,11 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
   const execSeed = execSeedOf(room);
   const reduced = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-  // tendência revelada pela leitura tática (flavor determinístico por beat).
-  const readTell = useMemo(() => {
-    const tells = [
-      'o adversário costuma forçar o duelo aqui',
-      'eles seguram ângulo — cuidado com o pre-aim',
-      'o time recua pra retake, não corre',
-      'esperam sua agressão — entre com calma',
-      'a AWP está de olho no meio',
-      'eles apostam no flanco esquerdo',
-    ];
-    return tells[hashStr(`tell:${room.idx}:${room.clutch?.step ?? 0}:${prep.matchSeed}`) % tells.length];
-  }, [room.idx, room.clutch?.step, prep.matchSeed]);
+  // O1-44: a Leitura revela a POSTURA do adversário no beat (entra nas odds);
+  // sem leitura, a tela mostra a tendência (os pesos que as odds já usam).
+  const posture = currentPosture(room);
+  const lean = room.cfg.oppLean ?? EVEN_POSTURE;
+  const leanLine = `rush ${Math.round(lean.aggro * 100)}% · passivo ${Math.round(lean.safe * 100)}% · setup ${Math.round(lean.smart * 100)}%`;
 
   const useRead = () => setRoom((r) => roomUseRead(r));
 
@@ -295,11 +287,14 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
           <p className="rtp-room-sit">{moment.situation}</p>
           <div className="rtp-room-read">
             {room.readUsed ? (
-              <span className="rtp-read-active"><RtpIcon name="brain" size={13} /> LEITURA: {readTell}</span>
+              <span className="rtp-read-active"><RtpIcon name="brain" size={13} /> LEITURA: {posture ? POSTURE_TELL[posture] : ''}</span>
             ) : (
-              <button type="button" className="rtp-read-btn" disabled={room.reads <= 0} onClick={useRead}>
-                <RtpIcon name="brain" size={13} /> {room.reads > 0 ? `LER O JOGO · ${room.reads}` : 'SEM LEITURAS'}
-              </button>
+              <>
+                <button type="button" className="rtp-read-btn" disabled={room.reads <= 0} onClick={useRead}>
+                  <RtpIcon name="brain" size={13} /> {room.reads > 0 ? `LER O JOGO · ${room.reads}` : 'SEM LEITURAS'}
+                </button>
+                <span className="rtp-read-lean" title="Tendência do adversário: a leitura revela como eles jogam ESTE round">{leanLine}</span>
+              </>
             )}
             <button type="button" className="rtp-room-skip" onClick={skipRest} title="Resolve os momentos restantes no automático e vai pro resultado">
               PULAR PARTIDA <RtpIcon name="chevR" size={12} />
@@ -398,6 +393,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
               {locked.execPerf != null && locked.execPerf >= 0.9 && <span className="rtp-pill exec-gold">EXECUÇÃO PERFEITA</span>}
               {locked.execPerf != null && locked.execPerf < 0.5 && <span className="rtp-pill exec-bad">EXECUÇÃO FALHOU</span>}
               {outcomePills(beat, locked.outcome).map((p, i) => <span key={i} className="rtp-pill">{p}</span>)}
+              <span className="rtp-pill posture">eles {POSTURE_LABEL[locked.posture]}</span>
             </div>
           </div>
           <p className="rtp-room-narr">{locked.outcome.narrative}</p>

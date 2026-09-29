@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../state/i18n';
+import { Modal } from './ds';
 
 export const PIXGG_URL = 'https://pixgg.com/MatheusCastro';
 export const KOFI_URL = 'https://ko-fi.com/matheuscastrobr';
@@ -57,60 +58,50 @@ export function DonateModal({ open, onClose }: { open: boolean; onClose: () => v
 
   if (!open) return null;
 
+  // modal do design system: Esc fecha, foco preso e devolvido
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal donate-modal fade-in" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          {t('donate.title')}
-          <span className="spacer" />
-          <button className="icon-btn" onClick={onClose} aria-label={t('donate.close')}>
-            ✕
-          </button>
-        </div>
-        <div className="panel-body">
-          <p className="muted" style={{ marginTop: 0 }}>
-            {t('donate.blurb')}
-          </p>
-          <div className="donate-actions">
-            <a className="btn gold big" href={PIXGG_URL} target="_blank" rel="noreferrer">
-              {t('donate.pix')}
-            </a>
-            <a className="btn big" href={KOFI_URL} target="_blank" rel="noreferrer">
-              {t('donate.kofi')}
-            </a>
-          </div>
-
-          <div className="donors-box">
-            <div className="donors-head">
-              {t('donate.wall')}
-              {data && data.count > 0 && (
-                <span className="muted small">
-                  {' '}
-                  - {data.count} {t('donate.donations')} · R$ {data.total.toFixed(2).replace('.', ',')}
-                </span>
-              )}
-            </div>
-            {!data && <div className="muted small">{t('donate.loading')}</div>}
-            {data && data.donors.length === 0 && (
-              <div className="muted small">{t('donate.first')}</div>
-            )}
-            {data && data.donors.length > 0 && (
-              <div className="donors-list">
-                {data.donors.slice(0, 20).map((d, i) => (
-                  <div key={i} className="donor-row">
-                    <span className="dname">
-                      {d.source === 'kofi' ? '☕' : '⚡'} {d.name}
-                    </span>
-                    {d.amount > 0 && <span className="damount">R$ {Number(d.amount).toFixed(2).replace('.', ',')}</span>}
-                    {d.message && <span className="dmsg">"{d.message}"</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+    <Modal open onClose={onClose} title={t('donate.title')} size="md">
+      <p className="muted" style={{ marginTop: 0 }}>
+        {t('donate.blurb')}
+      </p>
+      <div className="donate-actions">
+        <a className="btn gold big" href={PIXGG_URL} target="_blank" rel="noreferrer">
+          {t('donate.pix')}
+        </a>
+        <a className="btn big" href={KOFI_URL} target="_blank" rel="noreferrer">
+          {t('donate.kofi')}
+        </a>
       </div>
-    </div>
+
+      <div className="donors-box">
+        <div className="donors-head">
+          {t('donate.wall')}
+          {data && data.count > 0 && (
+            <span className="muted small">
+              {' '}
+              - {data.count} {t('donate.donations')} · R$ {data.total.toFixed(2).replace('.', ',')}
+            </span>
+          )}
+        </div>
+        {!data && <div className="muted small">{t('donate.loading')}</div>}
+        {data && data.donors.length === 0 && (
+          <div className="muted small">{t('donate.first')}</div>
+        )}
+        {data && data.donors.length > 0 && (
+          <div className="donors-list">
+            {data.donors.slice(0, 20).map((d, i) => (
+              <div key={i} className="donor-row">
+                <span className="dname">
+                  {d.source === 'kofi' ? '☕' : '⚡'} {d.name}
+                </span>
+                {d.amount > 0 && <span className="damount">R$ {Number(d.amount).toFixed(2).replace('.', ',')}</span>}
+                {d.message && <span className="dmsg">"{d.message}"</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

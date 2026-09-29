@@ -6,7 +6,7 @@ import { Flag } from './ui';
 import { Button, Panel } from './ds';
 import { DivBadge } from './Leaderboard';
 import { LegalLinks } from './Legal';
-import { deleteAccount, exportAccountData, type Account } from '../state/account';
+import { deleteAccount, exportAccountData, useAccountStore, type Account } from '../state/account';
 import { fetchMyRank, type MyRank } from '../state/ranking';
 import type { Manager } from '../state/manager';
 import { ct } from '../state/career-i18n';
@@ -31,7 +31,9 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
   const [dataError, setDataError] = useState('');
   useEffect(() => { if (paid) void fetchMyRank(manager.nick).then(setRank); }, [paid, manager.nick]);
   // funil: CTA de vitalícia visto na tela de Perfil (src já existe em App.tsx, faltava a view)
-  useEffect(() => { if (!paid) trackPaywallView('profile'); }, [paid]);
+  // [O0-11] só depois do /me: antes disso o pagante ainda parece grátis
+  const accountReady = useAccountStore((s) => s.ready);
+  useEffect(() => { if (accountReady && !paid) trackPaywallView('profile'); }, [accountReady, paid]);
 
   const downloadData = async () => {
     if (dataBusy) return;

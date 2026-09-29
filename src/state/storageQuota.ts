@@ -84,3 +84,45 @@ export function writeWithQuotaRescue(key: string, value: string): QuotaWriteResu
     return { ok: false, rescued: true, freed, error: first };
   }
 }
+
+// ── "Liberar espaço" (banner "Não consegui salvar") [O0-26] ──────────────────
+// Mais agressivo que o resgate automático, porque é o JOGADOR que pede: apaga
+// todo `.corrupt` e todo `.bak` do domínio e o cache da base de times (ele é
+// refeito do build no próximo load). Nunca apaga save principal, conta, nem a
+// base do admin com edições não salvas no banco (flag dirty).
+const DATASET_CACHE_KEYS = ['major-cs-dataset-v3', 'major-cs-dataset-remote-sync-v1', 'major-cs-dataset-rev'];
+const DATASET_DIRTY_KEY = 'major-cs-dataset-dirty-v1';
+
+export interface FreeSpaceResult {
+  removed: string[];
+  /** caracteres liberados (chave + valor), ~bytes em UTF-16 / 2 */
+  chars: number;
+}
+
+type MiniStorage = Pick<Storage, 'getItem' | 'removeItem' | 'key' | 'length'>;
+
+export function freeLocalSpace(storage: MiniStorage = localStorage): FreeSpaceResult {
+  const targets: string[] = [];
+  try {
+    for (let i = 0; i < storage.length; i++) {
+      const k = storage.key(i);
+      if (k && (k.endsWith('.corrupt') || k.endsWith('.bak'))) targets.push(k);
+    }
+    if (storage.getItem(DATASET_DIRTY_KEY) !== '1') {
+      for (const k of DATASET_CACHE_KEYS) if (storage.getItem(k) != null) targets.push(k);
+    }
+  } catch {
+    return { removed: [], chars: 0 };
+  }
+  const removed: string[] = [];
+  let chars = 0;
+  for (const k of targets) {
+    try {
+      const v = storage.getItem(k);
+      storage.removeItem(k);
+      removed.push(k);
+      chars += k.length + (v?.length ?? 0);
+    } catch { /* segue com as outras */ }
+  }
+  return { removed, chars };
+}

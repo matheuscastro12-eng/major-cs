@@ -14,8 +14,9 @@ export interface WlEntry {
 }
 export interface WlStanding { rank: number; nick: string; division: string; wins: number; losses: number; roundBalance: number; }
 export interface WlRewardTier { minWins: number; credits: number; card?: string; name: string; }
-export interface WlStatus { window: WlWindow; entry: WlEntry | null; standings: WlStanding[]; rewardTiers: WlRewardTier[]; }
-export interface WlClaimOutcome { replayed: boolean; tier: WlRewardTier; wins: number; credits: number; }
+// [O0-22] prêmio de colocação da última janela fechada, pago pelo fecho automático e ainda não coletado no save
+export interface WlLastSettle { windowId: string; rank: number; prize: number; at: string; }
+export interface WlStatus { window: WlWindow; entry: WlEntry | null; standings: WlStanding[]; rewardTiers: WlRewardTier[]; lastSettle?: WlLastSettle | null; }
 
 export const WL_MAX_MATCHES = 60;
 
@@ -96,9 +97,11 @@ export async function wlRegister(win: WlWindow): Promise<WlEntry> {
   return d.entry as WlEntry;
 }
 
-export async function wlClaim(windowId: string): Promise<WlClaimOutcome> {
-  const d = await post({ action: 'claim', windowId });
-  return { replayed: !!d.replayed, tier: d.tier as WlRewardTier, wins: Number(d.wins ?? 0), credits: Number(d.credits ?? 0) };
+// [O0-22] coleta o prêmio de colocação no save. replayed=true ⇒ já coletado
+// (outro aparelho): quem chama NÃO credita de novo.
+export async function wlSettleAck(windowId: string): Promise<{ replayed: boolean; prize: number; rank: number }> {
+  const d = await post({ action: 'settleAck', windowId });
+  return { replayed: !!d.replayed, prize: Number(d.prize ?? 0), rank: Number(d.rank ?? 0) };
 }
 
 // Espelho do report da ranqueada: fire-and-forget, NUNCA lança nem perturba o

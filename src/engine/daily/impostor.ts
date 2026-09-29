@@ -91,5 +91,5 @@ export function shareTextOfImpostor(dateKey: string, round: ImpostorRound, p: Im
       : `Achei o impostor da ${round.team} ${round.year} ${grid}`
     : `O impostor da ${round.team} ${round.year} me enganou ${grid}`;
   const tail = streak >= 2 ? ` · 🔥 ${streak} dias seguidos` : '';
-  return `O IMPOSTOR #${day} · MAJOR//CS\n${head}${tail}\nroadtomajor.com.br/diario`;
+  return `O IMPOSTOR #${day} · ROAD TO MAJOR\n${head}${tail}\nroadtomajor.com.br/diario`;
 }

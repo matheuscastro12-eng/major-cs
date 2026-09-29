@@ -52,7 +52,9 @@ export function analyzeSeries(series: SeriesResult, teams: [TTeam, TTeam], povId
   }
 
   // 2) veto / mapas
-  const mapEdge = series.maps.reduce((s, m) => s + ((me.mapPrefs[m.map] ?? 0) - (opp.mapPrefs[m.map] ?? 0)), 0) / series.maps.length;
+  const mapEdge = series.maps.length
+    ? series.maps.reduce((s, m) => s + ((me.mapPrefs[m.map] ?? 0) - (opp.mapPrefs[m.map] ?? 0)), 0) / series.maps.length
+    : 0;   // série sem mapas: sem leitura de veto (antes NaN)
   if (mapEdge < -0.8) {
     bullets.push({ icon: '🗺️', text: `${ct('O veto te deixou em maus lençóis:')} ${series.maps.map((m) => MAP_LABELS[m.map]).join(', ')} ${ct('favoreciam o adversário.')}`, tone: 'bad' });
   } else if (mapEdge > 0.8) {

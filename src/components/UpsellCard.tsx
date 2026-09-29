@@ -197,9 +197,9 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
         </div>
         {pixErr && <p style={{ color: '#e2574c', fontSize: '0.78rem', margin: '10px 0 0' }}>{pixErr}</p>}
         {pix && (
-          <div style={{ marginTop: '14px', background: 'rgba(94,216,138,.08)', border: '1px solid rgba(94,216,138,.35)', borderRadius: '6px', padding: '14px' }}>
+          <div style={{ marginTop: '14px', background: 'color-mix(in srgb, var(--c-win) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-win) 35%, transparent)', borderRadius: '6px', padding: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#5ed88a', boxShadow: '0 0 8px #5ed88a' }} />
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 8px var(--c-win)' }} />
               <b style={{ fontSize: '0.8rem', color: 'var(--em-text, #fff)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
             </div>
             {pix.qrCodeImage && (
@@ -209,7 +209,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
             )}
             {pix.brCode && (
               <button type="button" onClick={copyBr}
-                style={{ width: '100%', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'rgba(94,216,138,.2)' : 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.15)', color: 'inherit', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                style={{ width: '100%', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'color-mix(in srgb, var(--c-win) 20%, transparent)' : 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.15)', color: 'inherit', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
                 {copied ? ct('Copiado!') : ct('Copiar código Pix')}
               </button>
             )}

@@ -1,12 +1,18 @@
-// Landing page de marketing — porta fiel do ui_kits/road-to-major/landing.html do
-// design system. Hero, modos, planos (grátis x R$20 vitalício), como funciona,
-// FAQ, CTA e o modal de conta (que dispara o checkout real via Stripe).
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+// Landing page de marketing (rota /). Mesma identidade da interface nova do
+// jogo: marinho + dourado da marca, escudo, Oswald/Barlow. Hero com UMA ação
+// principal (jogar de graça), a vitrine com capturas reais de cada modo, o
+// destaque da sala do Road to Pro, planos (grátis x conta vitalícia de R$20),
+// como funciona, FAQ, CTA final e o modal de conta (checkout real: Pix/Stripe).
+// Estilos em src/styles/landing.css (só tokens).
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, Crosshair, Eye, Gauge, Gift, Globe, Layers, Play, Swords, Target, Trophy, Star } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
 import { AnnouncementTweet, TwitterLink } from './social';
+import { openPatchNotes } from './PatchNotesModal';
+import { PATCHES } from '../data/patchNotes';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
 import { login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, type PixCharge } from '../state/account';
@@ -19,14 +25,20 @@ import { fetchActiveLiveops } from '../state/liveops';
 import { weekendEventView, weekendExclusiveCard, type WeekendEventView } from '../state/weekendEvent';
 import { formatCountdown } from '../engine/ultimate/weekendEvent';
 import { useCommunityGoalPublic } from '../state/communityGoal'; // [URG-5]
+import '../styles/landing.css';
 
-const M = '/maps/';
+// capturas reais da interface do jogo (public/landing/, WebP)
+const SHOT = '/landing/';
 
+// Revela as seções abaixo da dobra ao entrar na tela. Quem já está visível no
+// carregamento nunca some; a trava de segurança (1,6s) garante que nada fica
+// escondido se o IntersectionObserver não disparar. Sem movimento liberado, o
+// CSS ignora a classe (landing.css: prefers-reduced-motion).
 function useReveal() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current) return;
-    const els = Array.from(ref.current.querySelectorAll<HTMLElement>('.rtm-reveal'));
+    const els = Array.from(ref.current.querySelectorAll<HTMLElement>('.lp-reveal'));
     els.forEach((el) => { if (el.getBoundingClientRect().top > window.innerHeight * 0.9) el.classList.add('anim'); });
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) e.target.classList.add('in'); }), { threshold: 0.08, rootMargin: '0px 0px -8% 0px' });
     els.forEach((el) => io.observe(el));
@@ -36,205 +48,267 @@ function useReveal() {
   return ref;
 }
 
-function SectionHead({ kicker, title, sub }: { kicker: string; title: string; sub?: string }) {
+function SectionHead({ kicker, title, sub, center = false, id }: { kicker?: string; title: ReactNode; sub?: string; center?: boolean; id?: string }) {
   return (
-    <div className="rtm-reveal" style={{ textAlign: 'center', marginBottom: '34px' }}>
-      <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>{kicker}</span>
-      <h2 style={{ fontFamily: 'var(--font-cond)', fontSize: '38px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-text-strong)', margin: '8px 0 0' }}>{title}</h2>
-      {sub && <p style={{ color: 'var(--rtm-dim)', fontSize: '15px', maxWidth: '560px', margin: '12px auto 0' }}>{sub}</p>}
+    <div className={`lp-head lp-reveal${center ? ' lp-head--center' : ''}`}>
+      {kicker && <span className="lp-kicker">{kicker}</span>}
+      <h2 className="lp-h2" id={id}>{title}</h2>
+      {sub && <p className="lp-lead">{sub}</p>}
     </div>
   );
 }
 
+function Wordmark() {
+  return <span className="lp-wordmark">Road to <b>Major</b></span>;
+}
+
+// Nav fixa: fica sólida quando o topo sai da tela (sentinela observada, sem
+// listener de scroll). "Criar conta · R$20" é o único CTA de cadastro com preço
+// no próprio texto (src landing-nav); some no celular pra caber o essencial.
 function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: () => void; onPlay: () => void }) {
   const [solid, setSolid] = useState(false);
+  const sentinel = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    const h = () => setSolid(window.scrollY > 40);
-    window.addEventListener('scroll', h); return () => window.removeEventListener('scroll', h);
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setSolid(!e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
   const links: [string, string][] = [['modos', 'Modos'], ['conta', 'Conta'], ['como', 'Como funciona'], ['faq', 'Perguntas']];
   return (
-    <header style={{ position: 'sticky', top: 0, zIndex: 60, background: solid ? 'rgba(24,29,35,.92)' : 'transparent', backdropFilter: solid ? 'blur(10px)' : 'none', borderBottom: `1px solid ${solid ? 'var(--rtm-border-soft)' : 'transparent'}`, transition: 'background .25s, border-color .25s' }}>
-      <div className="lp-wrap" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 22px' }}>
-        <a href="#topo" style={{ display: 'inline-flex', alignItems: 'center', gap: '9px' }}>
-          <BrandMark size={30} />
-          <span style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Road to <span style={{ color: 'var(--em-gold)' }}>Major</span></span>
-        </a>
-        <nav className="l-nav-links" style={{ display: 'flex', gap: '6px', flex: 1, justifyContent: 'center' }}>
-          {links.map(([id, lbl]) => <a key={id} href={'#' + id} style={{ color: 'var(--rtm-dim)', fontSize: '13px', fontWeight: 600, padding: '8px 12px' }}>{ct(lbl)}</a>)}
-        </nav>
-        <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: '10px' }}>
-          <Button variant="ghost" size="sm" onClick={onLogin}>{ct('Entrar')}</Button>
-          {/* funil: único CTA de cadastro da página sem preço em lugar nenhum por
-              perto (o Hero, logo abaixo, só aparece depois de rolar/carregar) —
-              mesmo padrão que já ajudou o clique em outras superfícies do jogo
-              (acct-chip-guest, UltimateSquadScreen: preço no próprio texto do
-              botão, não só num elemento vizinho). */}
-          <Button variant="ghost" size="sm" onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
-          <Button size="sm" onClick={onPlay}>{ct('Jogar agora')}</Button>
-        </span>
-      </div>
-    </header>
+    <>
+      <span ref={sentinel} aria-hidden style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 24 }} />
+      <header className="lp-nav" data-solid={solid}>
+        <div className="lp-wrap lp-nav__bar">
+          <a href="#topo" className="lp-brand" aria-label="Road to Major, início">
+            <BrandMark size={30} />
+            <Wordmark />
+          </a>
+          <nav className="lp-nav__links" aria-label={ct('Seções')}>
+            {links.map(([id, lbl]) => <a key={id} href={'#' + id}>{ct(lbl)}</a>)}
+          </nav>
+          <span className="lp-nav__actions">
+            <Button variant="ghost" size="sm" onClick={onLogin}>{ct('Entrar')}</Button>
+            <Button variant="gold" size="sm" className="lp-nav__acct" onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
+            <Button size="sm" onClick={onPlay}>{ct('Jogar agora')}</Button>
+          </span>
+        </div>
+      </header>
+    </>
   );
 }
 
-// [URG-5] META DA COMUNIDADE — barra fina acima da dobra, visível deslogado.
+// [URG-5] META DA COMUNIDADE: faixa fina acima da dobra, visível deslogado.
 // Número REAL do servidor (GET público cacheado no edge); sem dado, não renderiza.
 function CommunityGoalBar({ onPlay }: { onPlay: () => void }) {
   const week = useCommunityGoalPublic();
   if (!week) return null;
   const done = week.reached;
   return (
-    <button type="button" onClick={onPlay} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '8px 14px', border: 'none', borderBottom: '1px solid rgba(97,168,221,.25)', background: done ? 'rgba(41,196,122,.12)' : 'rgba(97,168,221,.1)', color: 'var(--rtm-text-strong)', fontSize: '13px', cursor: 'pointer', flexWrap: 'wrap' }}>
-      <span>🌍 <b>{ct('Meta da comunidade')}:</b> {week.total.toLocaleString('pt-BR')}/{week.target.toLocaleString('pt-BR')} {ct('partidas esta semana')}{done ? ` · ✅ ${ct('batida!')}` : ''}</span>
-      <span style={{ flex: '0 0 auto', width: '120px', height: '6px', borderRadius: '999px', background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
-        <span style={{ display: 'block', width: `${week.pct}%`, height: '100%', background: done ? 'var(--rtm-green-bright)' : '#61a8dd' }} />
-      </span>
-      <span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>{ct('Jogar no Ultimate')} →</span>
+    <button type="button" className="lp-notice lp-notice--goal" data-done={done} onClick={onPlay}>
+      <Globe size={16} aria-hidden />
+      <span><b>{ct('Meta da comunidade')}:</b> {week.total.toLocaleString('pt-BR')}/{week.target.toLocaleString('pt-BR')} {ct('partidas esta semana')}{done ? ` · ${ct('batida!')}` : ''}</span>
+      <span className="lp-notice__meter" aria-hidden><span style={{ width: `${week.pct}%` }} /></span>
+      <span className="lp-notice__cta">{ct('Jogar no Ultimate')} <ArrowRight size={14} aria-hidden /></span>
     </button>
   );
 }
 
 function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
   return (
-    <section id="topo" style={{ position: 'relative', overflow: 'hidden', marginTop: '-66px', paddingTop: '66px' }}>
-      <img src={M + 'mirage.jpg'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3 }} />
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(900px 500px at 50% 0, rgba(67,130,182,.25), transparent 70%), linear-gradient(180deg, rgba(13,17,22,.7) 0%, rgba(24,29,35,.96) 78%, var(--rtm-bg) 100%)' }} />
-      <div style={{ position: 'relative' }}><CommunityGoalBar onPlay={onPlay} /></div>
-      <div className="lp-wrap" style={{ position: 'relative', textAlign: 'center', padding: '56px 22px 44px' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '999px', background: 'rgba(216,169,67,.12)', border: '1px solid var(--rtm-gold-soft)', color: 'var(--rtm-gold)', fontSize: '12px', fontWeight: 700, letterSpacing: '.5px' }}>
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--rtm-green-bright)' }} /> {ct('Beta aberto, joga de graça no navegador')}
-        </span>
-        <h1 className="l-hero-h1" style={{ fontFamily: 'var(--font-cond)', fontSize: '74px', fontWeight: 700, letterSpacing: '4px', margin: '18px 0 0', textTransform: 'uppercase', color: 'var(--rtm-text-strong)', lineHeight: 0.98, textShadow: '0 0 40px rgba(97,168,221,.35)' }}>
-          {ct('Monte o time dos sonhos')}<br /><span style={{ color: 'var(--em-gold)' }}>{ct('de todas as eras do CS')}</span>
-        </h1>
-        <p style={{ color: 'var(--rtm-dim)', fontSize: '17px', maxWidth: '620px', margin: '18px auto 0', lineHeight: 1.55 }}>
-          {ct('Sorteie lendas de 1.6, Source, CS:GO e CS2. Escolha cinco, contrate o coach e leve o seu elenco até o título do Major. Fase suíça, playoffs, veto de mapa e scoreboard no estilo HLTV.')}
-        </p>
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '28px', flexWrap: 'wrap' }}>
-          <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')}</Button>
-          <Button size="big" variant="gold" onClick={onAccount}>{ct('Save na nuvem por R$20')}</Button>
+    <section id="topo" className="lp-hero" aria-labelledby="lp-hero-title">
+      <div className="lp-wrap lp-hero__grid">
+        <div className="lp-hero__copy">
+          <span className="lp-badge"><span className="lp-badge__live" aria-hidden /> {ct('Beta aberto, joga de graça no navegador')}</span>
+          <h1 className="lp-h1" id="lp-hero-title">
+            {ct('Seu time de CS')} <span>{ct('rumo ao Major')}</span>
+          </h1>
+          <p className="lp-hero__sub">
+            {ct('Manager e simulador de Counter-Strike no navegador. Comande uma org, viva a carreira de pro ou dispute a ranqueada online, no PC e no celular.')}
+          </p>
+          <div className="lp-hero__cta">
+            <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
+            {/* funil: o CTA pago do Hero é a maior exposição do funil (paywall_view
+                src=landing). Continua aqui, mas como link: não disputa com o jogar.
+                Preço + "pagamento único" no próprio texto (a reassurance que já
+                ajudou nas outras superfícies) e o contador REAL de Fundadores. */}
+            <div className="lp-offer">
+              <button type="button" className="lp-textlink" onClick={onAccount}>{ct('Criar conta')} · R$20</button>
+              <span>{ct('Pagamento único · sem mensalidade')}</span>
+            </div>
+            <FounderCounter />
+          </div>
         </div>
-        {/* funil (28d): o CTA do Hero é a maior exposição do funil inteiro
-            (paywall_view src=landing, ~2,5 mil sids/28d — ~23% de tudo), mas o
-            botão só diz "R$20", sem deixar claro que é pagamento único — a
-            mesma lacuna que o acct-chip-guest e o home-rtp tinham antes de
-            ganhar essa reassurance (dado real já mostrou que ela ajuda nas
-            outras superfícies). Texto abaixo do botão, sem mexer no CTA em si. */}
-        <p style={{ color: 'var(--rtm-faint)', fontSize: '12px', margin: '10px 0 0' }}>
-          {ct('Pagamento único · sem mensalidade')}
-        </p>
-        {/* funil: dado real (rtm_accounts) mostra a vaga de Fundador quase no fim,
-            mas o contador só aparecia depois de rolar até o Plano ou abrir o modal
-            — nunca no CTA de maior exposição do funil (Hero da landing, ~25% de
-            todo o paywall_view). Mesmo componente, mesma prova social real. */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
-          <FounderCounter />
-        </div>
-        <div style={{ display: 'flex', gap: '22px', justifyContent: 'center', marginTop: '24px', flexWrap: 'wrap', color: 'var(--rtm-faint)', fontSize: '13px' }}>
-          <span><b style={{ color: 'var(--rtm-text-strong)' }}>16</b> {ct('times')}</span>
-          <span><b style={{ color: 'var(--rtm-text-strong)' }}>5</b> {ct('eras de CS')}</span>
-          <span><b style={{ color: 'var(--rtm-text-strong)' }}>3</b> {ct('modos de jogo')}</span>
-          <span>{ct('Dados de HLTV e Liquipedia')}</span>
+        <div className="lp-hero__stage">
+          <div className="lp-screen">
+            <img
+              src={SHOT + 'hero-carreira-1440.webp'}
+              srcSet={`${SHOT}hero-carreira-800.webp 800w, ${SHOT}hero-carreira-1440.webp 1440w`}
+              sizes="(min-width: 1180px) 640px, (min-width: 960px) 52vw, calc(100vw - 32px)"
+              width={1440}
+              height={900}
+              fetchPriority="high"
+              decoding="async"
+              alt={ct('Tela da Carreira no Road to Major: próximo jogo, relatório do adversário, finanças e ranking mundial')}
+            />
+          </div>
+          <div className="lp-phone">
+            <img src={SHOT + 'rtp-celular.webp'} width={390} height={565} decoding="async" alt={ct('Road to Pro no celular: a próxima série e o botão de jogar')} />
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-function Modes({ onPlay }: { onPlay: () => void }) {
-  const [tab, setTab] = useState(0);
-  const MODES = [
-    { id: 'career', tone: 'var(--rtm-gold)', kicker: 'Campanha longa', title: 'Carreira', img: M + 'nuke.jpg', desc: 'Funde a sua organização, monte o elenco, gerencie transferências e dispute uma temporada inteira rumo ao título.', bullets: ['Hub da organização com química do time', 'Mercado de transferências com orçamento', 'Perfis de jogador e de time clicáveis', 'Killfeed ao vivo na partida'] },
-    { id: 'ultimate', tone: 'var(--rtm-green-bright)', kicker: 'Competitivo · Online', title: 'Ultimate', img: M + 'ancient.jpg', desc: 'Abra pacotes, monte seu elenco dos jogadores reais de 2026 e dispute a ranqueada online contra outros managers. Suba de divisão e prove o seu time.', bullets: ['Duelos 1v1 online de verdade', 'Fila ranqueada com divisões (Bronze → Elite)', 'Coleção, evolução de cartas e mercado', 'Temporadas, missões e recompensas'] },
-    { id: 'draft', tone: 'var(--em-gold)', kicker: 'Partida rápida', title: 'Draft', img: M + 'mirage.jpg', desc: 'Gire a roleta, pegue uma lenda de cada elenco histórico e jogue um Major de uma sentada só. Rápido e diferente toda vez.', bullets: ['Roleta de sorteio estilo abertura de caixa', 'Cinco escolhas mais o coach', 'Pick Em nas outras partidas da chave', 'Fase suíça completa com playoffs'] },
+// fatos conferidos no código, nada inventado sobre o negócio:
+// 6 modos = ModeId do shell (ds/shell/types.ts, fora o Início); 4 versões =
+// GAME_ORDER (data/teams.ts); 16 times = usuário + 15 do pool (engine/swiss.ts);
+// HLTV e Liquipedia = fonte do dataset (README, área admin).
+function Facts() {
+  const FACTS: [string, string, boolean?][] = [
+    ['6', 'modos de jogo'],
+    ['4', 'versões do CS, do 1.6 ao CS2'],
+    ['16', 'times por Major'],
+    ['HLTV + Liquipedia', 'fonte dos dados', true],
   ];
-  const m = MODES[tab];
   return (
-    <section id="modos" className="lp-wrap" style={{ padding: '70px 22px' }}>
-      <SectionHead kicker={ct('Três jeitos de jogar')} title={ct('Escolha o seu modo')} />
-      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '22px', flexWrap: 'wrap' }}>
-        {MODES.map((x, i) => (
-          <button key={x.id} type="button" onClick={() => setTab(i)} style={{ cursor: 'pointer', borderRadius: '999px', padding: '9px 22px', fontFamily: 'var(--font-cond)', fontSize: '15px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', border: `1px solid ${i === tab ? x.tone : 'var(--rtm-border)'}`, background: i === tab ? x.tone : 'transparent', color: i === tab ? '#06121d' : 'var(--rtm-dim)', transition: 'all .15s' }}>{ct(x.title)}</button>
+    <div className="lp-wrap">
+      <dl className="lp-facts">
+        {FACTS.map(([v, l, text]) => (
+          <div key={l}><dt>{ct(l)}</dt><dd className={text ? 'is-text' : undefined}>{v}</dd></div>
         ))}
+      </dl>
+    </div>
+  );
+}
+
+type ModeCard = { id: string; icon: ReactNode; kicker: string; title: string; desc: string; meta: ReactNode; img: string; alt: string; lead?: boolean };
+
+function Modes({ onPlay }: { onPlay: () => void }) {
+  const MODES: ModeCard[] = [
+    { id: 'carreira', lead: true, icon: <Trophy size={18} />, kicker: 'Destaque', title: 'Carreira', desc: 'Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.', meta: ct('1 jogador · campanha'), img: 'modo-carreira.webp', alt: 'Elenco da Carreira com os titulares, atributos, OVR e valor de mercado' },
+    { id: 'rtp', lead: true, icon: <Crosshair size={18} />, kicker: 'Demo grátis', title: 'Road to Pro', desc: 'Você não treina o time: você é o jogador. Treine, cuide da sua vida de pro e brilhe nos momentos decisivos.', meta: <><b>{ct('Demo grátis')}</b> · {ct('carreira completa na conta vitalícia')}</>, img: 'modo-rtp.webp', alt: 'Visão geral do Road to Pro: próxima série, energia do jogador, finanças e ranking mundial' },
+    { id: 'ultimate', icon: <Star size={18} />, kicker: 'Competitivo · Online', title: 'Ultimate', desc: 'Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.', meta: ct('Online · ranqueada'), img: 'modo-ultimate.webp', alt: 'Squad do Ultimate com as cartas dos jogadores e a química do time' },
+    { id: 'online', icon: <Globe size={18} />, kicker: 'Ranqueada', title: 'Online', desc: 'Ranqueada contra outros managers, duelo privado com amigos e o Major da Semana.', meta: ct('Com o seu squad do Ultimate'), img: 'modo-online.webp', alt: 'Ranqueada online com as divisões do Bronze ao Elite' },
+    { id: 'draft', icon: <Layers size={18} />, kicker: 'Partida rápida', title: 'Draft', desc: 'Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.', meta: ct('1 jogador · ~15 min'), img: 'modo-draft.webp', alt: 'Draft do elenco: escolha um jogador de um elenco histórico sorteado' },
+    { id: 'diario', icon: <CalendarDays size={18} />, kicker: 'Todo dia', title: 'Diário', desc: 'Quatro desafios por dia, os mesmos pra todo mundo. Grátis, sem conta.', meta: ct('1 jogador · 2 min'), img: 'modo-diario.webp', alt: 'Os quatro desafios do Diário: Lines Históricas, Quem é o Pro, O Impostor e Placar do Clássico' },
+  ];
+  return (
+    <section id="modos" className="lp-section" aria-labelledby="lp-modos-title">
+      <div className="lp-wrap">
+        <SectionHead id="lp-modos-title" center title={ct('Seis modos, um jogo só')} sub={ct('Tudo na mesma interface, com o trilho de modos à mão. Estas são telas reais do jogo.')} />
+        <div className="lp-modes">
+          {MODES.map((m) => (
+            <article key={m.id} className={`lp-mode lp-reveal${m.lead ? ' lp-mode--lead' : ''}`} aria-labelledby={`lp-mode-${m.id}`}>
+              <div className="lp-mode__shot">
+                <img src={SHOT + m.img} width={960} height={600} loading="lazy" decoding="async" alt={ct(m.alt)} />
+              </div>
+              <div className="lp-mode__body">
+                <div className="lp-mode__top">
+                  <span className="lp-mode__icon" aria-hidden>{m.icon}</span>
+                  <span className="lp-kicker">{ct(m.kicker)}</span>
+                </div>
+                <h3 id={`lp-mode-${m.id}`}>{ct(m.title)}</h3>
+                <p>{ct(m.desc)}</p>
+                <span className="lp-mode__meta">{m.meta}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="lp-modes__cta lp-reveal">
+          <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
+        </div>
       </div>
-      <div className="rtm-reveal in l-grid2" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '20px', alignItems: 'stretch', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', overflow: 'hidden' }}>
-        <div style={{ position: 'relative', minHeight: '300px', overflow: 'hidden' }}>
-          <img key={m.img} src={m.img} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-          <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(13,17,22,.2), rgba(13,17,22,.85))' }} />
-          <span style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: m.tone }} />
-          <span style={{ position: 'absolute', bottom: '20px', left: '22px', fontFamily: 'var(--font-cond)', fontSize: '40px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct(m.title)}</span>
+    </section>
+  );
+}
+
+// A sala do Road to Pro: o diferencial que merece seção própria.
+function RtpSpotlight() {
+  const POINTS: [ReactNode, string, string][] = [
+    [<Eye size={18} />, 'Nada escondido', 'Cada escolha mostra a chance e de onde ela vem: base, mira, cansaço, tendência do adversário, OVR de quem está do outro lado.'],
+    [<Gauge size={18} />, 'Você decide e executa', 'Depois de escolher, o seu tempo de reação ainda move as odds em até 8%, pra cima ou pra baixo.'],
+    [<Target size={18} />, 'Demo grátis', 'A peneira e as três primeiras semanas são de graça. A carreira inteira vem com a conta vitalícia.'],
+  ];
+  return (
+    <section id="road-to-pro" className="lp-section" aria-labelledby="lp-rtp-title">
+      <div className="lp-wrap lp-spot">
+        <div className="lp-spot__copy lp-reveal">
+          <span className="lp-kicker"><Crosshair size={14} aria-hidden /> Road to Pro</span>
+          <h2 className="lp-h2" id="lp-rtp-title">{ct('O % que você vê')} <span>{ct('é o % que rola')}</span></h2>
+          <p className="lp-lead">{ct('No Road to Pro você é o jogador. Nos momentos-chave da partida, o jogo abre a conta na sua frente e você escolhe a jogada.')}</p>
+          <ul className="lp-points">
+            {POINTS.map(([icon, t, d]) => (
+              <li key={t}><span aria-hidden>{icon}</span><div><b>{ct(t)}</b><p>{ct(d)}</p></div></li>
+            ))}
+          </ul>
         </div>
-        <div style={{ padding: '26px 26px 26px 6px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1.4px', textTransform: 'uppercase', color: m.tone }}>{ct(m.kicker)}</span>
-          <p style={{ color: 'var(--rtm-text)', fontSize: '15px', lineHeight: 1.55, margin: '10px 0 16px' }}>{ct(m.desc)}</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
-            {m.bullets.map((b, i) => <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: 'var(--rtm-dim)' }}><span style={{ color: m.tone, fontWeight: 800 }}>✓</span> {ct(b)}</span>)}
+        <figure className="lp-spot__media lp-reveal">
+          <div className="lp-screen lp-screen--gold">
+            <img src={SHOT + 'modo-rtp-sala.webp'} width={960} height={800} loading="lazy" decoding="async" alt={ct('Momento-chave do Road to Pro: round de pistola com três jogadas, cada uma com a sua chance em porcentagem e os modificadores que a formam')} />
           </div>
-          <Button style={{ marginTop: '22px', alignSelf: 'flex-start' }} onClick={onPlay}>{ct('Abrir o jogo')}</Button>
-        </div>
+          <figcaption>{ct('Round de pistola numa partida real: três jogadas, três chances.')}</figcaption>
+        </figure>
       </div>
     </section>
   );
 }
 
 function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
-  const FREE = ['Todos os modos liberados', 'Save no navegador (localStorage)', 'Ranqueada online do Ultimate', 'Roleta, draft e Major completos'];
-  const PAID = ['Todo o gameplay continua gratuito', 'Save na nuvem, joga de qualquer lugar', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil', 'Pagamento único, sem mensalidade'];
+  const FREE = ['Carreira, Ultimate, Draft, Diário e Online completos', 'Ranqueada online do Ultimate', 'Road to Pro: demo com a peneira e 3 semanas', 'Save neste navegador'];
+  const PAID = ['Road to Pro completo, com a Série do Dia', 'Save na nuvem: joga no PC e no celular', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil'];
   return (
-    <section id="conta" className="lp-wrap" style={{ padding: '60px 22px' }}>
-      <SectionHead kicker={ct('Conta e save')} title={ct('Grátis pra jogar, conta pra ir além')} sub={ct('Você joga tudo de graça com save no navegador — incluindo a ranqueada online do Ultimate. A conta guarda o seu progresso na nuvem, libera a compra de coins e mais.')} />
-      <div className="rtm-reveal l-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.05fr', gap: '18px', alignItems: 'stretch', maxWidth: '880px', margin: '0 auto' }}>
-        <div style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', padding: '26px 24px', display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-dim)' }}>{ct('Sem conta')}</span>
-          <div style={{ fontFamily: 'var(--font-cond)', fontSize: '44px', fontWeight: 800, color: 'var(--rtm-text-strong)', margin: '6px 0 2px' }}>R$0</div>
-          <span style={{ fontSize: '13px', color: 'var(--rtm-faint)', marginBottom: '18px' }}>{ct('Joga agora, save só neste navegador')}</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
-            {FREE.map((f, i) => <span key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--rtm-dim)' }}><span style={{ color: 'var(--em-gold)', fontWeight: 800 }}>✓</span>{ct(f)}</span>)}
-          </div>
-          <Button variant="ghost" style={{ marginTop: '22px', width: '100%' }} onClick={onPlay}>{ct('Jogar de graça')}</Button>
+    <section id="conta" className="lp-section" aria-labelledby="lp-conta-title">
+      <div className="lp-wrap">
+        <SectionHead id="lp-conta-title" center kicker={ct('Conta e save')} title={ct('Grátis pra jogar, conta pra ir além')} sub={ct('Sem conta você joga de graça com save no navegador, incluindo a ranqueada online. A conta vitalícia guarda tudo na nuvem e libera o Road to Pro completo.')} />
+        <div className="lp-plans lp-reveal">
+          <article className="lp-plan" aria-labelledby="lp-plan-free">
+            <h3 className="lp-plan__name" id="lp-plan-free">{ct('Sem conta')}</h3>
+            <div className="lp-plan__price"><strong>R$0</strong><span>{ct('pra sempre')}</span></div>
+            <p className="lp-plan__note">{ct('Joga agora, save só neste navegador')}</p>
+            <ul className="lp-checks">
+              {FREE.map((f) => <li key={f}><Check size={16} aria-hidden />{ct(f)}</li>)}
+            </ul>
+            <Button variant="secondary" block onClick={onPlay}>{ct('Jogar agora, de graça')}</Button>
+          </article>
+          <article className="lp-plan lp-plan--paid" aria-labelledby="lp-plan-paid">
+            <h3 className="lp-plan__name" id="lp-plan-paid">{ct('Conta vitalícia')}</h3>
+            <div className="lp-plan__price"><strong>R$20</strong><span>{ct('uma vez, sem assinatura')}</span></div>
+            <p className="lp-plan__note">{ct('Pix ou cartão · acesso imediato')}</p>
+            {/* prova social REAL: contagem de Fundadores do servidor (falhou? não mostra nada) */}
+            <FounderCounter />
+            <ul className="lp-checks">
+              {PAID.map((f) => <li key={f}><Check size={16} aria-hidden /><b>{ct(f)}</b></li>)}
+            </ul>
+            <Button variant="gold" block onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
+          </article>
         </div>
-        <div style={{ position: 'relative', background: 'linear-gradient(160deg, rgba(216,169,67,.12), var(--rtm-panel))', border: '1px solid var(--rtm-gold-soft)', borderRadius: '12px', padding: '26px 24px', display: 'flex', flexDirection: 'column', boxShadow: '0 0 0 1px rgba(216,169,67,.18), 0 12px 36px rgba(0,0,0,.4)' }}>
-          <span style={{ position: 'absolute', top: '18px', right: '20px', fontSize: '10px', fontWeight: 800, letterSpacing: '.8px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '4px 10px', borderRadius: '999px' }}>{ct('Recomendado')}</span>
-          <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>{ct('Conta com save na nuvem')}</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '6px 0 2px' }}>
-            <span style={{ fontFamily: 'var(--font-cond)', fontSize: '44px', fontWeight: 800, color: 'var(--rtm-gold)' }}>R$20</span>
-            <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('uma vez, sem assinatura')}</span>
-          </div>
-          <span style={{ fontSize: '13px', color: 'var(--rtm-faint)', marginBottom: '10px' }}>{ct('Persistência enquanto o serviço estiver em operação')}</span>
-          {/* prova social REAL: contagem de Fundadores do servidor (falhou? não mostra nada) */}
-          <FounderCounter style={{ marginBottom: '14px' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
-            {PAID.map((f, i) => <span key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: i === 0 ? 'var(--rtm-dim)' : 'var(--rtm-text)' }}><span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>✓</span>{ct(f)}</span>)}
-          </div>
-          <Button variant="gold" style={{ marginTop: '22px', width: '100%' }} onClick={onAccount}>{ct('Ativar conta com save')}</Button>
-        </div>
+        <p className="lp-plans__foot lp-reveal">
+          {ct('Os R$20 cobrem conta, banco de dados e persistência em nuvem enquanto o serviço estiver em operação, sem mensalidade.')}
+        </p>
       </div>
-      <p className="rtm-reveal" style={{ textAlign: 'center', color: 'var(--rtm-faint)', fontSize: '12.5px', marginTop: '18px' }}>
-        {ct('O jogo completo é gratuito. Os R$20 cobrem conta, banco de dados e persistência em nuvem, sem mensalidade.')}
-      </p>
     </section>
   );
 }
 
 function How() {
-  const STEPS: [string, string, string][] = [
-    ['01', 'Crie o seu manager', 'Nick, idade, país e a cor da sua organização. Leva dez segundos.'],
-    ['02', 'Monte o elenco', 'Sorteie elencos históricos e escolha uma lenda de cada era, mais o coach.'],
-    ['03', 'Dispute o Major', 'Veto de mapa, killfeed ao vivo e scoreboard. Vença a suíça e os playoffs.'],
-    ['04', 'Dispute a ranqueada', 'No Ultimate você joga online contra outros managers e sobe de divisão, do Bronze ao Elite.'],
+  const STEPS: [string, string][] = [
+    ['Crie o seu manager', 'Nick, idade, país e a cor da sua organização. Leva dez segundos.'],
+    ['Escolha o modo', 'Carreira, Road to Pro, Ultimate, Draft, Diário ou Online. Dá pra trocar a qualquer hora.'],
+    ['Jogue a partida', 'Veto de mapa, killfeed ao vivo e scoreboard no estilo HLTV.'],
+    ['Suba no ranking', 'Na ranqueada online você enfrenta outros managers e sobe do Bronze ao Elite.'],
   ];
   return (
-    <section id="como" className="lp-wrap" style={{ padding: '60px 22px' }}>
-      <SectionHead kicker={ct('Começar é simples')} title={ct('Como funciona')} />
-      <div className="rtm-reveal l-grid3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
-        {STEPS.map(([n, t, d]) => (
-          <div key={n} style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', padding: '22px 18px' }}>
-            <div style={{ fontFamily: 'var(--font-cond)', fontSize: '36px', fontWeight: 800, color: 'var(--em-gold)', lineHeight: 1 }}>{n}</div>
-            <h3 style={{ fontFamily: 'var(--font-cond)', fontSize: '19px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', margin: '12px 0 6px' }}>{ct(t)}</h3>
-            <p style={{ color: 'var(--rtm-dim)', fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>{ct(d)}</p>
-          </div>
-        ))}
+    <section id="como" className="lp-section" aria-labelledby="lp-como-title">
+      <div className="lp-wrap">
+        <SectionHead id="lp-como-title" title={ct('Como funciona')} />
+        <ol className="lp-steps lp-reveal">
+          {STEPS.map(([t, d]) => (
+            <li key={t}><div><h3>{ct(t)}</h3><p>{ct(d)}</p></div></li>
+          ))}
+        </ol>
       </div>
     </section>
   );
@@ -242,30 +316,38 @@ function How() {
 
 function Faq() {
   const Q: [string, string][] = [
-    ['Preciso pagar pra jogar?', 'Não. Todos os modos estão liberados de graça — incluindo a ranqueada online do Ultimate — e o save fica no seu navegador. A conta de R$20 serve pra guardar o progresso na nuvem e liberar recursos extras.'],
-    ['O que a conta me dá?', 'Save na nuvem pra jogar de qualquer aparelho, a compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. Nenhum modo é vendido: todo o gameplay é gratuito.'],
-    ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça — a conta só entra pra salvar na nuvem e comprar coins.'],
+    ['Preciso pagar pra jogar?', 'Não. Carreira, Ultimate, Draft, Diário e Online são de graça, incluindo a ranqueada online, e o Road to Pro tem demo grátis. O save fica no seu navegador. A conta de R$20 guarda o progresso na nuvem e libera o Road to Pro completo.'],
+    ['O que a conta vitalícia me dá?', 'O Road to Pro completo com a Série do Dia, save na nuvem pra jogar no PC e no celular, compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. É um pagamento único, sem mensalidade.'],
+    ['Funciona no celular?', 'Sim. O jogo roda no navegador do celular com a mesma interface do PC, e dá pra instalar na tela inicial como um app.'],
+    ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça: a conta só entra pra salvar na nuvem e comprar coins.'],
     ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
     ['Como pago os R$20?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
-    ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, cobrindo as cinco eras do Counter-Strike.'],
+    ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, do CS 1.6 ao CS2.'],
   ];
   const [open, setOpen] = useState(0);
   return (
-    <section id="faq" className="lp-wrap" style={{ padding: '60px 22px', maxWidth: '820px' }}>
-      <SectionHead kicker={ct('Tirando dúvidas')} title={ct('Perguntas frequentes')} />
-      <div className="rtm-reveal" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {Q.map(([q, a], i) => {
-          const on = open === i;
-          return (
-            <div key={i} style={{ background: 'var(--rtm-panel)', border: `1px solid ${on ? 'var(--em-gold)' : 'var(--rtm-border-soft)'}`, borderRadius: 'var(--rtm-radius)', overflow: 'hidden' }}>
-              <button type="button" onClick={() => setOpen(on ? -1 : i)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', background: 'none', border: 'none', cursor: 'pointer', padding: '16px 18px', textAlign: 'left' }}>
-                <span style={{ fontFamily: 'var(--font-cond)', fontSize: '17px', fontWeight: 700, color: 'var(--rtm-text-strong)' }}>{ct(q)}</span>
-                <span style={{ color: 'var(--em-gold)', fontSize: '20px', fontWeight: 700, transform: on ? 'rotate(45deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>+</span>
-              </button>
-              {on && <div style={{ padding: '0 18px 16px', color: 'var(--rtm-dim)', fontSize: '14px', lineHeight: 1.6 }}>{ct(a)}</div>}
-            </div>
-          );
-        })}
+    <section id="faq" className="lp-section" aria-labelledby="lp-faq-title">
+      <div className="lp-wrap lp-faq">
+        <div className="lp-faq__intro lp-reveal">
+          <h2 className="lp-h2" id="lp-faq-title">{ct('Perguntas frequentes')}</h2>
+          <p className="lp-lead">{ct('O essencial sobre modos, conta e pagamento. Ainda com dúvida? Chama no X: @castroomath.')}</p>
+        </div>
+        <div className="lp-faq__list lp-reveal">
+          {Q.map(([q, a], i) => {
+            const on = open === i;
+            return (
+              <div key={q} className="lp-qa" data-open={on}>
+                <h3>
+                  <button type="button" className="lp-qa__btn" id={`lp-q-${i}`} aria-expanded={on} aria-controls={`lp-a-${i}`} onClick={() => setOpen(on ? -1 : i)}>
+                    <span>{ct(q)}</span>
+                    <ChevronDown size={20} aria-hidden />
+                  </button>
+                </h3>
+                <div className="lp-qa__panel" id={`lp-a-${i}`} role="region" aria-labelledby={`lp-q-${i}`} hidden={!on}>{ct(a)}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
@@ -273,28 +355,26 @@ function Faq() {
 
 function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
   return (
-    <section className="lp-wrap" style={{ padding: '40px 22px 70px' }}>
-      <div className="rtm-reveal" style={{ position: 'relative', overflow: 'hidden', borderRadius: '14px', border: '1px solid var(--rtm-gold-soft)', textAlign: 'center', padding: '46px 26px' }}>
-        <img src={M + 'nuke.jpg'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.22 }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(700px 300px at 50% 0, rgba(216,169,67,.18), transparent 70%), rgba(13,17,22,.7)' }} />
-        <div style={{ position: 'relative' }}>
+    <section className="lp-section lp-section--last" aria-labelledby="lp-final-title">
+      <div className="lp-wrap">
+        <div className="lp-final lp-reveal">
+          <img src="/maps/nuke.jpg" alt="" loading="lazy" decoding="async" width={300} height={168} />
           <BrandMark size={56} />
-          <h2 style={{ fontFamily: 'var(--font-cond)', fontSize: '44px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)', margin: '14px 0 8px', lineHeight: 1 }}>{ct('O título não é dado, é conquistado')}</h2>
-          <p style={{ color: 'var(--rtm-dim)', fontSize: '16px', maxWidth: '520px', margin: '0 auto 24px' }}>{ct('Comece de graça agora. Quando quiser salvar tudo e disputar o ranking, é só criar a sua conta.')}</p>
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Button size="big" onClick={onPlay}>{ct('Jogar agora')}</Button>
-            {/* funil: CTA final da página (depois de Modos/Como funciona/FAQ) —
-                mesmo padrão do Nav acima: preço no texto do botão, não só na
-                seção de Planos que já ficou pra trás na rolagem. */}
-            <Button size="big" variant="gold" onClick={onAccount}>{ct('Ativar save na nuvem')} · R$20</Button>
+          <h2 className="lp-h2" id="lp-final-title">{ct('O título não é dado, é conquistado')}</h2>
+          <p className="lp-lead">{ct('Comece de graça agora. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')}</p>
+          <div className="lp-final__cta">
+            <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
+            {/* funil: CTA final da página, com o preço no texto do botão (a seção de
+                planos já ficou pra trás na rolagem). src landing-final. */}
+            <Button size="big" variant="gold" onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
           </div>
         </div>
+        <footer className="lp-footer">
+          <span className="lp-footer__brand"><BrandMark size={22} /> Road to Major</span>
+          <p>{ct('Produto comercial independente, não afiliado ou endossado pela Valve, HLTV, Liquipedia, equipes ou jogadores.')}</p>
+          <LegalLinks />
+        </footer>
       </div>
-      <footer className="landing-legal-footer">
-        <span className="landing-footer-brand"><BrandMark size={22} /> Road to Major</span>
-        <span>{ct('Produto comercial independente, não afiliado ou endossado pela Valve, HLTV, Liquipedia, equipes ou jogadores.')}</span>
-        <LegalLinks />
-      </footer>
     </section>
   );
 }
@@ -486,7 +566,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <FounderCounter style={{ marginTop: '8px' }} />
         </div>
       )}
-      {info && mode !== 'signup' && <p style={{ color: '#5ed88a', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
+      {info && mode !== 'signup' && <p style={{ color: 'var(--c-win)', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
       {mode !== 'reset' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
@@ -579,9 +659,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : ct('Entrar')}</Button>
       ) : null}
       {pix && (
-        <div style={{ marginTop: '14px', background: 'rgba(94,216,138,.08)', border: '1px solid rgba(94,216,138,.35)', borderRadius: '6px', padding: '14px' }}>
+        <div style={{ marginTop: '14px', background: 'color-mix(in srgb, var(--c-win) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-win) 35%, transparent)', borderRadius: '6px', padding: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#5ed88a', boxShadow: '0 0 8px #5ed88a', animation: 'pulse 1.4s infinite' }} />
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 8px var(--c-win)', animation: 'pulse 1.4s infinite' }} />
             <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
           </div>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
@@ -602,7 +682,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
               <textarea readOnly value={pix.charge.brCode} rows={3} onClick={(e) => (e.target as HTMLTextAreaElement).select()}
                 style={{ ...input, fontFamily: 'monospace', fontSize: '0.72rem', resize: 'none', wordBreak: 'break-all' }} />
               <button type="button" onClick={copyBr}
-                style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'rgba(94,216,138,.2)' : 'var(--em-panel-2)', border: '1px solid var(--em-border)', color: 'var(--em-text)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'color-mix(in srgb, var(--c-win) 20%, transparent)' : 'var(--em-panel-2)', border: '1px solid var(--em-border)', color: 'var(--em-text)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
                 {copied ? ct('Copiado!') : ct('Copiar código Pix')}
               </button>
             </>
@@ -662,17 +742,74 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   );
 }
 
-// banda de novidades: o tweet de anúncio do @castroomath como prova social, logo
-// abaixo dos modos e antes do plano (momento de decisão).
-function TweetBand() {
+// Novidades: o tweet de anúncio do @castroomath como prova social, mas sem
+// depender dele. O cartão com as últimas notas do jogo (patchNotes) aparece na
+// hora; o widget do X só é carregado quando a seção entra na tela e só troca o
+// cartão se renderizar em até 3,5s. Bloqueador, rede lenta ou falha: fica o
+// cartão, nunca um buraco.
+const X_PROFILE = 'https://x.com/castroomath';
+
+function NewsCard() {
+  const patch = PATCHES[0];
+  if (!patch) return null;
   return (
-    <section id="novidades" className="lp-wrap" style={{ padding: '50px 22px', textAlign: 'center' }}>
-      <div className="rtm-reveal" style={{ maxWidth: '600px', margin: '0 auto' }}>
-        <div style={{ fontSize: '11px', letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800, marginBottom: '6px' }}>{ct('Acompanhe o projeto')}</div>
-        <h2 style={{ fontFamily: 'var(--font-cond)', fontSize: '30px', textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-text-strong)', margin: '0 0 6px' }}>{ct('Novidades direto do X')}</h2>
-        <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', margin: '0 0 22px' }}>{ct('Updates, bastidores e o anúncio oficial do Road to Major.')}</p>
-        <AnnouncementTweet />
-        <div style={{ marginTop: '20px' }}><TwitterLink /></div>
+    <article className="lp-newscard" aria-labelledby="lp-newscard-title">
+      <div className="lp-newscard__head">
+        <h3 id="lp-newscard-title">{patch.title}</h3>
+        <span>{patch.date}</span>
+      </div>
+      <ul className="lp-newscard__list">
+        {patch.items.slice(0, 3).map((it) => (
+          <li key={it.text}><b>{it.area}</b> {it.text}</li>
+        ))}
+      </ul>
+      <div className="lp-newscard__foot">
+        <button type="button" className="lp-textlink" onClick={openPatchNotes}>{ct('Ver todas as novidades')}</button>
+        <a className="lp-xbtn" href={X_PROFILE} target="_blank" rel="noreferrer">{ct('Siga @castroomath no X')} <ArrowUpRight size={16} aria-hidden /></a>
+      </div>
+    </article>
+  );
+}
+
+function NewsBand() {
+  const slot = useRef<HTMLDivElement>(null);
+  const embed = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'ready' | 'fallback'>('idle');
+  useEffect(() => {
+    const el = slot.current;
+    if (!el || phase !== 'idle') return;
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setPhase('loading'); io.disconnect(); } }, { rootMargin: '200px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [phase]);
+  useEffect(() => {
+    if (phase !== 'loading') return;
+    const started = Date.now();
+    const t = window.setInterval(() => {
+      const frame = embed.current?.querySelector('iframe');
+      const rendered = !!frame && frame.getBoundingClientRect().height > 120 && getComputedStyle(frame).visibility !== 'hidden';
+      // só troca se a seção não estiver acima da tela: crescer ali empurraria o
+      // que a pessoa está lendo (ex.: pulou pro FAQ pela nav)
+      const safe = (slot.current?.getBoundingClientRect().top ?? -1) >= 0;
+      if (rendered && safe) { setPhase('ready'); window.clearInterval(t); }
+      else if (Date.now() - started > 3500) { setPhase('fallback'); window.clearInterval(t); }
+    }, 250);
+    return () => window.clearInterval(t);
+  }, [phase]);
+  const embedOn = phase === 'loading' || phase === 'ready';
+  return (
+    <section id="novidades" className="lp-section" aria-labelledby="lp-news-title">
+      <div className="lp-wrap lp-news">
+        <SectionHead id="lp-news-title" center title={ct('Novidades')} sub={ct('O que mudou no jogo por último. Bastidores e avisos saem primeiro no X.')} />
+        <div ref={slot} className="lp-news__slot lp-reveal" data-phase={phase}>
+          {phase !== 'ready' && <NewsCard />}
+          {embedOn && (
+            <div ref={embed} className="lp-news__embed" data-ready={phase === 'ready'} inert={phase !== 'ready'}>
+              <AnnouncementTweet />
+            </div>
+          )}
+        </div>
+        {phase === 'ready' && <TwitterLink />}
       </div>
     </section>
   );
@@ -682,20 +819,20 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
   const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar OU clique numa trava dentro do app: pula a landing e abre direto o cadastro
   const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
   const ref = useReveal();
-  // funil: CTA da landing abrindo o modal de conta — first-touch, então quem
+  // funil: CTA da landing abrindo o modal de conta. first-touch, então quem
   // chegou de uma trava (home-rtp, wl-lock...) mantém a origem original.
-  // src por botão (28d): os 4 CTAs de cadastro da página (Nav, Hero, Pricing,
-  // FinalCta) caíam todos no mesmo 'landing' — 3181 paywall_view mas só 32
-  // checkout_open, sem dar pra saber qual CTA puxa o funil. Separa a atribuição
-  // por posição pra próxima iteração enxergar isso.
+  // src por botão: landing-nav, landing-hero, landing-pricing, landing-final e
+  // landing-ghost; o "Entrar" segue com o src padrão 'landing'.
   const openAcct = (mode: 'signup' | 'login' = 'signup', src: string = 'landing') => { setCheckoutSrc(src); setAcctMode(mode); setAcct(true); };
   // desafio de fantasma pendente (link aberto sem vitalícia): o motivo de
-  // comprar HOJE — o desafio expira à meia-noite.
+  // comprar HOJE, o desafio expira à meia-noite.
   const ghost = loadGhost(dayNumberOf(dateKeyOf(new Date())));
   const duelInvite = loadDuelInvite(); // [U11]
   // [URG-2] evento de fim de semana: lê o live-ops público (o servidor mescla o automático) e
   // recalcula a cada minuto pro contador; sem rede cai no cálculo local do mesmo engine.
-  const [wknd, setWknd] = useState<WeekendEventView | null>(null);
+  // Começa já com o cálculo local (o mesmo engine): a faixa entra no primeiro
+  // render e não empurra o hero quando a resposta do servidor chega (CLS).
+  const [wknd, setWknd] = useState<WeekendEventView | null>(() => weekendEventView());
   useEffect(() => {
     let on = true;
     const compute = () => { if (on) setWknd(weekendEventView()); };
@@ -706,37 +843,50 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
   const wkndCard = wknd ? weekendExclusiveCard(wknd) : null;
   const wkndRemain = wknd ? (wknd.open ? wknd.endsAtMs : wknd.startsAtMs) - Date.now() : 0;
   return (
-    <div ref={ref} className="lp-root">
+    <div ref={ref} className="lp-page">
+      <a className="lp-skip" href="#conteudo">{ct('Pular para o conteúdo')}</a>
       <Nav onAccount={() => openAcct('signup', 'landing-nav')} onLogin={() => openAcct('login')} onPlay={onPlay} />
-      {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
-      {duelInvite && (
-        <div style={{ background: 'color-mix(in srgb, #4382b6 14%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
-          ⚔️ {ct('Você foi convidado pra um DUELO no Ultimate')} — {ct('sala')} <b style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{duelInvite}</b>. {ct('A sala expira em algumas horas.')}{' '}
-          <button type="button" onClick={onPlay} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>{ct('Entrar e aceitar')} →</button>
+      <main id="conteudo" tabIndex={-1}>
+        <div className="lp-notices">
+          {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
+          {duelInvite && (
+            <div className="lp-notice">
+              <Swords size={16} aria-hidden />
+              <span>{ct('Você foi convidado pra um DUELO no Ultimate')}, {ct('sala')} <b className="lp-notice__code">{duelInvite}</b>. {ct('A sala expira em algumas horas.')}</span>
+              <button type="button" className="lp-notice__go" onClick={onPlay}>{ct('Entrar e aceitar')} <ArrowRight size={14} aria-hidden /></button>
+            </div>
+          )}
+          {/* [URG-2] evento de fim de semana: discreto, acima da dobra, mesmo deslogado */}
+          {wknd && (
+            <div className="lp-notice">
+              <Gift size={16} aria-hidden />
+              <span>
+                {wknd.open
+                  ? <>{ct('Evento até domingo')}: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>} · {ct('termina em')} <b>{formatCountdown(wkndRemain)}</b></>
+                  : <>{ct('Próximo evento em')} <b>{formatCountdown(wkndRemain)}</b>: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>}</>}
+              </span>
+              <button type="button" className="lp-notice__go" onClick={onPlay}>{ct('Jogar')} <ArrowRight size={14} aria-hidden /></button>
+            </div>
+          )}
+          {ghost && (
+            <div className="lp-notice">
+              <Target size={16} aria-hidden />
+              <span><b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')}, {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {ct('O desafio expira à meia-noite. A Série do Dia é da conta vitalícia (R$20, uma vez).')}</span>
+              <button type="button" className="lp-notice__go" onClick={() => openAcct('signup', 'landing-ghost')}>{ct('Aceitar o desafio')} <ArrowRight size={14} aria-hidden /></button>
+            </div>
+          )}
+          <CommunityGoalBar onPlay={onPlay} />
         </div>
-      )}
-      {/* [URG-2] evento de fim de semana: discreto, acima da dobra, mesmo deslogado */}
-      {wknd && (
-        <div style={{ background: 'color-mix(in srgb, #f472b6 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '8px 22px', textAlign: 'center', fontSize: '13.5px', lineHeight: 1.5 }}>
-          🎁 {wknd.open
-            ? <>{ct('Evento até domingo')}: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>} · {ct('só neste fim de semana')} · {ct('termina em')} <b>{formatCountdown(wkndRemain)}</b></>
-            : <>{ct('Próximo evento em')} <b>{formatCountdown(wkndRemain)}</b>: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>}</>}{' '}
-          <button type="button" onClick={onPlay} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>{ct('Jogar')} →</button>
-        </div>
-      )}
-      {ghost && (
-        <div style={{ background: 'color-mix(in srgb, var(--rtm-gold) 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
-          🥊 <b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')} — {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {ct('O desafio expira à meia-noite — a Série do Dia é da conta vitalícia (R$20, uma vez).')}{' '}
-          <button type="button" onClick={() => openAcct('signup', 'landing-ghost')} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>{ct('Aceitar o desafio')}</button>
-        </div>
-      )}
-      <Hero onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />
-      <Modes onPlay={onPlay} />
-      <TweetBand />
-      <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPlay={onPlay} />
-      <How />
-      <Faq />
-      <FinalCta onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
+        <Hero onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />
+        <Facts />
+        <Modes onPlay={onPlay} />
+        <RtpSpotlight />
+        <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPlay={onPlay} />
+        <How />
+        <NewsBand />
+        <Faq />
+        <FinalCta onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
+      </main>
       {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} />}
     </div>
   );

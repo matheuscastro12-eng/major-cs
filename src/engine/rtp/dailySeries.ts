@@ -86,7 +86,7 @@ export function dailyShareText(day: number, s: DailyScore, rank: number | null, 
   const res = s.won ? `venci ${s.mapScore[0]}–${s.mapScore[1]}` : `caí ${s.mapScore[0]}–${s.mapScore[1]}`;
   const pos = rank ? ` · top #${rank}` : '';
   const streak = streakDays >= 2 ? ` · 🔥 ${streakDays} dias` : '';
-  return `SÉRIE DO DIA #${day} · MAJOR//CS\nRating ${s.rating.toFixed(2)} — ${res}${pos}${streak}\nMesma série pra todo mundo. Consegue mais?\nroadtomajor.com.br`;
+  return `SÉRIE DO DIA #${day} · ROAD TO MAJOR\nRating ${s.rating.toFixed(2)} — ${res}${pos}${streak}\nMesma série pra todo mundo. Consegue mais?\nroadtomajor.com.br`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,5 +143,5 @@ export function parseGhostParam(raw: string | null | undefined): GhostChallenge 
 
 // convite que vai junto do link (o texto é o desafio; o link é a armadilha).
 export function ghostInviteText(g: GhostChallenge): string {
-  return `🥊 Te desafio na SÉRIE DO DIA #${g.day} do MAJOR//CS.\nFiz ${g.rating.toFixed(2)} de rating na MESMA série que você vai jogar. Me supera:\n${ghostLinkOf(g)}`;
+  return `🥊 Te desafio na SÉRIE DO DIA #${g.day} do Road to Major.\nFiz ${g.rating.toFixed(2)} de rating na MESMA série que você vai jogar. Me supera:\n${ghostLinkOf(g)}`;
 }

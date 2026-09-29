@@ -8,6 +8,8 @@ import { track } from '../state/track';
 import type { Tournament, TournamentPool } from '../types';
 import { Flag, PlayerAvatar, TeamBadge } from './ui';
 import { useLang } from '../state/i18n';
+import { getToken } from '../state/account';
+import { ct } from '../state/career-i18n';
 
 interface Props {
   t: Tournament;
@@ -56,7 +58,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
   const [nick, setNick] = useState(() => {
     try { return localStorage.getItem('major-nick') ?? ''; } catch { return ''; }
   });
-  const [hallStatus, setHallStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [hallStatus, setHallStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'login'>('idle');
 
   const mvp = useMemo(() => {
     if (!t.mvpId || !champion) return undefined;
@@ -74,6 +76,9 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
   const registerHall = () => {
     const player = nick.trim();
     if (!player || alreadyPosted || postingRef.current || hallStatus === 'saving') return;
+    // [O0-36] o Hall agora exige conta (1 campanha por conta por temporada).
+    const token = getToken();
+    if (!token) { setHallStatus('login'); return; }
     postingRef.current = true;
     try { localStorage.setItem('major-nick', player); } catch { /* storage indisponível */ }
     setHallStatus('saving');
@@ -81,6 +86,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        token,
         player,
         teamName: user.name,
         pool,
@@ -94,6 +100,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
       signal: AbortSignal.timeout(8000),
     })
       .then((r) => {
+        if (r.status === 401) { setHallStatus('login'); return; }
         if (!r.ok) throw new Error(`hall ${r.status}`);
         try { localStorage.setItem(hallKey, '1'); } catch { /* storage indisponível */ }
         setPostedKey(hallKey);
@@ -238,6 +245,11 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
                     {hallStatus === 'saving' ? tr('final.registering') : `🏛 ${tr('final.registerHall')}`}
                   </button>
                 </div>
+                {hallStatus === 'login' && (
+                  <div className="muted small" style={{ marginTop: 6 }}>
+                    {ct('Entre na sua conta pra registrar a campanha no Hall da Fama.')}
+                  </div>
+                )}
                 {hallStatus === 'error' && (
                   <div className="neg small" style={{ marginTop: 6 }}>
                     {tr('final.hallUnavailable')}

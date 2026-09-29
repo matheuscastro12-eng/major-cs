@@ -5,31 +5,46 @@
 // - checkout: cria a URL do Payment Link ligada à conta autenticada.
 // - claim: confirma a sessão do Stripe no retorno; o webhook é a fonte principal.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
-import { scryptSync, randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
+import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { ADMIN_SESSION_TTL_SEC, respondMissingSecret, signAccountToken, signAdminSession, verifyAccountToken } from '../server/auth.js';
 import {
   accountReference,
+  assignFounderNumbers,
+  checkoutBase,
   checkoutBelongsToAccount,
   checkoutHasExpectedPrice,
   checkoutIsPaid,
   checkoutUrl,
   cleanEnv,
+  COIN_TIERS,
   findPaidCheckoutForEmail,
-  parsePassTier,
   passTier,
   PASS_PRICE_CENTS,
-  renumberFounders,
+  pixAccountPriceCents,
   retrieveCheckout,
   stripeClient,
 } from '../server/payments.js';
-import { restorableCoins } from '../server/coin-restore.js';
+import { claimPaidOrders } from '../server/paid-credit.js';
+import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
 import { mailConfigured, sendMail } from '../server/mail.js';
+import { findReusableCharge, rememberCharge } from '../server/order-settle.js';
+import { nickProblem, nickTaken, normalizeNick } from '../server/nick.js';
+import { clientIp, rateLimitHit, respondLimited, type RateRule, type RateSql } from '../server/rate-limit.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
-const APP_SECRET = () => cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEnv(process.env.DATABASE_URL) || 'dev'}`;
-const TTL = 60 * 60 * 24 * 180; // 180 dias
 // Edição Fundador: selo numerado vitalício pros primeiros que pagam (teto configurável).
 const FOUNDER_LIMIT = Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
 let accountSchemaPromise: Promise<void> | null = null;
+// [O0-46] coinsClaim/passClaim gravam no ledger do Ultimate — DDL da economia
+// (idempotente) 1× por instância, só quando um claim roda.
+let ultSchemaPromise: Promise<void> | null = null;
+function ensureUltSchema(sql: SqlTag): Promise<void> {
+  if (!ultSchemaPromise) {
+    ultSchemaPromise = (async () => { for (const q of ultEconomySchemaQueries(sql)) await q; })()
+      .catch((e) => { ultSchemaPromise = null; throw e; });
+  }
+  return ultSchemaPromise;
+}
 let founderAuditAt = 0;
 // Cache em memória da contagem pública de Fundadores (prova social). Serve de
 // rate-limit natural: por instância, no máximo 1 query/min mesmo sob rajada;
@@ -61,12 +76,19 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       // método do pedido de coins: 'pix' (Woovi) | 'stripe' (cartão). Métricas do CRM.
       sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`,
       sql`CREATE INDEX IF NOT EXISTS rtm_coin_orders_email_idx ON rtm_coin_orders (email, status)`,
+      // [O0-41] cobrança do pedido pendente (QR/URL) e validade: o 2º clique no
+      // passe da mesma temporada devolve a MESMA cobrança (server/order-settle.ts).
+      sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS pay_ref TEXT`,
+      sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS pay_expires_at TIMESTAMPTZ`,
       // re-emissões de coins comprados (jogador perdeu o save local): cada linha é
       // uma restauração; SUM(coins) por e-mail nunca passa do SUM dos pedidos claimed.
       sql`CREATE TABLE IF NOT EXISTS rtm_coin_restores (id BIGSERIAL PRIMARY KEY, email TEXT NOT NULL, coins INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
       sql`CREATE INDEX IF NOT EXISTS rtm_coin_restores_email_idx ON rtm_coin_restores (email)`,
       // reset de senha: código de 6 dígitos por e-mail (hash scrypt, igual à senha),
       // 30min de validade, 5 tentativas, 1 código ativo por e-mail.
+      // [O1-10] unicidade do nick sem diferenciar maiúsculas (checada no código; o
+      // índice não é UNIQUE porque a base pode ter duplicatas antigas).
+      sql`CREATE INDEX IF NOT EXISTS rtm_accounts_nick_lower_idx ON rtm_accounts (lower(nick))`,
       sql`CREATE TABLE IF NOT EXISTS rtm_password_resets (email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, attempts INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT now())`,
     ]).then(() => undefined).catch((error) => {
       accountSchemaPromise = null;
@@ -76,15 +98,17 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
   await accountSchemaPromise;
 }
 
+// backfill de número de Fundador pra quem pagou e ficou sem (ex.: webhook que
+// caiu no meio). Só PREENCHE — número já dado nunca muda (O0-42).
 async function auditFounderNumbers(sql: AccountSql): Promise<void> {
   const now = Date.now();
   if (now - founderAuditAt < 5 * 60_000) return;
   founderAuditAt = now;
   try {
-    const g = await sql`SELECT
-        (SELECT count(*) FILTER (WHERE is_founder) FROM rtm_accounts)::int AS have,
-        LEAST((SELECT count(*) FILTER (WHERE paid) FROM rtm_accounts)::int, ${FOUNDER_LIMIT})::int AS want`;
-    if (Number(g[0]?.have ?? 0) !== Number(g[0]?.want ?? 0)) await renumberFounders(sql, FOUNDER_LIMIT);
+    const g = await sql`SELECT EXISTS (
+        SELECT 1 FROM rtm_accounts WHERE paid AND founder_no IS NULL AND COALESCE(payment_method, '') <> 'admin'
+      ) AND COALESCE((SELECT MAX(founder_no) FROM rtm_accounts), 0) < ${FOUNDER_LIMIT} AS missing`;
+    if (g[0]?.missing) await assignFounderNumbers(sql, FOUNDER_LIMIT);
   } catch (error) {
     founderAuditAt = 0;
     throw error;
@@ -102,33 +126,30 @@ function verifyPw(pw: string, stored: string): boolean {
   const orig = Buffer.from(h, 'hex');
   return calc.length === orig.length && timingSafeEqual(calc, orig);
 }
-function sign(email: string): string {
-  const body = `${email}|${Math.floor(Date.now() / 1000) + TTL}`;
-  const sig = createHmac('sha256', APP_SECRET()).update(body).digest('base64url');
-  return `${Buffer.from(body).toString('base64url')}.${sig}`;
-}
-// Tiers de coins do Ultimate (Pix via Woovi). Valor cresce por real gasto pra
-// recompensar o tier maior: R$10 → 30k, R$15 → 50k (+11%), R$30 → 120k (+33%).
-const COIN_TIERS: Record<string, { cents: number; coins: number; label: string }> = {
-  p10: { cents: 1000, coins: 30000, label: 'Pacote Arsenal' },
-  p15: { cents: 1500, coins: 50000, label: 'Pacote Elite' },
-  p30: { cents: 3000, coins: 120000, label: 'Pacote Lendário' },
-};
+// token de conta (HMAC com APP_SECRET, 180 dias) — implementação em server/auth.ts.
+const sign = signAccountToken;
+const verifyToken = verifyAccountToken;
+// Tiers de coins do Ultimate: COIN_TIERS em server/payments.ts (fonte única,
+// o woovi-webhook usa a mesma tabela).
 
-function verifyToken(token: string): string | null {
-  const [b64, sig] = (token ?? '').split('.');
-  if (!b64 || !sig) return null;
-  const body = Buffer.from(b64, 'base64url').toString();
-  const expect = createHmac('sha256', APP_SECRET()).update(body).digest('base64url');
-  const sb = Buffer.from(sig); const eb = Buffer.from(expect);
-  if (sb.length !== eb.length || !timingSafeEqual(sb, eb)) return null;
-  const [email, exp] = body.split('|');
-  if (!email || Number(exp) < Math.floor(Date.now() / 1000)) return null;
-  return email;
-}
+// Rate limit por IP e por e-mail (O0-35/SEGU-09), no Postgres (compartilhado
+// entre instâncias — ver server/rate-limit.ts). Janelas generosas pro jogador
+// normal; o alvo é força bruta de senha (scrypt sem freio), credential stuffing,
+// flood de cadastro e o 'me' que chamava o Stripe em toda request.
+const RATE = {
+  signup: { ip: [10, 3600], email: [5, 3600] },
+  login: { ip: [30, 900], email: [10, 900] },
+  me: { ip: [120, 60] },
+  resetRequest: { ip: [10, 3600], email: [5, 3600] },
+  resetConfirm: { ip: [30, 3600], email: [10, 3600] },
+  setNick: { ip: [20, 3600], email: [5, 86400] },
+} as const;
+// reconciliação com o Stripe (list de 100 sessões com expand) no máx. 1x a cada
+// 2 min por e-mail: o 'me' de um cadastro pendente não vira flood na API do Stripe.
+const STRIPE_RECON_WINDOW_SEC = 120;
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   // GET público: contagem agregada de Fundadores (prova social honesta). Sem
@@ -141,7 +162,9 @@ export default async function handler(
       if (!foundersCache || Date.now() - foundersCache.at > 60_000) {
         const sql = neon(dbUrl);
         await ensureAccountSchema(sql);
-        const r = await sql`SELECT count(*) FILTER (WHERE is_founder)::int AS founders FROM rtm_accounts`;
+        // números EMITIDOS (o maior founder_no): número de conta revogada fica
+        // aposentado e não volta pra fila (O0-42), então "vagas" = teto − isso.
+        const r = await sql`SELECT COALESCE(MAX(founder_no), 0)::int AS founders FROM rtm_accounts`;
         foundersCache = { at: Date.now(), founders: Number(r[0]?.founders ?? 0) };
       }
       res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
@@ -152,14 +175,16 @@ export default async function handler(
 
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
   res.setHeader('Cache-Control', 'no-store');
+  // falha fechada: sem APP_SECRET nenhum token é assinado nem aceito (SEGU-10).
+  if (respondMissingSecret(res)) return;
   const dbUrl = cleanEnv(process.env.DATABASE_URL);
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl);
   await ensureAccountSchema(sql);
 
-  // Backfill de fundador: numera os pagantes antigos (que pagaram antes do selo
-  // existir / pelo webhook) por ordem de pagamento. Guardado por um SELECT barato
-  // pra rodar só quando há divergência — depois de numerar, fica quieto.
+  // Backfill de fundador: dá número a quem pagou e ficou sem (webhook que caiu no
+  // meio), na ordem do pagamento, sem mexer em número já dado. Guardado por um
+  // SELECT barato (1x a cada 5 min por instância) — sem pendência, fica quieto.
   await auditFounderNumbers(sql);
 
   let body: Record<string, unknown> = {};
@@ -167,7 +192,17 @@ export default async function handler(
   const action = String(body.action ?? '');
   const email = String(body.email ?? '').trim().toLowerCase().slice(0, 200);
   const password = String(body.password ?? '');
-  const nick = String(body.nick ?? '').trim().slice(0, 40);
+  // [O1-10] nick da conta normalizado (NFKC, sem invisíveis); validado no signup/setNick.
+  const nick = normalizeNick(body.nick);
+  const ip = clientIp(req.headers);
+  const rsql = sql as unknown as RateSql;
+  // 429 quando QUALQUER regra (IP ou e-mail) da ação estourou. Devolve true se respondeu.
+  const limited = async (name: keyof typeof RATE, em = email): Promise<boolean> => {
+    const cfg = RATE[name] as { ip: readonly [number, number]; email?: readonly [number, number] };
+    const rules: RateRule[] = [{ key: `${name}:ip:${ip}`, limit: cfg.ip[0], windowSec: cfg.ip[1] }];
+    if (cfg.email && em) rules.push({ key: `${name}:email:${em}`, limit: cfg.email[0], windowSec: cfg.email[1] });
+    return respondLimited(res, await rateLimitHit(rsql, rules));
+  };
 
   if (action === 'export' || action === 'delete') {
     const em = verifyToken(String(body.token ?? ''));
@@ -235,11 +270,10 @@ export default async function handler(
     await sql.transaction(stmts);
     await claimFounder();
   };
-  // Edição Fundador: renumera TODOS os pagantes por ordem de pagamento (#001 = o
-  // primeiro do Stripe). Idempotente e determinístico (só toca o que muda), então
-  // serve tanto pra novo pagamento quanto pra backfill dos antigos.
+  // Edição Fundador: dá número a quem pagou e ainda não tem, na ordem do
+  // pagamento. Número já dado nunca muda (O0-42); idempotente.
   const claimFounder = async (): Promise<void> => {
-    await renumberFounders(sql, FOUNDER_LIMIT);
+    await assignFounderNumbers(sql, FOUNDER_LIMIT);
     founderAuditAt = Date.now();
   };
   const founderOf = async (em: string): Promise<{ founder: boolean; founderNo: number | null; admin: boolean }> => {
@@ -253,7 +287,7 @@ export default async function handler(
     if (knownPaid) return true;
     const p = await sql`SELECT 1 FROM rtm_paid_emails WHERE email=${em}`;
     if (p.length) { await markPaid(em); return true; }
-    if (reconcileStripe) {
+    if (reconcileStripe && !(await rateLimitHit(rsql, [{ key: `stripe-recon:${em}`, limit: 1, windowSec: STRIPE_RECON_WINDOW_SEC }])).limited) {
       try {
         const session = await findPaidCheckoutForEmail(stripeClient(), em);
         if (session) { await markPaid(em, session.id); return true; }
@@ -265,9 +299,16 @@ export default async function handler(
   };
 
   if (action === 'signup') {
+    if (await limited('signup')) return;
     if (!/\S+@\S+\.\S+/.test(email) || password.length < 6) { res.status(400).json({ error: 'E-mail inválido ou senha com menos de 6 caracteres.' }); return; }
     const exists = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email}`;
     if (exists.length) { res.status(409).json({ error: 'Já existe uma conta com esse e-mail. Faça login.' }); return; }
+    // [O1-10] nick opcional no cadastro, mas se vier: regras + unicidade.
+    if (nick) {
+      const problem = nickProblem(nick);
+      if (problem) { res.status(400).json({ error: problem, field: 'nick' }); return; }
+      if (await nickTaken(sql, nick, email)) { res.status(409).json({ error: 'Esse nick já está em uso. Escolha outro.', field: 'nick' }); return; }
+    }
     // REGRA: só pago tem conta. Se o e-mail já pagou (antes de cadastrar), cria a
     // conta direto. Senão, guarda como cadastro PENDENTE e manda pro pagamento — a
     // conta só nasce quando o pagamento confirma (claim/webhook promovem o pendente).
@@ -288,6 +329,7 @@ export default async function handler(
   }
 
   if (action === 'login') {
+    if (await limited('login')) return;
     const r = await sql`SELECT nick, pass_hash, paid FROM rtm_accounts WHERE email=${email}`;
     if (!r.length || !verifyPw(password, String(r[0].pass_hash))) { res.status(401).json({ error: 'E-mail ou senha incorretos.' }); return; }
     await ensureReference(email);
@@ -304,6 +346,7 @@ export default async function handler(
   // envio está configurado — não vaza se o e-mail tem conta (anti-enumeração).
   // Nenhum provedor configurado: 503 honesto.
   if (action === 'resetRequest') {
+    if (await limited('resetRequest')) return;
     if (!/\S+@\S+\.\S+/.test(email)) { res.status(400).json({ error: 'E-mail inválido.' }); return; }
     if (!mailConfigured()) {
       res.status(503).json({ error: 'Recuperação de senha temporariamente indisponível. Fale com a gente no suporte.' });
@@ -312,7 +355,7 @@ export default async function handler(
     const sendResetEmail = (code: string): Promise<boolean> => sendMail({
       to: email,
       subject: `Seu código pra trocar a senha: ${code}`,
-      text: `Alguém (esperamos que você) pediu pra trocar a senha da sua conta no MAJOR//CS.\n\nSeu código: ${code}\n\nEle vale por 30 minutos. Se não foi você, ignore este e-mail — sua senha continua a mesma.`,
+      text: `Alguém (esperamos que você) pediu pra trocar a senha da sua conta no Road to Major.\n\nSeu código: ${code}\n\nEle vale por 30 minutos. Se não foi você, ignore este e-mail — sua senha continua a mesma.`,
     });
     // só gera/envia se o e-mail EXISTE (conta ativa ou cadastro pendente) — mas a
     // resposta é idêntica nos dois casos.
@@ -340,6 +383,7 @@ export default async function handler(
   // resetConfirm: valida o código e troca a senha (conta ativa E/OU cadastro
   // pendente). Código é de uso único; 5 erros queimam o código.
   if (action === 'resetConfirm') {
+    if (await limited('resetConfirm')) return;
     const code = String(body.code ?? '').trim();
     if (!/^\d{6}$/.test(code)) { res.status(400).json({ error: 'Código inválido — são 6 dígitos.' }); return; }
     if (password.length < 6) { res.status(400).json({ error: 'A nova senha precisa de pelo menos 6 caracteres.' }); return; }
@@ -368,6 +412,7 @@ export default async function handler(
   }
 
   if (action === 'me') {
+    if (await limited('me')) return;
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
     let r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
@@ -383,18 +428,35 @@ export default async function handler(
     return;
   }
 
-  // adminKey: se a conta do token for admin (is_admin), devolve a chave do CRM
-  // (ADMIN_PASSWORD) pro cliente autenticar nos endpoints de admin já existentes.
-  // É a ponte que faz o acesso ao CRM vir da CONTA, não mais de senha/rota secreta.
+  // setNick: troca o nick da CONTA (o que aparece no ranking, na Série do Dia,
+  // no Draft e no aviso de rival — O1-10). Mesmas regras do cadastro; no máx.
+  // 5 trocas por dia por conta.
+  if (action === 'setNick') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
+    if (await limited('setNick', em)) return;
+    const problem = nickProblem(nick);
+    if (problem) { res.status(400).json({ error: problem, field: 'nick' }); return; }
+    if (await nickTaken(sql, nick, em)) { res.status(409).json({ error: 'Esse nick já está em uso. Escolha outro.', field: 'nick' }); return; }
+    const upd = await sql`UPDATE rtm_accounts SET nick=${nick} WHERE email=${em} RETURNING email`;
+    if (!upd.length) await sql`UPDATE rtm_pending_signups SET nick=${nick} WHERE email=${em}`;
+    res.status(200).json({ ok: true, nick });
+    return;
+  }
+
+  // adminSession: conta com is_admin troca o token de conta por uma SESSÃO de
+  // admin curta (12h, server/auth.ts), que os endpoints de admin aceitam no
+  // lugar da senha. Substitui a antiga action adminKey, que devolvia a própria
+  // ADMIN_PASSWORD ao browser (O0-16/SEGU-07): vazou o localStorage, vazou a
+  // chave mestra. Agora vaza, no máximo, uma sessão que expira e que morre na
+  // hora se a conta perder o is_admin (conferido no banco a cada request).
   // Não-admin recebe 403 (o painel nem aparece pra ele no cliente).
-  if (action === 'adminKey') {
+  if (action === 'adminSession') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
     const r = await sql`SELECT is_admin FROM rtm_accounts WHERE email=${em}`;
     if (!r.length || !r[0].is_admin) { res.status(403).json({ error: 'not admin' }); return; }
-    const key = cleanEnv(process.env.ADMIN_PASSWORD);
-    if (!key) { res.status(500).json({ error: 'ADMIN_PASSWORD não configurada' }); return; }
-    res.status(200).json({ key });
+    res.status(200).json({ session: signAdminSession(em), expiresIn: ADMIN_SESSION_TTL_SEC });
     return;
   }
 
@@ -420,7 +482,7 @@ export default async function handler(
     const appId = cleanEnv(process.env.OPENPIX_APP_ID);
     if (!appId) { res.status(500).json({ error: 'Pix indisponível: OPENPIX_APP_ID não configurada.' }); return; }
     // valor em CENTAVOS (R$20 = 2000). Editável via PIX_PRICE_CENTS (mesma régua do Stripe).
-    const value = Number(cleanEnv(process.env.PIX_PRICE_CENTS) || '2000') || 2000;
+    const value = pixAccountPriceCents();
     const nick = String(((await sql`SELECT nick FROM rtm_accounts WHERE email=${em}`)[0]?.nick) ?? '').slice(0, 80) || em;
     try {
       const r = await fetch('https://api.openpix.com.br/api/v1/charge', {
@@ -508,8 +570,7 @@ export default async function handler(
     const pack = COIN_TIERS[tier];
     if (!pack) { res.status(400).json({ error: 'pacote inválido' }); return; }
     const corr = `ultcoins:${tier}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
-    const origin = String(body.origin ?? '').replace(/\/+$/, '');
-    const base = /^https:\/\/[\w.-]+/.test(origin) ? origin : 'https://roadtomajor.com.br';
+    const base = checkoutBase(body.origin); // [O0-40] allowlist; origin desconhecido cai no domínio oficial
     // pedido ANTES da sessão (mesma razão do Pix): pending órfão é inofensivo; o
     // inverso — cartão aprovado sem pedido — perderia os coins do jogador.
     await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, method) VALUES (${corr}, ${em}, ${tier}, ${pack.coins}, ${pack.cents}, 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
@@ -544,56 +605,42 @@ export default async function handler(
     return;
   }
 
-  // coinsClaim: coleta todos os pedidos pagos e ainda não creditados desta conta.
-  // Atômico (UPDATE ... RETURNING): duas abas não creditam o mesmo pedido duas vezes.
-  // Pedidos de PASSE (tier "pass-s<N>", coins=0) ficam de fora — quem os coleta é
-  // o passClaim; se o coinsClaim os marcasse claimed, o desbloqueio do premium
-  // se perderia (o cliente só veria "0 coins").
+  // coinsClaim: coleta os pedidos pagos e ainda não creditados desta conta.
+  // [O0-46] O SERVIDOR credita cada pedido no ledger do Ultimate (opId
+  // `coins:<correlationID>`, idempotente) ANTES de marcar 'claimed' — ver
+  // server/paid-credit.ts. O cliente não soma nada sozinho: absorve os
+  // vouchers que o save ainda não viu. Pedidos de PASSE (tier "pass-s<N>")
+  // ficam de fora — quem os coleta é o passClaim.
   if (action === 'coinsClaim') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' AND tier NOT LIKE 'pass-s%' RETURNING correlation_id, coins`;
-    const coins = rows.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
+    const esql = sql as unknown as SqlTag;
+    await ensureUltSchema(esql);
+    const r = await claimPaidOrders(esql, em, 'coins');
+    const coins = r.claimed.reduce((acc, o) => acc + o.coins, 0);
     // [U02] orders: o cliente deduplica o evento purchase_fulfilled por pedido (nunca por UI)
-    res.status(200).json({ coins, orders: rows.map((r) => ({ orderId: String(r.correlation_id), coins: Number(r.coins) || 0 })) });
+    res.status(200).json({ coins, orders: r.claimed.map((o) => ({ orderId: o.orderId, coins: o.coins })), vouchers: r.vouchers, credits: r.credits });
     return;
   }
 
-  // coinsSummary: quanto esta conta já comprou de coins (pedidos claimed) e
-  // quanto ainda pode ser RE-EMITIDO (1× por coin) pra quem perdeu o save local.
-  // Pedidos 'paid' ainda não claimed ficam de fora — o coinsClaim normal cobre.
+  // coinsSummary: quanto esta conta já comprou de coins (pedidos claimed).
+  // [O0-04] restorable é sempre 0: o "Recuperar compras" foi desligado — um
+  // cliente antigo em cache que ainda lê este campo não mostra mais o card.
   if (action === 'coinsSummary') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const [orders, restores] = await Promise.all([
-      sql`SELECT coins FROM rtm_coin_orders WHERE email=${em} AND status='claimed'`,
-      sql`SELECT coins FROM rtm_coin_restores WHERE email=${em}`,
-    ]);
+    const orders = await sql`SELECT coins FROM rtm_coin_orders WHERE email=${em} AND status='claimed'`;
     const purchased = orders.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
-    const restorable = restorableCoins(orders.map((r) => Number(r.coins) || 0), restores.map((r) => Number(r.coins) || 0));
-    res.status(200).json({ purchased, restorable });
+    res.status(200).json({ purchased, restorable: 0 });
     return;
   }
 
-  // coinsRestore: re-emite os coins comprados que ainda não foram restaurados —
-  // 1× por coin, pra sempre. Atômico: o advisory lock transacional (por e-mail)
-  // serializa requests simultâneos e o INSERT ... SELECT calcula o saldo restante
-  // (claimed − já restaurado) no PRÓPRIO statement; o segundo request só roda
-  // depois do commit do primeiro, enxerga a linha nova e insere nada (retorna 0).
+  // coinsRestore: DESLIGADO [O0-04]. Re-emitia SUM(claimed) − SUM(restores)
+  // sem olhar o save — cada compra rendia o dobro com um clique (ECON-03).
+  // Com o O0-46 a compra já está no ledger do servidor e o cliente absorve os
+  // vouchers que faltarem no save; não há mais o que "recuperar" à mão.
   if (action === 'coinsRestore') {
-    const em = verifyToken(String(body.token ?? ''));
-    if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const [, rows] = await sql.transaction([
-      sql`SELECT pg_advisory_xact_lock(hashtext('rtm_coin_restore'), hashtext(${em}))`,
-      sql`INSERT INTO rtm_coin_restores (email, coins)
-          SELECT ${em}, s.remaining FROM (
-            SELECT (COALESCE((SELECT SUM(coins) FROM rtm_coin_orders WHERE email=${em} AND status='claimed'), 0)
-                  - COALESCE((SELECT SUM(coins) FROM rtm_coin_restores WHERE email=${em}), 0))::int AS remaining
-          ) s WHERE s.remaining > 0
-          RETURNING coins`,
-    ]);
-    const coins = (rows ?? []).reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
-    res.status(200).json({ coins });
+    res.status(410).json({ error: 'Recuperar compras foi desativado: suas compras agora ficam guardadas no servidor.', coins: 0 });
     return;
   }
 
@@ -616,6 +663,12 @@ export default async function handler(
     if (dup.length) {
       if (String(dup[0].status) === 'paid') { res.status(200).json({ already: true }); return; }
       res.status(409).json({ error: 'Você já comprou o Passe Premium desta temporada.' });
+      return;
+    }
+    // [O0-41] Pix desta temporada ainda aberto → a MESMA cobrança, não uma 2ª.
+    const open = await findReusableCharge(sql, em, tier, 'pix');
+    if (open) {
+      res.status(200).json({ correlationID: open.correlationID, season, qrCodeImage: open.ref.qrCodeImage ?? null, brCode: open.ref.brCode ?? null, paymentLinkUrl: open.ref.paymentLinkUrl ?? null, expiresIn: open.expiresIn, reused: true });
       return;
     }
     const appId = cleanEnv(process.env.OPENPIX_APP_ID);
@@ -644,6 +697,7 @@ export default async function handler(
       }
       const j = (await r.json()) as { charge?: Record<string, unknown> };
       const c = j?.charge ?? {};
+      await rememberCharge(sql, corr, { qrCodeImage: c.qrCodeImage ?? null, brCode: c.brCode ?? null, paymentLinkUrl: c.paymentLinkUrl ?? null }, Number(c.expiresIn));
       res.status(200).json({
         correlationID: corr,
         season,
@@ -670,9 +724,11 @@ export default async function handler(
       res.status(409).json({ error: 'Você já comprou o Passe Premium desta temporada.' });
       return;
     }
+    // [O0-41] checkout de cartão desta temporada ainda aberto → a MESMA sessão.
+    const open = await findReusableCharge(sql, em, tier, 'stripe');
+    if (open && typeof open.ref.url === 'string') { res.status(200).json({ url: open.ref.url, correlationID: open.correlationID, season, reused: true }); return; }
     const corr = `ultcoins:${tier}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
-    const origin = String(body.origin ?? '').replace(/\/+$/, '');
-    const base = /^https:\/\/[\w.-]+/.test(origin) ? origin : 'https://roadtomajor.com.br';
+    const base = checkoutBase(body.origin); // [O0-40] allowlist; origin desconhecido cai no domínio oficial
     await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, method) VALUES (${corr}, ${em}, ${tier}, 0, ${PASS_PRICE_CENTS}, 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
     try {
       const session = await stripeClient().checkout.sessions.create({
@@ -696,6 +752,8 @@ export default async function handler(
         res.status(502).json({ error: 'Falha ao criar checkout. Tente de novo.' });
         return;
       }
+      // a sessão da Stripe expira em expires_at (24h por padrão)
+      await rememberCharge(sql, corr, { url: session.url }, session.expires_at ? session.expires_at - Math.floor(Date.now() / 1000) : NaN);
       res.status(200).json({ url: session.url, correlationID: corr, season });
     } catch (error) {
       await sql`DELETE FROM rtm_coin_orders WHERE correlation_id=${corr} AND status='pending'`;
@@ -705,17 +763,20 @@ export default async function handler(
     return;
   }
 
-  // passClaim: coleta os pedidos de PASSE pagos e ainda não claimados. Atômico
-  // e idempotente (UPDATE ... RETURNING) igual ao coinsClaim; devolve os pedidos
-  // (orderId + temporada) pro cliente ligar o premium no save.
+  // passClaim: coleta os pedidos de PASSE pagos e ainda não claimados.
+  // [O0-46] credita no ledger (opId `pass:<season>`, delta 0 — registra o
+  // desbloqueio) antes de marcar 'claimed'; devolve os pedidos (orderId +
+  // temporada) e os vouchers pro cliente ligar o premium no save.
   if (action === 'passClaim') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' AND tier LIKE 'pass-s%' RETURNING correlation_id, tier`;
-    const orders = rows
-      .map((r) => ({ orderId: String(r.correlation_id), season: parsePassTier(String(r.tier)) ?? 0 }))
+    const esql = sql as unknown as SqlTag;
+    await ensureUltSchema(esql);
+    const r = await claimPaidOrders(esql, em, 'pass');
+    const orders = r.claimed
+      .map((o) => ({ orderId: o.orderId, season: o.season ?? 0 }))
       .filter((o) => o.season > 0);
-    res.status(200).json({ orders });
+    res.status(200).json({ orders, vouchers: r.vouchers, credits: r.credits });
     return;
   }
 

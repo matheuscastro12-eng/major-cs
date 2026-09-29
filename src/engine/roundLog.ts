@@ -20,7 +20,11 @@ export interface DecisionEvent {
   beat?: string;               // Sala: kind do beat (pistol, clutch, mapPoint…)
   label: string;               // o que foi decidido (o golpe / a opção)
   actor?: string;              // quem executou (nick)
-  pWin: number;                // a % mostrada ANTES de rolar (0..1) — o que o dado enfrentou
+  pWin: number;                // a % MOSTRADA antes de rolar (pShown, 0..1)
+  // [O1-47] a % contra a qual o dado rolou de verdade (0..1). Na Sala é igual à
+  // mostrada; na partida tática da Carreira inclui a leitura de site da defesa
+  // (informação oculta, ±14pp) — a UI indica quando as duas divergem.
+  pRolled?: number;
   execPerf?: number;           // Sala: performance no minigame (0..1), se houve
   won: boolean;                // o dado deu (contra pWin)
   stakes?: Stakes;
