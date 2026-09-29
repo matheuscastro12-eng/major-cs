@@ -26,6 +26,8 @@ interface Props {
   results: WorldEventResult[];
   myEventId: string | null;
   myLive: boolean;
+  /** eventos da etapa em curso que têm field (um evento sem 5 times na faixa não acontece) */
+  activeIds: string[];
   qualifiers: Record<string, 'won' | 'lost'>;
   route: MajorRouteInfo;
   userRank: number;
@@ -66,7 +68,11 @@ export function CalendarTab(p: Props) {
       );
     }
     if (e.id === p.myEventId && p.myLive) return <Tag tone="accent">{ct('Você joga')}</Tag>;
-    if (e.split === p.split && (e.etapa ?? 99) === p.etapa) return <Tag tone="warn">{ct('Em andamento')}</Tag>;
+    const past = e.split < p.split || (e.split === p.split && (e.etapa ?? 99) < p.etapa);
+    if (e.split === p.split && (e.etapa ?? 99) === p.etapa) {
+      return p.activeIds.includes(e.id) ? <Tag tone="warn">{ct('Em andamento')}</Tag> : <span className="ci-dim">{ct('sem field nesta etapa')}</span>;
+    }
+    if (past && e.kind === 'gsl') return <span className="ci-dim">{ct('não disputado')}</span>;
     return <span className="ci-dim">{ct('a seguir')}</span>;
   };
   const row = (e: CalendarEvent) => {

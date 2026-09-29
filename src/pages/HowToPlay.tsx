@@ -130,16 +130,18 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <p>
-          A cada 4 splits acontece o <b>Major Mundial</b>. Os <b>top 32 do ranking VRS mundial</b>
-          se classificam. VRS é rolante: decai a cada split, soma quando você vence.
+          A cada 4 splits acontece o <b>Major Mundial</b>. O <b>ranking VRS</b> (um só pra todos os
+          times: premiação real, adversários batidos e LAN, com os resultados envelhecendo) decide:
+          top 24 entram direto; os próximos de cada região disputam o <b>RMR</b> por vagas no Stage 1.
         </p>
         <p>
           Formato do Major (3 stages):
         </p>
         <ul>
-          <li><b>Stage 1</b> (32 times → 16) — entrada de times tier-3+</li>
-          <li><b>Stage 2</b> (16 → 8) — entrada de times tier-2+</li>
-          <li><b>Stage 3</b> (8 → 8) — entrada de times tier-1</li>
+          <li><b>RMR</b> (suíço de 16 por região) — Europa 4 vagas, Américas 2, Ásia-Pacífico 2</li>
+          <li><b>Stage 1</b> (16 → 8) — VRS 17–24 + os classificados dos RMRs</li>
+          <li><b>Stage 2</b> (16 → 8) — entram os VRS 9–16</li>
+          <li><b>Stage 3</b> (16 → 8) — entram os VRS 1–8</li>
           <li><b>Champions</b> — playoffs MD3/MD5</li>
         </ul>
         <p>

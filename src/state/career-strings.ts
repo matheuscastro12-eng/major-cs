@@ -2,6 +2,8 @@
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   // [fase 4 · frente CIRCUITO] calendário, circuito, VRS, qualificatórios, RMR, LAN, visto e bootcamp
+  "sem field nesta etapa": { en: "no field this stage", es: "sin field en esta etapa" },
+  "não disputado": { en: "not held", es: "no disputado" },
   "Bootcamp feito:": { en: "Bootcamp done:", es: "Bootcamp hecho:" },
   "Visto negado:": { en: "Visa denied:", es: "Visa denegada:" },
   "fora do": { en: "out of", es: "fuera del" },

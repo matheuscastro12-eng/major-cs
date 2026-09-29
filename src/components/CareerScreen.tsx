@@ -5859,7 +5859,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     isChampion: rec?.champion ?? false,
                     circuitTier: save.circuit?.tier ?? save.tier,
                     finalPos: rec?.position ?? 99,
-                    qualified: true, endTier: save.tier, wonMajor: mr.champion,
+                    qualified: !mr.rmrOut, endTier: save.tier, wonMajor: mr.champion,
                   }),
                   ...evo,
                   ...majorWindowPatch,
@@ -6778,7 +6778,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   for (const c of circuits) if (c.eventId) circuitFields[c.eventId] = { teams: c.teams.map((t) => t.id), invited: c.invited ?? [] };
   if (myEventId) circuitFields[myEventId] = { teams: league.teams.map((t) => t.id), invited: circuitFields[myEventId]?.invited ?? [] };
   const vrsTableNow = hubTab === 'vrs' || hubTab === 'circuito' ? computeVrs(mundoNow.results, mundoNow.vrsAt ?? etapaTime(save.split, save.eventInSplit ?? 1)) : null;
-  const majorRouteInfo: MajorRouteInfo = (() => {
+  const majorRouteInfo: MajorRouteInfo | null = hubTab !== 'calendar' ? null : (() => {
     const pool = oppEra.filter((x) => x.id !== USER_ID && x.players.length >= 5);
     const plan = majorFieldFromVrs(mundoNow.vrs, pool, { region: save.region });
     const route = majorRouteOf(plan);
@@ -7956,7 +7956,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
       {/* ===== HISTÓRIA DA ORGANIZAÇÃO ===== */}
       {/* T1.4: aba Calendar extraída em src/pages/career/CalendarTab.tsx */}
-      {hubTab === 'calendar' && (
+      {hubTab === 'calendar' && majorRouteInfo && (
         <CalendarTab
           season={seasonNow}
           split={save.split}
@@ -7966,6 +7966,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           results={mundoNow.results}
           myEventId={myEventId}
           myLive={myLive}
+          activeIds={Object.keys(circuitFields)}
           qualifiers={mundoNow.qualifiers ?? {}}
           route={majorRouteInfo}
           userRank={majorRouteInfo.rank}
