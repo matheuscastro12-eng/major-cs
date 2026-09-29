@@ -544,6 +544,12 @@ import { MajorTab } from '../pages/career/MajorTab';
 import { FinanceTab } from '../pages/career/FinanceTab';
 import { SquadTab } from '../pages/career/SquadTab';
 import { OverviewTab } from '../pages/career/OverviewTab';
+// [fase 2 · frente STAFF] comissão técnica
+import { StaffTab } from '../pages/career/StaffTab';
+import { migrateGestao } from '../engine/gestao/gestaoMigration';
+import type { GestaoState } from '../engine/gestao/model';
+import { staffEffects, staffSplitTick, syncHeadCoach, scaleStep } from '../engine/gestao/staff';
+import { aiStaffEdgeFor } from '../engine/gestao/staffData';
 
 // ----- prestígio + fãs da org (estilo Brasval) -----
 // Derivados de conquistas (sem campo novo no save: não quebram saves e sobem ao
@@ -1309,6 +1315,7 @@ interface CareerSave {
   scarEvents?: ScarEvent[]; // [W4] eventos pontuais que o fechamento não reconstrói (dispensa de estrela infeliz)
   identity?: TeamIdentity; // [W5] identidade tática emergente (histograma decaído das suas chamadas)
   promiseLog?: PromiseOutcome[]; // [W4] promessas à diretoria já julgadas (append-only, teto 24) — fita e cicatrizes leem
+  gestao?: GestaoState; // [fase 2] treino, tática por mapa, comissão técnica e condição (save v28)
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -1466,12 +1473,15 @@ function nextMorale(
   prev: Record<string, number>,
   squad: { oid: string; form: number; expiring: boolean }[],
   ctx: { champion: boolean; objMet: boolean },
+  // [fase 2 · STAFF] staffEffects().moraleRecovery: psicólogo/técnico aceleram a
+  // volta de quem está abaixo da média (1 = como antes)
+  recovery = 1,
 ): Record<string, number> {
   const out: Record<string, number> = {};
   for (const s of squad) {
     const prevM = prev[s.oid] ?? MORALE_DEFAULT;
     let m = prevM;
-    m += (MORALE_DEFAULT - m) * 0.25; // reversão à média mais firme (não trava em baixa)
+    m += (MORALE_DEFAULT - m) * 0.25 * (m < MORALE_DEFAULT ? recovery : 1); // reversão à média mais firme (não trava em baixa)
     // forma só puxa pra CIMA: fase quente motiva, mas fase fria não realimenta a
     // queda de moral (senão vira má fase eterna num time que perde sempre).
     m += Math.max(0, (s.form ?? 1) - 1) * 55;
@@ -1485,6 +1495,22 @@ function nextMorale(
   return out;
 }
 // acrescenta manchetes (mais recentes primeiro, teto de 40) e conta as não lidas
+// [fase 2 · STAFF] manchetes da virada de split: quem da comissão saiu (contrato
+// vencido) e a renovação automática do técnico principal.
+function staffTickNews(t: ReturnType<typeof staffSplitTick>, split: number): NewsItem[] {
+  return [
+    ...t.left.map((m): NewsItem => ({
+      id: `${split}:staff-out:${m.id}`, split, icon: '📋', tone: 'bad', cat: 'board',
+      title: `${m.nick ?? m.name} ${ct('deixou a comissão técnica')}`,
+      body: ct('O contrato venceu e não foi renovado. A vaga está aberta em Time › Comissão técnica.'),
+    })),
+    ...t.renewed.map((m): NewsItem => ({
+      id: `${split}:staff-renew:${m.id}`, split, icon: '📋', tone: 'info', cat: 'board',
+      title: `${m.nick ?? m.name} ${ct('renovou como técnico principal')}`,
+      body: `${ct('Contrato estendido por 2 splits, com reajuste. Novo salário:')} ${formatMoney(m.wage)}.`,
+    })),
+  ];
+}
 function pushNews(save: CareerSave, items: NewsItem[]): Pick<CareerSave, 'news' | 'unread'> {
   if (items.length === 0) return { news: save.news ?? [], unread: save.unread ?? 0 };
   const news = [...items, ...(save.news ?? [])].slice(0, 40);
@@ -3558,6 +3584,23 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     };
   };
 
+  // [fase 2 · STAFF] técnico do save ⇄ headCoach da comissão técnica. Cobre o
+  // save migrado (o técnico de time real só se resolve com a base, que não entra
+  // na migração), a carreira nova (nasce sem o bloco gestao) e a troca de técnico
+  // no mercado. Idempotente: só grava quando algo muda.
+  useEffect(() => {
+    if (!save.org || !save.coachFromId) return;
+    const id = save.coachFromId;
+    const coach = id === '__custom__' && save.customCoach
+      ? save.customCoach
+      : currentEra.find((t) => t.id === id)?.coach ?? CS2_REAL_2026.find((t) => t.id === id)?.coach ?? ROOKIE_COACH;
+    const gestao = save.gestao ?? (migrateGestao(save as unknown as Record<string, unknown>).gestao as GestaoState);
+    const synced = syncHeadCoach(gestao.staff, coach, id, save.split);
+    if (!synced && save.gestao) return;
+    update({ gestao: { ...gestao, staff: synced ?? gestao.staff } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.org, save.coachFromId, save.customCoach?.nick, currentEra]);
+
   // #6: sparrings elegíveis pro scrim (banda de força + disponibilidade
   // determinística por split/uso). Depende de buildTeam — fica declarado aqui.
   const scrimOpponents = useMemo(() => {
@@ -3583,7 +3626,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const aiBoost = CIRCUIT_AI_BOOST + Math.min(2.5, (s.split - 1) * 0.35 * tierScale);
     const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 15).map((t) => {
       const tt = teamSeasonToTTeam(t);
-      tt.strength += aiBoost;
+      tt.strength += aiBoost + aiStaffEdgeFor(t); // [fase 2 · STAFF] comissão da IA (|δ| ≤ 0,5)
       return tt;
     });
     // PAD: garante que [user, ...ai] tenha 16 times (= 4 grupos de 4 perfeitos
@@ -3601,7 +3644,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         .slice(0, 15 - ai.length)
         .map((t) => {
           const tt = teamSeasonToTTeam(t);
-          tt.strength += aiBoost;
+          tt.strength += aiBoost + aiStaffEdgeFor(t); // [fase 2 · STAFF]
           return tt;
         });
       ai.push(...filler);
@@ -3854,6 +3897,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       let d = r < 35 ? 3 : r < 75 ? 2 : 1;
       if (s.academyFocus === a.id) d += 1; // treino focado acelera
       d += developmentBonus(a.id, s.split, normalizeFacilities(s.facilities).training);
+      // [fase 2 · STAFF] formação de jovens da comissão (youthDevelopment): 1 = como antes
+      d = scaleStep(d, staffEffects(s.gestao?.staff).youthGrowth, `acastaff:${a.id}:${s.split}`);
       d = Math.min(d, a.potential - ovr); // não ultrapassa o potencial
       const clamp = (v: number) => Math.max(40, Math.min(99, v));
       return {
@@ -4403,7 +4448,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // 17-32 = Stage 1. Os stages antes do seu são AUTO-SIMULADOS.
     const aiSorted = oppEra
       .filter((t) => t.id !== 'user' && t.id !== s.takeoverId)
-      .map((t) => ({ tt: teamSeasonToTTeam(t), vrs: aiTeamVrs(t, s.split) }))
+      .map((t) => { const tt = teamSeasonToTTeam(t); tt.strength += aiStaffEdgeFor(t); return { tt, vrs: aiTeamVrs(t, s.split) }; }) // [fase 2 · STAFF] comissão da IA
       .sort((a, b) => b.vrs - a.vrs);
     const userVrs = userBaseVrsFor(user.teamwork, s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined) + s.vrs + userLegacyVrs(s);
     const userRank = aiSorted.filter((x) => x.vrs > userVrs).length + 1; // posição mundial
@@ -5331,7 +5376,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const until = save.contracts?.[sg.playerId];
                   return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                 });
-                const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }), normalizeFacilities(save.facilities).psychologist);
+                const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }, staffEffects(save.gestao?.staff).moraleRecovery), normalizeFacilities(save.facilities).psychologist);
                 // #16: campanha de Major como fator de resultados (1º=1.0 … fundo=0.45)
                 const majResults01 = mr.champion ? 1 : typeof mr.placement === 'number' ? (mr.placement <= 4 ? 0.8 : mr.placement <= 8 ? 0.6 : 0.45) : 0.6;
                 const hap = tickHappiness(save, majResults01, morale0);
@@ -5396,11 +5441,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 // T3.12: scouting tick — salário + relatórios
                 const scoutingPatchMajor = applyScoutingSplitTick(save, oppEra, rngRef.current);
                 const scoutSalaryMajor = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
+                // [fase 2 · STAFF] folha da comissão + contratos que vencem
+                const staffTickMajor = staffSplitTick(save.gestao?.staff, save.split);
                 // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
                 const { marketNews: majorMarketNews, ...majorWindowPatch } = applyTransferWindow(save);
                 const next = {
                   ...save,
-                  budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) - scoutSalaryMajor + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
+                  budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) - scoutSalaryMajor - staffTickMajor.payroll + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
+                  ...(save.gestao ? { gestao: { ...save.gestao, staff: staffTickMajor.staff } } : {}),
                   vrs: applyCareerVrsDecay(save.vrs, mr.vrs), // Major também é um evento do ranking rolante
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
@@ -5453,7 +5501,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   peakOvr,
                   mapTraining: applyMapTraining(save),
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                  ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...pj.news, ...sc.news, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
+                  ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...pj.news, ...sc.news, ...staffTickNews(staffTickMajor, save.split), ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
                 };
                 const fin = consummateDeals(next);
                 persist(fin);
@@ -5861,7 +5909,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     const until = save.contracts?.[sg.playerId];
                     return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                   });
-                  const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }), normalizeFacilities(save.facilities).psychologist);
+                  const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }, staffEffects(save.gestao?.staff).moraleRecovery), normalizeFacilities(save.facilities).psychologist);
                   // #16: campanha do split como fator de resultados (winrate da liga)
                   const splitResults01 = me.wins + me.losses > 0 ? me.wins / (me.wins + me.losses) : 0.5;
                   const hap = tickHappiness(save, splitResults01, morale0);
@@ -5923,6 +5971,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   // T3.12: scouting tick — salário + relatórios
                   const scoutingPatch = applyScoutingSplitTick(save, oppEra, rngRef.current);
                   const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
+                  // [fase 2 · STAFF] folha da comissão + contratos que vencem
+                  const staffTick = staffSplitTick(save.gestao?.staff, save.split);
                   // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
                   const { marketNews, ...windowPatch } = applyTransferWindow(save);
                   // #15: jogadores LISTADOS à venda — a IA dá o lance no fechamento.
@@ -5953,7 +6003,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   }));
                   // #8: fechar o split no vermelho (receitas não cobriram a folha)
                   // também corrói a confiança — a diretoria vê o caixa, não só a tabela.
-                  const rawBudget = save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
+                  const rawBudget = save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary - staffTick.payroll + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
                   const boardCash = rawBudget < 0
                     ? applyBoardDelta(boardPatch.board, boardPatch.boardLog, save.split, APPROVAL_DELTAS.splitCashCrunch, ct('Caixa zerado: receitas do split não cobriram a folha'))
                     : null;
@@ -5962,6 +6012,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
                     // a carreira com saldo negativo (impossível montar 5)
                     budget: Math.max(0, rawBudget),
+                    ...(save.gestao ? { gestao: { ...save.gestao, staff: staffTick.staff } } : {}),
                     vrs: applyCareerVrsDecay(save.vrs, vrsGain), // VRS rolante (decai e soma o ganho do evento)
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
@@ -6004,7 +6055,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                    ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...listedNews, ...pj.news, ...sc.news, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...listedNews, ...pj.news, ...sc.news, ...staffTickNews(staffTick, save.split), ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
                     // #15: vendas de jogadores LISTADOS entram no trilho da janela
                     pendingSales: [...(save.pendingSales ?? []), ...listedSales],
                     listedPrices: listedPricesLeft,
@@ -6870,6 +6921,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 ? 'full'
                 : (watchOf(save.watchlist, oid)?.revealLevel ?? 0) >= 2 ? 'scouted' : 'rumor',
               oid,
+              staffEffects(save.gestao?.staff).scoutAccuracy, // [fase 2 · STAFF] olheiros estreitam a faixa
             )}
             tab={ppTab}
             onTab={(t) => setPpTabFor({ id: playerRouteId, tab: t })}
@@ -7057,7 +7109,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const me = resolveTeamById('user');
         return me ? <AnalystReportCard report={generateAnalystReport(opp, me)} oppName={opp.name} oppTag={opp.tag} /> : null;
       })()}
-      {hubTab === 'squad' && squadSec !== 'an' && (
+      {/* [fase 2 · STAFF] Time › Comissão técnica */}
+      {hubTab === 'squad' && squadSec === 'st' && (
+        <StaffTab
+          save={save as unknown as Parameters<typeof StaffTab>[0]['save']}
+          sponsorIncome={effSponsorIncome(save)}
+          update={update as unknown as Parameters<typeof StaffTab>[0]['update']}
+        />
+      )}
+      {hubTab === 'squad' && squadSec !== 'an' && squadSec !== 'st' && (
         <SquadTab
           section={squadSec as SquadSection}
           save={save as unknown as Parameters<typeof SquadTab>[0]['save']}

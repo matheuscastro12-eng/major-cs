@@ -1,5 +1,6 @@
 // [fase 2] Save da Carreira v27 → v28: grava o bloco `gestao` (treino, tática,
 // comissão técnica e condição) com os padrões de cada frente. Idempotente.
+// [frente STAFF] `defaultStaff(save)`: o técnico do save vira o headCoach.
 import type { GestaoState } from './model';
 import { defaultTrainingState, defaultCondition } from './treino';
 import { defaultTactics } from './tatica';
@@ -12,6 +13,6 @@ export function migrateGestao(save: Save): Save {
   const squad = Array.isArray(save.squad) ? (save.squad as { playerId?: string }[]) : [];
   const condition: GestaoState['condition'] = {};
   for (const s of squad) if (typeof s?.playerId === 'string') condition[s.playerId] = defaultCondition();
-  const gestao: GestaoState = { v: 1, training: defaultTrainingState(), tactics: defaultTactics(), staff: defaultStaff(), condition };
+  const gestao: GestaoState = { v: 1, training: defaultTrainingState(), tactics: defaultTactics(), staff: defaultStaff(save as Parameters<typeof defaultStaff>[0]), condition };
   return { ...save, gestao };
 }
