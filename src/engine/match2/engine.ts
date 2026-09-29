@@ -39,6 +39,15 @@
 // AI_EDGE, preferência de mapa, forma do dia, estilo do técnico e do IGL,
 // playbook × entrosamento, postura, calls (rush/retake/force/save), timeout,
 // momentum, leitura de site e identidade tática.
+//
+// TÁTICA POR MAPA (fase 2, opt-in por `team.tactics`; engine/gestao/tatica.ts):
+// papel no mapa → tabela de engajamento, AWPer e IGL do mapa, custo fora da
+// função (pontos de atributo); setup CT × execuções T (RPS) e familiaridade →
+// viés do duelo; instruções → compra (política de eco, custo de utilitária),
+// plant/tempo/meio do round (ritmo), abertura × trocas (agressividade) e
+// timeouts automáticos (quebram o embalo). Chamada/postura ao vivo do time
+// substitui ritmo/agressividade no round. Tudo entra no MESMO roundEffect de
+// step() e peekWinProb(): % mostrado = % rolado.
 
 import type { KillEvent, MapId, MapResult, PlayerMapStats, TPlayer, TTeam } from '../../types';
 import type { Call, MapSim, MapSimOpts, SiteCall, SiteRound, BombSite } from '../match';
@@ -51,6 +60,12 @@ import {
 import { econOf, identityRoundDelta, type IdentityAction } from '../career/teamIdentity';
 import { ct } from '../../state/career-i18n';
 import { duelProfile, type DuelProfile } from './profile';
+import {
+  resolveTeamPlan, tacticDuelMods, buyPolicy, timeoutThreshold, MAP_ROLE_W, TIMEOUTS_PER_MAP,
+  type TeamPlan, type BuyPolicy,
+} from '../gestao/tatica';
+import type { TacticDuelMods } from '../gestao/model';
+import { conditionDuelMod, conditionStaminaMul } from '../gestao/condicao';
 import { DUEL, playRound, winProbT, type RoundPlay, type RoundSpec, type SideSpec, type WeaponClass } from './round';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,7 +175,7 @@ function econLevel(classes: WeaponClass[], pistolRound: boolean): EconLevel {
   return full >= 3 ? 2 : eco >= 3 ? -1 : 0;
 }
 
-export type MapSimV2 = MapSim & { trace: () => RoundTrace[] };
+export type MapSimV2 = MapSim & { trace: () => RoundTrace[]; autoTimeouts: () => { round: number; team: 0 | 1 }[] };
 
 interface TeamCtx {
   team: TTeam;
@@ -174,6 +189,8 @@ interface TeamCtx {
   fixedMod: Float64Array; // forma, variância do mapa, bigMatch, fadiga da série, mod de duelo (RtP)
   tradeTeam: number;
   utilAvg: number;
+  plan: TeamPlan | null;     // tática por mapa (null = sem tática: motor de antes)
+  policy: BuyPolicy | null;  // política de compra da tática
 }
 
 export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, pickedBy: 0 | 1 | -1, opts?: MapSimOpts): MapSimV2 {
@@ -186,22 +203,33 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
   const bigMatch = !!opts?.bigMatch;
   const duelMods = opts?.duelMods ?? {};
 
-  const buildTeam = (t: TTeam, orig: TTeam): TeamCtx => {
+  // tática por mapa de cada time (null = sem tática)
+  const planOf = (t: TTeam, o: TTeam): TeamPlan | null => (t.tactics ? resolveTeamPlan(t.tactics, map, t.players, t.id, o.id) : null);
+  const plans: [TeamPlan | null, TeamPlan | null] = [planOf(a, b), planOf(b, a)];
+
+  const buildTeam = (t: TTeam, orig: TTeam, plan: TeamPlan | null): TeamCtx => {
     const players = t.players;
     const attrs = players.map((p) => attrsOf(p));
     const prof = players.map((p, i) => duelProfile(p, attrs[i]));
-    let awper = players.findIndex((p) => p.role === 'AWP');
-    if (awper < 0) awper = players.findIndex((p) => p.role2 === 'AWP');
-    if (awper < 0) {
-      let best = -1, bestV = 15.5;
-      attrs.forEach((x, i) => { if (x.a.awp >= bestV) { best = i; bestV = x.a.awp; } });
-      awper = best;
+    let awper: number;
+    if (plan && plan.awpSlot != null) awper = plan.awpSlot; // o papel AWP do mapa decide quem compra a AWP (sem papel = ninguém)
+    else {
+      awper = players.findIndex((p) => p.role === 'AWP');
+      if (awper < 0) awper = players.findIndex((p) => p.role2 === 'AWP');
+      if (awper < 0) {
+        let best = -1, bestV = 15.5;
+        attrs.forEach((x, i) => { if (x.a.awp >= bestV) { best = i; bestV = x.a.awp; } });
+        awper = best;
+      }
     }
-    let iglSlot = players.findIndex((p) => p.role === 'IGL');
+    let iglSlot = plan && plan.iglSlot >= 0 ? plan.iglSlot : players.findIndex((p) => p.role === 'IGL');
     if (iglSlot < 0) iglSlot = players.findIndex((p) => p.role2 === 'IGL');
     if (iglSlot < 0) iglSlot = prof.reduce((bi, p, i) => (p.igl > prof[bi].igl ? i : bi), 0);
     const igl: IglInfo = { style: prof[iglSlot].style, rating: prof[iglSlot].igl * 5 };
-    const hasIgl = players.some((p) => p.role === 'IGL' || p.role2 === 'IGL') || igl.rating >= 80;
+    // com papel de IGL no mapa, quem chama é ele: se não sabe chamar, o time joga sem IGL
+    const hasIgl = plan && plan.iglSlot >= 0
+      ? players[iglSlot].role === 'IGL' || players[iglSlot].role2 === 'IGL' || igl.rating >= 80
+      : players.some((p) => p.role === 'IGL' || p.role2 === 'IGL') || igl.rating >= 80;
     const residual = clamp(fin(orig.strength, 70) - playersBaseline(orig.players.length ? orig : t), -RESIDUAL_CAP, RESIDUAL_CAP);
     const fixedMod = new Float64Array(5);
     for (let k = 0; k < 5; k++) {
@@ -211,11 +239,14 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       const sigma = 1.25 * clamp(1.5 - 0.05 * (0.6 * pr.consistencyHidden + 0.4 * pr.consistency), 0.55, 1.45);
       const swing = gauss(rng) * sigma;
       const big = bigMatch ? ((pr.bigMatch - 11) / 9) * 0.8 : 0;
-      const fatigue = mapIndex > 0 ? -mapIndex * ((20 - pr.stamina) / 19) * 0.45 : 0;
+      // condição do jogador (fase 2 · treino): ritmo e cansaço entram no duelo, e
+      // o cansaço amplia o desgaste de mapa a mapa. Sem `cond` (IA) = 0.
+      const cond = players[k].cond;
+      const fatigue = mapIndex > 0 ? -mapIndex * ((20 - pr.stamina) / 19) * 0.45 * conditionStaminaMul(cond) : 0;
       // quem CHAMA o jogo divide a cabeça entre a mira e a call: o IGL duela
       // pior (a concentração amortece) — mas o time ganha a leitura dele.
       const callLoad = k === iglSlot ? -(hasIgl ? CALL_LOAD : CALL_LOAD_IMPROVISED) * clamp(1.35 - pr.concentration / 20, 0.5, 1.2) : 0;
-      fixedMod[k] = form + swing + big + fatigue + callLoad + fin(duelMods[players[k].id], 0);
+      fixedMod[k] = form + swing + big + fatigue + callLoad + conditionDuelMod(cond) + fin(duelMods[players[k].id], 0) + (plan ? plan.fit[k] : 0);
     }
     const tw = fin(t.teamwork, 70);
     return {
@@ -224,9 +255,29 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       fixedMod,
       tradeTeam: clamp(1 + 0.012 * (tw - 70), 0.7, 1.3),
       utilAvg: prof.reduce((s, p) => s + p.util, 0) / 5,
+      plan,
+      policy: plan ? buyPolicy(plan.instr) : null,
     };
   };
-  const tc: [TeamCtx, TeamCtx] = [buildTeam(a, a0), buildTeam(b, b0)];
+  const tc: [TeamCtx, TeamCtx] = [buildTeam(a, a0, plans[0]), buildTeam(b, b0, plans[1])];
+
+  // modificadores da tática por (time, lado, call ao vivo, pistol) — constantes no mapa
+  const modsCache = new Map<string, TacticDuelMods>();
+  const tmods = (ti: 0 | 1, side: 'ct' | 't', live: boolean, pistol: boolean): TacticDuelMods | null => {
+    const plan = tc[ti].plan;
+    if (!plan) return null;
+    const key = `${ti}${side}${live ? 1 : 0}${pistol ? 1 : 0}`;
+    let m = modsCache.get(key);
+    if (!m) {
+      m = tacticDuelMods({ plan, opp: tc[ti === 0 ? 1 : 0].plan, side, live, pistol });
+      modsCache.set(key, m);
+    }
+    return m;
+  };
+  // timeouts automáticos da tática (política de timeout); o time que chama timeout
+  // à mão (partida interativa) fica fora
+  const timeoutsLeft: [number, number] = [TIMEOUTS_PER_MAP, TIMEOUTS_PER_MAP];
+  const autoTimeouts: { round: number; team: 0 | 1 }[] = [];
 
   let scoreA = 0;
   let scoreB = 0;
@@ -263,12 +314,24 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
     return [aSide, aSide === 'ct' ? 't' : 'ct'];
   };
 
+  // compra: a política de eco da tática troca os limiares (sem tática, a regra de antes)
+  const buyOf = (ti: 0 | 1, isPistol: boolean): BuyTier => {
+    const aggressiveCoach = teams[ti].coach?.style === 'aggressive';
+    const pol = tc[ti].policy;
+    if (!pol || pol.forceMin == null) return decideBuy(eco[ti], isPistol, aggressiveCoach);
+    if (isPistol) return 'pistol';
+    const m = eco[ti].money;
+    if (m >= 4500) return 'full';
+    if (m >= (pol.forceMin ?? (aggressiveCoach ? 2300 : 2600))) return 'force';
+    return 'eco';
+  };
+  const utilCostOf = (ti: 0 | 1, tier: BuyTier): number => {
+    const pol = tc[ti].policy;
+    return pol && (tier === 'full' || tier === 'force') ? pol.utilCost : 0;
+  };
   const computeBuys = (): [BuyTier, BuyTier] => {
     const isPistol = round === 0 || round === 12;
-    return [
-      decideBuy(eco[0], isPistol, teams[0].coach?.style === 'aggressive'),
-      decideBuy(eco[1], isPistol, teams[1].coach?.style === 'aggressive'),
-    ];
+    return [buyOf(0, isPistol), buyOf(1, isPistol)];
   };
   let nextBuys = computeBuys();
 
@@ -319,19 +382,24 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       if (carried) return carried;
       // eco: save seco para comprar cheio no round seguinte. Exceção do CS2: o 2º
       // round de quem perdeu o pistol, com caixa pra colete, vira meia-compra.
-      const afterPistol = round === 1 || round === 13;
+      const half = tc[ti].policy?.halfBuy ?? 'afterPistol';
+      const afterPistol = half === 'anyEco' || (half === 'afterPistol' && (round === 1 || round === 13));
       return tier === 'force' ? 'smg' : afterPistol && eco[ti].money >= HALF_BUY_MONEY ? 'half' : 'eco';
     });
 
-  const sideSpec = (ti: 0 | 1, side: 'ct' | 't', classes: WeaponClass[], tier: BuyTier, mode: Stance | undefined, saveCall: boolean, secondHalf: boolean): SideSpec => {
+  const sideSpec = (
+    ti: 0 | 1, side: 'ct' | 't', classes: WeaponClass[], tier: BuyTier, mode: Stance | undefined, saveCall: boolean, secondHalf: boolean,
+    tm: TacticDuelMods | null,
+  ): SideSpec => {
     const t = tc[ti];
     const isT = side === 't';
     const s: SideSpec = {
       base: new Float64Array(5), mod: new Float64Array(5), phase1: new Float64Array(5), sense: new Float64Array(5),
       phase2: new Float64Array(5), clutch: new Float64Array(5), trade: new Float64Array(5), eq: new Float64Array(5),
       awp: new Uint8Array(5), wOpen: new Float64Array(5), wMid: new Float64Array(5), wPost: new Float64Array(5),
-      tradeTeam: t.tradeTeam,
-      saveMult: tier === 'eco' ? (saveCall ? 2.6 : 1.4) : tier === 'force' ? 1.1 : 1,
+      tradeTeam: t.tradeTeam * (tm?.tradeMult ?? 1),
+      // política de eco: propensão a salvar no eco natural (o save chamado ao vivo manda)
+      saveMult: (tier === 'eco' ? (saveCall ? 2.6 : 1.4) : tier === 'force' ? 1.1 : 1) * (tier === 'eco' && !saveCall ? tm?.saveMult ?? 1 : 1),
     };
     const ls = eco[ti].lossStreak;
     for (let k = 0; k < 5; k++) {
@@ -359,9 +427,18 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       let styleMid = st === 'aggressive' ? 1.1 : st === 'passive' ? 0.9 : 1;
       if (mode === 'aggressive' && st === 'aggressive') { styleOpen *= 1.3; styleMid *= 1.3; }
       if (mode === 'cautious' && st === 'passive') { styleOpen *= 1.2; styleMid *= 1.2; }
-      s.wOpen[k] = (isT ? W_OPEN_T[role] ?? 1 : cls === 'awp' ? W_OPEN_CT_AWP : W_OPEN_CT[role] ?? 1) * styleOpen;
-      s.wMid[k] = (W_MID[role] ?? 1) * styleMid;
-      s.wPost[k] = (isT ? W_POST_T[role] : W_POST_CT[role]) ?? 1;
+      const mr = t.plan?.roles[k];
+      if (mr) {
+        // tática por mapa: o PAPEL no mapa decide quem aparece em cada fase
+        const W = MAP_ROLE_W[mr];
+        s.wOpen[k] = (isT ? W.tOpen : cls === 'awp' ? W_OPEN_CT_AWP : W.ctOpen) * styleOpen * (tm?.engageWeight?.[t.players[k].id] ?? 1);
+        s.wMid[k] = W.mid * styleMid;
+        s.wPost[k] = isT ? W.tPost : W.ctPost;
+      } else {
+        s.wOpen[k] = (isT ? W_OPEN_T[role] ?? 1 : cls === 'awp' ? W_OPEN_CT_AWP : W_OPEN_CT[role] ?? 1) * styleOpen;
+        s.wMid[k] = (W_MID[role] ?? 1) * styleMid;
+        s.wPost[k] = (isT ? W_POST_T[role] : W_POST_CT[role]) ?? 1;
+      }
     }
     return s;
   };
@@ -423,10 +500,23 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
     const cIdx: 0 | 1 = aIsT ? 1 : 0;
     const classes: [WeaponClass[], WeaponClass[]] = [weaponClasses(0, buys[0]), weaponClasses(1, buys[1])];
     const saveCall = (ti: 0 | 1) => !!call && call.team === ti && call.kind === 'save';
-    const T = sideSpec(tIdx, 't', classes[tIdx], buys[tIdx], callModeOf(tIdx, call, stance), saveCall(tIdx), secondHalf);
-    const C = sideSpec(cIdx, 'ct', classes[cIdx], buys[cIdx], callModeOf(cIdx, call, stance), saveCall(cIdx), secondHalf);
+    // tática por mapa: chamada/postura AO VIVO do time substitui ritmo/agressividade preparados
+    const live = (ti: 0 | 1) => (!!call && call.team === ti) || (!!stance && stance.team === ti && stance.mode !== 'default');
+    const mT = tmods(tIdx, 't', live(tIdx), isPistol);
+    const mC = tmods(cIdx, 'ct', live(cIdx), isPistol);
+    const T = sideSpec(tIdx, 't', classes[tIdx], buys[tIdx], callModeOf(tIdx, call, stance), saveCall(tIdx), secondHalf, mT);
+    const C = sideSpec(cIdx, 'ct', classes[cIdx], buys[cIdx], callModeOf(cIdx, call, stance), saveCall(cIdx), secondHalf, mC);
     let bias = (aIsT ? diffA : -diffA) * S2D - (MAP_CT_BIAS[map] ?? DEFAULT_CT_BIAS);
     let plantMult = clamp(1 + 0.04 * (tc[tIdx].utilAvg - 12), 0.75, 1.3);
+    let phaseBias: [number, number, number] | undefined;
+    let timeMult: number | undefined;
+    if (mT || mC) {
+      bias += (mT?.teamLogit ?? 0) - (mC?.teamLogit ?? 0);
+      const pT = mT?.phaseLogit, pC = mC?.phaseLogit;
+      if (pT || pC) phaseBias = [(pT?.open ?? 0) - (pC?.open ?? 0), (pT?.mid ?? 0) - (pC?.mid ?? 0), (pT?.post ?? 0) - (pC?.post ?? 0)];
+      plantMult *= mT?.plantMult ?? 1;
+      if (mT?.timeMult != null) timeMult = mT.timeMult;
+    }
     const tMode = callModeOf(tIdx, call, stance);
     if (tMode === 'aggressive') plantMult *= 1.15;
     else if (tMode === 'cautious') plantMult *= 0.9;
@@ -435,6 +525,8 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       else { bias += SITE_WRONG; plantMult *= 1.35; }
     }
     let spec: RoundSpec = { sides: [T, C], bias, plantMult };
+    if (phaseBias) spec.phaseBias = phaseBias;
+    if (timeMult != null) spec.timeMult = timeMult;
 
     // [W5] IDENTIDADE TÁTICA: desvio direto de probabilidade (±pp), igual ao v1.
     // No v2 o desvio vira viés de duelo resolvido EXATAMENTE (a cadeia passa a
@@ -511,8 +603,8 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
     lastEffect = eff;
     lastPA = null; // calculada sob demanda (lastRollP) — a amostragem não precisa da DP
     const { buys, aSide, bSide, classes } = eff;
-    eco[0].money = Math.max(0, eco[0].money - buyCost(buys[0]));
-    eco[1].money = Math.max(0, eco[1].money - buyCost(buys[1]));
+    eco[0].money = Math.max(0, eco[0].money - buyCost(buys[0]) - utilCostOf(0, buys[0]));
+    eco[1].money = Math.max(0, eco[1].money - buyCost(buys[1]) - utilCostOf(1, buys[1]));
 
     // ── o round acontece: cadeia de duelos ──
     const play = playRound(eff.spec, rng);
@@ -582,6 +674,18 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       eco[0] = { money: OT_START_MONEY, lossStreak: 0 };
       eco[1] = { money: OT_START_MONEY, lossStreak: 0 };
       for (const c of carry) c.fill(null);
+    }
+    // timeout automático da tática: quem perdeu N seguidos para e quebra o embalo
+    // do adversário. Decidido no FIM do round (estado), então a % do próximo já o vê.
+    if (!finished && streakTeam >= 0) {
+      const ti: 0 | 1 = streakTeam === 0 ? 1 : 0;
+      const plan = tc[ti].plan;
+      if (plan && opts?.manualTimeouts !== ti && timeoutsLeft[ti] > 0 && streakLen >= timeoutThreshold(plan.instr)) {
+        timeoutsLeft[ti]--;
+        autoTimeouts.push({ round, team: ti });
+        streakTeam = -1;
+        streakLen = 0;
+      }
     }
     if (!finished) nextBuys = computeBuys();
     return finished;
@@ -718,6 +822,7 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       stats,
     }),
     trace: () => traceLog,
+    autoTimeouts: () => autoTimeouts,
   };
 }
 

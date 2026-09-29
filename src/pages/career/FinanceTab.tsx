@@ -27,6 +27,8 @@ import {
 } from '../../engine/career/facilities';
 import type { Player } from '../../types';
 import { scoutById } from '../../engine/scouting';
+import { staffPayroll } from '../../engine/gestao/staff';
+import type { GestaoState } from '../../engine/gestao/model';
 
 interface FinanceTabSave {
   org?: { name?: string } | null;
@@ -37,6 +39,7 @@ interface FinanceTabSave {
   split: number;
   difficulty?: Difficulty;
   hiredScoutId?: string | null;
+  gestao?: GestaoState; // [fase 2 · STAFF] folha da comissão técnica
   youthAge?: Record<string, number>;
   youthDebut?: Record<string, YouthDebut>;
   // pass-through pros helpers effSponsorIncome/careerFans (que esperam CareerSave)
@@ -79,7 +82,9 @@ export function FinanceTab({ section = 'money', save, findSigning, update }: Pro
   // salário do scout: DEBITADO de verdade na virada de split (CareerScreen), mas
   // ficava fora do "Saldo fixo" — o caixa "sumia" sem linha justificando.
   const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
-  const net = sponsorInc - folha - encargos - upkeep - scoutSalary;
+  // [fase 2 · STAFF] comissão técnica: debitada na virada de split
+  const staffSalary = staffPayroll(save.gestao?.staff);
+  const net = sponsorInc - folha - encargos - upkeep - scoutSalary - staffSalary;
 
   const facilityCards: { key: FacilityKey; icon: CareerIconName; name: string; effect: string }[] = [
     { key: 'training', icon: 'dumbbell', name: ct('Centro de treino'), effect: ct('Acelera a evolução do elenco e da academia.') },
@@ -116,6 +121,9 @@ export function FinanceTab({ section = 'money', save, findSigning, update }: Pro
         <div className="fin-card"><span className="fin-k">{ct('Infraestrutura / split')}</span><b className="neg">-{formatMoney(upkeep)}</b></div>
         {scoutSalary > 0 && (
           <div className="fin-card"><span className="fin-k">{ct('Scout / split')}</span><b className="neg">-{formatMoney(scoutSalary)}</b></div>
+        )}
+        {staffSalary > 0 && (
+          <div className="fin-card"><span className="fin-k">{ct('Comissão técnica / split')}</span><b className="neg">-{formatMoney(staffSalary)}</b></div>
         )}
         <div className="fin-card"><span className="fin-k">{ct('Saldo fixo / split')}</span><b className={net >= 0 ? 'pos' : 'neg'}>{net >= 0 ? '+' : ''}{formatMoney(net)}</b></div>
       </div>

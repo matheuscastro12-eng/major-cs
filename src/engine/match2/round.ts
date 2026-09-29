@@ -53,6 +53,11 @@ export const DUEL = {
   TRADE_SKILL: 0.05,   // por ponto de trade médio acima de 12
   K_TRADE: 0.06,
   NUM_ADV: 0.2,       // por jogador a mais vivo: crossfire, troca armada, utilitária sobrando
+  // 1v1 com MEMÓRIA: quem tinha a vantagem numérica antes do round virar 1v1
+  // chega na posição, com a utilitária e a informação (o 2v1 que virou 1v1).
+  // Guardado no estado da cadeia (DP e amostragem). Calibrado contra o clutch
+  // 1v1 real (docs/calibration-targets.json).
+  ADV_1V1: 0.4,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,6 +84,9 @@ export interface RoundSpec {
   sides: [SideSpec, SideSpec];  // [T, CT]
   bias: number;                 // logit a favor do T em TODO duelo (time, lado do mapa, leitura de site…)
   plantMult: number;            // execução do T (utilitária, IGL, rush, leitura de site)
+  // [fase 2 · tática] opcionais (ausentes = motor de antes, bit a bit):
+  phaseBias?: [number, number, number]; // logit a favor do T por fase: [abertura, meio, pós-plant]
+  timeMult?: number;                    // chance de o tempo acabar (ritmo do T)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -86,6 +94,7 @@ export interface RoundSpec {
 
 interface Tables {
   pT: (Float64Array | null)[];      // (9 chaves de fase × 9 diferenças de vivos) → P(T slot i vence CT slot j), [i*5+j]
+  p11: (Float64Array | null)[];     // 1v1 com memória: (plantado × vantagem anterior T/CT)
   tr: [Float64Array, Float64Array]; // tr[s][killer*32 + mask] = P(lado s troca o killer com os vivos `mask`)
   ev: Float64Array;                 // probabilidades de evento por (plantado, nT, nC)
 }
@@ -95,7 +104,7 @@ const tablesOf = new WeakMap<RoundSpec, Tables>();
 function tables(spec: RoundSpec): Tables {
   let t = tablesOf.get(spec);
   if (t) return t;
-  t = { pT: new Array<Float64Array | null>(81).fill(null), tr: [tradeTable(spec, 0), tradeTable(spec, 1)], ev: eventTable(spec) };
+  t = { pT: new Array<Float64Array | null>(81).fill(null), p11: [null, null, null, null], tr: [tradeTable(spec, 0), tradeTable(spec, 1)], ev: eventTable(spec) };
   tablesOf.set(spec, t);
   return t;
 }
@@ -119,12 +128,14 @@ function eqOf(s: SideSpec, side: 0 | 1, k: number, planted: boolean): number {
   return holding ? DUEL.E_AWP_HOLD : DUEL.E_AWP_PEEK;
 }
 
-function duelTable(spec: RoundSpec, key: number, diff: number): Float64Array {
+function duelTable(spec: RoundSpec, key: number, diff: number, extra = 0): Float64Array {
   const [T, C] = spec.sides;
   const pl = key !== 8 && key >= 4;
   const tAlone = key !== 8 && (key & 2) !== 0;
   const cAlone = key !== 8 && (key & 1) !== 0;
-  const bias = spec.bias + (key === 8 ? DUEL.OPEN_T : 0) + (pl ? DUEL.POST_T : 0) + DUEL.NUM_ADV * diff;
+  const pb = spec.phaseBias;
+  const bias = spec.bias + (key === 8 ? DUEL.OPEN_T : 0) + (pl ? DUEL.POST_T : 0) + DUEL.NUM_ADV * diff
+    + (pb ? (key === 8 ? pb[0] : pl ? pb[2] : pb[1]) : 0) + extra;
   const out = new Float64Array(N * N);
   for (let i = 0; i < N; i++) {
     const pi = powerOf(T, i, key, tAlone);
@@ -142,6 +153,18 @@ function duelTable(spec: RoundSpec, key: number, diff: number): Float64Array {
 function pTable(t: Tables, spec: RoundSpec, key: number, diff: number): Float64Array {
   const idx = key * 9 + diff + 4;
   return t.pT[idx] ?? (t.pT[idx] = duelTable(spec, key, diff));
+}
+
+// Vantagem anterior no 1v1: 0 = nenhuma (trocaram até o 1v1), 1 = o T tinha mais, 2 = o CT tinha mais.
+type Adv = 0 | 1 | 2;
+// estado seguinte a partir de (nT, nC): se virou 1v1, quem tinha mais vivos antes
+const advAfter = (nT: number, nC: number, mT1: number, mC1: number): Adv =>
+  POP[mT1] === 1 && POP[mC1] === 1 ? (nT > nC ? 1 : nT < nC ? 2 : 0) : 0;
+
+function pTableOf(t: Tables, spec: RoundSpec, key: number, diff: number, adv: Adv): Float64Array {
+  if (!adv) return pTable(t, spec, key, diff);
+  const idx = (key >= 4 ? 2 : 0) + adv - 1;
+  return t.p11[idx] ?? (t.p11[idx] = duelTable(spec, key, 0, adv === 1 ? DUEL.ADV_1V1 : -DUEL.ADV_1V1));
 }
 
 // Troca: o lado `s` (com os vivos `mask`) derruba o `killer` do outro lado na hora.
@@ -179,6 +202,7 @@ const evIdx = (pl: number, nT: number, nC: number) => ((pl * 6 + nT) * 6 + nC) *
 function eventTable(spec: RoundSpec): Float64Array {
   const out = new Float64Array(2 * 6 * 6 * EV_STRIDE);
   const [T, C] = spec.sides;
+  const tm = spec.timeMult ?? 1;
   for (let nT = 1; nT <= 5; nT++) {
     for (let nC = 1; nC <= 5; nC++) {
       // sem bomba: o T precisa agir
@@ -186,7 +210,7 @@ function eventTable(spec: RoundSpec): Float64Array {
       if (nT === 1) tSave = nC >= 3 ? 0.2 : nC === 2 ? 0.05 : 0;
       else if (nT === 2) tSave = nC >= 4 ? 0.12 : nC === 3 ? 0.02 : 0;
       // o tempo só vence o T que está em desvantagem e sem conseguir entrar
-      const time = nT < nC ? 0.025 : nT === nC ? 0.006 : 0.002;
+      const time = (nT < nC ? 0.025 : nT === nC ? 0.006 : 0.002) * tm;
       const plant = Math.max(0.02, Math.min(0.5, (0.09 + 0.07 * (nT - nC)) * spec.plantMult));
       const o0 = evIdx(0, nT, nC);
       out[o0] = Math.min(0.9, tSave * T.saveMult);
@@ -214,24 +238,24 @@ const weightsOf = (s: SideSpec, key: number): Float64Array => (key === 8 ? s.wOp
 
 export function winProbT(spec: RoundSpec): number {
   const t = tables(spec);
-  const memo = new Float64Array(2 * 32 * 32).fill(-1);
+  const memo = new Float64Array(3 * 2 * 32 * 32).fill(-1);
   const [T, C] = spec.sides;
 
-  const V = (mT: number, mC: number, pl: number): number => {
+  const V = (mT: number, mC: number, pl: number, adv: Adv = 0): number => {
     if (mT === 0) return 0;
     if (mC === 0) return 1;
-    const mi = (pl * 32 + mT) * 32 + mC;
+    const mi = ((adv * 2 + pl) * 32 + mT) * 32 + mC;
     const hit = memo[mi];
     if (hit >= 0) return hit;
     const nT = POP[mT], nC = POP[mC];
     const e = evIdx(pl, nT, nC);
     const e0 = t.ev[e], e1 = t.ev[e + 1], e2 = t.ev[e + 2];
     const key = phaseKey(mT, mC, pl);
-    const d = duelValue(mT, mC, pl, key);
+    const d = duelValue(mT, mC, pl, key, adv);
     let v: number;
     if (!pl) {
       // save do T → CT vence; tempo → CT vence; plant → estado plantado
-      const planted = V(mT, mC, 1);
+      const planted = V(mT, mC, 1, adv);
       v = (1 - e0) * (1 - e1) * (e2 * planted + (1 - e2) * d);
     } else {
       // save do CT → T vence; explodiu → T vence; desarmou → CT vence
@@ -241,8 +265,9 @@ export function winProbT(spec: RoundSpec): number {
     return v;
   };
 
-  const duelValue = (mT: number, mC: number, pl: number, key: number): number => {
-    const p = pTable(t, spec, key, POP[mT] - POP[mC]);
+  const duelValue = (mT: number, mC: number, pl: number, key: number, adv: Adv): number => {
+    const nT = POP[mT], nC = POP[mC];
+    const p = pTableOf(t, spec, key, nT - nC, adv);
     const wT = weightsOf(T, key), wC = weightsOf(C, key);
     let WT = 0, WC = 0;
     for (let i = 0; i < N; i++) if (mT & (1 << i)) WT += wT[i];
@@ -257,9 +282,9 @@ export function winProbT(spec: RoundSpec): number {
         const pij = p[i * N + j];
         const tc = mCj ? t.tr[1][i * 32 + mCj] : 0;   // CT troca o T que matou
         const tt = mTi ? t.tr[0][j * 32 + mTi] : 0;   // T troca o CT que matou
-        const both = tc > 0 || tt > 0 ? V(mTi, mCj, pl) : 0;
-        const win = (1 - tc) * V(mT, mCj, pl) + tc * both;
-        const lose = (1 - tt) * V(mTi, mC, pl) + tt * both;
+        const both = tc > 0 || tt > 0 ? V(mTi, mCj, pl, advAfter(nT, nC, mTi, mCj)) : 0;
+        const win = (1 - tc) * V(mT, mCj, pl, advAfter(nT, nC, mT, mCj)) + tc * both;
+        const lose = (1 - tt) * V(mTi, mC, pl, advAfter(nT, nC, mTi, mC)) + tt * both;
         sum += wT[i] * wC[j] * (pij * win + (1 - pij) * lose);
       }
     }
@@ -312,6 +337,7 @@ export function playRound(spec: RoundSpec, rng: Rng): RoundPlay {
   const t = tables(spec);
   const [T, C] = spec.sides;
   let mT = FULL, mC = FULL, pl = 0, planter = -1;
+  let adv: Adv = 0;
   const duels: DuelRec[] = [];
   const clutch: [ClutchRec | null, ClutchRec | null] = [null, null];
   const noteClutch = () => {
@@ -339,7 +365,7 @@ export function playRound(spec: RoundSpec, rng: Rng): RoundPlay {
     const i = pickWeighted(rng, weightsOf(T, key), mT);
     const j = pickWeighted(rng, weightsOf(C, key), mC);
     const opening = duels.length === 0;
-    const p = pTable(t, spec, key, nT - nC)[i * N + j];
+    const p = pTableOf(t, spec, key, nT - nC, adv)[i * N + j];
     if (rng() < p) {
       // T i mata CT j; o CT pode trocar
       mC &= ~(1 << j);
@@ -358,6 +384,7 @@ export function playRound(spec: RoundSpec, rng: Rng): RoundPlay {
       }
       duels.push({ winSide: 1, win: j, loseSide: 0, lose: i, trader, opening, planted: pl === 1 });
     }
+    if (mT && mC && !adv) adv = advAfter(nT, nC, mT, mC);
     noteClutch();
   }
   // guarda (inalcançável na prática): decide por quem tem mais vivos

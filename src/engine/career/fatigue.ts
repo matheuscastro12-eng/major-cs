@@ -1,4 +1,4 @@
-import type { TPlayer, TTeam } from '../../types';
+import type { TPlayer } from '../../types';
 import { personalityFatigueDelta } from './personality';
 
 export const BURNOUT_THRESHOLD = 80;
@@ -14,25 +14,10 @@ export function fatigueBand(value: number): 'fresh' | 'loaded' | 'tired' | 'burn
   return 'fresh';
 }
 
-export function applyFatigueForm(
-  team: TTeam,
-  fatigue: Record<string, number> | undefined,
-  reducedLoad: string[] | undefined,
-): TTeam {
-  if (!team.isUser) return team;
-  const resting = new Set(reducedLoad ?? []);
-  return {
-    ...team,
-    players: team.players.map((player) => {
-      const id = careerPlayerId(player.id);
-      const load = fatigue?.[id] ?? 0;
-      const fatiguePenalty = Math.max(0, load - 30) * 0.00145;
-      const reducedLoadPenalty = resting.has(id) ? 0.018 : 0;
-      return { ...player, form: Math.max(0.88, Math.min(1.12, (player.form ?? 1) * (1 - fatiguePenalty - reducedLoadPenalty))) };
-    }),
-  };
-}
-
+// A forma pela fadiga (applyFatigueForm) e a recuperação (recoverFatigue) viraram
+// CONDIÇÃO (fitness/ritmo) na fase 2: engine/gestao/condicao.ts (motor) e
+// engine/gestao/treino.ts (recoverCondition). Aqui fica a carga por série, pura
+// sobre o mapa de fadiga (0–100); a Carreira converte para fitness na borda.
 export function updateMatchFatigue(
   previous: Record<string, number> | undefined,
   players: TPlayer[],
@@ -55,13 +40,4 @@ export function updateMatchFatigue(
     if (before < BURNOUT_THRESHOLD && next >= BURNOUT_THRESHOLD) newBurnouts.push(player.nick);
   }
   return { fatigue, newBurnouts };
-}
-
-// recuperação de fadiga (descanso). `bonus` = psicologia esportiva acelerando.
-// Subtrai amount+bonus, piso em 0. Quanto maior a folga (etapa < split < temporada),
-// maior o amount — a recuperação de fim de temporada quase zera o desgaste, evitando
-// a espiral de burnout em carreiras longas.
-export function recoverFatigue(previous: Record<string, number> | undefined, amount: number, bonus = 0): Record<string, number> {
-  const total = amount + Math.max(0, bonus);
-  return Object.fromEntries(Object.entries(previous ?? {}).map(([id, value]) => [id, Math.max(0, Math.round(value - total))]));
 }

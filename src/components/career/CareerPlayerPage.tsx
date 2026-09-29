@@ -205,6 +205,8 @@ export function CareerPlayerPage({
   morale,
   moraleIcon,
   fatigue,
+  sharpness,
+  injuryNote,
   valueLabel,
   wageLabel,
   contractLeft,
@@ -262,6 +264,10 @@ export function CareerPlayerPage({
   moraleLabel: string;
   moraleIcon: CareerIconName;
   fatigue: number;
+  /** [fase 2 · treino] ritmo de jogo 0–100 (condição) */
+  sharpness?: number;
+  /** [fase 2 · treino] lesão atual ("Punho (LER) · 2 sem.") */
+  injuryNote?: string | null;
   valueLabel: string;
   wageLabel: string;
   contractLeft: string;
@@ -557,7 +563,7 @@ export function CareerPlayerPage({
               </Panel>
               {/* #22: FOCO DE TREINO — qual atributo este jogador trabalha */}
               {onFocusAttr && focusOptions && focusOptions.length > 0 && (
-                <Panel title="Foco de treino" icon="brain">
+                <Panel title="Foco individual de treino" icon="brain">
                   <div className="pp-focus-grid">
                     {focusOptions.map((o) => (
                       <button
@@ -573,7 +579,7 @@ export function CareerPlayerPage({
                       </button>
                     ))}
                   </div>
-                  <p className="pp-focus-hint">{ct('Split de desenvolvimento com foco = +1 extra no atributo escolhido (até +4). O staff marca a maior lacuna da função.')}</p>
+                  <p className="pp-focus-hint">{ct('O foco individual redistribui o treino da semana: o atributo escolhido rende ×2,2 (o resto cede um pouco); o foco na função rende ×1,45 nos atributos dela. A agenda e a intensidade ficam em Treinos e scrims. ★ = maior lacuna da função.')}</p>
                 </Panel>
               )}
               {/* #40: PASSAGENS — a biografia do jogador na sua org */}
@@ -722,7 +728,9 @@ export function CareerPlayerPage({
             <Panel title="Indicadores" icon="chart">
               <div className="pp-kv-grid">
                 <div><span>{ct('Moral')}</span><b><CareerIcon name={moraleIcon} size={12} /> {morale}/100</b></div>
-                <div><span>{ct('Fadiga')}</span><b>{fatigue}/100</b></div>
+                <div><span>{ct('Condição física')}</span><b>{Math.max(0, 100 - fatigue)}/100</b></div>
+                {sharpness != null && <div><span>{ct('Ritmo de jogo')}</span><b>{sharpness}/100</b></div>}
+                {injuryNote && <div><span>{ct('Lesão')}</span><b style={{ color: 'var(--c-loss)' }}>{injuryNote}</b></div>}
                 <div><span>{ct('Evolução na carreira')}</span><b>{evoTotal > 0 ? `+${evoTotal}` : '0'}</b></div>
                 <div><span>{ct('Pico OVR')}</span><b>{peakOvr}</b></div>
                 <div><span>{ct('Margem de crescimento')}</span><b>{Math.max(0, pot - ovr)}</b></div>

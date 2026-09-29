@@ -121,6 +121,9 @@ export interface TPlayer {
   skill: number; // derived overall
   ovr: number; // overall exibido (50-99)
   form?: number; // fase no torneio (0.9 frio … 1.1 em chamas), atualizada a cada série
+  // [realismo FM fase 2 · treino] condição do jogador NESTA partida (0–100):
+  // fitness (cansaço) e sharpness (ritmo de jogo). Ausente = neutro (IA, outros modos).
+  cond?: { fitness: number; sharpness: number };
   fromTeam?: string; // era label for drafted players
   originTeam?: string;
   originTeamId?: string;
@@ -151,6 +154,10 @@ export interface TTeam {
   playbook?: Playbook; // esquema tático treinado (modo carreira)
   playbookFam?: number; // entrosamento no esquema, 0..1 (quão bem treinado)
   noEdge?: boolean; // Road to Pro: dispensa o AI_EDGE de dificuldade do modo carreira
+  // [realismo FM fase 2 · tática por mapa] plano preparado (papéis, setup CT,
+  // execuções T, instruções, familiaridade, anti-strat). Opt-in: sem ele o motor
+  // v2 joga exatamente como antes; o v1 ignora. Ver engine/gestao/tatica.ts.
+  tactics?: import('./engine/gestao/model').TacticsState | null;
   onlinePlan?: {
     captainNick?: string;
     reserveNick?: string;
