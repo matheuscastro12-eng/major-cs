@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import test from 'node:test';
 import {
   adminPasswordMatches,
@@ -35,20 +36,34 @@ function fakeRes() {
   };
 }
 
-test('sem APP_SECRET: nada é assinado nem aceito (falha fechada, sem fallback da DATABASE_URL)', () => withEnv(
-  { APP_SECRET: undefined, DATABASE_URL: 'postgresql://quem-ve-isso-nao-forja-token' },
+test('sem APP_SECRET e sem DATABASE_URL: nada é assinado nem aceito (falha fechada)', () => withEnv(
+  { APP_SECRET: undefined, DATABASE_URL: undefined },
   () => {
     assert.throws(() => appSecret(), AppSecretMissingError);
     assert.throws(() => signAccountToken('a@b.com'), AppSecretMissingError);
     assert.throws(() => accountReference('a@b.com'), AppSecretMissingError);
-    // token forjado com o antigo fallback `fallback:${DATABASE_URL}` não passa mais
     assert.equal(verifyAccountToken('YUBiLmNvbXw5OTk5OTk5OTk5.qualquer'), null);
     assert.equal(verifyAdminSession('adm.x.y'), null);
   },
 ));
 
+test('HOTFIX: sem APP_SECRET, usa o reserva legado e aceita os tokens já em circulação', () => withEnv(
+  { APP_SECRET: undefined, DATABASE_URL: 'postgresql://prod' },
+  () => {
+    assert.equal(appSecret(), 'fallback:postgresql://prod');
+    // token assinado do jeito antigo (api/account.ts em 7e4fba8) continua valendo
+    const body = `jogador@example.com|${Math.floor(Date.now() / 1000) + 3600}`;
+    const sig = createHmac('sha256', 'fallback:postgresql://prod').update(body).digest('base64url');
+    assert.equal(verifyAccountToken(`${Buffer.from(body).toString('base64url')}.${sig}`), 'jogador@example.com');
+    // e com APP_SECRET configurada ela vence o reserva
+    process.env.APP_SECRET = 'novo';
+    assert.equal(appSecret(), 'novo');
+    assert.equal(verifyAccountToken(`${Buffer.from(body).toString('base64url')}.${sig}`), null);
+  },
+));
+
 test('respondMissingSecret responde 500 sem APP_SECRET e deixa passar com ela', () => {
-  withEnv({ APP_SECRET: undefined }, () => {
+  withEnv({ APP_SECRET: undefined, DATABASE_URL: undefined }, () => {
     const { out, res } = fakeRes();
     assert.equal(respondMissingSecret(res), true);
     assert.equal(out.code, 500);
@@ -60,8 +75,8 @@ test('respondMissingSecret responde 500 sem APP_SECRET e deixa passar com ela', 
   });
 });
 
-test('rota com token (cloud-save) responde 500 sem APP_SECRET, antes de tocar no banco', () => withEnv(
-  { APP_SECRET: undefined, DATABASE_URL: 'postgresql://unused' },
+test('rota com token (cloud-save) responde 500 sem APP_SECRET e sem reserva, antes de tocar no banco', () => withEnv(
+  { APP_SECRET: undefined, DATABASE_URL: undefined },
   async () => {
     const { out, res } = fakeRes();
     await cloudSave({ method: 'POST', body: { action: 'pull', token: 'x.y' }, headers: {} }, res);
