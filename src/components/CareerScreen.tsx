@@ -57,7 +57,7 @@ import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCo
 import { personalityChemBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
 import { closeMatchIdentity, scoutingOf, type TeamIdentity } from '../engine/career/teamIdentity';
-import { aiTactics, matchTacticsFor, tacticsAfterMatch, antiStratReveal } from '../engine/gestao/tatica';
+import { aiTactics, matchTacticsFor, tacticsAfterMatch, antiStratReveal, autoAntiStratReadiness } from '../engine/gestao/tatica';
 import { GamePlanScreen } from '../pages/career/GamePlanScreen';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { isPlayerCommittedForExit, matchesNegotiationFilters, sortMarketEntries, type MarketSort } from '../engine/career/market';
@@ -3053,7 +3053,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // aplica também o domínio de mapa e o playbook atuais (valem se mudarem no
     // meio do split — o snapshot da liga não saberia sozinho)
     // [fase 2] tática por mapa (Plano de jogo) vai junto com o time pra partida
-    const mt = matchTacticsFor(save.gestao?.tactics, save.gamePlan, oppId);
+    const mt = matchTacticsFor(save.gestao?.tactics, save.gamePlan, oppId, autoAntiStratReadiness(scoutingOf(team)));
     const synced: TTeam = {
       ...t,
       mapPrefs: { ...t.mapPrefs, ...(save.mapTraining ?? {}) },

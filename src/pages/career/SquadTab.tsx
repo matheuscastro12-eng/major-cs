@@ -16,7 +16,6 @@ import {
   ROLE_OPTS,
   PLAYBOOK_SWITCH_TO,
   MORALE_DEFAULT,
-  mapLevel,
   moraleInfo,
   PHASE_LABEL,
   playerPhase,
@@ -27,7 +26,8 @@ import {
   type SeasonStat,
 } from '../../components/CareerScreen';
 import type { YouthDebut } from '../../engine/career/playerAge';
-import type { PlayerCondition } from '../../engine/gestao/model';
+import type { PlayerCondition, TacticsState } from '../../engine/gestao/model';
+import { mapTacticOf } from '../../engine/gestao/tatica';
 import { fatigueBand } from '../../engine/career/fatigue';
 import { formStatus } from '../../engine/career/form';
 import { activeStint as activeCoachStint } from '../../engine/coachCareer';
@@ -139,8 +139,9 @@ export function SquadTab({
   const chemAvg = teamChemistry({ pairChem: save.pairChem }, rows.map((p) => playerOrgId(p.id)));
   const chemLabel = chemAvg >= 80 ? ct('Excelente') : chemAvg >= 60 ? ct('Boa') : chemAvg >= 40 ? ct('Regular') : ct('Fraca');
   const payroll = rows.reduce((sum, p) => sum + playerWage(p), 0);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapsSorted = [...MAP_POOL].map((m) => ({ m, lvl: mapLevel(save as any, m) })).sort((x, y) => y.lvl - x.lvl);
+  // [fase 2] domínio do mapa = familiaridade do plano (Plano de jogo)
+  const tacticsNow = (save.gestao as { tactics?: TacticsState } | undefined)?.tactics;
+  const mapsSorted = [...MAP_POOL].map((m) => ({ m, fam: mapTacticOf(tacticsNow, m).familiarity })).sort((x, y) => y.fam - x.fam);
 
   return (
     <div className={`em-tab em-squad em-squad--${section}`}>
@@ -155,16 +156,19 @@ export function SquadTab({
               </div>
               <Bar value={chemAvg} tone={chemAvg >= 60 ? 'var(--c-win)' : chemAvg >= 40 ? 'var(--c-warn)' : 'var(--c-loss)'} lg label={`${ct('Química')} ${chemAvg}`} />
             </Panel>
-            <Panel icon={<Target size={16} />} title={ct('Mapas')} flush>
-              {[mapsSorted[0], mapsSorted[1], mapsSorted[mapsSorted.length - 1]].filter(Boolean).map((x, i) => (
-                <div key={x.m} className="ds-row">
-                  <b style={{ width: 80 }}>{MAP_LABELS[x.m]}</b>
-                  <span style={{ color: i === 0 && x.lvl > 0 ? 'var(--c-win)' : i === 2 && x.lvl < 0 ? 'var(--c-loss)' : 'var(--c-ink-dim)', fontWeight: 600 }}>
-                    {i === 0 && x.lvl > 0 ? ct('Mapa forte') : i === 2 && x.lvl < 0 ? ct('Evitar no veto') : ct('Sólido')}
-                  </span>
-                  <span className="ds-dim" style={{ marginLeft: 'auto' }}>{x.lvl > 0 ? '+' : ''}{x.lvl.toFixed(1)}</span>
-                </div>
-              ))}
+            <Panel icon={<Target size={16} />} title={ct('Mapas · familiaridade')} flush>
+              {[mapsSorted[0], mapsSorted[1], mapsSorted[mapsSorted.length - 1]].filter(Boolean).map((x, i) => {
+                const strong = i === 0 && x.fam >= 60, weak = i === 2 && x.fam < 40;
+                return (
+                  <div key={x.m} className="ds-row">
+                    <b style={{ width: 80 }}>{MAP_LABELS[x.m]}</b>
+                    <span style={{ color: strong ? 'var(--c-win)' : weak ? 'var(--c-loss)' : 'var(--c-ink-dim)', fontWeight: 600 }}>
+                      {strong ? ct('Mapa forte') : weak ? ct('Evitar no veto') : ct('Sólido')}
+                    </span>
+                    <span className="ds-dim" style={{ marginLeft: 'auto' }}>{Math.round(x.fam)}</span>
+                  </div>
+                );
+              })}
             </Panel>
             <Panel icon={<Wallet size={16} />} title={ct('Folha salarial')}>
               <div className="squad-big">

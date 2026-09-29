@@ -175,6 +175,13 @@ export const INJURY_BASE = 0.012;    // chance semanal de lesão (semana padrão
 export const BURNOUT_FITNESS = 12;   // abaixo disso o burnout vira sorteio semanal
 export const BURNOUT_CHANCE = 0.25;
 export const INJURED_RECOVERY = 10;  // fitness recuperado por semana parado
+// [integração] o corpo se protege: abaixo de RECOVERY_FLOOR de fitness a
+// recuperação da semana cresce (RECOVERY_PROP por ponto abaixo do piso). Com a
+// agenda padrão normal e o calendário da Carreira (~4 séries por etapa) o
+// elenco não despenca até o burnout sem você ter errado nada; o desgaste de
+// 40–100 continua igual ao da fadiga antiga. Agenda pesada/intensa ainda queima.
+export const RECOVERY_FLOOR = 40;
+export const RECOVERY_PROP = 0.5;
 
 const REF_EXPOSURE = DEFAULT_WEEK.reduce((s, x) => s + SESSION_INFO[x].exposure, 0);
 
@@ -336,7 +343,7 @@ export function runTrainingWeek(input: WeekInput): WeekOutput {
     const next: Partial<Record<AttrKey, number>> = {};
     for (const k of ALL_ATTRS) next[k] = Math.round(((prev[k] ?? 0) + pts[k]) * 100) / 100;
     progress[p.id] = next;
-    const fitness = clampC(c0.fitness + fitDelta);
+    const fitness = clampC(c0.fitness + fitDelta + RECOVERY_PROP * Math.max(0, RECOVERY_FLOOR - c0.fitness));
     const sharpness = clampC(c0.sharpness + sharpGain + maps * SHARP_PER_MAP - c0.sharpness * SHARP_DECAY);
     // lesão / burnout
     let injury: PlayerCondition['injury'] = null;

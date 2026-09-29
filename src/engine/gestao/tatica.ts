@@ -731,13 +731,20 @@ export function matchTacticsFor(
   tactics: TacticsState | null | undefined,
   gamePlan: string | null | undefined,
   oppId: string | null | undefined,
+  autoReadiness = 0,
 ): { tactics: TacticsState; genericAntiStrat: boolean } {
-  const t = tactics ?? defaultTactics();
+  let t = tactics ?? defaultTactics();
   const prepared = hasAntiStratVs(t, oppId);
+  // sem preparação manual, o analista estuda o adversário no automático — a
+  // MESMA regra da IA (scouting × AI_PREP): quem nunca mexe não fica pra trás
+  if (!prepared && oppId && autoReadiness > 0) t = { ...t, antiStrat: { opponentTeamId: oppId, readiness: Math.round(clamp(autoReadiness, 0, 100)) } };
   if (gamePlan !== 'antistrat') return { tactics: t, genericAntiStrat: false };
   if (!prepared || !oppId) return { tactics: t, genericAntiStrat: true };
   return { tactics: focusAntiStrat(t, oppId), genericAntiStrat: false };
 }
+
+/** Prontidão automática do analista (sem preparar): a mesma regra da IA. */
+export const autoAntiStratReadiness = (scouting: number) => Math.round(clamp(scouting, 0, 1) * AI_PREP * 100);
 
 /** Fim de série na Carreira: familiaridade (jogados sobem, resto decai) e a preparação usada. */
 export function tacticsAfterMatch(tactics: TacticsState | null | undefined, mapsPlayed: MapId[], opponentTeamId: string, famGainMult = 1): TacticsState {

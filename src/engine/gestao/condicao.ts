@@ -115,7 +115,10 @@ export function substituteInjured(
     subs.push({ out: p.nick, in: pick.nick });
   }
   // sem reserva da base: o motor completa com o reserva genérico
-  const full = withFullRoster({ ...team, players, bench: [] });
+  // o cinco inteiro lesionado e sem base: reservas genéricos derivados de quem saiu
+  const full = players.length
+    ? withFullRoster({ ...team, players, bench: [] })
+    : withFullRoster({ ...team, players: withFullRoster({ ...team, players: [out[0]], bench: [] }).players.slice(1), bench: [] });
   for (const s of subs) if (!s.in) s.in = 'reserva';
   const tw = num(team.teamwork, 70);
   const delta = teamStrengthFromPlayers(full.players, tw) - teamStrengthFromPlayers(team.players, tw) - STANDIN_TEAMWORK_COST * out.length;
