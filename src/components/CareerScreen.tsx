@@ -5829,7 +5829,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   renewals,
                   morale,
                   satisfaction: hap.satisfaction,
-                  clube: hap.clube, // [fase 3 · vestiário]
+                  // [integração] mercado da janela (I) + vestiário do fechamento (G) — os dois saem do mesmo clube
+                  clube: { ...hap.clube, market: (majorWindowPatch.clube ?? hap.clube).market },
                   coachBond: pj.coachBond,
                   playerPromises: pj.playerPromises,
                   splitStart: snapshotSplitStart(save, save.split + 1, save.budget),
@@ -6405,7 +6406,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     renewals,
                     morale,
                     satisfaction: hap.satisfaction,
-                    clube: hap.clube, // [fase 3 · vestiário]
+                    // [integração] mercado da janela (I) + vestiário do fechamento (G) — os dois saem do mesmo clube
+                    clube: { ...hap.clube, market: (windowPatch.clube ?? hap.clube).market },
                     coachBond: pj.coachBond,
                     playerPromises: pj.playerPromises,
                     splitStart: snapshotSplitStart(save, save.split + 1, Math.max(0, rawBudget)),
