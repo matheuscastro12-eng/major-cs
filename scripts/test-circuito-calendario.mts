@@ -109,7 +109,7 @@ test('calendário gravado: agenda do split + ciclo do Major da temporada; renova
   assert.deepEqual(parseEventId(eventIdOf(6, 2, 't2-alt')), { kind: 'ev', split: 6, etapa: 2, slot: 't2-alt' });
 });
 
-test('field da etapa: faixas de força de sempre (dificuldade intacta), convites pelo VRS, campos disjuntos', () => {
+test('field da etapa: o mesmo field de sempre (dificuldade intacta), convites pelo VRS, campos disjuntos', () => {
   const pool = aiPool(3);
   const str = strengthMap(pool);
   const legacy = buildEtapaEvents(pool, 3, 2, null);
@@ -117,7 +117,7 @@ test('field da etapa: faixas de força de sempre (dificuldade intacta), convites
   const vrs: Record<string, VrsEntry> = {};
   pool.forEach((t, i) => { vrs[t.id] = { teamId: t.id, points: Math.round(t.teamwork * 12 + ((i * 7919) % 97) * 3), history: [] }; });
   const withVrs = buildEtapaEvents(pool, 3, 2, vrs);
-  assert.ok(legacy.length >= 7 && withVrs.length >= legacy.length - 1, 'regional com menos de 5 times some (como antes)');
+  assert.deepEqual(withVrs.map((e) => [e.slot, e.teams.map((t) => t.id)]), legacy.map((e) => [e.slot, e.teams.map((t) => t.id)]), 'o VRS muda só quem é convidado, não o field');
   const seen = new Set<string>();
   for (const ev of withVrs) {
     assert.ok(ev.teams.length >= 5 && ev.teams.length <= 15);
@@ -126,7 +126,7 @@ test('field da etapa: faixas de força de sempre (dificuldade intacta), convites
     const old = legacy.find((e) => e.slot === ev.slot);
     if (!old) continue;
     const avg = (ts: typeof ev.teams) => ts.reduce((a, t) => a + (str.get(t.id) ?? 0), 0) / ts.length;
-    assert.ok(Math.abs(avg(ev.teams) - avg(old.teams)) < 2.2, `${ev.slot}: força média do field mudou (${avg(ev.teams).toFixed(1)} × ${avg(old.teams).toFixed(1)})`);
+    assert.ok(Math.abs(avg(ev.teams) - avg(old.teams)) < 0.01, `${ev.slot}: força média do field mudou (${avg(ev.teams).toFixed(1)} × ${avg(old.teams).toFixed(1)})`);
   }
   // o convite sai do VRS: no t1 os convidados são os de mais pontos da faixa
   const t1 = withVrs.find((e) => e.slot === 't1')!;

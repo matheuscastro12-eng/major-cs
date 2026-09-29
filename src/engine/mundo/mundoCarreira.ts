@@ -7,13 +7,13 @@ import type { MundoState, WorldEventResult, VrsEntry, EventKind } from './model'
 import type { TeamSeason } from '../../types';
 import type { MacroRegion } from '../../data/regions';
 import {
-  EVENTS_PER_SPLIT, MAJOR_POOL, MAJOR_S1, MAJOR_S2, MAJOR_S3, RMR_FIELD, RMR_POOL, RMR_REGIONS, RMR_LABEL,
+  EVENTS_PER_SPLIT, MAJOR_POOL, MAJOR_S1, MAJOR_S2, MAJOR_S3, RMR_FIELD, RMR_POOL, RMR_REGIONS, RMR_LABEL, RMR_SLOTS,
   buildEtapaEvents, etapaTime, isMajorSplit, majorIdOf, majorTime, rmrIdOf, rmrRegionOf, teamMacroRegion,
   seasonCalendarFrom, calendarFresh, eventHost,
   type EtapaEvent, type MajorRoute, type RmrRegion,
 } from './circuito';
 import { computeVrs, publishVrs, VRS_WINDOW, type VrsTable } from './vrs';
-import { completeMajor, quickGslEvent, seedRng, withEventForm, type MajorProgress, type MajorWorld, type QPlacement } from './mundoSim';
+import { completeMajor, quickGslEvent, quickSwiss, seedRng, withEventForm, type MajorProgress, type MajorWorld, type QPlacement } from './mundoSim';
 import { majorName } from '../../data/tournaments';
 import { ct } from '../../state/career-i18n';
 
@@ -132,6 +132,22 @@ export function majorRouteOf(plan: MajorFieldPlan, id = USER_ID): MajorRoute {
   for (const reg of RMR_REGIONS) if (plan.rmr[reg]?.field.includes(id)) return { kind: 'rmr', region: reg };
   return { kind: 'out' };
 }
+/** Resolve (modelo calibrado) os RMRs que ainda não têm ordem final — o Stage 1 precisa dos classificados. */
+export function resolveRmrs(plan: MajorFieldPlan, strengthOf: (id: string) => number, seedKey: string): MajorFieldPlan {
+  const rmr = { ...plan.rmr };
+  for (const reg of RMR_REGIONS) {
+    const r = rmr[reg];
+    if (!r || r.order || r.field.length < 2) continue;
+    const rng = seedRng(`rmr:${seedKey}:${reg}`);
+    rmr[reg] = { ...r, order: quickSwiss(rng, withEventForm(rng, r.field.map((id) => ({ id, s: strengthOf(id) })))).order };
+  }
+  return { ...plan, rmr };
+}
+/** Os classificados dos RMRs (na ordem Europa, Américas, Ásia-Pacífico). */
+export function rmrQualifiedIds(plan: MajorProgress): string[] {
+  return RMR_REGIONS.flatMap((reg) => plan.rmr[reg]?.order?.slice(0, RMR_SLOTS[reg]) ?? []);
+}
+
 /** Resultados do Major (RMRs + Major) pro mundo. */
 export function majorResults(split: number, w: MajorWorld): WorldEventResult[] {
   const name = majorName(split);

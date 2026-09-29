@@ -214,10 +214,10 @@ export function calendarVenue(ev: Pick<CalendarEvent, 'name' | 'tier' | 'kind' |
 }
 
 // ─── Field de cada etapa ───────────────────────────────────────────────────
-// Faixas de FORÇA por tier (índice no ranking de força — a MESMA régua de antes:
-// o Tier-1 sai só da elite, o Tier-3 só do acesso; a dificuldade não muda).
-// Dentro da faixa, os CONVITES diretos são os melhores do ranking VRS (antes, o
-// núcleo fixo era "os mais fortes"); as outras vagas saem do qualificatório.
+// Faixas de FORÇA por tier (índice no ranking de força — a MESMA régua e o MESMO
+// field de antes: o Tier-1 sai só da elite, o Tier-3 só do acesso; a dificuldade
+// não muda). Dentro do field, os CONVITES diretos são os melhores do ranking VRS;
+// as outras vagas são de quem passou pelo qualificatório.
 export interface EtapaEvent {
   slot: SlotId;
   id: string;
@@ -269,15 +269,16 @@ export function buildEtapaEvents(pool: TeamSeason[], split: number, etapa: numbe
   const byVrsDesc = (a: TeamSeason, b: TeamSeason) => pts(b.id) - pts(a.id) || b.teamwork - a.teamwork;
   const bandField = (key: SlotId, lo: number, hi: number, coreN: number, n: number, seed: number, rotBy: number): TeamSeason[] => {
     const band = byStrength.slice(lo, hi).filter((t) => !used.has(t.id));
-    const core = (hasVrs ? [...band].sort(byVrsDesc) : band).slice(0, coreN);
-    const coreIds = new Set(core.map((t) => t.id));
-    const windowPart = band.filter((t) => !coreIds.has(t.id));
+    const core = band.slice(0, coreN);                  // os mais fortes da faixa, fixos
+    const windowPart = band.slice(coreN);               // vagas rotativas (variam por etapa)
     const off = windowPart.length ? (((rotBy % windowPart.length) + windowPart.length) % windowPart.length) : 0;
     const rotatedWindow = [...windowPart.slice(off), ...windowPart.slice(0, off)];
     const rot = seededShuffle(rotatedWindow, seed).slice(0, Math.max(0, n - core.length));
     const field = [...core, ...rot];
     for (const t of field) used.add(t.id);
-    invitedOf.set(key, core.map((t) => t.id));
+    // convites diretos = os melhores do ranking VRS DENTRO do field (sem VRS, o
+    // núcleo por força); o resto das vagas veio do qualificatório
+    invitedOf.set(key, (hasVrs ? [...field].sort(byVrsDesc) : field).slice(0, coreN).map((t) => t.id));
     return field;
   };
   const bandFieldRegional = (key: SlotId, lo: number, hi: number, n: number, seed: number, countrySet: Set<string>): TeamSeason[] => {

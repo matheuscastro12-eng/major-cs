@@ -89,7 +89,9 @@ const refOf = (vals: number[]) => {
   return s[Math.min(VRS_REF_RANK, s.length) - 1] || s[0] || 1;
 };
 export const pointsFromScore = (score: number): number => (score <= 0 ? 0 : Math.max(1, Math.round(PTS_SCALE * Math.min(1, score))));
-const norm = (raw: number, ref: number, sqrt: boolean) => { const x = Math.min(1, Math.max(0, raw / ref)); return sqrt ? Math.sqrt(x) : x; };
+const norm = (raw: number, ref: number, pow: number) => Math.pow(Math.min(1, Math.max(0, raw / ref)), pow);
+/** Concavidade da premiação e da rede (0,5 = raiz): quanto menor, mais o acesso encosta na elite. */
+export const VRS_CURVE = 0.5;
 
 /**
  * O ranking no instante `now` (tempo absoluto em etapas). Resultados sem `t` ou
@@ -124,7 +126,7 @@ export function computeVrs(results: readonly WorldEventResult[], now: number): V
   const prizeRaw = new Map<string, number>();
   for (const [id, rows] of rowsOf) prizeRaw.set(id, sumTop(rows.map((x) => x.prizeWon * x.weight)));
   const refPrize = refOf([...prizeRaw.values()]);
-  const bounty = (id: string) => norm(prizeRaw.get(id) ?? 0, refPrize, false);
+  const bounty = (id: string) => norm(prizeRaw.get(id) ?? 0, refPrize, 1);
   // 2º passo: rede de adversários (valor dos batidos) e LAN
   const netRaw = new Map<string, number>();
   const lanRaw = new Map<string, number>();
@@ -138,9 +140,9 @@ export function computeVrs(results: readonly WorldEventResult[], now: number): V
   const entries: Record<string, VrsBreakdown> = {};
   for (const [id, rows] of rowsOf) {
     const f = {
-      prize: norm(prizeRaw.get(id) ?? 0, refPrize, true),
-      network: norm(netRaw.get(id) ?? 0, refNet, true),
-      lan: norm(lanRaw.get(id) ?? 0, refLan, false),
+      prize: norm(prizeRaw.get(id) ?? 0, refPrize, VRS_CURVE),
+      network: norm(netRaw.get(id) ?? 0, refNet, VRS_CURVE),
+      lan: norm(lanRaw.get(id) ?? 0, refLan, 1),
     };
     const score = VRS_WEIGHTS.prize * f.prize + VRS_WEIGHTS.network * f.network + VRS_WEIGHTS.lan * f.lan;
     const points = pointsFromScore(score);

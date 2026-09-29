@@ -1,7 +1,15 @@
 // Aba VRS — T1.4. Saiu de inline no CareerScreen (hubTab === 'vrs').
+// [fase 4 · circuito] VRS REAL e unificado: a composição dos pontos (premiação
+// real, rede de adversários batidos, LAN) por time, a subida/queda desde a última
+// publicação e os resultados que mais pesaram (com o decaimento pela idade).
 
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { DashCard } from '../../components/ds';
+import { Bar } from '../../components/ds';
+import type { VrsEntry } from '../../engine/mundo/model';
+import type { VrsTable } from '../../engine/mundo/vrs';
+import { VRS_WEIGHTS, VRS_WINDOW } from '../../engine/mundo/vrs';
+import '../../styles/circuito.css';
 import { OrgFlag } from '../../components/flags';
 import { TeamBadge } from '../../components/ui';
 import { ct } from '../../state/career-i18n';
@@ -39,6 +47,20 @@ interface Props {
   /** #42 corrida ao Major: tamanho do corte (top N vão) + splits até o Major (0 = é agora) */
   majorCut?: number;
   splitsToMajor?: number;
+  /** [fase 4 · circuito] ranking publicado (fatores, anterior) e a composição por resultado */
+  published?: Record<string, VrsEntry>;
+  table?: VrsTable | null;
+  onOpenEvent?: (eventId: string) => void;
+}
+
+const placeTxt = (pl: number, n: number) => (pl === 1 ? '1º' : pl === 2 ? '2º' : pl <= 4 ? '3–4º' : pl <= 8 ? '5–8º' : n >= 32 ? (pl <= 16 ? '9–16º' : pl <= 24 ? '17–24º' : '25–32º') : pl <= 12 ? '9–12º' : '13–16º');
+function Mini({ f }: { f?: { prize: number; network: number; lan: number } }) {
+  if (!f) return null;
+  return (
+    <span className="ci-mini" aria-label={`premiação ${Math.round(f.prize * 100)}%, rede ${Math.round(f.network * 100)}%, LAN ${Math.round(f.lan * 100)}%`}>
+      <i><u style={{ width: `${f.prize * 100}%` }} /></i><i><u style={{ width: `${f.network * 100}%` }} /></i><i><u style={{ width: `${f.lan * 100}%` }} /></i>
+    </span>
+  );
 }
 
 export function VrsTab({
@@ -50,7 +72,13 @@ export function VrsTab({
   openTeamProfile,
   majorCut = 0,
   splitsToMajor = 0,
+  published,
+  table,
+  onOpenEvent,
 }: Props) {
+  const [focus, setFocus] = useState<string>('user');
+  const fe = table?.entries[focus];
+  const fRow = vrsAll.find((t) => t.id === focus);
   // #42 — a CORRIDA: sua distância em pontos até a vaga (ou a gordura de quem
   // já está dentro). O "rival do corte" é quem está do outro lado da linha.
   const race = (() => {
@@ -84,6 +112,43 @@ export function VrsTab({
           </span>
         </div>
       )}
+      {table && (
+        <div className="world-card" style={{ marginBottom: 12 }}>
+          <div className="world-head">
+            <span className="world-region">{ct('Composição dos pontos')} · {fRow?.name ?? focus}</span>
+            <span className="muted small">{fe ? `#${fe.rank} · ${fe.points} ${ct('pts')}` : ct('sem ranking (nenhum resultado na janela)')}</span>
+          </div>
+          {fe ? (
+            <>
+              <div className="ci-factors">
+                <div className="ci-factor"><span>{ct('Premiação')} ({Math.round(VRS_WEIGHTS.prize * 100)}%)</span><Bar value={fe.factors!.prize * 100} tone="gold" /><b>{Math.round(fe.factors!.prize * 100)}</b></div>
+                <div className="ci-factor"><span>{ct('Rede de adversários')} ({Math.round(VRS_WEIGHTS.network * 100)}%)</span><Bar value={fe.factors!.network * 100} tone="var(--c-ct)" /><b>{Math.round(fe.factors!.network * 100)}</b></div>
+                <div className="ci-factor"><span>LAN ({Math.round(VRS_WEIGHTS.lan * 100)}%)</span><Bar value={fe.factors!.lan * 100} tone="var(--c-win)" /><b>{Math.round(fe.factors!.lan * 100)}</b></div>
+              </div>
+              <table className="stats">
+                <tbody>
+                  {fe.rows.slice(0, 6).map((r) => (
+                    <tr key={r.eventId} className={onOpenEvent ? 'clickable-row' : undefined} onClick={() => onOpenEvent?.(r.eventId)}>
+                      <td style={{ textAlign: 'left' }}>{r.name} <span className="muted small">{r.split > 0 ? `S${r.split}` : ct('pré-carreira')}{r.lan ? ' · LAN' : ''}</span></td>
+                      <td style={{ textAlign: 'right' }} className="muted small">{placeTxt(r.place, r.field)}</td>
+                      <td style={{ textAlign: 'right' }} className="muted small">{ct('peso')} {Math.round(r.weight * 100)}%</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>+{r.contribution}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : null}
+          <p className="muted small" style={{ margin: '8px 0 0' }}>
+            {ct('Um ranking só pra todo mundo (você incluído): dinheiro REAL ganho, os times que você deixou pra trás (vale mais bater quem tem pontos) e LAN. Resultado pesa inteiro por 1 etapa e cai até zerar em')} {VRS_WINDOW} {ct('etapas. Clique nas barras de um time pra ver a composição dele.')}
+          </p>
+          <div className="ci-legend" style={{ marginTop: 6 }}>
+            <span><i style={{ background: 'var(--c-brand)' }} />{ct('Premiação')}</span>
+            <span><i style={{ background: 'var(--c-ct)' }} />{ct('Rede')}</span>
+            <span><i style={{ background: 'var(--c-win)' }} />LAN</span>
+          </div>
+        </div>
+      )}
       <div className="t20-head">
         <div className="muted small section-label" style={{ marginTop: 0 }}>
           {vrsMode === 'geral' ? ct('Ranking mundial de VRS · geral') : ct('Ranking mundial de VRS · por região')}
@@ -115,7 +180,7 @@ export function VrsTab({
               {/* #42: a LINHA DE CORTE do Major, desenhada no ranking */}
               {majorCut > 0 && i === majorCut && (
                 <tr className="vrs-cutline" aria-hidden>
-                  <td colSpan={3}>✂️ {ct('LINHA DE CORTE DO MAJOR — top')} {majorCut} {ct('garantem vaga')}</td>
+                  <td colSpan={5}>✂️ {ct('LINHA DE CORTE DO MAJOR — top')} {majorCut} {ct('com convite direto; os próximos de cada região vão ao RMR')}</td>
                 </tr>
               )}
               <tr
@@ -137,6 +202,12 @@ export function VrsTab({
                     </span>
                     <span className="muted small vrs-reg">{MACRO_REGION_LABELS[t.region]}</span>
                   </span>
+                </td>
+                <td style={{ textAlign: 'right' }} onClick={(e) => { if (table) { e.stopPropagation(); setFocus(t.id); } }} title={ct('Composição dos pontos')}>
+                  <Mini f={published?.[t.id]?.factors} />
+                </td>
+                <td style={{ textAlign: 'right', width: 44 }} className="muted small">
+                  {(() => { const e = published?.[t.id]; if (!e || e.prev == null) return null; const d = e.points - e.prev; return d ? <span className={d > 0 ? 'ci-up' : 'ci-down'}>{d > 0 ? '▲' : '▼'}{Math.abs(d)}</span> : '='; })()}
                 </td>
                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{t.vrs}</td>
               </tr>

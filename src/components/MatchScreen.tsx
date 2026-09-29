@@ -29,6 +29,8 @@ interface Props {
   onDecided?: (series: SeriesResult) => void; // dispara ao DECIDIR a série (antes do Continuar): trava o resultado
   // [W5] identidade tática do SEU time (save.identity). Sem ela o mapa é o de sempre.
   identity?: TeamIdentity;
+  /** [fase 4 · circuito] evento LAN/Major: peso do oculto bigMatch no motor (0/ausente = online) */
+  pressure?: number;
   // [W5] as chamadas que você fez na série (uma por round jogado) — a Carreira acumula no save.
   onCalls?: (calls: IdentityCall[]) => void;
 }
@@ -98,7 +100,7 @@ const BUY_LABEL: Record<BuyTier, string> = {
   full: 'FULL BUY',
 };
 
-export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish, onDecided, identity, onCalls }: Props) {
+export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish, onDecided, identity, onCalls, pressure }: Props) {
   // [W5] identidade nos dois sentidos: a sua (rotulada do save) e a do adversário
   // (derivada do elenco/coach/playbook). Cada um lê o outro com scoutingOf.
   const idOpp: 0 | 1 = userIdx === 0 ? 1 : 0;
@@ -220,7 +222,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     const safe = Math.min(idx, maps.length - 1); // guarda defensiva contra índice além do veto
     if (!simsRef.current[safe]) {
       // mapIndex: fadiga (stamina) no motor v2; MD5 = final (jogo grande, oculto bigMatch)
-      simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy, { identity: identityMods, mapIndex: safe, bigMatch: bestOf === 5, manualTimeouts: userIdx });
+      simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy, { identity: identityMods, mapIndex: safe, bigMatch: bestOf === 5, manualTimeouts: userIdx, ...(pressure ? { pressure } : {}) });
     }
     return simsRef.current[safe];
   };
