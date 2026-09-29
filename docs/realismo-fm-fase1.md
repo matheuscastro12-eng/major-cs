@@ -54,4 +54,16 @@ Assinaturas são contrato. Precisou mudar? Registre em "Mudanças de contrato" n
 - Ordem de integração prevista: A (dados) → B (atributos) → C (motor).
 
 ## Mudanças de contrato
-(nenhuma ainda)
+- (frente A, 2026-09-28) Assinaturas de `src/engine/attrs/model.ts` intactas. Acréscimo em `src/types.ts`:
+  `TeamSeason.defunct?: boolean` — time que acabou (ou o virtual `__retired__`, onde ficam aposentados,
+  inativos e quem virou técnico). O id continua no `bo3-2026.json` para saves que o guardam, mas o time
+  sai do mundo da carreira (`currentEra`, exceto o time que o usuário assumiu), do Road to Pro
+  (`REAL_BY_RT`), do online (`onlineDataset`) e do "pro do dia"; `applyMoves` não usa time extinto como
+  destino. O Ultimate continua vendo os jogadores de `__retired__` (cartas já compradas não somem).
+- (frente A) `src/data/player-attrs-2026.json` cobre TODO jogador do `bo3-2026.json` (inclusive
+  `__free__` e `__retired__`): `{ [playerId]: PlayerAttrs & { src } }`. `src` diz a origem
+  (`bo3.gg 6m (N rounds)`, `bo3.gg 12m ...` ou `legado (sem estatística pública)`).
+- (frente A) Fórmulas e fontes: `docs/realismo-fm-dados.md`. Elencos de setembro/2026: `docs/elencos-set-2026.md`.
+
+## Frente A: andamento
+- 2026-09-28 22:55: coleta no bo3.gg em ~1.000 de 1.099 jogadores (papéis, estatística avançada e forma por jogador); faltam ~100 jogadores, as transferências (~250 requisições) e a amostra tier S de calibração (já sendo aquecida em paralelo). Depois: atributos, atualização de elencos, portões.

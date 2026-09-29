@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "provisional": true,
+  "owner": "frente A (motor/dados) substitui estes valores pelos medidos no bo3.gg; formato definido pela frente C (motor/partida)",
+  "note": "PROVISÓRIO: valores públicos amplamente conhecidos de CS2 profissional (2024-2026, MR12), arredondados. Cada alvo tem value (central) e tol (tolerância absoluta aceita no teste). 'by' guarda alvos por mapa/função no mesmo formato. Onde o número é estimativa (sem série pública confiável), 'estimate': true e 'source' explica.",
+  "schema": {
+    "target": "{ value: number, tol: number, unit: 'fraction' | 'rating' | 'adr', def: string, source: string, provisional: boolean, estimate?: boolean, by?: Record<string, { value: number, tol: number }> }"
+  },
+  "targets": {
+    "ctRoundWin": {
+      "unit": "fraction",
+      "def": "fração dos rounds vencidos pelo CT, por mapa (todos os rounds da regulamentação e da prorrogação)",
+      "source": "estatísticas de mapa HLTV/bo3.gg de CS2 profissional 2024-2025 (Nuke e Train CT-sided, Anubis T-sided, Dust2 equilibrado)",
+      "provisional": true,
+      "value": 0.52,
+      "tol": 0.025,
+      "by": {
+        "mirage": { "value": 0.525, "tol": 0.03 },
+        "inferno": { "value": 0.52, "tol": 0.03 },
+        "nuke": { "value": 0.555, "tol": 0.03 },
+        "ancient": { "value": 0.535, "tol": 0.03 },
+        "anubis": { "value": 0.47, "tol": 0.03 },
+        "dust2": { "value": 0.5, "tol": 0.03 },
+        "train": { "value": 0.545, "tol": 0.03 }
+      }
+    },
+    "pistolConversion": {
+      "unit": "fraction",
+      "def": "P(vencer o 2º round do half | venceu o pistol)",
+      "source": "conversão de pistol em CS2 profissional (~75-82%; menor que no CS:GO pela economia do CS2)",
+      "provisional": true,
+      "value": 0.78,
+      "tol": 0.07
+    },
+    "ecoWin": {
+      "unit": "fraction",
+      "def": "taxa de vitória de um time em eco (sem pistol round) contra full buy",
+      "source": "vitória de eco contra compra completa em CS2 profissional (~8-12%)",
+      "provisional": true,
+      "value": 0.1,
+      "tol": 0.05
+    },
+    "forceWin": {
+      "unit": "fraction",
+      "def": "taxa de vitória de um force buy contra full buy",
+      "source": "force buy contra compra completa em CS2 profissional (~25-30%)",
+      "provisional": true,
+      "value": 0.27,
+      "tol": 0.07
+    },
+    "openingConversion": {
+      "unit": "fraction",
+      "def": "5v4: P(vencer o round | o time fez o primeiro abate). O 4v5 é o complemento (1 - value)",
+      "source": "HLTV: o time do opening kill vence ~70-74% dos rounds",
+      "provisional": true,
+      "value": 0.72,
+      "tol": 0.05
+    },
+    "clutch1v1": {
+      "unit": "fraction",
+      "def": "P(vencer o round | o time ficou com 1 vivo contra 1)",
+      "source": "clutch 1v1 em CS2 profissional (~48-52%)",
+      "provisional": true,
+      "value": 0.5,
+      "tol": 0.07
+    },
+    "clutch1v2": {
+      "unit": "fraction",
+      "def": "P(vencer o round | o time ficou com 1 vivo contra 2)",
+      "source": "clutch 1v2 em CS2 profissional (~13-20%)",
+      "provisional": true,
+      "value": 0.17,
+      "tol": 0.06
+    },
+    "ratingRelByRole": {
+      "unit": "rating",
+      "def": "rating médio da função ÷ rating médio geral (rating do jogo, engine/match.ts computeDisplay). Relativo porque o nível absoluto depende da fórmula de rating",
+      "source": "médias do rating 2.x por função na HLTV (AWPers e riflers estrela acima; suportes e IGLs abaixo)",
+      "provisional": true,
+      "estimate": true,
+      "value": 1.0,
+      "tol": 0.05,
+      "by": {
+        "AWP": { "value": 1.06, "tol": 0.05 },
+        "Entry": { "value": 0.99, "tol": 0.05 },
+        "Rifler": { "value": 1.03, "tol": 0.05 },
+        "Lurker": { "value": 1.01, "tol": 0.05 },
+        "Support": { "value": 0.95, "tol": 0.05 },
+        "IGL": { "value": 0.91, "tol": 0.06 }
+      }
+    },
+    "adr": {
+      "unit": "adr",
+      "def": "dano médio por round (geral e por função)",
+      "source": "ADR médio de profissionais de CS2 ~74-80; entries e riflers acima, IGLs abaixo",
+      "provisional": true,
+      "value": 77,
+      "tol": 5,
+      "by": {
+        "AWP": { "value": 76, "tol": 7 },
+        "Entry": { "value": 80, "tol": 7 },
+        "Rifler": { "value": 80, "tol": 7 },
+        "Lurker": { "value": 76, "tol": 7 },
+        "Support": { "value": 73, "tol": 7 },
+        "IGL": { "value": 68, "tol": 8 }
+      }
+    },
+    "kast": {
+      "unit": "fraction",
+      "def": "KAST médio (fração dos rounds com kill, assist, sobrevivência ou morte trocada)",
+      "source": "KAST médio de profissionais ~70-74%",
+      "provisional": true,
+      "value": 0.72,
+      "tol": 0.035,
+      "by": {
+        "AWP": { "value": 0.72, "tol": 0.05 },
+        "Entry": { "value": 0.69, "tol": 0.05 },
+        "Rifler": { "value": 0.72, "tol": 0.05 },
+        "Lurker": { "value": 0.72, "tol": 0.05 },
+        "Support": { "value": 0.73, "tol": 0.05 },
+        "IGL": { "value": 0.7, "tol": 0.05 }
+      }
+    },
+    "entryOpeningShare": {
+      "unit": "fraction",
+      "def": "fração dos opening kills do time feitos pelo Entry (times com Entry)",
+      "source": "estimativa a partir de opening kills por round de entries na HLTV (~0,15-0,18 OK/round contra ~0,5 do time)",
+      "provisional": true,
+      "estimate": true,
+      "value": 0.28,
+      "tol": 0.06
+    },
+    "awpKillShare": {
+      "unit": "fraction",
+      "def": "fração dos abates do time feitos pelo AWPer (times com AWP de função)",
+      "source": "AWPers respondem por ~21-25% dos abates do time na HLTV",
+      "provisional": true,
+      "value": 0.23,
+      "tol": 0.04
+    }
+  }
+}

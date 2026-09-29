@@ -921,10 +921,10 @@ export function buildUserAcademyTeam(orgCountry: string, orgTag: string, split: 
 // não pode ficar nos dois lugares. O time perde o titular e promove um jovem da
 // base (OVR baixo, determinístico) pra manter 5 — o time fica realmente mais fraco.
 // O jovem tem nick/nome reais (não mais "TAG.jr1") pra parecer um prospecto de fato.
-function backfillPlayers(team: TeamSeason, n: number): Player[] {
+function backfillPlayers(team: TeamSeason, n: number, start = 0): Player[] {
   const region = macroRegionOf(team.country) ?? 'europe';
   const out: Player[] = [];
-  for (let i = 0; i < n; i++) {
+  for (let i = start; i < start + n; i++) {
     const h = hashStr(`fill:${team.id}:${i}`);
     const base = 64 + (h % 9); // 64-72
     const ident = prospectIdentity(`fill:${team.id}:${i}`, region);
@@ -2161,7 +2161,8 @@ function applyMoves(teams: TeamSeason[], moves: Record<string, string> | undefin
   if (!moves || Object.keys(moves).length === 0) return teams;
   const all: { p: Player; orig: string }[] = [];
   for (const t of teams) for (const p of t.players) all.push({ p, orig: t.id });
-  const valid = new Set(teams.map((t) => t.id));
+  // time extinto (defunct) não recebe ninguém: o jogador volta ao time da base
+  const valid = new Set(teams.filter((t) => !t.defunct).map((t) => t.id));
   const teamOf = (pid: string, orig: string) => {
     const m = moves[pid];
     return m && valid.has(m) ? m : orig;
@@ -3125,7 +3126,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     () => {
       const skip = new Set(save.squad.map((s) => s.playerId));
       return applyAiAging(applyMoves(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves), save.split, skip)
-        .filter((t) => t.id !== '__free__')
+        .filter((t) => t.id !== '__free__' && (!t.defunct || t.id === save.takeoverId))
         // times com <5 jogadores (Legacy/Galorys/RED Canids no dataset atual) somem
         // do circuito porque a UI/engine assume 5 titulares. Antes a gente filtrava
         // (= 'legacy sumiu'); agora completa o line com prospects sintéticos do
@@ -3167,7 +3168,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         if (squadIds.size === 0) return t;
         const kept = t.players.filter((p) => !squadIds.has(p.id));
         if (kept.length === t.players.length) return t;
-        const fill = backfillPlayers(t, t.players.length - kept.length);
+        // continua a numeração dos jovens que o currentEra já pôs (senão o
+        // `${t.id}__aca0` aparece duas vezes no mesmo time)
+        const acaUsed = t.players.filter((p) => p.id.startsWith(`${t.id}__aca`)).length;
+        const fill = backfillPlayers(t, t.players.length - kept.length, acaUsed);
         return { ...t, players: [...kept, ...fill] };
       });
   }, [currentEra, save.takeoverId, save.squad]);
@@ -3527,7 +3531,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // '__custom__' = coach criado no Custom Roster Builder (Vitalícia)
     const coach = s.coachFromId === '__custom__' && s.customCoach
       ? s.customCoach
-      : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
+      : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? CS2_REAL_2026.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
     // TAKEOVER herda o entrosamento real da org (o 78 do buildUserTeam é a
     // premissa do draft). Sem isso, assumir a Yawara (teamwork 60) já a
     // promovia no ranking sem jogar nada — o teamwork é a semente do VRS.
