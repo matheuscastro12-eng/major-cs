@@ -1,3 +1,4 @@
+import type { PlayerAttrs } from './engine/attrs/model';
 export type Game = 'CS 1.6' | 'CS:Source' | 'CS:GO' | 'CS2';
 
 export type Role = 'AWP' | 'IGL' | 'Rifler' | 'Entry' | 'Support' | 'Lurker';
@@ -38,6 +39,7 @@ export interface Player {
   consistency: number;
   awp: number;
   igl: number;
+  attrs?: PlayerAttrs | null; // [realismo FM] atributos próprios (fonte da verdade); sem eles, attrsOf() deriva dos 5 acima
 }
 
 export type CoachStyle = 'tactical' | 'aggressive' | 'discipline';
@@ -111,6 +113,7 @@ export interface TPlayer {
   consistency: number;
   awp: number;
   igl: number;
+  attrs?: PlayerAttrs | null; // [realismo FM] ver engine/attrs/model.ts
   skill: number; // derived overall
   ovr: number; // overall exibido (50-99)
   form?: number; // fase no torneio (0.9 frio … 1.1 em chamas), atualizada a cada série
