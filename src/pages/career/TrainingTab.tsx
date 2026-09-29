@@ -20,6 +20,7 @@ import {
   previewGrowthMul, weekFitnessDelta, weekSharpGain, weeklyInjuryRisk, weekFamiliarityPoints, leakAgainst,
   LEAK_CHANCE_REAL, LEAK_CHANCE_SESSION,
 } from '../../engine/gestao/treino';
+import { mapTacticOf } from '../../engine/gestao/tatica';
 import { isInjured } from '../../engine/gestao/condicao';
 import { staffEffects } from '../../engine/gestao/staff';
 import { ATTR_CLASS, ATTR_CLASS_LABEL, type AttrClass } from '../../engine/attrs/progression';
@@ -346,7 +347,7 @@ export function TrainingTab({
             {MAP_POOL.map((m) => {
               const on = t.mapFocus.includes(m);
               const full = !on && t.mapFocus.length >= MAP_FOCUS_MAX;
-              const fam = Math.round(gestao.tactics.maps[m]?.familiarity ?? 0);
+              const fam = Math.round(mapTacticOf(gestao.tactics, m).familiarity);
               return (
                 <button key={m} type="button" className="tr-map" aria-pressed={on} disabled={full} onClick={() => toggleMap(m)}
                   title={on ? ct('Priorizado: tática e scrim rendem familiaridade aqui (clique pra tirar)') : full ? `${ct('Máximo de')} ${MAP_FOCUS_MAX} ${ct('mapas')}` : ct('Priorizar este mapa no treino')}>
