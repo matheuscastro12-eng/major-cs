@@ -12,7 +12,8 @@ import { Panel as DsPanel, AttrValue, attrBand } from '../ds/index';
 import { ATTR_LABEL, MECHANICAL_KEYS, MENTAL_KEYS, PHYSICAL_KEYS, type AttrKey } from '../../engine/attributes';
 import { CaPaStars } from './CaPaStars';
 import { deriveEventLine, type SeasonEventLine } from '../../engine/career/seasonStats';
-import { HAPPINESS_FACTOR_LABEL, type HappinessBreakdown } from '../../engine/career/happiness';
+import { HAPPINESS_FACTOR_LABEL, HAPPINESS_FACTOR_ORDER, type HappinessBreakdown } from '../../engine/career/happiness';
+import '../../styles/vestiario.css'; // [fase 3] painel de status no elenco
 import { physicalStatus, satisfactionStatus, disciplineStatus, reputationStatus } from '../../engine/career/playerStatus';
 import { SubRoleStars } from './SubRoleStars';
 
@@ -220,6 +221,7 @@ export function CareerPlayerPage({
   potBoost = 0,
   happiness = null,
   bond,
+  squadStatus = null,
   listedPrice = null,
   marketValue,
   onList,
@@ -281,6 +283,17 @@ export function CareerPlayerPage({
   potBoost?: number; // #17: pontos de teto FURADOS por performance (0 = potencial scouted puro)
   happiness?: HappinessBreakdown | null; // #16: satisfação composta (5 fatores legíveis)
   bond?: number; // #31: vínculo com você (0-100)
+  /** [fase 3 · vestiário] status no elenco (promessa de tempo de jogo), escalação e incômodo */
+  squadStatus?: {
+    value: string;
+    options: { value: string; label: string; desc: string }[];
+    onChange: (v: string) => void;
+    expected: number;       // fração de mapas que o status promete
+    share: number | null;   // fração que ele joga (split corrente ou último fechado)
+    slot: string;           // "Titular" / "Banco"
+    unrest: string | null;  // "Pediu conversa" / "Quer sair"
+    influence?: string;     // "Líder do time"…
+  } | null;
   listedPrice?: number | null; // #15: preço pedido se listado à venda
   marketValue?: number; // #15: valor de mercado atual (base das ofertas de listagem)
   onList?: (price: number | null) => void; // #15: listar (preço) / retirar (null)
@@ -521,12 +534,43 @@ export function CareerPlayerPage({
                   <div><span>{ct('Treino')}</span><b>{focused ? ct('Ativo') : ct('Inativo')}</b></div>
                 </div>
               </Panel>
+              {squadStatus && (
+                <Panel title="Status no elenco">
+                  <label className="pp-status-row">
+                    <span>{ct('Status')}</span>
+                    <select
+                      className="pp-status-select"
+                      value={squadStatus.value}
+                      onChange={(e) => squadStatus.onChange(e.target.value)}
+                      aria-label={ct('Status no elenco')}
+                    >
+                      {squadStatus.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </label>
+                  <p className="pp-status-desc">{squadStatus.options.find((o) => o.value === squadStatus.value)?.desc}</p>
+                  <div className="pp-bar-list">
+                    <div className="pp-bar-item">
+                      <span>{ct('Tempo de jogo')}</span>
+                      <div className="pp-bar-track pp-bar-track--mark" style={{ ['--mark' as string]: `${Math.round(squadStatus.expected * 100)}%` }}>
+                        <i style={{ width: `${Math.round((squadStatus.share ?? 0) * 100)}%` }} />
+                      </div>
+                      <b>{squadStatus.share == null ? '—' : `${Math.round(squadStatus.share * 100)}%`}</b>
+                    </div>
+                  </div>
+                  <div className="pp-status-meta">
+                    <span>{ct('Espera jogar')} <b>{Math.round(squadStatus.expected * 100)}%</b> {ct('dos mapas')}</span>
+                    <span>{ct('Escalação')}: <b>{squadStatus.slot}</b></span>
+                    {squadStatus.influence && <span>{ct('Vestiário')}: <b>{squadStatus.influence}</b></span>}
+                    {squadStatus.unrest && <span className="pp-status-unrest">{squadStatus.unrest}</span>}
+                  </div>
+                </Panel>
+              )}
               <Panel title="Felicidade & vínculo">
                 {/* #16: satisfação COMPOSTA — 5 fatores legíveis explicam o porquê */}
                 <div className="pp-happy-score"><b>{happiness ? happiness.overall : Math.round((morale + fitness) / 2)}</b><span>/100</span></div>
                 <div className="pp-bar-list">
                   {happiness ? (
-                    (Object.keys(happiness.factors) as (keyof typeof happiness.factors)[]).map((k) => (
+                    HAPPINESS_FACTOR_ORDER.filter((k) => happiness.factors[k] != null).map((k) => (
                       <div key={k} className="pp-bar-item">
                         <span>{ct(HAPPINESS_FACTOR_LABEL[k])}</span>
                         <div className="pp-bar-track"><i style={{ width: `${happiness.factors[k]}%` }} /></div>

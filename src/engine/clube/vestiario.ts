@@ -353,7 +353,8 @@ const LANG_BY_COUNTRY: Record<string, string> = {
   rs: 'bcs', ba: 'bcs', me: 'bcs', hr: 'bcs',
   xk: 'sq', ks: 'sq', al: 'sq',
   cn: 'zh', tw: 'zh', hk: 'zh',
-  tr: 'tr', mn: 'mn', fi: 'fi', ro: 'ro', bg: 'bg', hu: 'hu', mk: 'mk', lv: 'lv', lt: 'lt', ee: 'et', il: 'he',
+  tr: 'tr', mn: 'mn', fi: 'fi', ro: 'ro', bg: 'bg', hu: 'hu', mk: 'mk', lv: 'ru', lt: 'lt', ee: 'ru', // bálticos da cena falam russo no servidor
+  il: 'he',
   sa: 'ar', jo: 'ar', iq: 'ar', lb: 'ar', ps: 'ar', id: 'id', vn: 'vi', nl: 'nl',
 };
 export function languageOf(country: string): string {

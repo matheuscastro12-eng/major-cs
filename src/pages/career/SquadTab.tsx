@@ -87,6 +87,12 @@ interface Props {
   mySquadIds: Set<string>;
   /** [fase 2] tela "Plano de jogo" (tática por mapa) — renderizada na seção 'pl' */
   gamePlan?: ReactNode;
+  /** [fase 3 · vestiário] escalação e banco (seção 'sq') */
+  lineup?: ReactNode;
+  /** [fase 3 · vestiário] dinâmica do vestiário (seção 'dy') */
+  dinamica?: ReactNode;
+  /** [fase 3 · vestiário] status/escalação/valor por jogador na tabela do Elenco */
+  squadInfo?: Record<string, { status: string; slot: 'starter' | 'bench'; valueMul: number }>;
 }
 
 export function SquadTab({
@@ -101,6 +107,9 @@ export function SquadTab({
   seasonStats,
   mySquadIds,
   gamePlan,
+  lineup,
+  dinamica,
+  squadInfo,
 }: Props) {
   const rows = save.squad.map((sig) => findSigning(sig)?.player).filter(Boolean) as Player[];
   const hasAwp = rows.some((p) => p.role === 'AWP' || p.role2 === 'AWP');
@@ -134,6 +143,9 @@ export function SquadTab({
       contractLeft: until != null ? until - save.split + 1 : null,
       rating: st?.rating, maps: st?.maps, kd: st?.kd, adr: st?.adr,
       recent: save.recentRatings?.[p.id],
+      status: squadInfo?.[p.id]?.status,
+      slot: squadInfo?.[p.id]?.slot,
+      valueMul: squadInfo?.[p.id]?.valueMul,
     };
   });
   const chemAvg = teamChemistry({ pairChem: save.pairChem }, rows.map((p) => playerOrgId(p.id)));
@@ -147,6 +159,7 @@ export function SquadTab({
     <div className={`em-tab em-squad em-squad--${section}`}>
       {section === 'sq' && (
         <>
+          {lineup}
           <ElencoPanel rows={elencoRows} onOpen={openPlayerProfile} />
           <div className="squad-trio">
             <Panel icon={<Sparkles size={16} />} title={ct('Química')}>
@@ -185,6 +198,7 @@ export function SquadTab({
 
       {section === 'dy' && (
         <>
+      {dinamica}
       {/* T3.4: matriz de química do elenco */}
       {rows.length >= 2 && (
         <ChemistryMatrix

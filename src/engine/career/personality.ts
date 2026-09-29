@@ -82,7 +82,9 @@ let source: PersonalitySource | null = null;
 const cache = new Map<string, { key: string; profile: PersonalityProfile }>();
 export function setPersonalitySource(fn: PersonalitySource | null): void {
   source = fn;
-  cache.clear();
+  // o cache é por id + números do jogador: trocar a função-fonte (a cada render
+  // da Carreira) não o invalida; desligar a fonte, sim.
+  if (!fn) cache.clear();
 }
 
 /** Perfil do jogador pelo id (null sem fonte ou jogador desconhecido). */
