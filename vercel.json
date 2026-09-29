@@ -25,6 +25,7 @@
     { "source": "/diario", "destination": "/" },
     { "source": "/carreira", "destination": "/" },
     { "source": "/carreira/:path*", "destination": "/" },
+    { "source": "/editor", "destination": "/" },
     { "source": "/hall", "destination": "/" },
     { "source": "/banners", "destination": "/" },
     { "source": "/design", "destination": "/" },

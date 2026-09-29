@@ -3215,9 +3215,12 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   // customizada por cima dela, CONGELADA no save na criação (mundo.database).
   // Sem base customizada, rawBase/editedBase são exatamente os de antes.
   const [storedDbs] = useState(() => loadCustomDbs(CS2_REAL_2026));
+  // só o id e a cópia congelada importam (o resto do bloco mundo muda toda etapa)
+  const mundoDbId = save.mundo?.databaseId ?? null;
+  const mundoDbSnap = save.mundo?.database ?? null;
   const careerDb = useMemo(
-    () => resolveCareerDatabase(save.mundo, CS2_REAL_2026, storedDbs.map((x) => x.db)),
-    [save.mundo, storedDbs],
+    () => resolveCareerDatabase({ databaseId: mundoDbId, database: mundoDbSnap }, CS2_REAL_2026, storedDbs.map((x) => x.db)),
+    [mundoDbId, mundoDbSnap, storedDbs],
   );
   const rawBase = useMemo(() => applyCustomDatabase(CS2_REAL_2026, careerDb.db), [careerDb.db]);
   const editedBase = useMemo(() => applyCustomDatabase(applyBo3Edits(CS2_REAL_2026, bo3Edits), careerDb.db), [bo3Edits, careerDb.db]);
