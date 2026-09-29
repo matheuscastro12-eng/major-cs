@@ -219,7 +219,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const getSim = (idx: number): MapSim => {
     const safe = Math.min(idx, maps.length - 1); // guarda defensiva contra índice além do veto
     if (!simsRef.current[safe]) {
-      simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy, { identity: identityMods });
+      // mapIndex: fadiga (stamina) no motor v2; MD5 = final (jogo grande, oculto bigMatch)
+      simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy, { identity: identityMods, mapIndex: safe, bigMatch: bestOf === 5 });
     }
     return simsRef.current[safe];
   };
