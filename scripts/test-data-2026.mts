@@ -4,7 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { attrsOf, HIDDEN_KEYS, ALL_ATTRS, type PlayerAttrs } from '../src/engine/attrs/model.ts';
+import { attrsOf, withAttrs, legacyFromAttrs, ovrFromLegacy, HIDDEN_KEYS, ALL_ATTRS, type PlayerAttrs } from '../src/engine/attrs/model.ts';
+import { CS2_REAL_2026 } from '../src/data/bo3.ts';
+import { gameScale } from '../src/data/playerAttrs.ts';
 import { buildAllAttrs, loadLegacy, type StatsFile } from './stats-to-attrs.mts';
 import type { TeamSeason, Player } from '../src/types.ts';
 
@@ -29,8 +31,9 @@ test('todo jogador da base tem PlayerAttrs válido (28 atributos 1–20, 8 ocult
     for (const k of HIDDEN_KEYS) assert.ok(Number.isInteger(x.h[k]) && x.h[k] >= 1 && x.h[k] <= 20, `${p.nick}.h.${k}=${x.h[k]}`);
     assert.ok(Number.isInteger(x.ca) && x.ca >= 1 && x.ca <= x.pa && x.pa <= 200, `${p.nick} ca=${x.ca} pa=${x.pa}`);
     assert.equal(typeof x.src, 'string');
-    // attrsOf devolve os atributos gravados quando o jogador os carrega
-    assert.deepEqual(attrsOf({ ...p, attrs: x }), x);
+    // attrsOf devolve os atributos gravados quando o jogador os carrega (pelo
+    // contrato: withAttrs grava os atributos E os 5 números que saem deles)
+    assert.deepEqual(attrsOf(withAttrs(p, x)), x);
   }
 });
 
@@ -91,4 +94,17 @@ test('alvos de calibração trazem a fonte (ou estão marcados como estimativa)'
   const ts = Object.entries(calib.targets);
   assert.ok(ts.length >= 8);
   for (const [k, t] of ts) assert.ok(t.source || t.estimate, `alvo sem fonte: ${k}`);
+});
+
+// [junção A × B] os atributos da frente A são da escala da CENA (tier 1–3); o
+// carregador leva à escala do jogo pela regressão curado × atributos crus.
+test('escala do jogo: a base real mantém o OVR médio da cena e os craques no topo', () => {
+  assert.ok(gameScale() && gameScale()!.n >= 1000, 'régua ajustada na base real');
+  const mat = CS2_REAL_2026.flatMap((t) => t.players);
+  const ovrJson = all.reduce((s, { p }) => s + ovrFromLegacy(p), 0) / all.length;
+  const ovrReal = mat.reduce((s, p) => s + ovrFromLegacy(legacyFromAttrs(attrsOf(p))), 0) / mat.length;
+  assert.ok(Math.abs(ovrReal - ovrJson) < 1, `OVR médio ${ovrReal.toFixed(1)} × curado ${ovrJson.toFixed(1)}`);
+  const ovrOf = (n: string) => ovrFromLegacy(legacyFromAttrs(attrsOf(mat.find((p) => p.nick === n)!)));
+  const sorted = mat.map((p) => ovrFromLegacy(legacyFromAttrs(attrsOf(p)))).sort((a, b) => b - a);
+  for (const star of ['ZywOo', 'donk', 'm0NESY']) assert.ok(ovrOf(star) >= sorted[15], `${star} fora do top 16 (${ovrOf(star)})`);
 });

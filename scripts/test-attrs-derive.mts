@@ -108,15 +108,19 @@ test('registro da base: TPlayer de torneio acha os atributos pelo sourcePlayerId
   assert.equal(attrsOf(tp), x);
 });
 
-test('dataset real: jogadores registrados com a idade real (PA) e números intactos sem base real', () => {
+// [junção A × B] com a base real da frente A entregue, os 5 números da base SAEM
+// dos atributos reais (levados à escala do jogo pelo carregador).
+test('dataset real: jogadores registrados com a idade real (PA) e números saídos da base real', () => {
   const zywoo = CS2_REAL_2026.flatMap((t) => t.players).find((p) => p.nick === 'ZywOo')!;
-  assert.equal(zywoo.aim, 96);
   const x = attrsOf(zywoo);
   assert.equal(x, attrsOf({ ...zywoo }), 'vem do registro');
+  const l = legacyFromAttrs(x);
+  assert.deepEqual({ aim: zywoo.aim, awp: zywoo.awp, igl: zywoo.igl, clutch: zywoo.clutch, consistency: zywoo.consistency }, l);
+  assert.ok(ovrFromLegacy(l) >= 90, 'ZywOo segue no topo da escala do jogo');
   const donk = CS2_REAL_2026.flatMap((t) => t.players).find((p) => p.nick === 'donk')!;
   const dx = attrsOf(donk);
   assert.ok(dx.pa > dx.ca, 'donk (19) ainda tem espaço');
-  assert.equal(Object.keys(PLAYER_ATTRS_DB).length, 0, 'sem o arquivo da frente de dados, base vazia');
+  assert.ok(Object.keys(PLAYER_ATTRS_DB).length >= 1200, 'base real da frente de dados carregada');
 });
 
 test('carregador: fixture no disco, entrada inválida descartada, números saem dos atributos reais', () => {
