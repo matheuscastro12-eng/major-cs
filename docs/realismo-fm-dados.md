@@ -135,3 +135,29 @@ O ruído é determinístico (hash FNV-1a de `id + chave`), igual em toda execuç
   está listada em `docs/elencos-set-2026.md`.
 - 5 números legados dos novatos (para o código que ainda os lê): `legacyFromAttrs` levado à escala
   curada por uma regressão linear ajustada nos jogadores que já estavam na base.
+
+## Conferência contra jogadores conhecidos (coleta de 2026-09-29, UTC)
+
+| Jogador | Time / função / idade | Estatística (bo3.gg, 6m) | Atributos-chave | CA / PA |
+|---|---|---|---|---|
+| ZywOo | Vitality, AWP, 25 | rating 6,81; KPR 0,85; awper 39% dos rounds | awp 20, aim 20, clutch 20, gameSense 20, liderança 9 | 185 / 192 |
+| apEX | Vitality, IGL, 33 | rating 5,63; KPR 0,61 | liderança 18, comunicação 17, aim 10, reflexes 11 | 135 / 135 |
+| donk | Spirit, Entry, 19 | rating 6,81; 0,20 opening kill/round (maior entre os Entry com 500+ rounds) | aimMovement 20, reflexes 20, aim 20, headshot 20, awp 9 | 182 / 200 |
+| m0NESY | Falcons, AWP, 21 | rating 6,97; awper 51%; 37% dos abates de HS | awp 20, aim 20, consistency 19 | 178 / 200 |
+| karrigan | Falcons, IGL, 36 | rating 5,07; KPR 0,48 | liderança 17, comunicação 17, aim 6 | 113 / 113 |
+
+O teste `scripts/test-data-2026.mts` trava esses casos: ZywOo com AWP ≥ 18, apEX com liderança ≥ 17 e
+mira entre 8 e 13, o Entry que mais abre round com aimMovement e reflexes ≥ 15, e IGLs com liderança
+média pelo menos 5 pontos acima do resto.
+
+## O que é estimativa
+
+- Ocultos `professionalism`, `ambition`, `injuryProneness` (sem dado público); a escala de `loyalty`
+  (o tempo de casa é real). `stamina` é metade estimativa (idade).
+- Liderança, comunicação e visão dos IGLs: o bo3.gg não publica quem é IGL; vale a função curada da base.
+- Novatos sem amostra (< 20 rounds na janela): perfil neutro no nível do time (`src` avisa).
+- Jogadores sem estatística pública (aposentados, fictícios "regen", não achados): `deriveAttrs` dos 5 legados.
+- Função dos novatos: inferida pelos papéis por round (ou, sem papéis, por % de HS e duelos de abertura).
+- Em `docs/calibration-targets.json` nenhum alvo ficou como estimativa: todos foram medidos na amostra.
+  Ressalvas: `awpKillShare` é a fatia de abates do AWPer de função (a API não separa por arma) e
+  `ratingRelByRole` usa o rating do bo3.gg, não o Rating 2.x da HLTV.

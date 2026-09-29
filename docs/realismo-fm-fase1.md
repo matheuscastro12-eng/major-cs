@@ -66,4 +66,4 @@ Assinaturas são contrato. Precisou mudar? Registre em "Mudanças de contrato" n
 - (frente A) Fórmulas e fontes: `docs/realismo-fm-dados.md`. Elencos de setembro/2026: `docs/elencos-set-2026.md`.
 
 ## Frente A: andamento
-- 2026-09-28 22:55: coleta no bo3.gg em ~1.000 de 1.099 jogadores (papéis, estatística avançada e forma por jogador); faltam ~100 jogadores, as transferências (~250 requisições) e a amostra tier S de calibração (já sendo aquecida em paralelo). Depois: atributos, atualização de elencos, portões.
+- 2026-09-29: coleta concluída — 1.236 jogadores do bo3.gg com estatística/cadastro (de 1.236 previstos), 700 mapas tier S na amostra de calibração. Atributos, elencos de setembro/2026 e alvos de calibração gerados e commitados. Falta só rodar os portões finais.
