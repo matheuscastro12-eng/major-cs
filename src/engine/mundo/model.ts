@@ -48,7 +48,26 @@ export interface VrsEntry {
 }
 
 // ─── Juventude ─────────────────────────────────────────────────────────────
-export interface YouthIntakeLog { year: number; region: MacroRegion | 'global'; playerIds: string[] }
+export interface YouthIntakeLog {
+  year: number;
+  region: MacroRegion | 'global';
+  playerIds: string[];
+  /** [K] de onde saiu cada jovem: 'user' (sua base) ou id do clube com academia. Ausente = cena aberta. */
+  origin?: Record<string, string>;
+}
+
+/** [K] Aposentado do mundo da IA (manchete + pool da comissão técnica). */
+export interface WorldRetiree {
+  id: string;
+  nick: string;
+  age: number;
+  split: number;          // split em que parou
+  ovr: number;
+  role: Player['role'];
+  country: string;
+  teamId?: string;        // último clube
+  staffRole?: 'headCoach' | 'assistant' | 'analyst' | null; // virou comissão (entra no mercado de staff)
+}
 
 // ─── Bloco gravado no save da Carreira (v30) ───────────────────────────────
 export interface MundoState {
@@ -59,6 +78,10 @@ export interface MundoState {
   newgens: Record<string, Player>;        // jogadores gerados (não existem na base) — persistidos
   intake: YouthIntakeLog[];               // histórico das gerações anuais
   databaseId: string | null;              // base usada (null = oficial)
+  // [K · juventude] campos opcionais (o `ensureYearIntake`/`tickJuventude` preenchem):
+  seed?: string;                          // semente estável das levas desta Carreira
+  newgenAttrs?: Record<string, string>;   // atributos empacotados de cada jovem (ver juventude.ts#packAttrs)
+  retirees?: WorldRetiree[];              // aposentados recentes do mundo (últimos 60)
 }
 
 // ─── Editor de base de dados (fora do save) ────────────────────────────────

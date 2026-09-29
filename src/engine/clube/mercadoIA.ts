@@ -240,6 +240,9 @@ export interface WorldTickArgs {
   loans?: MarketLoan[];             // stand-ins da IA ativos (voltam no fim do split)
   arrivals?: Record<string, number>;// quem chegou na janela anterior (ou nesta) não é revendido
   maxMoves?: number;
+  /** [fase 4 · juventude] preferência do comprador pelo jogador (ex.: jovem da
+   *  própria academia); somada ao score da escolha. Ausente = neutro. */
+  affinity?: (buyerId: string, p: Player) => number;
 }
 
 export interface WorldTickResult {
@@ -418,6 +421,7 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
         case 'survival': score += fee === 0 ? 20 : -costF * 40; break;
         default: score -= costF * 15;
       }
+      if (a.affinity) score += a.affinity(buyerId, p);
       score += (hashStr(`pick:${buyerId}:${p.id}:${split}`) % 7) / 10;
       if (!pick || score > pick.score) pick = { p, fromId, fee, cost, score, swap };
     };
