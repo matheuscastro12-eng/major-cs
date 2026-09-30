@@ -466,6 +466,14 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const pwMismatch = mode === 'signup' && pw2.length > 0 && pw !== pw2;
   const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6
     && (mode === 'login' || (accepted && pw === pw2));
+  // funil: o botão de pagar fica DISABLED (sem onClick, sem feedback) até o
+  // checkbox de termos ser marcado — quem preenche e-mail/senha/confirmação
+  // certinhos mas esquece a caixinha (a única linha sem cara de "campo
+  // obrigatório", só texto pequeno com links) vê o botão inerte e não sabe
+  // por quê. Sinaliza exatamente essa lacuna assim que ela é a única
+  // pendência, sem esperar clique (não dá pra ouvir clique em botão disabled).
+  const onlyMissingTerms = mode === 'signup' && !accepted
+    && /\S+@\S+\.\S+/.test(email) && pw.length >= 6 && pw2.length > 0 && pw === pw2;
   const go = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
@@ -635,10 +643,13 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         </div>
       )}
       {mode === 'signup' && (
-        <label className="checkout-legal-accept">
+        <label className="checkout-legal-accept" style={onlyMissingTerms ? { outline: '1px solid var(--em-gold)', borderRadius: '6px' } : undefined}>
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
           <span>{ct('Li e aceito os')} <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">{ct('Termos')}</a> {ct('e a')} <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">{ct('Política de Reembolso')}</a>{ct(', consultei a')} <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">{ct('Privacidade')}</a> {ct('e confirmo ser maior de 18 anos ou responsável legal pela compra.')}</span>
         </label>
+      )}
+      {onlyMissingTerms && (
+        <p style={{ color: 'var(--em-gold)', fontSize: '0.74rem', margin: '6px 0 0' }}>↑ {ct('Só falta marcar essa caixa pra continuar.')}</p>
       )}
       {err && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
       {/* funil: dado real (checkout_open x rtm_paid_emails, por método) mostra o Pix
