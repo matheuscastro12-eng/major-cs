@@ -88,6 +88,24 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     close();
     onUpgrade();
   };
+  // funil: o upsell in-game é quem mais abre checkout no app inteiro (lidera
+  // checkout_open), mas fechava o QR Pix com UM clique — overlay inteiro e o ✕
+  // chamavam close() direto, sem a fricção leve que a Landing já validou (nudge
+  // 1x/sessão antes de deixar fechar). Num card in-game, com ❌ grande e overlay
+  // de fundo cobrindo a tela, um toque sem querer custa a cobrança gerada — e
+  // parte dos abandonos de Pix (28d) fecha rápido demais pra ser decisão
+  // consciente. Mesmo padrão da Landing: 1 nudge honesto, depois fecha mesmo.
+  const nudgeShown = useRef(false);
+  const [nudge, setNudge] = useState(false);
+  const requestClose = () => {
+    if (pix && !pixConfirmed.current && !pixSwitchedMethod.current && !nudgeShown.current) {
+      nudgeShown.current = true;
+      setNudge(true);
+      trackPaywallView('upsell-nudge'); // funil: nudge exibido nesta superfície (src próprio, mede separado do 'checkout-nudge' da Landing)
+      return;
+    }
+    close();
+  };
 
   useEffect(() => {
     const onEvt = (e: Event) => {
@@ -129,7 +147,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
 
   const close = () => {
     if (pix && !pixConfirmed.current && !pixSwitchedMethod.current) trackCheckoutAbandon('pix', (Date.now() - pixOpenedAt.current) / 1000);
-    setPix(null); setPixErr(''); setPixBusy(false);
+    setPix(null); setPixErr(''); setPixBusy(false); setNudge(false);
     setOpen(false);
   };
 
@@ -153,9 +171,9 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
   };
 
   return (
-    <div className="upsell-overlay" role="dialog" aria-modal="true" onClick={close}>
+    <div className="upsell-overlay" role="dialog" aria-modal="true" onClick={requestClose}>
       <div className="upsell-card" onClick={(e) => e.stopPropagation()}>
-        <button className="upsell-x" onClick={close} aria-label={ct('fechar')}>✕</button>
+        <button className="upsell-x" onClick={requestClose} aria-label={ct('fechar')}>✕</button>
         <div className="upsell-kicker">{ct('Conta vitalícia')}</div>
         <h3 className="upsell-title">{ct(hook)}</h3>
         <ul className="upsell-list">
@@ -193,7 +211,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
               {ct('Criar conta e ativar')} · R$20
             </button>
           )}
-          <button className="upsell-later" onClick={close}>{ct('Agora não')}</button>
+          <button className="upsell-later" onClick={requestClose}>{ct('Agora não')}</button>
         </div>
         {pixErr && <p style={{ color: '#e2574c', fontSize: '0.78rem', margin: '10px 0 0' }}>{pixErr}</p>}
         {pix && (
@@ -232,6 +250,25 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
               <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
                 {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
               </p>
+            )}
+            {nudge && (
+              /* nudge anti-abandono (1x/sessão), mesmo padrão da Landing: honesto,
+                 descartável — um segundo clique em "Fechar" sempre fecha mesmo. */
+              <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(232,193,112,.08)', border: '1px solid rgba(232,193,112,.4)', borderRadius: '6px' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--em-text, #fff)', lineHeight: 1.5 }}>
+                  {ct('Ficou alguma dúvida? O acesso é vitalício e o Pix confirma na hora.')}
+                </p>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="button" onClick={() => setNudge(false)}
+                    style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                    {ct('Continuar pagamento')}
+                  </button>
+                  <button type="button" onClick={close}
+                    style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,.15)', color: 'var(--em-muted, #9aa4b2)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                    {ct('Fechar')}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
