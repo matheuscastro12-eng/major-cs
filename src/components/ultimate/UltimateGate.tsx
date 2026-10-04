@@ -29,6 +29,13 @@ export function UltimateGate({
   // que ficou órfã quando este modal substituiu o card travado da Home.
   useEffect(() => { trackPaywallView('home-ultimate'); }, []);
 
+  // funil (28d, dado real): "Criar conta vitalícia" era o ÚNICO CTA primário
+  // de cadastro do app sem o preço no próprio texto do botão — todo o resto
+  // (Home, UpsellCard, Landing, WeekendLeague, banner de convidado do
+  // Ultimate) já repete "R$20" no botão desde iterações anteriores, com dado
+  // real validando que isso ajuda o clique (o preço some num parágrafo longe
+  // do botão, principalmente no celular). Alinha este CTA ao mesmo padrão.
+
   const title = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
       <BrandMark size={22} />
@@ -56,7 +63,7 @@ export function UltimateGate({
       </div>
 
       <Button variant="gold" style={{ width: '100%' }} onClick={onSignup}>
-        {ct('Criar conta vitalícia')}
+        {ct('Criar conta vitalícia')} · R$20
       </Button>
       <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '12px 0' }}>
         {ct('Já tem conta? ')}
