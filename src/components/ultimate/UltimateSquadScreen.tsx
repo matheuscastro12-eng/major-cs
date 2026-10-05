@@ -89,6 +89,7 @@ import { WeekendLeague } from '../online/WeekendLeague';
 import { WlResultBanner } from './WlResultBanner'; // [O0-22]
 import { UtPanel, UtEmpty } from './UtPanel';
 import { FounderCounter } from '../FounderCounter';
+import { useFounders } from '../../state/founders';
 import {
   LayoutGrid, Layers, Shirt, FlaskConical, ArrowLeftRight, Package, Crosshair,
   Swords, ListOrdered, Coins, Trophy, Zap, CalendarDays, Lock,
@@ -477,6 +478,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // mostra o link estático do Woovi como fallback.
   const [coinModal, setCoinModal] = useState<{ pack: CoinPack; charge: CoinCharge | null; error?: boolean } | null>(null);
   const { account, ready: accountReady } = useAccount();
+  // funil: Fundadores esgotados (500/500, dado real) — usado pra não prometer
+  // "virar Fundador" na trava do Mercado (abaixo) quando o selo já acabou,
+  // mesma contradição ("Edição esgotada" + CTA "virar Fundador" na mesma
+  // tela) já corrigida no Home.tsx e no UpsellCard.
+  const founderStats = useFounders();
+  const founderSoldOut = !!founderStats && founderStats.founders >= founderStats.limit;
   // funil: convidado viu o aviso/CTA de conta vitalícia no topo do Ultimate
   // (única superfície de venda do modo convidado, aberto desde o guest mode)
   useEffect(() => { if (guest) trackPaywallView('ultimate-guest'); }, [guest]);
@@ -2826,6 +2833,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     baixo risco: aplica o mesmo padrão aqui — amostra pequena demais
                     (53 sessões) pra provar que isso sozinho resolve, mas alinha esta
                     trava ao resto do funil. */}
+                {/* funil: Fundadores esgotados (500/500) desde antes deste período —
+                    o FounderCounter bem acima já avisa "esgotada" honestamente, mas
+                    este botão seguia prometendo "virar Fundador", a mesma tela dizendo
+                    duas coisas opostas no momento da compra (contradição já corrigida
+                    no Home.tsx e no UpsellCard). Copy condicional ao estoque real. */}
                 {(guest ? onCreateAccount : onUpgrade) ? (
                   <button
                     type="button"
@@ -2833,7 +2845,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     style={{ padding: '9px 20px', fontSize: '0.82rem', marginTop: 2 }}
                     onClick={() => { setCheckoutSrc('mkt-lock'); (guest ? onCreateAccount : onUpgrade)?.(); }}
                   >
-                    {ct('Virar Fundador · R$20 · destravar o Mercado')}
+                    {founderSoldOut ? ct('Virar conta vitalícia · R$20 · destravar o Mercado') : ct('Virar Fundador · R$20 · destravar o Mercado')}
                   </button>
                 ) : (
                   <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
