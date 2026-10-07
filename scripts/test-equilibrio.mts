@@ -27,6 +27,11 @@ import {
 } from '../src/engine/career/equilibrio.ts';
 import { headCoachFromCoach } from '../src/engine/gestao/staff.ts';
 import { aiFor, mirror, prepUser, ranked, series, takeoverUser, MIRROR_RANKS } from './lib/equilibrio-harness.mts';
+import { decideOffer, MARKET_BY_MODE } from '../src/engine/career/decideOffer.ts';
+import { demandFor, willingToNegotiate, type NegoProfile } from '../src/engine/clube/contratos.ts';
+import { tickMarketWindow, AI_MARKET_BY_MODE } from '../src/engine/clube/mercadoIA.ts';
+import { agedFreeAgents, aiAgeOf, baseOvrOf, BASE_PLAYER_IDS } from '../src/engine/career/aiWorld.ts';
+import { playerValue } from '../src/engine/ratings.ts';
 
 const N = Number(process.env.EQ_N ?? 250);
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
@@ -157,3 +162,45 @@ test('dream team no Lendário: ≤ 25% de títulos em 10 splits de circuito', ()
   assert.ok(titles / events <= 0.25, `títulos ${titles}/${events} = ${pct(titles / events)}`);
 });
 
+
+// ─── mercado por modo ────────────────────────────────────────────────────────
+
+test('mercado por modo: estrela "não está à venda" com mais frequência e ágio maior no Lendário', () => {
+  const stars = ranked.flatMap((t) => t.players).filter((p) => playerOvr(p) >= 84);
+  const nfs = (mode: 'normal' | 'hard' | 'legend') => stars.filter((p) => {
+    const r = decideOffer({ offer: 1, asking: 1, marketValue: playerValue(p), player: p, fromTeamwork: 90, round: 0, ctx: { difficulty: mode } });
+    return r.kind === 'reject' && r.firm;
+  }).length;
+  const [n, h, l] = [nfs('normal'), nfs('hard'), nfs('legend')];
+  assert.ok(n < h && h < l, `não está à venda: normal ${n} · difícil ${h} · lendário ${l} (de ${stars.length})`);
+  assert.equal(MARKET_BY_MODE.normal.coreRatio, 1.7, 'Normal = a regra de sempre');
+  assert.ok(MARKET_BY_MODE.legend.coreRatio > MARKET_BY_MODE.hard.coreRatio);
+});
+
+test('free agent de calibre: 85+ recusa tier 3 e cobra luvas', () => {
+  const base: NegoProfile = {
+    playerId: 'x', ovr: 86, age: 25, marketWage: 200_000, marketValue: 3_000_000,
+    hidden: { ambition: 12, loyalty: 10, professionalism: 10, temperament: 10 },
+    clubTier: 3, squadRank: 0, kind: 'signing', split: 2,
+  };
+  assert.equal(willingToNegotiate({ ...base, freeAgent: true }).ok, false);
+  assert.equal(willingToNegotiate({ ...base, freeAgent: true, clubTier: 2 }).ok, true);
+  assert.equal(willingToNegotiate(base).ok, true, 'sem ser free agent, a regra de antes');
+  const fa = demandFor({ ...base, clubTier: 2, freeAgent: true }).terms.signingBonus;
+  const notFa = demandFor({ ...base, clubTier: 2 }).terms.signingBonus;
+  assert.ok(fa - notFa >= 0.25 * base.marketValue, `luvas do free agent ${fa} × ${notFa}`);
+});
+
+test('IA no Lendário: orçamento maior e assina os free agents ≥ 80 antes de você', () => {
+  const split = 2;
+  const args = {
+    teams: ranked, freeAgents: agedFreeAgents(CS2_REAL_2026, {}, split, new Set<string>()), split, kind: 'offseason' as const,
+    formOf: () => 50, ageOf: (p: Player) => aiAgeOf(p, split), baseOvrOf, movableIds: BASE_PLAYER_IDS,
+  };
+  const normal = tickMarketWindow(args);
+  const legend = tickMarketWindow({ ...args, ...AI_MARKET_BY_MODE.legend });
+  const faSigned = (r: typeof normal) => r.log.filter((m) => m.fromId === '__free__' && m.ovr >= 80).length;
+  assert.ok(faSigned(legend) > faSigned(normal), `free agents ≥80 assinados: lendário ${faSigned(legend)} × normal ${faSigned(normal)}`);
+  const sum = (b: Record<string, number>) => Object.values(b).reduce((a, x) => a + x, 0);
+  assert.ok(sum(legend.budgets) + legend.log.reduce((a, m) => a + m.fee, 0) > sum(normal.budgets), 'orçamento da IA maior no Lendário');
+});

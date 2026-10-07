@@ -390,7 +390,7 @@ import { OverviewTab } from '../pages/career/OverviewTab';
 // [fase 2 · frente STAFF] comissão técnica
 import { StaffTab } from '../pages/career/StaffTab';
 import type { ClubStrategy, IncomingOffer, MarketLoan, MarketState } from '../engine/clube/model';
-import { tickMarketWindow, clubsSnapshot, clubNeeds, aiTierOf, squadOvr, type ClubNeed, type WindowKind } from '../engine/clube/mercadoIA';
+import { tickMarketWindow, clubsSnapshot, clubNeeds, aiTierOf, squadOvr, AI_MARKET_BY_MODE, type ClubNeed, type WindowKind } from '../engine/clube/mercadoIA';
 import { quickSaleFee, sellToBuyer, releaseToFree, pickQuickSaleBuyer, settleSaleAtBuyer, displacedBy, endLoanOutMove, faReleaseRepair, FA_RELEASE_FIX, type BuyerCtx, type ExitBooks } from '../engine/clube/saidas';
 import {
   marketOf, userLoans, expireOffers, generateIncomingOffers, applyWorldTick, withOffers, pushRumors, chainRumors, needRumors,
@@ -3818,6 +3818,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     blockedFor: (pid, party) => negotiationBlock(save, pid, party, save.split),
     onRecord: (n) => updateClube((s) => recordNegotiation(s, n)),
     split: save.split,
+    difficulty: careerDiff(save.difficulty),
   });
   const renewalBlockedFor = (pid: string): Negotiation | null => negotiationBlock(save, pid, 'player', save.split);
   // [fase 3] save migrado: grava o salário real (playerWage do jogador ATUAL)
@@ -4412,7 +4413,10 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     // seus empréstimos (emprestado por você ou stand-in acertado) também são
     // intocáveis: a IA não contrata quem já tem acordo com o seu clube
     const loanIds = userLoans(m).map((l) => l.playerId);
-    const protectedIds = new Set([...squadIds, ...loanIds]);
+    // [equilíbrio] quem já tem acordo fechado com você (entra na janela) também
+    const dealIds = (s.pendingDeals ?? []).map((d) => d.inPlayerId);
+    const protectedIds = new Set([...squadIds, ...loanIds, ...dealIds]);
+    const mm = AI_MARKET_BY_MODE[careerDiff(s.difficulty)];
     const teams = oppEra.filter((t) => t.id !== s.takeoverId);
     const byId = new Map(teams.map((t) => [t.id, t]));
     const forms = computeAllTeamForms(s);
@@ -4434,6 +4438,8 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       arrivals: m.arrivals,
       maxMoves: opts.maxMoves,
       seed: mundoOf(s).seed,                  // cada Carreira tem o seu mercado
+      budgetMul: mm.budgetMul,                // [equilíbrio] IA mais rica no Difícil/Lendário
+      faFirstOvr: mm.faFirstOvr,              // [equilíbrio] e chega antes nos free agents ≥ 80
     });
   };
   // propostas pelos SEUS jogadores (depois dos movimentos da IA)
@@ -4711,7 +4717,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
     const snap = stored
       ? { budgets: m.budgets, strategies: m.strategies ?? {} }
-      : clubsSnapshot({ teams, split: s.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(s, t) : 0; }, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut) });
+      : clubsSnapshot({ teams, split: s.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(s, t) : 0; }, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut), budgetMul: AI_MARKET_BY_MODE[careerDiff(s.difficulty)].budgetMul });
     return { teams, split: s.split, budgets: snap.budgets, strategies: snap.strategies, formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut), baseOvrOf };
   };
   const applyQuickSales = (s: CareerSave, leavingIds: string[]) => {
@@ -5387,7 +5393,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
     const snap = stored
       ? { budgets: m.budgets, strategies: m.strategies ?? {} }
-      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf: (p) => aiAgeOf(p, save.split, save.youthDebut), seed: mundoOf(save).seed });
+      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf: (p) => aiAgeOf(p, save.split, save.youthDebut), seed: mundoOf(save).seed, budgetMul: AI_MARKET_BY_MODE[careerDiff(save.difficulty)].budgetMul });
     const ageOf = (p: Player) => aiAgeOf(p, save.split, save.youthDebut);
     const rows: RivalRow[] = teams.map((t) => {
       const strategy = snap.strategies[t.id] ?? 'balanced';
@@ -5411,7 +5417,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const forms = computeAllTeamForms(save);
     const byId = new Map(teams.map((t) => [t.id, t]));
     const ageOf = (p: Player) => aiAgeOf(p, save.split, save.youthDebut);
-    const snap = clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf, seed: mundoOf(save).seed });
+    const snap = clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf, seed: mundoOf(save).seed, budgetMul: AI_MARKET_BY_MODE[careerDiff(save.difficulty)].budgetMul });
     const win = transferWindowOf({ split: save.split, eventInSplit: save.eventInSplit ?? 1, inMajor: !!save.majorT && save.majorT.phase !== 'done', majorSplit: isMajorSplit(save.split) });
     // na abertura ninguém paga cláusula: o mundo não força venda ao carregar o save
     const squad = squadEntries(save).map((e) => ({ ...e, clause: null }));
@@ -10738,8 +10744,9 @@ function ColorSwatch({ value, onChange, label }: { value: string; onChange: (v: 
 }
 
 // ---------- negociação de transferência (modal) ----------
-function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, split = 0, blocked, onRecord, onClose, onAgree }: {
+function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, split = 0, blocked, difficulty, onRecord, onClose, onAgree }: {
   player: Player; from: TeamSeason; budget: number;
+  difficulty?: Difficulty;  // [equilíbrio] mercado por modo (estrelas mais protegidas, ágio maior)
   split?: number;           // [fase 3] split da conversa (rodadas e bloqueio)
   blocked?: Negotiation | null; // [fase 3] o clube encerrou a conversa neste split
   onRecord?: (nego: Negotiation) => void; // [fase 3] grava conversa encerrada (bloqueia até o próximo split)
@@ -10755,7 +10762,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
   const ask = askingPrice(player, from.teamwork);
   // contexto multifatorial do clube vendedor — from.players já é o elenco
   // ATUAL (currentEra vem pós-applyMoves)
-  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount, buyoutFloor };
+  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount, buyoutFloor, difficulty: careerDiff(difficulty) };
   const mkt = playerValue(player);
   const wage = playerWage(player);
   const [offer, setOffer] = useState(Math.round(ask * 0.85));
@@ -11047,6 +11054,8 @@ interface ContractCtx {
   onRecord: (nego: Negotiation) => void;
   /** split da conversa (bloqueio): o atual, mesmo quando o contrato começa no próximo */
   split: number;
+  /** [equilíbrio] modo da Carreira (mercado mais duro no Difícil/Lendário) */
+  difficulty?: Difficulty;
 }
 function subjectOf(player: Player, age: number, fromLabel: string): ContractNegoSubject {
   return { id: player.id, nick: player.nick, name: player.name, country: player.country, role: player.role, ovr: playerOvr(player), age, fromLabel };
@@ -11059,11 +11068,13 @@ function TransferNegotiation({ player, from, budget, contract, clubProps, onClos
   onDone: (fee: number, outIds: string[], terms: ContractTerms) => void;
 }) {
   const [club, setClub] = useState<{ fee: number; outIds: string[] } | null>(null);
-  const profile = useMemo(() => contract.profileFor(player), [contract, player]);
+  // [equilíbrio] free agent sem taxa de transferência pede luvas pelo calibre
+  const profile = useMemo(() => ({ ...contract.profileFor(player), freeAgent: from.id === FREE_TEAM_ID }), [contract, player, from.id]);
   if (!club) {
     return (
       <NegotiationModal
         {...clubProps}
+        difficulty={contract.difficulty}
         player={player} from={from} budget={budget} split={contract.split}
         blocked={contract.blockedFor(player.id, 'club')}
         onRecord={contract.onRecord}
