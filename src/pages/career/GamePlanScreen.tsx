@@ -19,6 +19,7 @@ import type { CtSetup, MapRole, TExecute, TacticsState, TeamInstructions } from 
 import { scoutingOf } from '../../engine/career/teamIdentity';
 import { ct } from '../../state/career-i18n';
 import { MAP_LABELS, MAP_POOL, type MapId, type Player, type TTeam } from '../../types';
+import { StylePanel } from './StylePanel';
 import '../../styles/tatica.css';
 
 export interface GamePlanScreenProps {
@@ -134,6 +135,9 @@ export function GamePlanScreen({ tactics, onChange, players, opp, reveal, gamePl
           })}
         </div>
       </Panel>
+
+      {/* ── estilo de jogo (por lado, todos os mapas) ── */}
+      <StylePanel tactics={tactics} onChange={onChange} players={players} mapFam={mt.familiarity} oppStyle={theirs && reveal >= 0.5 ? theirs.style : null} />
 
       <div className="tac-grid">
         <div className="tac-col">

@@ -195,13 +195,13 @@ export function styleShape(side: 't' | 'ct', s: StyleId, P0: StyleProfile): Styl
         engOpen: (r, st) => (st === 'aggressive' ? 1.3 : r === 'entry' || r === 'second' ? 1.15 : 1),
       };
       case 'passive': return {
-        open: -0.02, mid: 0.019 + 0.045 * P.sense, post: 0.01 + 0.045 * P.post + 0.04 * P.clutch - 0.03 * aggFit,
+        open: -0.02, mid: 0.027 + 0.045 * P.sense, post: 0.01 + 0.045 * P.post + 0.04 * P.clutch - 0.03 * aggFit,
         trade: 0.95, plant: 0.94, time: 1.3, k: 1, oppPlant: 1,
         engOpen: (r, st) => (st === 'passive' || r === 'lurker' ? 0.8 : 1),
         engPost: (r, st) => (r === 'lurker' || st === 'passive' ? 1.3 : 1),
       };
       case 'control': return {
-        open: -0.01, mid: -0.0435 + 0.045 * P.igl + 0.03 * P.util + 0.02 * P.sense, post: 0,
+        open: -0.01, mid: -0.036 + 0.045 * P.igl + 0.03 * P.util + 0.02 * P.sense, post: 0,
         trade: 1, plant: 0.97, time: 1.35, k: 1.07, oppPlant: 1,
         engMid: (r) => (r === 'igl' || r === 'support' ? 1.15 : 1),
       };
@@ -302,15 +302,16 @@ export function styleDuelMods(c: StyleModsCtx): Partial<TacticDuelMods> & { team
 //
 // Estimativa do efeito em pontos percentuais dos rounds DAQUELE LADO contra um
 // adversário Padrão. Pesos por unidade medidos no motor (regressão sobre
-// scripts/measure-estilo.mts, 5 perfis × 8 estilos × 3000 mapas; R² ≈ 0,7) —
+// scripts/measure-estilo.mts, 5 perfis × 8 estilos × 3000 mapas; R² ≈ 0,7;
+// `base` = intercepto da regressão) —
 // test-estilo.mts confere que o encaixe ordena os estilos como a simulação.
 
-const W_PP = { open: 8.5, mid: 14.5, post: 12.5, trade: 7, plant: 12, oppPlant: -2 };
+const W_PP = { base: 0.35, open: 8.5, mid: 14.5, post: 12.5, trade: 7, plant: 12, oppPlant: -2 };
 
 export function styleFitPp(side: 't' | 'ct', s: StyleId, P: StyleProfile, q = 1): number {
   const sh = styleShape(side, s, P);
   if (sh === NONE) return 0;
-  return q * (W_PP.open * sh.open + W_PP.mid * sh.mid + W_PP.post * sh.post
+  return q * (W_PP.base + W_PP.open * sh.open + W_PP.mid * sh.mid + W_PP.post * sh.post
     + W_PP.trade * (sh.trade - 1) + W_PP.plant * (sh.plant - 1) + W_PP.oppPlant * (sh.oppPlant - 1));
 }
 
@@ -365,7 +366,7 @@ export function setStyle(state: TacticsState, patch: Partial<TeamStyle>): Tactic
 export interface AiStyleTeam { players: StylePlayer[]; coach?: Pick<Coach, 'style' | 'rating'>; playbook?: Playbook }
 
 /** Margem (logit) que um estilo precisa ter sobre o Padrão para a IA adotá-lo. */
-export const AI_STYLE_MARGIN = -0.15; // pp de round no lado (a estimativa é conservadora: medido ≈ +0,4 pp acima)
+export const AI_STYLE_MARGIN = 0.2; // pp de round no lado: só adota com encaixe claro
 
 export function aiStyle(team: AiStyleTeam): { style: TeamStyle; fam: Partial<Record<string, number>> } {
   const P = styleProfile(team.players);

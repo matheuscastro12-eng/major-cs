@@ -96,6 +96,8 @@ if (process.argv[1]?.endsWith('measure-estilo.mts')) {
       ...STYLES_T.filter((s) => s !== 'standard').map((s) => [`T:${s}`, { t: s, ct: 'standard' }, 't', s] as [string, TeamStyle, 't', StyleId]),
       ...STYLES_CT.filter((s) => s !== 'standard').map((s) => [`CT:${s}`, { t: 'standard', ct: s }, 'ct', s] as [string, TeamStyle, 'ct', StyleId]),
     ];
+    // (sem descontar Padrão×Padrão da mesma semente: com o estilo, o sorteio
+    // diverge no 1º round e a amostra vira independente — a referência é 50%)
     for (const [name, st, side, s] of cells) {
       const r = mirrorStyle(prof, st, n);
       out[prof][name] = r;
