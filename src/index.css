@@ -6673,3 +6673,23 @@ button.t20-row {
 .pp-stint { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border: 1px solid var(--em-border); border-left: 3px solid var(--em-gold); border-radius: 4px; }
 .pp-stint b { font-size: 0.82rem; }
 .pp-stint span { font-size: 0.7rem; color: var(--em-muted); }
+
+/* [estilo de jogo] troca ao vivo e pós-jogo (MatchStyle.tsx) */
+.style-live { padding-top: 0; }
+.style-live__side { display: inline-flex; align-items: center; gap: 6px; }
+.style-live__select {
+  background: var(--bg-deep); border: 1px solid var(--border-soft); border-radius: var(--radius); color: var(--text-strong);
+  font-family: var(--font-cond); font-size: 12.5px; letter-spacing: 0.4px; padding: 5px 8px; cursor: pointer; min-height: 32px;
+}
+.style-live__select:hover, .style-live__select:focus-visible { border-color: var(--gold-soft); }
+.style-live__hint { font-size: 11px; color: var(--dim); }
+.style-stats__table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.style-stats__table th, .style-stats__table td { padding: 6px 8px; border-bottom: 1px solid var(--border-soft); text-align: right; font-variant-numeric: tabular-nums; }
+.style-stats__table th[scope="row"] { text-align: left; color: var(--dim); font-weight: 600; }
+.style-stats__table thead th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.style-stats__table .you { color: var(--gold); }
+.style-stats__style td { font-size: 12px; }
+@media (max-width: 520px) {
+  .style-live__hint { flex-basis: 100%; text-align: center; }
+  .style-stats__table { font-size: 12px; }
+}
