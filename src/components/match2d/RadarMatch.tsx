@@ -55,6 +55,7 @@ interface Props {
   stance: Stance;
   timeoutsLeft: number;
   onTipAction: (a: TipAction) => void;
+  canStyle?: boolean;                 // [integração] a tela troca o estilo T/CT ao vivo
   onBusy?: (busy: boolean) => void;
   onShownStats?: (s: Record<string, PlayerMapStats> | null) => void; // stats do round ENCENADO (sem spoiler)   // true enquanto há round para encenar (o MatchScreen segura a troca de mapa)
 }
@@ -79,7 +80,7 @@ function useReducedMotion(): boolean {
 const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 export function RadarMatch(props: Props) {
-  const { sim, map, mapIdx, teams, userIdx, tick, gate, paused, requestStep, onShownScore, stance, timeoutsLeft, onTipAction, onBusy, onShownStats } = props;
+  const { sim, map, mapIdx, teams, userIdx, tick, gate, paused, requestStep, onShownScore, stance, timeoutsLeft, onTipAction, onBusy, onShownStats, canStyle } = props;
   const reduced = useReducedMotion();
   const roster = useMemo(() => teams.map((t) => withFullRoster(t).players.slice(0, 5)) as [TTeam['players'], TTeam['players']], [teams]);
   const nickOf = useMemo(() => {
@@ -296,8 +297,8 @@ export function RadarMatch(props: Props) {
 
   const tips = useMemo(() => assistantTips({
     history, userIdx, money: preRef.current?.money ?? [0, 0],
-    nextSide: preRef.current?.sides ?? ['ct', 't'], stance, timeoutsLeft,
-  }), [history, userIdx, stance, timeoutsLeft]);
+    nextSide: preRef.current?.sides ?? ['ct', 't'], stance, timeoutsLeft, canStyle,
+  }), [history, userIdx, stance, timeoutsLeft, canStyle]);
 
   const view = playing;
   const sc = view?.script ?? null;

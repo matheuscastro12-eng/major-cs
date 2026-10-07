@@ -88,6 +88,11 @@ export const QUESTION: Record<PressTopic, Tri> = {
     en: ['That is {x} losses in a row. What is going on?', '{x} straight defeats. Does the roster still believe in the plan?'],
     es: ['Son {x} derrotas seguidas. ¿Qué está pasando?', '{x} tropiezos seguidos. ¿El plantel aún cree en el plan?'],
   },
+  style: {
+    pt: ['O time insiste no estilo {n}. Não está na hora de mudar?', 'O {n} virou previsível? Os rivais parecem ler cada round.'],
+    en: ['The team keeps playing {n}. Isn\'t it time to change?', 'Has the {n} style become predictable? Rivals seem to read every round.'],
+    es: ['El equipo insiste con el estilo {n}. ¿No es hora de cambiar?', '¿El {n} se volvió previsible? Los rivales leen cada ronda.'],
+  },
   title: {
     pt: ['Campeões do {ev}! Qual o tamanho dessa conquista?', 'Título do {ev}. Para quem vai essa taça?'],
     en: ['{ev} champions! How big is this one?', '{ev} title. Who is this trophy for?'],
@@ -157,6 +162,12 @@ export const ANSWER: AnswerBook = {
     confident: one('A virada começa no próximo jogo.', 'The turnaround starts next game.', 'La remontada empieza el próximo partido.'),
     aggressive: one('Alguns jogadores precisam se olhar no espelho.', 'Some players need to look in the mirror.', 'Algunos jugadores deben mirarse al espejo.'),
     deflect: one('Não tenho mais nada a declarar.', 'I have nothing more to say.', 'No tengo nada más que decir.'),
+  },
+  style: {
+    calm: one('O {n} é a nossa identidade. Vamos ajustar detalhes, não a ideia.', '{n} is our identity. We\'ll adjust details, not the idea.', 'El {n} es nuestra identidad. Ajustaremos detalles, no la idea.'),
+    confident: one('Ninguém joga o {n} como a gente. Vai voltar a encaixar.', 'Nobody plays {n} like us. It will click again.', 'Nadie juega el {n} como nosotros. Volverá a encajar.'),
+    aggressive: one('Se precisar, mudo tudo amanhã. Ninguém está confortável.', 'If needed I\'ll change everything tomorrow. Nobody is comfortable.', 'Si hace falta, cambio todo mañana. Nadie está cómodo.'),
+    deflect: one('Tática a gente discute no vestiário.', 'Tactics stay in the locker room.', 'La táctica se habla en el vestuario.'),
   },
   title: {
     calm: one('Mérito dos jogadores e de todo o estafe.', 'All credit to the players and the staff.', 'Mérito de los jugadores y de todo el staff.'),
@@ -326,6 +337,7 @@ export const TOPIC_NAME: Record<PressTopic, Tri> = {
   board: one('a diretoria', 'the board', 'la directiva'),
   streak: one('a crise', 'the crisis', 'la crisis'),
   title: one('o título', 'the title', 'el título'),
+  style: one('o estilo de jogo', 'the playstyle', 'el estilo de juego'),
 };
 
 /** Rótulos da UI da tela de mídia. */

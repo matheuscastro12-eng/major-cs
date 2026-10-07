@@ -277,3 +277,4 @@
 .md-rums li:last-child { border-bottom: 0; }
 .md-rums b { color: var(--c-ink); font-size: var(--fs-3); }
 .md-col--feed .ds-panel__head { flex-wrap: wrap; row-gap: var(--sp-2); }
+.md-callout[data-done] { border-color: var(--c-line); background: var(--c-surface-2); }

@@ -119,7 +119,8 @@ import {
   Trophy, UserRound, Users, Wallet, Megaphone,
 } from 'lucide-react';
 // [super atualização 2 · mídia viva] coletivas, feed da cena e narrativas
-import { MidiaTab, PressCallout } from '../pages/career/MidiaTab';
+import { MidiaTab, PressSlot } from '../pages/career/MidiaTab';
+import { useOverlayHeld } from '../state/overlayHold';
 import { midiaAfterSeries, answerPress, type MidiaSeriesArgs } from '../engine/midia/carreira';
 import { midiaOf, type MidiaState, type PressConf, type PressFx, type PressTone } from '../engine/midia/model';
 import { preMatchConference, koStageOf, openRumorOnSquad } from '../engine/midia/midia';
@@ -188,7 +189,7 @@ import {
   BALANCE_FIX_ID, MODE_AI_EDGE, PLAN_STYLE, PLAN_STYLE_FIX, applyGamePlan, coachForMatch, coachMatchImpact, analystScoutingPrep, careerAiTeam, careerMode, careerUserTeam, estimateTenure, newOrgTeamwork, takeoverTeamwork, togetherSplits,
   type CareerGamePlan,
 } from '../engine/career/equilibrio';
-import { setStyle, styleOf } from '../engine/gestao/estilo';
+import { setStyle, styleOf, STYLE_SHORT } from '../engine/gestao/estilo';
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // PLANO DE JOGO: atalho da decisão pré-partida. [integração] Sem bônus de força:
@@ -2275,6 +2276,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   usePeekResolver((ref) => (ref.startsWith('career:') ? peekFnRef.current(ref.slice(7)) : null));
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
+  const overlayHeldNow = useOverlayHeld(); // [integração] o tour espera a abertura do Major
   const [showOnb, setShowOnb] = useState(() => { try { return !localStorage.getItem('rtm-onboarded-v1'); } catch { return false; } });
   const dismissOnb = () => { try { localStorage.setItem('rtm-onboarded-v1', '1'); } catch { /* sem storage */ } setShowOnb(false); };
   const [promoting, setPromoting] = useState<string | null>(null); // prospecto escolhendo quem sai do elenco
@@ -3060,6 +3062,8 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       world: () => oppEra.filter((t) => !t.id.startsWith('__') && t.players.length)
         .map((t) => ({ id: t.id, tag: t.tag, players: t.players.map((p) => ({ id: p.id, nick: p.nick, ovr: playerOvr(p) })) }))
         .sort((a, b) => b.players.reduce((q, p) => q + p.ovr, 0) / b.players.length - a.players.reduce((q, p) => q + p.ovr, 0) / a.players.length),
+      // [integração] estilo T/CT fora do padrão vira pergunta na coletiva de crise
+      style: (() => { const st = styleOf(gestaoOf(s).tactics); return st.t !== 'standard' ? `${ct(STYLE_SHORT[st.t])} (T)` : st.ct !== 'standard' ? `${ct(STYLE_SHORT[st.ct])} (CT)` : undefined; })(),
       teamOf: (pid) => (squadIds.includes(pid) ? 'user' : oppEra.find((t) => t.players.some((p) => p.id === pid))?.id ?? null),
     };
   };
@@ -6259,33 +6263,26 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const mySquadOidsM = new Set(save.squad.map((s) => s.playerId));
     const seasonTop3 = seasonTopPlayersYear(top20Pool, save.split, 3);
     const seasonTop20 = seasonTopPlayersYear(top20Pool, save.split, 20);
-    const PLACE_PT: Record<PlacementCode, string> = {
-      champion: ct('CAMPEÃO DO MAJOR'),
-      runnerup: ct('VICE-CAMPEÃO'),
-      semi: ct('SEMIFINAL'),
-      quarters: ct('QUARTAS DE FINAL'),
-      playoffs: ct('FASE DE PLAYOFFS'),
-      swiss: ct('FASE SUÍÇA'),
-    };
     return (
       <CareerDashFrame title={ct('Major Mundial — resultado')} onExit={onExit}>
         <div className="em-stage-page">
           {/* [Major espetáculo] cerimônia: troféu, confete, MVP, elenco e números */}
           <MajorCeremony result={mr} org={save.org} split={save.split} worldChampion={majorWorldChampion(save.mundo, save.split)} />
           <div className="em-stage-card center">
-            <div className="trophy">{mr.champion ? '🏆' : mr.placement === 'runnerup' ? '🥈' : '★'}</div>
-            <h2>{save.org?.name}: {mr.rmrOut ? ct('ELIMINADO NO RMR') : PLACE_PT[mr.placement]}</h2>
+            {/* [integração] fora do RMR a cerimônia já mostra troféu e colocação */}
+            {mr.rmrOut && <div className="trophy">★</div>}
+            {mr.rmrOut && <h2>{save.org?.name}: {ct('ELIMINADO NO RMR')}</h2>}
             <div className="prize-banner">
               {ct('Premiação:')} <b>+{formatMoney(mr.prize)}</b> · VRS: <b>+{mr.vrs} pts</b>
               {mr.champion ? ` · ${ct('+1 título!')}` : ''}
             </div>
-            <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
+            {mr.rmrOut && <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
               {mr.champion
                 ? ct('Sua organização é CAMPEÃ MUNDIAL! O nome entrou para a história do CS.')
                 : mr.rmrOut
                   ? ct('O regional (RMR) não deu a vaga: o Major segue sem você. O resultado do RMR ainda conta no VRS.')
                   : ct('Sua org representou o circuito no Major mundial. Volte mais forte no próximo split.')}
-            </p>
+            </p>}
             {!mr.rmrOut && <div className={`career-hall-status ${careerHallStatus}`}>
               {careerHallStatus === 'saving' && ct('Registrando a campanha no Hall da Fama…')}
               {careerHallStatus === 'saved' && ct('Campanha registrada no Hall da Fama com elenco, MVP e recordes.')}
@@ -7303,7 +7300,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
               split: save.split, matchKey: `po:${p.circuit}:${stageLbl}:${ot.id}`, oid: ot.id, o: ot.tag, label: `${p.circuit.split('·')[0].trim()} · ${ct(stageLbl)}`, k: koStageOf(stageLbl),
               rivalScore: rivalryScore(save.rivalries, ot.id), squad: midiaSquad(save), board: save.board, rumor: openRumorOnSquad(midiaOf(save), save.squad.map((sg) => sg.playerId)),
             }) : null);
-            return conf ? <PressCallout key={conf.key} lang={lang} conf={conf} onAnswer={answerMidiaPress} nickOf={(id) => midiaSquad(save).find((x) => x.id === id)?.nick ?? id} /> : null;
+            return <PressSlot scope={`po:${p.circuit}:${stageLbl}:${ot?.id ?? ''}`} lang={lang} conf={conf} onAnswer={answerMidiaPress} nickOf={(id) => midiaSquad(save).find((x) => x.id === id)?.nick ?? id} />;
           })()}
           <PlayoffBracket p={p} teamOf={teamOf} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />
         </DashCard>
@@ -8275,6 +8272,18 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
 
       {/* ===== MAJOR AO VIVO (dentro do hub) ===== */}
       {/* T1.4: aba Major extraída em src/pages/career/MajorTab.tsx */}
+      {/* [mídia viva] coletiva antes do jogo do Major (ou a pendente) */}
+      {hubTab === 'major' && majorT && majorActive && (() => {
+        const up = tournamentUserPairing(majorT);
+        const oid = up ? (up.a === 'user' ? up.b : up.a) : null;
+        const ot = oid ? getTeam(majorT, oid) : null;
+        const lbl = `${majorT.name} · ${up?.label ?? ''}`;
+        const conf = midiaOf(save).pend ?? (ot ? preMatchConference(midiaOf(save), {
+          split: save.split, matchKey: `mj:${save.majorStage ?? 1}:${up?.label ?? ''}:${ot.id}`, oid: ot.id, o: ot.tag, label: lbl, k: koStageOf(up?.label ?? ''),
+          rivalScore: rivalryScore(save.rivalries, ot.id), squad: midiaSquad(save), board: save.board, rumor: openRumorOnSquad(midiaOf(save), save.squad.map((sg) => sg.playerId)),
+        }) : null);
+        return <PressSlot scope={`mj:${save.majorStage ?? 1}:${up?.label ?? ''}:${ot?.id ?? ''}`} lang={lang} conf={conf} onAnswer={answerMidiaPress} nickOf={(id) => midiaSquad(save).find((x) => x.id === id)?.nick ?? id} />;
+      })()}
       {hubTab === 'major' && majorT && (
         <MajorTab
           majorT={majorT}
@@ -8749,13 +8758,24 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       </>
       )}
     </CareerShell>
-      {ceremonyYear != null && (() => {
-        const y = legadoOf(save.legado).years.find((x) => x.year === ceremonyYear);
+      {/* [integração] na virada do ano a cerimônia da cena substitui o modal antigo de prêmios (abre uma vez) */}
+      {(ceremonyYear ?? (save.pendingYearAwards && ceremonyNew ? ceremonyNew.year : null)) != null && (() => {
+        const cy = ceremonyYear ?? ceremonyNew!.year;
+        const y = legadoOf(save.legado).years.find((x) => x.year === cy);
         if (!y) return null;
         const close = () => {
           setCeremonyYear(null);
-          const lg = legadoOf(save.legado);
-          if ((lg.seenYear ?? 0) < y.year) update({ legado: { ...lg, seenYear: y.year } });
+          setSave((s) => {
+            const lg = legadoOf(s.legado);
+            const pend = s.pendingYearAwards;
+            const next: CareerSave = {
+              ...s,
+              ...((lg.seenYear ?? 0) < y.year ? { legado: { ...lg, seenYear: y.year } } : {}),
+              ...(pend ? { pendingYearAwards: null, yearAwardsHistory: [...(s.yearAwardsHistory ?? []), pend] } : {}),
+            };
+            persist(next);
+            return next;
+          });
         };
         return <LegadoCeremony year={y} onClose={close} onShare={() => { close(); setLegadoCards((n) => n + 1); setHubTab('legado'); }} />;
       })()}
@@ -8851,7 +8871,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
           onClose={() => setTalkPlayer(null)}
         />
       )}
-      {save.pendingYearAwards && (
+      {save.pendingYearAwards && !ceremonyNew && (
         <YearAwardsModal
           awards={save.pendingYearAwards}
           onClose={() => {
@@ -8937,7 +8957,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       )}
 
       {/* T8.2: Tour interativo de boas-vindas — substitui o slideshow estático. */}
-      {showOnb && (
+      {showOnb && !overlayHeldNow && (
         <InteractiveTour
           steps={[
             {

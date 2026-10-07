@@ -33,6 +33,7 @@ export interface MidiaSeriesArgs {
   offers: { pid: string; nick: string; toId: string; to: string }[];
   world: () => WorldTeamLite[];
   teamOf: (pid: string) => string | null;
+  style?: string;
 }
 
 const N_PRESS = one('Coletiva marcada', 'Press conference scheduled', 'Rueda de prensa convocada');
@@ -60,7 +61,7 @@ export function midiaAfterSeries(prev: MidiaState | null | undefined, a: MidiaSe
   const before = m0;
   const out = recordSeries(m0, {
     split: a.split, oid: a.opp.id, o: a.opp.tag, label: a.label, shortLabel: a.shortLabel, won: a.won, sc: a.sc, upset: a.upset,
-    mvp: a.mvp, onick, rivalScore: a.rivalScore, squad: a.squad, board: a.board, rumorOnSquad: rumor,
+    mvp: a.mvp, onick, rivalScore: a.rivalScore, squad: a.squad, board: a.board, rumorOnSquad: rumor, style: a.style,
   });
   const news: MidiaNews[] = [];
   const L = a.lang;

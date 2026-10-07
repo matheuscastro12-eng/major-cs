@@ -5,6 +5,12 @@
 // existir: a tela que souber aplicar estilo passa `canStyle` e trata a ação.
 
 import type { BuyTier, RoundCall, Stance } from '../../engine/match';
+import { STYLE_LABEL } from '../../engine/gestao/estilo';
+import type { StyleId } from '../../engine/gestao/model';
+
+/** [integração] a dica de estilo vira um estilo real de engine/gestao/estilo.ts */
+export const HINT_STYLE: Record<'slow' | 'fast' | 'retake' | 'stack', StyleId> = { slow: 'control', fast: 'rush', retake: 'retake', stack: 'passive' };
+const styleBtn = (side: 'T' | 'CT', hint: keyof typeof HINT_STYLE) => `Estilo ${side}: ${STYLE_LABEL[HINT_STYLE[hint]]}`;
 
 export interface RoundRecord {
   round: number;                       // 0-based
@@ -61,7 +67,7 @@ export function assistantTips(inp: AssistantInput): Tip[] {
         text: `Perdendo ${pct(lost)} das aberturas no ${site}`,
         why: `${rs.filter((r) => r.openingTeam === opp).length} de ${rs.length} rounds atacando o ${site} começaram com uma baixa nossa`,
         action: inp.canStyle ? { kind: 'style', side: 't', hint: 'slow' } : { kind: 'stance', mode: 'cautious' },
-        label: inp.canStyle ? 'Ataque lento, entrar em dupla' : 'Postura cautelosa (entrar trocando)',
+        label: inp.canStyle ? styleBtn('T', 'slow') : 'Postura cautelosa (entrar trocando)',
       });
     }
   }
@@ -75,7 +81,7 @@ export function assistantTips(inp: AssistantInput): Tip[] {
         text: `A defesa cede a 1ª baixa em ${pct(lostCt)} dos rounds`,
         why: 'segurar ângulo agressivo está custando o duelo de abertura',
         action: inp.canStyle ? { kind: 'style', side: 'ct', hint: 'retake' } : { kind: 'call', call: 'retake' },
-        label: inp.canStyle ? 'Defesa recuada, jogar o retake' : 'Chamar retake no próximo',
+        label: inp.canStyle ? styleBtn('CT', 'retake') : 'Chamar retake no próximo',
       });
     } else if (retakesLost >= 3) {
       tips.push({
@@ -83,7 +89,7 @@ export function assistantTips(inp: AssistantInput): Tip[] {
         text: `${retakesLost} retakes perdidos depois do plant`,
         why: 'a bomba está caindo e o CT chega tarde',
         action: inp.canStyle ? { kind: 'style', side: 'ct', hint: 'stack' } : { kind: 'stance', mode: 'aggressive' },
-        label: inp.canStyle ? 'Empilhar no site mais atacado' : 'Postura agressiva (negar o plant)',
+        label: inp.canStyle ? styleBtn('CT', 'stack') : 'Postura agressiva (negar o plant)',
       });
     }
   }

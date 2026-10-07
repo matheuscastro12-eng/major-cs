@@ -135,21 +135,35 @@ export function PressRoom({ lang, conf, onAnswer, nickOf }: PressProps) {
   );
 }
 
-/** Chamada compacta (playoffs/hub): abre a sala de imprensa num modal. */
-export function PressCallout({ lang, conf, onAnswer, nickOf }: PressProps) {
+/** Chamada compacta (playoffs/Major): abre a sala de imprensa num modal. */
+export function PressCallout({ lang, conf, onAnswer, nickOf, done = false }: PressProps & { done?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className="md-callout" onClick={() => setOpen(true)}>
+      <button type="button" className="md-callout" data-done={done ? '' : undefined} onClick={() => setOpen(true)}>
         <span className="md-press__mic" aria-hidden><Mic size={16} /></span>
-        <span className="md-callout__txt"><span className="md-kicker">{tr(lang, KIND_TITLE[conf.kind])}</span><b>{tr(lang, UI.pending)}{conf.o ? ` · ${conf.o}` : ''}</b></span>
-        <span className="md-onair"><Radio size={12} aria-hidden /> ON AIR</span>
+        <span className="md-callout__txt"><span className="md-kicker">{tr(lang, KIND_TITLE[conf.kind])}</span><b>{done ? tr(lang, UI.done) : tr(lang, UI.pending)}{conf.o ? ` · ${conf.o}` : ''}</b></span>
+        {!done && <span className="md-onair"><Radio size={12} aria-hidden /> ON AIR</span>}
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={tr(lang, UI.press)} size="lg">
         <PressRoom lang={lang} conf={conf} onAnswer={onAnswer} nickOf={nickOf} />
       </Modal>
     </>
   );
+}
+
+/**
+ * Lugar fixo da coletiva fora da aba Mídia: depois de responder, o botão fica
+ * ("Coletiva encerrada") e o modal mostra a repercussão — até mudar o `scope`
+ * (a próxima partida).
+ */
+export function PressSlot({ conf, scope, onAnswer, ...rest }: Omit<PressProps, 'conf'> & { conf: PressConf | null; scope: string }) {
+  const [held, setHeld] = useState<{ conf: PressConf; scope: string } | null>(null);
+  const kept = held && held.scope === scope ? held.conf : null;
+  const c = conf ?? kept;
+  if (!c) return null;
+  const wrapped = (cc: PressConf, picks: PressTone[] | null) => { if (picks) setHeld({ conf: cc, scope }); return onAnswer(cc, picks); };
+  return <PressCallout key={c.key} {...rest} conf={c} onAnswer={wrapped} done={!conf && !!kept} />;
 }
 
 // ── Feed ───────────────────────────────────────────────────────────────────

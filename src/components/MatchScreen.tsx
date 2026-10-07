@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LiveCanvasGame } from './LiveCanvasGame';
 import { RadarMatch } from './match2d/RadarMatch';
-import type { TipAction } from './match2d/assistant';
+import { HINT_STYLE, type TipAction } from './match2d/assistant';
 import { analyzeSeries } from '../engine/insights';
 import { StyleLiveBar, StyleStatsPanel } from './MatchStyle';
 import type { TeamStyle } from '../engine/gestao/model';
@@ -522,7 +522,12 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     if (a.kind === 'stance') setStance(a.mode);
     else if (a.kind === 'call') { callRef.current = a.call; setPendingCall(a.call); }
     else if (a.kind === 'timeout') callTimeout();
-    // 'style': ponto de integração do estilo T/CT (engine/gestao/estilo.ts) — sem efeito aqui
+    else if (a.kind === 'style') {
+      // [integração] a dica troca o estilo T/CT ao vivo (o mesmo do seletor)
+      const cur = getSim(mapIdx).style?.(userIdx);
+      if (!cur) return;
+      changeStyle(a.side === 't' ? { ...cur, t: HINT_STYLE[a.hint] as typeof cur.t } : { ...cur, ct: HINT_STYLE[a.hint] as typeof cur.ct });
+    }
   };
   const radarRequest = useCallback((n: number) => { radarReqRef.current = Math.max(radarReqRef.current, n); }, []);
 
@@ -812,6 +817,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
             stance={stance}
             timeoutsLeft={timeoutsLeft}
             onTipAction={onTipAction}
+            canStyle={!!sim.style?.(userIdx)}
             onBusy={onRadarBusy}
             onShownStats={setRadarStats}
           />

@@ -3,6 +3,7 @@
 // decider, walkout, contagem da final), pick'em e a chave navegável.
 // Só apresentação: lê o Tournament que o motor resolveu, não decide nada.
 import { useEffect, useMemo, useState } from 'react';
+import { setOverlayHold } from '../../../state/overlayHold';
 import { majorName } from '../../../data/tournaments';
 import { eventHost } from '../../../engine/mundo/circuito';
 import { userPairing } from '../../../engine/swiss';
@@ -116,6 +117,8 @@ export function MajorSpectacle({ majorT: t, save, history, grade, onPick, onOpen
   const [lastKey, setLastKey] = useState(openKey);
   if (lastKey !== openKey) { setLastKey(openKey); setOpening(!seenOnce(openKey)); }
   const closeOpening = () => { markSeen(openKey); setOpening(false); };
+  // [integração] tour/Novidades esperam a abertura fechar
+  useEffect(() => { setOverlayHold('major-open', opening); return () => setOverlayHold('major-open', false); }, [opening]);
 
   const teamOf = useMemo(() => teamLookup(t.teams, save.majorSeed2, save.majorSeed3), [t.teams, save.majorSeed2, save.majorSeed3]);
   const odds = useOdds(t, save);

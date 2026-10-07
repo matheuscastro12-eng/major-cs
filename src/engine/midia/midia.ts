@@ -80,6 +80,7 @@ export interface SeriesInput {
   squad: SquadForm[];     // elenco com a média recente de rating
   board: number;
   rumorOnSquad?: { pid: string; nick: string; to: string } | null;
+  style?: string;         // [estilo de jogo] rótulo do estilo atual quando não é o padrão
 }
 
 export interface SeriesOutput { midia: MidiaState; conf: PressConf | null; breaker?: number }
@@ -119,7 +120,7 @@ export function recordSeries(prev: MidiaState | null | undefined, ev: SeriesInpu
   if (kind) {
     conf = buildConference(kind, m, {
       split: ev.split, oid: ev.oid, o: ev.o, label: ev.shortLabel, won: ev.won, sc: ev.sc, k,
-      rivalScore: ev.rivalScore, squad: ev.squad, board: ev.board, rumor: ev.rumorOnSquad ?? null, key: `${kind}:${ev.split}:${n}`,
+      rivalScore: ev.rivalScore, squad: ev.squad, board: ev.board, rumor: ev.rumorOnSquad ?? null, style: ev.style, key: `${kind}:${ev.split}:${n}`,
     });
     // uma coletiva pendente por vez: a nova substitui a antiga (a antiga "passou")
     if (conf) m = { ...m, pend: conf, cn: n };
@@ -141,6 +142,7 @@ export interface ConfCtx {
   squad: SquadForm[];
   board: number;
   rumor: { pid: string; nick: string; to: string } | null;
+  style?: string;
 }
 
 const BAD_FORM = 0.95;
@@ -173,6 +175,7 @@ export function buildConference(kind: PressKind, m: MidiaState, c: ConfCtx): Pre
     push({ t: 'form', v: 0 });
   } else if (kind === 'crisis') {
     push({ t: 'streak', v: 0, x: -(m.streak ?? 0) });
+    if (c.style) push({ t: 'style', v: 0, n: c.style });
     if (w) push({ t: 'player', v: 0, p: w.id, n: w.nick });
     if (c.board < 45) push({ t: 'board', v: 0 });
     if (c.rumor) push({ t: 'rumor', v: 0, p: c.rumor.pid, n: c.rumor.nick, o: c.rumor.to });
@@ -227,6 +230,7 @@ export const FX: Record<PressTopic, Record<PressTone, Fx4>> = {
   rumor:    { calm: [0, 2, 0, 0],  confident: [1, 3, -1, 0], aggressive: [-1, -5, 1, -1], deflect: [0, -2, 0, -1] },
   board:    { calm: [0, 0, 1, 0],  confident: [0, 0, 1, 0],  aggressive: [1, 0, -3, -1], deflect: [-1, 0, -1, -1] },
   streak:   { calm: [1, 0, 0, 1],  confident: [0, 0, 1, 0],  aggressive: [-2, 0, 2, 0],  deflect: [0, 0, -1, -2] },
+  style:    { calm: [0, 0, 0, 1],  confident: [1, 0, -1, 0], aggressive: [-1, 0, 1, -1], deflect: [-1, 0, 0, -1] },
   title:    { calm: [1, 0, 1, 2],  confident: [1, 0, 1, 0],  aggressive: [0, 0, -1, -3], deflect: [-1, 0, 0, -1] },
 };
 export const FX_CAP = { squad: 2, player: 6, board: 3, rep: 6 };

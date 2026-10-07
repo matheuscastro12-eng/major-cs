@@ -33,7 +33,8 @@ export type PressTopic =
   | 'rumor'    // rumor de transferência de um jogador seu
   | 'board'    // pressão da diretoria
   | 'streak'   // sequência de derrotas (crise)
-  | 'title';   // conquista (glória)
+  | 'title'    // conquista (glória)
+  | 'style';   // estilo de jogo T/CT (engine/gestao/estilo.ts) em crise
 export type PressTone = 'calm' | 'confident' | 'aggressive' | 'deflect';
 export const PRESS_TONES: PressTone[] = ['calm', 'confident', 'aggressive', 'deflect'];
 
