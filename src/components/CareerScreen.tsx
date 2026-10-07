@@ -397,6 +397,8 @@ import { CalendarTab } from '../pages/career/CalendarTab';
 import { WorldTab } from '../pages/career/WorldTab';
 import { AcademyTab } from '../pages/career/AcademyTab';
 import { MajorTab } from '../pages/career/MajorTab';
+import { MajorCeremony, majorWorldChampion } from '../pages/career/major/MajorCeremony';
+import { EventFinaleLite } from '../pages/career/major/EventFinaleLite';
 import { FinanceTab } from '../pages/career/FinanceTab';
 import { ContractsTab } from '../pages/career/ContractsTab';
 import { SquadTab } from '../pages/career/SquadTab';
@@ -6268,6 +6270,8 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     return (
       <CareerDashFrame title={ct('Major Mundial — resultado')} onExit={onExit}>
         <div className="em-stage-page">
+          {/* [Major espetáculo] cerimônia: troféu, confete, MVP, elenco e números */}
+          <MajorCeremony result={mr} org={save.org} split={save.split} worldChampion={majorWorldChampion(save.mundo, save.split)} />
           <div className="em-stage-card center">
             <div className="trophy">{mr.champion ? '🏆' : mr.placement === 'runnerup' ? '🥈' : '★'}</div>
             <h2>{save.org?.name}: {mr.rmrOut ? ct('ELIMINADO NO RMR') : PLACE_PT[mr.placement]}</h2>
@@ -7283,6 +7287,13 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
             ) : null}
           </span>
         }>
+          {/* [Major espetáculo · lite] final de evento T1: contagem, troféu e confete */}
+          {(save.circuit?.tier ?? save.tier) === 1 && p.final && (
+            <EventFinaleLite eventName={p.circuit} seenKey={`t1:${save.org?.name ?? ''}:${save.split}:${p.circuit}`} final={{
+              a: teamOf(p.final.a), b: teamOf(p.final.b),
+              score: p.final.result?.mapScore, winnerId: p.champion ?? undefined,
+            }} />
+          )}
           {(() => {
             // [mídia viva] coletiva antes do mata-mata (ou a pendente)
             const om = userMatch ? (userMatch.a === 'user' ? userMatch.b : userMatch.a) : null;
