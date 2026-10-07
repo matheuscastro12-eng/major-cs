@@ -178,6 +178,10 @@ export function releaseBenchedExtras<T extends MundoJuv>(a: { mundo: T; extraOnT
   if (!a.extraOnTeam) return { mundo: a.mundo, extraOnTeam: a.extraOnTeam, released };
   const indexOf = new Map<string, number>();
   for (const t of a.world) t.players.forEach((p, i) => indexOf.set(`${t.id}|${p.id}`, i));
+  // [evolução] o vendido no banco do comprador evoluiu pela curva única: volta ao
+  // mercado com os atributos de AGORA (a do mundo), não os da cópia da venda
+  const nowOf = new Map<string, Player>();
+  for (const t of a.world) for (const p of t.players) nowOf.set(`${t.id}|${p.id}`, p);
   let mundo = a.mundo;
   const out: ExtraOnTeam = {};
   const debut = a.split + 1;
@@ -185,7 +189,7 @@ export function releaseBenchedExtras<T extends MundoJuv>(a: { mundo: T; extraOnT
     const keep = list.filter((e) => {
       const i = indexOf.get(`${teamId}|${e.player.id}`);
       if (i == null || i < 5 || a.split + 1 - e.arrival < EXTRA_BENCH_SPLITS) return true;
-      const p = e.player;
+      const p = nowOf.get(`${teamId}|${e.player.id}`) ?? e.player;
       const age = Math.max(16, Math.min(40, aiAgeOf(p, debut)));
       const region = macroRegionOf(p.country) ?? 'europe';
       let n = 900;
@@ -223,6 +227,8 @@ export interface JuventudeTickArgs {
   youthGrowth?: number;
   /** save.youthDebut: base promovida vendida/emprestada segue o relógio da promoção */
   youthDebut?: Record<string, YouthDebut>;
+  /** [evolução] quem saiu do seu elenco: a IA continua do estado gravado */
+  worldEvo?: AiWorldArgs['worldEvo'];
 }
 /** Manchete da juventude (dados crus; a Carreira monta o texto traduzido). */
 export interface JuventudeNews {
@@ -253,11 +259,11 @@ export function tickJuventude(a: JuventudeTickArgs): JuventudeTickResult {
   const skip = new Set(a.skip);
   const exclude = new Set([...skip, ...Object.values(a.extraOnTeam ?? {}).flat().map((e) => e.player.id)]);
   const base = withNewgens(a.base, a.mundo, exclude);
-  const args = { base, moves: a.moves, skip, takeoverId: a.takeoverId, extraOnTeam: a.extraOnTeam, aiDrift: a.aiDrift, arrivals: a.arrivals };
+  const args = { base, moves: a.moves, skip, takeoverId: a.takeoverId, extraOnTeam: a.extraOnTeam, aiDrift: a.aiDrift, arrivals: a.arrivals, worldEvo: a.worldEvo, youthDebut: a.youthDebut };
   const world0 = buildAiWorld({ ...args, split: a.split });
   const world1 = buildAiWorld({ ...args, split: a.split + 1 });
-  const free0 = agedFreeAgents(base, a.moves, a.split, skip);
-  const free1 = agedFreeAgents(base, a.moves, a.split + 1, skip);
+  const free0 = agedFreeAgents(base, a.moves, a.split, skip, a.worldEvo);
+  const free1 = agedFreeAgents(base, a.moves, a.split + 1, skip, a.worldEvo);
   const news: JuventudeNews[] = [];
 
   // 1) aposentadorias do mundo (IA) — manchetes e pool da comissão

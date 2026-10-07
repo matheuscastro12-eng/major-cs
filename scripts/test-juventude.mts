@@ -11,7 +11,7 @@ import {
 } from '../src/engine/mundo/juventude.ts';
 import { EMPTY_MUNDO, ensureYearIntake, withNewgens, retireeStaffSources, mundoOf } from '../src/engine/mundo/juventudeMundo.ts';
 import { legacyFromAttrs, ovrFromLegacy } from '../src/engine/attrs/model.ts';
-import { evoDelta, aiRetireAge, buildAiWorld, aiAgeOf, aiSlotPlayer, regenYouth, REGEN_DEBUT_CAP, REGEN_DEBUT_FLOOR } from '../src/engine/career/aiWorld.ts';
+import { aiRetireAge, aiPotentialOvr, baseAge, buildAiWorld, aiAgeOf, aiSlotPlayer, regenYouth, REGEN_DEBUT_CAP, REGEN_DEBUT_FLOOR } from '../src/engine/career/aiWorld.ts';
 import { parseRegenPlayerId } from '../src/engine/career/signings.ts';
 import { playerOvr } from '../src/engine/ratings.ts';
 import { migrateMundo } from '../src/engine/mundo/mundoMigration.ts';
@@ -31,10 +31,11 @@ test('id do jovem carrega o relógio de idade (e não colide com regen)', () => 
   const id = newgenId(7, 16, 'cis', 12);
   assert.deepEqual(parseNewgenId(id), { debut: 7, ageAtDebut: 16, region: 'cis', n: 12 });
   assert.equal(newgenAge(id, 7), 16);
-  assert.equal(newgenAge(id, 9), 16);
-  assert.equal(newgenAge(id, 10), 17);
+  // 1 ano = 1 temporada = 4 splits (engine/clock.ts)
+  assert.equal(newgenAge(id, 10), 16);
+  assert.equal(newgenAge(id, 11), 17);
   assert.ok(!isNewgenId('bo3_team_1~rg0.1.4.18'));
-  assert.equal(aiAgeOf({ id, nick: 'x' }, 13), 18);
+  assert.equal(aiAgeOf({ id, nick: 'x' }, 15), 18);
 });
 
 test('leva anual: determinística, por região, 16–18 anos, atributos coerentes', () => {
@@ -124,12 +125,28 @@ test('save migrado v29 → v30 continua jogável: bloco neutro e a leva do ano n
   assert.ok(m1.intake.some((l) => l.region === 'global' && Object.keys(l.origin ?? {}).length > 5));
 });
 
-test('curva da IA: jovem sobe, pico ~22–26 estável, declínio depois dos 28', () => {
-  const mean = (age: number, ceil = false) => { let s = 0; for (let i = 0; i < 3000; i++) s += evoDelta(`p${i}`, i % 30, age, ceil); return s / 3000; };
-  assert.ok(mean(18) > 0.6);
-  assert.ok(Math.abs(mean(24, true)) < 0.15, `24 no teto: ${mean(24, true)}`);
-  assert.ok(mean(29, true) < -0.2);
-  assert.ok(mean(34, true) < mean(30, true));
+test('curva da IA (= curva única): jovem sobe, auge estável, veterano cai', () => {
+  // titulares da base: variação média de OVR em 2 anos (8 splits) por faixa de idade
+  const w1 = buildAiWorld({ base: CS2_REAL_2026, split: 1, skip: new Set() });
+  const w9 = buildAiWorld({ base: CS2_REAL_2026, split: 9, skip: new Set() });
+  const at9 = new Map(w9.flatMap((t) => t.players.map((p) => [p.id, p] as const)));
+  const band = (lo: number, hi: number) => {
+    const v: number[] = [];
+    for (const t of w1) for (const p of t.players.slice(0, 5)) {
+      const q = at9.get(p.id);
+      const a = baseAge(p);
+      if (q && a >= lo && a <= hi) v.push(playerOvr(q) - playerOvr(p));
+    }
+    return v.reduce((x, y) => x + y, 0) / Math.max(1, v.length);
+  };
+  assert.ok(band(15, 21) > 1, `jovem ${band(15, 21)}`);
+  assert.ok(Math.abs(band(22, 26)) < 1.2, `auge ${band(22, 26)}`);
+  assert.ok(band(29, 40) < -1, `veterano ${band(29, 40)}`);
+  // o teto da IA nunca é furado
+  for (const t of w1.slice(0, 40)) for (const p of t.players.slice(0, 5)) {
+    const q = at9.get(p.id);
+    if (q) assert.ok(playerOvr(q) <= Math.max(playerOvr(p), aiPotentialOvr(p.id, playerOvr(p), baseAge(p))) + 1, `${p.id} furou o teto`);
+  }
   // aposentadoria por idade, nível e motivação: estrela joga mais
   let star = 0, low = 0;
   for (let i = 0; i < 500; i++) { star += aiRetireAge(`r${i}`, 88); low += aiRetireAge(`r${i}`, 70); }
@@ -143,7 +160,7 @@ test('substituto da vaga: estreia pelo OVR ATUAL de quem sai, com teto, e se ref
     team.players.slice(0, 5).forEach((orig, slot) => {
       // acha a 1ª troca da vaga (split em que o titular vira regen)
       let prev = aiSlotPlayer(orig, team, slot, 1, NONE);
-      for (let split = 2; split <= 30; split++) {
+      for (let split = 2; split <= 40; split++) {
         const cur = aiSlotPlayer(orig, team, slot, split, NONE);
         const rg = parseRegenPlayerId(cur.id);
         if (rg && rg.debut === split && cur.id !== prev.id) {

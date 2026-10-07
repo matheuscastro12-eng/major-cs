@@ -1,6 +1,6 @@
 // [fase 4 · frente JUVENTUDE] Jovens gerados (newgens): geração anual, evolução e poda.
 //
-// GERAÇÃO ANUAL (uma vez por ano de Carreira = 3 splits): cada macro-região
+// GERAÇÃO ANUAL (uma vez por ano de Carreira = 1 temporada = 4 splits): cada macro-região
 // revela uma leva de jovens de 16–18 anos. Quantidade e qualidade seguem a
 // força da cena (Europa/CIS mais e melhores; Oceania/África menos). O PA segue
 // uma distribuição realista — a maioria 90–130, poucos 130–160 e raros 160+ —

@@ -13,6 +13,10 @@
 //     Aceitar adiciona caixa + remove prospect. Recusar mantém na Academia.
 
 import { SQUAD_MAX } from '../../engine/clube/vestiario';
+import { attrsOf, caFromOvr, ovrFromAttrs } from '../../engine/attrs/model';
+import { evolveAttrs } from '../../engine/attrs/progression';
+import { academyAgeAfterSplit } from '../../engine/career/playerAge';
+import { FACILITY_MAX_LEVEL } from '../../engine/career/facilities';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashCard } from '../../components/ds';
 import { CareerIcon } from '../../components/career/CareerIcon';
@@ -141,18 +145,27 @@ function prospectOffer(prospectId: string, split: number, ovr: number): Prospect
 }
 
 // ─── Evolução de prospect ────────────────────────────────────────────────────
-// Espelha a lógica de evolveAcademy() em CareerScreen.tsx:
-//   - Roll 0-99 determinístico por (id, split): 35% +3, 40% +2, 25% +1 → média 2.1
-//   - +1 fixo se em foco (academyFocus)
-//   - +trainingLv/3 esperado da facility de treino (0% / 33% / 67% / 100% chance de +1)
-//   - Capped pelo potencial
-// Usado pra mostrar "próx esperado: +X" e "~Y splits até potencial" na UI.
-function expectedEvoPerSplit(focused: boolean, trainingLv: number): number {
-  // média do roll base
-  const base = 0.35 * 3 + 0.40 * 2 + 0.25 * 1; // = 2.1
-  const focusBonus = focused ? 1 : 0;
-  const trainingBonus = trainingLv / 3; // chance de +1 (0..1)
-  return base + focusBonus + trainingBonus;
+// [evolução · curva única] a academia evolui pela MESMA evolveAttrs do elenco
+// (CareerScreen#evolveAcademyEntries). A projeção roda a curva de verdade
+// (determinística) nos próximos splits: OVR médio por split e quando chega
+// perto do potencial. Não conta a formação de jovens da comissão.
+const PROJ_SPLITS = 16;
+function projectAcademy(p: AcademyEntry, focused: boolean, trainingLv: number, split: number): { perSplit: number; splitsToMax: number | null } {
+  const growthMul = 1 + 0.35 * (trainingLv / FACILITY_MAX_LEVEL);
+  let x = attrsOf({ ...p, age: p.age });
+  let age = p.age;
+  const ovr0 = ovrFromAttrs(x);
+  let ovr4 = ovr0;
+  let reached: number | null = ovr0 >= p.potential - 1 ? 0 : null;
+  for (let i = 0; i < PROJ_SPLITS; i++) {
+    const s = split + i;
+    x = evolveAttrs({ ...x, pa: Math.max(x.ca, caFromOvr(p.potential)) }, { playerId: p.id, split: s, age, role: p.role, growthMul, focusPlayer: focused }).attrs;
+    age = academyAgeAfterSplit(age, s);
+    const o = ovrFromAttrs(x);
+    if (i === 3) ovr4 = o;
+    if (reached == null && o >= p.potential - 1) reached = i + 1;
+  }
+  return { perSplit: Math.max(0, (ovr4 - ovr0) / 4), splitsToMax: reached };
 }
 
 // ─── Simulação ao vivo de match academy (RNG não-determinístico) ─────────────
@@ -996,8 +1009,9 @@ export function AcademyTab({
               const potPct = Math.max(6, Math.min(100, ((p.potential - 60) / 33) * 100));
               const offer = offersByProspect.get(p.id);
               const atMax = ovr >= p.potential;
-              const expEvo = atMax ? 0 : expectedEvoPerSplit(focused, trainingLv);
-              const splitsToMax = atMax ? 0 : Math.ceil((p.potential - ovr) / Math.max(0.1, expEvo));
+              const proj = atMax ? { perSplit: 0, splitsToMax: 0 } : projectAcademy(p, focused, trainingLv, save.split);
+              const expEvo = proj.perSplit;
+              const splitsToMax = proj.splitsToMax ?? PROJ_SPLITS + 1;
               return (
                 <div
                   key={p.id}
@@ -1095,7 +1109,7 @@ export function AcademyTab({
                         borderRadius: 3,
                         fontSize: '0.68rem',
                       }}
-                      title={`${ct('Base 2.1 + foco')} ${focused ? '+1' : '+0'} + ${ct('treino')} +${(trainingLv / 3).toFixed(2)} = +${expEvo.toFixed(1)} ${ct('por split (média)')}`}
+                      title={`${ct('Projeção da curva de evolução (próximos 4 splits)')}: +${expEvo.toFixed(1)} ${ct('por split (média)')}`}
                     >
                       <span style={{ color: 'var(--em-muted)' }}>
                         {ct('Próx split')}
@@ -1104,7 +1118,7 @@ export function AcademyTab({
                         +{expEvo.toFixed(1)} OVR
                       </span>
                       <span style={{ color: 'var(--em-muted)' }}>
-                        ~{splitsToMax}s {ct('p/ pot')}
+                        {splitsToMax > PROJ_SPLITS ? `${PROJ_SPLITS}+s` : `~${splitsToMax}s`} {ct('p/ pot')}
                       </span>
                     </div>
                   )}
@@ -1654,9 +1668,7 @@ const td: React.CSSProperties = { padding: '8px', textAlign: 'center' };
 // Banner explicativo no DashCard Academia — explica como a evolução funciona.
 // Mostra o que cada bônus contribui em OVR/split, e o estado atual da facility.
 function EvoExplainer({ trainingLv }: { trainingLv: number }) {
-  const trainingBonus = (trainingLv / 3).toFixed(2);
-  const base = 2.1;
-  const focusedMax = base + 1 + trainingLv / 3;
+  const trainingPct = Math.round(35 * (trainingLv / FACILITY_MAX_LEVEL));
   return (
     <div
       style={{
@@ -1678,29 +1690,27 @@ function EvoExplainer({ trainingLv }: { trainingLv: number }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
         <EvoLine
           icon="📊"
-          label={ct('Base por split')}
-          value={`+${base.toFixed(1)} OVR`}
-          hint={ct('média (35% +3, 40% +2, 25% +1)')}
+          label={ct('Mesma curva do elenco')}
+          value={ct('por atributo')}
+          hint={ct('reflexo e mecânica crescem cedo; leitura de jogo até os 25')}
         />
         <EvoLine
           icon="★"
           label={ct('Em foco (★)')}
-          value="+1 OVR"
+          value="+35%"
           hint={ct('1 prospect por vez')}
           accent="var(--c-win)"
         />
         <EvoLine
           icon="🏋️"
           label={`${ct('Centro de treino')} nv ${trainingLv}`}
-          value={trainingLv === 0 ? '+0.00' : `+${trainingBonus} OVR`}
-          hint={trainingLv === 0
-            ? ct('Invista pra acelerar tudo')
-            : trainingLv === 3 ? ct('MAX — sempre +1') : `${Math.round((trainingLv / 3) * 100)}% ${ct('chance de +1')}`}
+          value={`+${trainingPct}%`}
+          hint={trainingLv === 0 ? ct('Invista pra acelerar tudo') : ct('no crescimento de todos')}
           accent={trainingLv > 0 ? '#e8c170' : undefined}
         />
       </div>
       <div style={{ fontSize: '0.7rem', color: 'var(--em-muted)', borderTop: '1px solid rgba(95,164,232,0.18)', paddingTop: 6, marginTop: 2 }}>
-        <b style={{ color: 'var(--em-text)' }}>{ct('Máximo possível')}</b>: {ct('foco + treino max')} = <b style={{ color: 'var(--c-win)' }}>+{focusedMax.toFixed(1)} OVR/split</b> · {ct('cresce até o')} <b style={{ color: 'var(--em-gold)' }}>{ct('potencial')}</b> {ct('individual e para.')} {ct('Envelhecem 1 ano a cada 3 splits.')}
+        {ct('Desaceleram perto do')} <b style={{ color: 'var(--em-gold)' }}>{ct('potencial')}</b> {ct('e não passam dele.')} {ct('Envelhecem 1 ano por temporada (4 splits).')}
       </div>
     </div>
   );
