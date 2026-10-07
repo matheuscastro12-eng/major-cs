@@ -3912,4 +3912,8 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Foca a preparação no adversário: lê as tendências dele (sem mudar o estilo).": { en: "Focuses preparation on the opponent: reads his tendencies (style unchanged).", es: "Enfoca la preparación en el rival: lee sus tendencias (sin cambiar el estilo)." },
   "Atalho do estilo Agressivo nos dois lados: pressão e duelos de abertura, mais oscilante.": { en: "Shortcut to the Aggressive style on both sides: pressure and opening duels, swingier.", es: "Atajo del estilo Agresivo en ambos lados: presión y duelos de apertura, más irregular." },
   "Partida equilibrada, com leve vantagem pra você.": { en: "Even matches, with a slight edge for you.", es: "Partidos parejos, con una leve ventaja para ti." },
+  // [mídia viva]
+  'Mídia': { en: 'Media', es: 'Medios' },
+  'Coletiva': { en: 'Press conference', es: 'Rueda de prensa' },
+  'Coletiva de imprensa aguardando você': { en: 'Press conference waiting for you', es: 'Rueda de prensa pendiente' },
 };
