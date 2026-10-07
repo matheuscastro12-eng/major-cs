@@ -271,7 +271,8 @@ export function careerTimeline(inp: LegadoInput, lines = clubPlayerLines(inp)): 
   for (const s of inp.legado.shirts) ev.push({ split: s.split, kind: 'shirt', gold: true, a: s.nick });
 
   const order: Record<TimelineKind, number> = { founded: 0, signing: 1, title: 2, majorRun: 3, major: 4, sceneMvp: 5, scene: 6, sceneCoach: 7, legendLeft: 8, shirt: 9, promoted: 10 };
-  ev.sort((a, b) => a.split - b.split || order[a.kind] - order[b.kind] || (b.n ?? 0) - (a.n ?? 0));
+  // mesmo split e tipo: Top 20 do melhor pro pior; contratações do maior OVR pro menor
+  ev.sort((a, b) => a.split - b.split || order[a.kind] - order[b.kind] || (a.kind === 'scene' ? (a.n ?? 0) - (b.n ?? 0) : (b.n ?? 0) - (a.n ?? 0)));
   const seasons = new Map<number, TimelineSeason>();
   for (const e of ev) {
     const year = yearOfSplit(e.split);

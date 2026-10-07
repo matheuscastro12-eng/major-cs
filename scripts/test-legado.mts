@@ -76,6 +76,7 @@ test('prêmios da cena: Top 20, MVP de evento, revelação, técnico e time idea
   assert.equal(new Set(y.ideal).size, 5);
   const roles = y.ideal.map((id) => y.top20.find((e) => e.id === id)!.role);
   assert.ok(roles.includes('AWP') && roles.includes('IGL'));
+  assert.equal(roles.filter((r) => r === 'AWP').length, 1, 'time ideal com um AWP só');
   const tr = teamResultsOfYear(results, 1);
   assert.equal(tr.get('user')!.titles, 1);
   assert.equal(tr.get('t2')!.majors, 1);
@@ -100,7 +101,7 @@ test('bloco legado: leitura tolerante, poda e pendências', () => {
   const { players, stats, results } = pool();
   for (let year = 1; year <= 30; year++) s = withYear(s, computeSceneAwards({ year, players, teams, seasonStats: stats, results }));
   assert.equal(s.years.length, MAX_YEARS);
-  assert.equal(s.years[0].year, 21);
+  assert.equal(s.years[0].year, 23);
   assert.equal(unseenCeremony(s)?.year, 30);
   s = { ...s, seenYear: 30 };
   assert.equal(unseenCeremony(s), null);

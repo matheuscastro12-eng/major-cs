@@ -8409,7 +8409,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       {hubTab === 'legado' && save.org && (() => {
         const lg = legadoOf(save.legado);
         const infoOf = (id: string) => {
-          const pl = resolvePlayerById(id);
+          const pl = resolvePlayerById(id) ?? currentEra.flatMap((t) => t.players).find((x) => x.id === id) ?? rawBase.flatMap((t) => t.players).find((x) => x.id === id);
           if (pl) return { nick: pl.nick, country: pl.country, role: save.roles?.[id] ?? pl.role };
           const e = lg.years.flatMap((y) => y.top20).find((x) => x.id === id);
           return e ? { nick: e.nick, country: e.country, role: e.role } : null;
@@ -8423,11 +8423,11 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
           <LegadoTab
             key={legadoCards} initialSection={legadoCards ? 'cards' : undefined}
             view={view} legado={lg} split={save.split}
-            orgName={save.org.name} tag={save.org.tag} colors={save.org.colors}
+            orgName={save.org.name} tag={save.org.tag} colors={save.org.colors} logo={save.org.logo}
             roster={(userTeamSeason?.players ?? []).slice(0, 5).map((pl) => ({ nick: pl.nick, role: save.roles?.[pl.id] ?? pl.role, value: String(playerOvr(pl)) }))}
             coachNick={userCoachNick}
             onOpenCeremony={setCeremonyYear}
-            onOpenPlayer={(id) => { const pl = resolvePlayerById(id); if (pl) openPlayerProfile(pl); }}
+            onOpenPlayer={(id) => { const pl = resolvePlayerById(id) ?? currentEra.flatMap((t) => t.players).find((x) => x.id === id); if (pl) openPlayerProfile(pl); }}
             onRetireShirt={(l) => askConfirm({
               title: `${ct('Aposentar a camisa de')} ${l.nick}?`,
               message: ct('A camisa sobe para o teto do clube e entra na história da org para sempre. Não dá para desfazer.'),

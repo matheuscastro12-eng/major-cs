@@ -78,9 +78,9 @@ export interface LegadoState {
   seenYear?: number;            // último ano cuja cerimônia você já assistiu
 }
 
-export const MAX_YEARS = 10;
+export const MAX_YEARS = 8;
 export const MAX_SHIRTS = 12;
-export const MAX_EVENT_MVPS = 8;
+export const MAX_EVENT_MVPS = 6;
 export const SPLITS_PER_YEAR = 4;
 
 /** Ano de Carreira de um split (1-based: splits 1–4 = ano 1). */

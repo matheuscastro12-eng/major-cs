@@ -90,6 +90,11 @@ function frame(ctx: CanvasRenderingContext2D, accent: [string, string]) {
   ctx.strokeRect(40, 46, W - 80, H - 86);
 }
 
+/** "[TAG] Nome" — sem repetir quando a tag é o próprio nome (FURIA, MIBR…). */
+export function orgLabel(tag: string, name: string): string {
+  return tag && tag.trim().toUpperCase() !== name.trim().toUpperCase() ? `[${tag.toUpperCase()}] ${name}` : name;
+}
+
 function lockup(ctx: CanvasRenderingContext2D, kicker: string) {
   ctx.textAlign = 'left';
   ctx.font = `700 34px ${COND}`;
@@ -233,7 +238,7 @@ function drawDynasty(ctx: CanvasRenderingContext2D, d: DynastyCardData) {
   frame(ctx, d.colors);
   lockup(ctx, ct('Minha dinastia'));
   trophy(ctx, W / 2, 160, 0.72);
-  centerText(ctx, `${d.tag ? `[${d.tag.toUpperCase()}] ` : ''}${d.orgName.toUpperCase()}`, 410, `800 68px ${COND}`, C.ink);
+  centerText(ctx, orgLabel(d.tag, d.orgName).toUpperCase(), 410, `800 68px ${COND}`, C.ink);
   centerText(ctx, `${d.seasons} ${d.seasons === 1 ? ct('temporada') : ct('temporadas')} · ${d.splits} splits · ${ct('reputação')} ${d.reputation} (${d.repLabel})`, 452, `500 22px ${BODY}`, C.dim);
   statRow(ctx, [
     { label: ct('Títulos'), value: String(d.titles), gold: true },
@@ -257,19 +262,19 @@ function drawDynasty(ctx: CanvasRenderingContext2D, d: DynastyCardData) {
     ctx.fillStyle = C.ink;
     ctx.fillText(t, rx + 48, yy + 31, colW - 60);
   });
-  sectionTitle(ctx, ct('Lendas do clube'), 76, 990, W - 152);
-  centerText(ctx, d.legends.length ? d.legends.slice(0, 4).join('  ·  ') : ct('As lendas ainda estão sendo escritas'), 1046, `700 36px ${COND}`, d.legends.length ? C.goldHi : C.faint);
+  sectionTitle(ctx, ct('Lendas do clube'), 76, 1012, W - 152);
+  centerText(ctx, d.legends.length ? d.legends.slice(0, 4).join('  ·  ') : ct('As lendas ainda estão sendo escritas'), 1072, `700 36px ${COND}`, d.legends.length ? C.goldHi : C.faint);
   const recs = d.numbers.slice(2, 5);
-  if (recs.length) centerText(ctx, recs.map((n) => `${n.label}: ${n.value}`).join('   ·   '), 1110, `500 21px ${BODY}`, C.dim);
+  if (recs.length) centerText(ctx, recs.map((n) => `${n.label}: ${n.value}`).join('   ·   '), 1130, `500 21px ${BODY}`, C.dim);
   footer(ctx);
 }
 
 function drawMajor(ctx: CanvasRenderingContext2D, d: MajorCardData) {
   frame(ctx, d.colors);
   lockup(ctx, d.title);
-  trophy(ctx, W / 2, 150, 1.02);
+  trophy(ctx, W / 2, 132, 0.9);
   centerText(ctx, ct('CAMPEÃO DO MAJOR'), 470, `800 92px ${COND}`, C.gold);
-  centerText(ctx, `${d.tag ? `[${d.tag.toUpperCase()}] ` : ''}${d.orgName.toUpperCase()}`, 536, `700 50px ${COND}`, C.ink);
+  centerText(ctx, orgLabel(d.tag, d.orgName).toUpperCase(), 536, `700 50px ${COND}`, C.ink);
   statRow(ctx, d.numbers.slice(0, 3).map((n, i) => ({ ...n, gold: i === 0 })), 576);
   sectionTitle(ctx, ct('Os campeões'), 76, 768, W - 152);
   rosterList(ctx, d.roster.slice(0, 5), 76, 786, W - 152, 56);

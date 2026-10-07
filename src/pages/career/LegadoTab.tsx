@@ -35,6 +35,7 @@ export interface LegadoTabProps {
   orgName: string;
   tag: string;
   colors: [string, string];
+  logo?: string;
   roster: CardRosterRow[];               // elenco atual (titulares primeiro)
   coachNick?: string;
   onOpenCeremony: (year: number) => void;
@@ -127,12 +128,12 @@ export function LegadoTab(p: LegadoTabProps) {
   return (
     <div className="lg-tab">
       <header className="lg-hero">
-        <div className="lg-hero__crest" style={{ '--c1': p.colors[0], '--c2': p.colors[1] } as CSSProperties} aria-hidden>
-          <Crown size={26} />
+        <div className={`lg-hero__crest${p.logo ? ' lg-hero__crest--logo' : ''}`} style={{ '--c1': p.colors[0], '--c2': p.colors[1] } as CSSProperties} aria-hidden>
+          {p.logo ? <img src={p.logo} alt="" /> : <Crown size={26} />}
         </div>
         <div className="lg-hero__id">
           <p className="lg-hero__kicker">{ct('Legado e dinastia')}</p>
-          <h1 className="lg-hero__name">{p.tag ? <span className="lg-hero__tag">[{p.tag}]</span> : null} {p.orgName}</h1>
+          <h1 className="lg-hero__name">{p.tag && p.tag.toUpperCase() !== p.orgName.toUpperCase() ? <span className="lg-hero__tag">[{p.tag}]</span> : null} {p.orgName}</h1>
           <p className="lg-hero__sub">{seasons} {seasons === 1 ? ct('temporada') : ct('temporadas')} · {view.hall.splits} splits · {ct('reputação')} {view.hall.reputation} ({ct(reputationLabel(view.hall.reputation))})</p>
         </div>
         <div className="lg-hero__stats">
@@ -229,7 +230,7 @@ function SceneSection({ years, year, onYear, onCeremony, onOpenPlayer }: {
     { key: 'f', header: ct('Função'), views: ['full'], cell: (e) => <RoleChip role={e.role} /> },
     { key: 'rt', header: 'Rating', num: true, cell: (e) => (e.maps > 0 ? e.rating.toFixed(2) : '—') },
     { key: 'm', header: ct('Mapas'), num: true, views: ['full'], cell: (e) => e.maps || '—' },
-    { key: 'ti', header: ct('Títulos'), num: true, cell: (e) => e.titles || '—' },
+    { key: 'ti', header: ct('Títulos'), num: true, views: ['full'], cell: (e) => e.titles || '—' },
     { key: 'o', header: 'OVR', num: true, views: ['full'], cell: (e) => e.ovr },
   ];
   return (

@@ -131,6 +131,11 @@ export function idealTeam(top: SceneTopEntry[]): string[] {
   };
   take('AWP');
   take('IGL');
+  // um AWP só (como um time de verdade); se faltar gente, completa com quem sobrar
+  for (const e of sorted) {
+    if (picked.length >= 5) break;
+    if (!picked.includes(e.id) && e.role !== 'AWP') picked.push(e.id);
+  }
   for (const e of sorted) {
     if (picked.length >= 5) break;
     if (!picked.includes(e.id)) picked.push(e.id);
