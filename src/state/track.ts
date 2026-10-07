@@ -27,7 +27,7 @@ export function sessionId(): string {
 // FUNIL DE CONVERSÃO (visitante → vitalícia R$20): eventos raros e de alto
 // valor — liberados no cliente junto com 'visit'/'ad_click'. Volume é ínfimo
 // (1x por sessão por superfície), então não mexe no controle de custo do Neon.
-const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel']);
+const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'checkout_blocked', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel']);
 
 // CORTE DE CUSTO: só 'visit', 'ad_click' e os eventos do FUNIL vão pro servidor.
 // Eventos de jogo (game_start, online_*, etc.) viram no-op pra não gerar
@@ -119,6 +119,17 @@ export function trackCheckoutAbandon(method: 'stripe' | 'pix', secondsOpen: numb
  *  sem esse evento não dá pra separar "abriu e desistiu" de "nem chegou a abrir". */
 export function trackCheckoutError(method: 'stripe' | 'pix', reason: string): void {
   track('checkout_error', { src: getCheckoutSrc() || 'direto', method, reason: reason.slice(0, 120) });
+}
+
+/** Clicou em "Pagar com Pix"/"Ativar com cartão" com o cadastro incompleto —
+ *  antes disso o botão só ficava desabilitado, sem dizer o motivo. 1x/sessão
+ *  por motivo (não é pra medir quantos cliques, é pra medir ONDE as pessoas
+ *  travam: e-mail, senha curta, senhas diferentes ou termos não aceitos). */
+export function trackCheckoutBlocked(reason: string): void {
+  const key = `checkout_blocked_${reason}`;
+  if (seenPaywalls.has(key)) return;
+  seenPaywalls.add(key);
+  track('checkout_blocked', { src: getCheckoutSrc() || 'direto', reason });
 }
 
 // ─── FUNIL DA DEMO DO RtP ────────────────────────────────────────────────────

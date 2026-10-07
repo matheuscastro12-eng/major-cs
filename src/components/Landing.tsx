@@ -6,7 +6,7 @@
 // Estilos em src/styles/landing.css (só tokens).
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, Crosshair, Eye, Gauge, Gift, Globe, Layers, Play, Swords, Target, Trophy, Star } from 'lucide-react';
-import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
+import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutBlocked, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
@@ -466,8 +466,31 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const pwMismatch = mode === 'signup' && pw2.length > 0 && pw !== pw2;
   const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6
     && (mode === 'login' || (accepted && pw === pw2));
+  // funil: os botões de pagar ficavam desabilitados quando faltava algo no
+  // cadastro, sem dizer o quê — quem travava aqui (ex.: esqueceu de marcar os
+  // Termos) desistia em silêncio, fora do funil (paywall_view tem ~2,1k
+  // sessões/28d, signup_start menos de 50, e não dá pra saber quanto dessa
+  // queda é "nem tentou" x "tentou e travou"). Só se aplica ao CADASTRO: o
+  // login já é só e-mail + senha, sem motivo escondido pra travar.
+  const signupBlockReason = (): 'email' | 'senha-curta' | 'senha-diferente' | 'termos' | null => {
+    if (!/\S+@\S+\.\S+/.test(email)) return 'email';
+    if (pw.length < 6) return 'senha-curta';
+    if (pw !== pw2) return 'senha-diferente';
+    if (!accepted) return 'termos';
+    return null;
+  };
+  const blockedMessage = (reason: 'email' | 'senha-curta' | 'senha-diferente' | 'termos'): string => ({
+    email: ct('Preencha um e-mail válido.'),
+    'senha-curta': ct('A senha precisa de pelo menos 6 caracteres.'),
+    'senha-diferente': ct('As senhas não são iguais — confira os dois campos.'),
+    termos: ct('Marque a caixa dos Termos acima pra continuar.'),
+  })[reason];
   const go = async () => {
-    if (!valid || busy) return;
+    if (busy) return;
+    if (mode === 'signup') {
+      const reason = signupBlockReason();
+      if (reason) { setErr(blockedMessage(reason)); trackCheckoutBlocked(reason); return; }
+    } else if (!valid) return;
     setBusy(true); setErr('');
     try {
       if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
@@ -481,7 +504,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   // e mostra QR + copia-e-cola INLINE. O webhook (/api/woovi-webhook) marca a conta
   // como paga e o polling acima detecta na mesma tela e libera o acesso.
   const goPix = async () => {
-    if (!valid || busy) return;
+    if (busy) return;
+    const reason = signupBlockReason(); // goPix só é chamado em modo signup
+    if (reason) { setErr(blockedMessage(reason)); trackCheckoutBlocked(reason); return; }
     setBusy(true); setErr('');
     try {
       if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
@@ -647,11 +672,11 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           (ouro) e o cartão passa a secundário, sem tirar a opção de ninguém. */}
       {mode === 'signup' ? (
         <>
-          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={goPix}>
+          <Button variant="gold" disabled={busy} style={{ width: '100%', marginTop: '20px' }} onClick={goPix}>
             {busy ? ct('Aguarde…') : ct('Pagar com Pix')}
           </Button>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '6px 0 0' }}>{ct('Confirma na hora, sem sair desta tela')}</p>
-          <Button variant="ghost" disabled={!valid || busy} style={{ width: '100%', marginTop: '10px' }} onClick={go}>
+          <Button variant="ghost" disabled={busy} style={{ width: '100%', marginTop: '10px' }} onClick={go}>
             {busy ? ct('Aguarde…') : ct('Ativar com cartão (Stripe)')}
           </Button>
         </>
