@@ -176,6 +176,7 @@ function effStrength(
   let s = team.strength + (team.mapPrefs[map] ?? 0) * 1.35;
   if (!team.isUser && !team.noEdge) s += AI_EDGE; // dificuldade: a IA joga um degrau acima nas suas partidas (RTP dispensa: noEdge)
   if (side === 'ct') s += 1.1;
+  if (team.planRisk) s += side === 't' ? team.planRisk.t : team.planRisk.ct; // [equilíbrio] plano Agressivo
   s += BUY_PENALTY[tier];
 
   // composição mal montada sofre DENTRO do jogo, não só na força base
@@ -187,7 +188,7 @@ function effStrength(
 
   // estilo do coach
   const c = team.coach;
-  const cPow = Math.max(0, (c.rating - 75) / 12);
+  const cPow = c.pow ?? Math.max(0, (c.rating - 75) / 12); // [equilíbrio] potência pelo atributo da função
   if (c.style === 'tactical' && pickedOwnMap) s += 1.2 + cPow;
   if (c.style === 'tactical' && !flags.hasIgl) s += 1.2;
   if (c.style === 'aggressive' && side === 't') s += 0.9 + cPow * 0.6;
@@ -320,8 +321,8 @@ export function createMapSimV1(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
   const formA = formBoost(a);
   const formB = formBoost(b);
   // forma do dia DESTE mapa (±MAP_SWING): cria variância de upset por mapa
-  const mapFormA = MAP_SWING ? (rng() * 2 - 1) * MAP_SWING : 0;
-  const mapFormB = MAP_SWING ? (rng() * 2 - 1) * MAP_SWING : 0;
+  const mapFormA = MAP_SWING ? (rng() * 2 - 1) * (MAP_SWING + (a.planRisk?.swing ?? 0)) : 0;
+  const mapFormB = MAP_SWING ? (rng() * 2 - 1) * (MAP_SWING + (b.planRisk?.swing ?? 0)) : 0;
 
   let round = 0;
   let nextBuys: [BuyTier, BuyTier] = ['pistol', 'pistol'];

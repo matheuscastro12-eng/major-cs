@@ -4,7 +4,7 @@
 // em três stages suíços mais Champions Stage. A interface usa PT como fonte e
 // traduz as strings da carreira com ct().
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles, orgRefSynergy } from '../engine/ratings';
+import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles, orgRefSynergy, draftSynergy } from '../engine/ratings';
 import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
 import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
 import { teamSeasonToTTeam } from '../engine/ratings';
@@ -14,8 +14,8 @@ import { mapRecordFromStats } from '../engine/teamMapStats';
 import { createSwissStage, createPlayoffStage, stageAdvancers, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
 // Hub: usado pela MajorTab; import movido pra page.
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
-import type { Coach, Difficulty, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
-import { DIFFICULTY_ECON, DIFFICULTY_LABELS, MAP_LABELS, MAP_POOL } from '../types';
+import type { Coach, CoachStyle, Difficulty, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TPlayer, TTeam } from '../types';
+import { COACH_STYLE_LABELS, DIFFICULTY_ECON, DIFFICULTY_LABELS, MAP_LABELS, MAP_POOL } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
@@ -173,31 +173,24 @@ import type { MundoState, WorldEventResult } from '../engine/mundo/model';
 import { JuventudeTab } from '../pages/career/JuventudeTab';
 import { getToken, useAccount } from '../state/account';
 import { CustomRosterBuilder } from './CustomRosterBuilder';
+import {
+  BALANCE_FIX_ID, MODE_AI_EDGE, applyGamePlan, coachForMatch, coachMatchImpact, analystScoutingPrep, careerAiTeam, careerMode, careerUserTeam, estimateTenure, newOrgTeamwork, takeoverTeamwork, togetherSplits,
+  type CareerGamePlan,
+} from '../engine/career/equilibrio';
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // PLANO DE JOGO: a decisão pré-partida do usuário. Cada plano dá um buff REAL na
 // simulação (some você do "modo espectador": sua escolha muda a partida).
-export type GamePlan = 'disciplined' | 'antistrat' | 'mapfocus' | 'aggressive';
+export type GamePlan = CareerGamePlan;
 const GAME_PLANS: { id: GamePlan; icon: CareerIconName; label: string; desc: string }[] = [
   { id: 'disciplined', icon: 'brain', label: ct('Disciplinado'), desc: ct('Jogo seguro e constante. Baixa variância, base sólida.') },
   { id: 'antistrat', icon: 'search', label: 'Anti-strat', desc: ct('Estuda o adversário: defesa mais sólida. Bom contra times melhores.') },
   { id: 'mapfocus', icon: 'map', label: ct('Foco no mapa forte'), desc: ct('Puxa o veto pro seu melhor mapa e joga mais forte nele.') },
-  { id: 'aggressive', icon: 'swords', label: ct('Agressivo'), desc: ct('Pressão nas aberturas: teto alto, mais arriscado.') },
+  { id: 'aggressive', icon: 'swords', label: ct('Agressivo'), desc: ct('Pressão no lado T: forte de TR, mais fraco de CT e mais oscilante. Bom para o azarão.') },
 ];
-// aplica o buff do plano no time do usuário antes da partida. [fase 2] Com
-// preparação de anti-strat contra o adversário (Plano de jogo), o "Anti-strat"
-// não soma o bônus genérico: ele foca a preparação (ver matchTacticsFor).
-function applyGamePlanBuff(t: TTeam, plan: GamePlan, genericAntiStrat = true): TTeam {
-  if (plan === 'aggressive') return { ...t, strength: t.strength + 2.5 };
-  if (plan === 'antistrat') return genericAntiStrat ? { ...t, strength: t.strength + 2 } : t;
-  if (plan === 'mapfocus') {
-    const prefs: Record<string, number> = { ...t.mapPrefs };
-    const best = Object.entries(prefs).sort((a, b) => b[1] - a[1])[0];
-    if (best) prefs[best[0]] = Math.min(5, best[1] + 2); // reforça o melhor mapa (veto + força)
-    return { ...t, mapPrefs: prefs, strength: t.strength + 1 };
-  }
-  return { ...t, strength: t.strength + 1.5 }; // disciplined
-}
+// aplica o buff do plano no time do usuário antes da partida — mora em
+// engine/career/equilibrio.ts (o Agressivo ganhou custo: lado CT e variância).
+const applyGamePlanBuff = applyGamePlan;
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
 // [fase 4 · circuito] divisão pelo ranking VRS: top 32 = Tier 1, 33–64 = Tier 2
@@ -399,7 +392,7 @@ import { OverviewTab } from '../pages/career/OverviewTab';
 // [fase 2 · frente STAFF] comissão técnica
 import { StaffTab } from '../pages/career/StaffTab';
 import type { ClubStrategy, IncomingOffer, MarketLoan, MarketState } from '../engine/clube/model';
-import { tickMarketWindow, clubsSnapshot, clubNeeds, aiTierOf, squadOvr, type ClubNeed, type WindowKind } from '../engine/clube/mercadoIA';
+import { tickMarketWindow, clubsSnapshot, clubNeeds, aiTierOf, squadOvr, AI_MARKET_BY_MODE, type ClubNeed, type WindowKind } from '../engine/clube/mercadoIA';
 import { quickSaleFee, sellToBuyer, releaseToFree, pickQuickSaleBuyer, settleSaleAtBuyer, displacedBy, endLoanOutMove, faReleaseRepair, FA_RELEASE_FIX, type BuyerCtx, type ExitBooks } from '../engine/clube/saidas';
 import {
   marketOf, userLoans, expireOffers, generateIncomingOffers, applyWorldTick, withOffers, pushRumors, chainRumors, needRumors,
@@ -778,18 +771,26 @@ const takeoverBudget = (tier: number) => (tier === 1 ? 600_000 : tier === 2 ? 1_
 // guarda contra valor corrompido no save (ex.: string fora do enum) — cai em 'normal'
 const careerDiff = (d: Difficulty | undefined): Difficulty => (d === 'hard' || d === 'legend' ? d : 'normal');
 
-// Seletor de dificuldade (eixo de gestão) reusado na fundação — Desafios e
-// "Assumir organização". Mostra o impacto econômico de cada nível em chips.
-const DIFF_HINTS: Record<Difficulty, string> = {
-  normal: ct('Caixa cheio, folha normal, patrocínios fartos.'),
-  hard: ct('Caixa −25%, folha +18%, menos patrocínios. Gestão aperta.'),
-  legend: ct('Caixa −45%, folha +32%, patrocínios raros. Só pros corajosos.'),
+// Seletor de dificuldade reusado na fundação — Desafios e "Assumir organização".
+// [equilíbrio] a dificuldade vale DENTRO do jogo (vantagem única da IA na força,
+// mercado mais duro) e na gestão (caixa, folha, patrocínios).
+// número com a vírgula do PT (en/es seguem com ponto)
+const decPt = (v: number, d: number) => { const x = v.toFixed(d); return ct('de força') === 'de força' ? x.replace('.', ',') : x; };
+const DIFF_MATCH: Record<Difficulty, string> = {
+  normal: 'Rivais um pouco acima de você na partida.',
+  hard: 'Rivais bem mais fortes na partida e mercado mais fechado.',
+  legend: 'Rivais muito mais fortes, estrelas que não saem e IA que contrata primeiro.',
+};
+const DIFF_ECON: Record<Difficulty, string> = {
+  normal: 'Caixa cheio, folha normal, patrocínios fartos.',
+  hard: 'Caixa −25%, folha +18%, menos patrocínios. Gestão aperta.',
+  legend: 'Caixa −45%, folha +32%, patrocínios raros. Só pros corajosos.',
 };
 function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d: Difficulty) => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '0 0 14px' }}>
       <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>
-        🎚️ {ct('Dificuldade de gestão')}
+        🎚️ {ct('Dificuldade')}
       </span>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {(['normal', 'hard', 'legend'] as Difficulty[]).map((d) => {
@@ -812,7 +813,10 @@ function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d
                 {ct(DIFFICULTY_LABELS[d])}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--em-muted,#8a99ab)', marginTop: 2, lineHeight: 1.35 }}>
-                {DIFF_HINTS[d]}
+                {ct(DIFF_MATCH[d])} {ct(DIFF_ECON[d])}
+              </div>
+              <div style={{ fontSize: '0.66rem', fontWeight: 700, color: on ? tone : 'var(--em-muted,#8a99ab)', marginTop: 4 }}>
+                {ct('IA na partida:')} +{decPt(MODE_AI_EDGE[d], 1)} {ct('de força')}
               </div>
             </button>
           );
@@ -2783,11 +2787,17 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     // herda o entrosamento da org assumida (ver buildTeam) — senão o resync
     // reestampava o 78 do draft e desfazia o fix no meio do split.
     const org = save.takeoverId ? currentEra.find((ct2) => ct2.id === save.takeoverId) : undefined;
-    const t = resyncUserRoles(team, roleOf, org?.teamwork, org ? orgRefSynergy(org) : 0);
+    const resynced = resyncUserRoles(team, roleOf, org?.teamwork, org ? orgRefSynergy(org) : 0, !balanceOn(save));
+    // [equilíbrio] força recalculada a cada partida (o snapshot da liga não manda)
+    const t = balanceOn(save)
+      ? careerUserTeam(resynced, careerTeamwork(save, resynced.players.map((p) => careerPlayerId(p.id)), resynced.players), userCoach(save, resynced.coach))
+      : resynced;
     // aplica também o domínio de mapa e o playbook atuais (valem se mudarem no
     // meio do split — o snapshot da liga não saberia sozinho)
     // [fase 2] tática por mapa (Plano de jogo) vai junto com o time pra partida
-    const mt = matchTacticsFor(save.gestao?.tactics, save.gamePlan, oppId, autoAntiStratReadiness(scoutingOf(team)));
+    // [equilíbrio] o analista alimenta a leitura automática de anti-strat
+    const prepRead = balanceOn(save) ? analystScoutingPrep(staffEffects(save.gestao?.staff).antiStratRead) : 0;
+    const mt = matchTacticsFor(save.gestao?.tactics, save.gamePlan, oppId, autoAntiStratReadiness(scoutingOf(team, prepRead)));
     const synced: TTeam = {
       ...t,
       mapPrefs: { ...t.mapPrefs, ...(save.mapTraining ?? {}) },
@@ -2831,7 +2841,9 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const prep = (raw: TTeam, other: TTeam): TTeam => {
       if (!raw.isUser) {
         const leak = other.isUser ? leakAgainst(g.training, raw.id) : 0;
-        return { ...raw, tactics: aiTactics(raw, { id: other.id, scouting: scoutingOf(raw), leak }) };
+        // [equilíbrio] IA na régua única + comissão + a vantagem do modo (sem AI_EDGE)
+        const ai = balanceOn(save) ? careerAiTeam(raw, modeOf(save), staffEdgeById(raw.id)) : raw;
+        return { ...ai, tactics: aiTactics(ai, { id: other.id, scouting: scoutingOf(ai), leak }) };
       }
       return substituteInjured(applyConditionToTeam(syncUser(raw, other.id), g.condition, save.restingPlayers), injured, standIns, benchTiers).team;
     };
@@ -3443,6 +3455,30 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save (flag)
   }, [faRepairDue]);
 
+  // [equilíbrio] saves de antes da régua única: a mudança vale a partir do
+  // PRÓXIMO split (o split em curso termina com as forças que já tinha), com uma
+  // notícia na caixa de entrada explicando. Carreira nova (split 1, sem
+  // histórico nem torneio) já nasce na régua nova, sem aviso.
+  const balanceDue = !!save.org && save.fixes?.[BALANCE_FIX_ID] == null;
+  useEffect(() => {
+    if (!balanceDue) return;
+    setSave((s) => {
+      if (!s.org || s.fixes?.[BALANCE_FIX_ID] != null) return s;
+      const fresh = s.split === 1 && !(s.history?.length) && !s.league && !s.majorT;
+      const busy = !!(s.league || s.majorT || s.playoff);
+      const from = fresh ? s.split : busy ? s.split + 1 : s.split;
+      const item: NewsItem = {
+        id: `${s.split}:equilibrio`, split: s.split, icon: '⚖️', tone: 'info', cat: 'board',
+        title: ct('Mudança no equilíbrio da Carreira'),
+        body: `${ct('A partir do split')} ${from}, ${ct('a força do seu time passa a usar a mesma régua dos times da IA: jogadores, entrosamento e técnico. A sinergia do elenco agora vale pelo entrosamento, que cresce +2 por split que os titulares jogam juntos (até +12). O seu entrosamento foi estimado pelo tempo de casa de cada jogador. A dificuldade escolhida passa a valer também dentro do jogo.')}`,
+      };
+      const next: CareerSave = { ...s, fixes: { ...(s.fixes ?? {}), [BALANCE_FIX_ID]: from }, ...(fresh ? {} : pushNews(s, [item])) };
+      persist(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save (flag)
+  }, [balanceDue]);
+
   // AUTO-CURA da LIGA: saves criados ANTES do fix do padding podem ter grupos
   // com menos de 4 times — o opening match referencia s[3] = undefined e o user
   // não consegue jogar nem avançar (bug reportado pelo Maicon na PGL Bucharest).
@@ -3525,6 +3561,38 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     };
   };
 
+  // ───────── [equilíbrio] régua única, entrosamento por convivência ─────────
+  // Saves de antes passam a valer no split seguinte (save.fixes[BALANCE_FIX_ID]).
+  const balanceOn = (s: CareerSave) => (s.fixes?.[BALANCE_FIX_ID] ?? Number.POSITIVE_INFINITY) <= s.split;
+  // escala antiga, só no split de transição (o buildUserTeam ainda a calcula)
+  const legacyUserTeam = (t: TTeam): TTeam => t;
+  // tempo de casa (splits completos no clube): a passagem ativa manda; sem ela,
+  // a química média com os outros titulares (saves antigos)
+  const tenureOf = (s: CareerSave, id: string, starterIds: string[]): number => {
+    const st = stintsOf(s.stints, id);
+    const act = st.length ? st[st.length - 1] : null;
+    if (act && act.to == null) return estimateTenure(s.split - act.from, null);
+    const others = starterIds.filter((x) => x !== id);
+    const chem = s.pairChem && others.length ? others.reduce((a, o) => a + getPairChem({ pairChem: s.pairChem }, id, o), 0) / others.length : null;
+    return estimateTenure(null, chem);
+  };
+  const careerTeamwork = (s: CareerSave, starterIds: string[], players: TPlayer[]): number => {
+    const syn = draftSynergy(players).total;
+    const ten = starterIds.map((id) => tenureOf(s, id, starterIds));
+    const org = s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) ?? rawBase.find((t) => t.id === s.takeoverId) : undefined;
+    if (org) {
+      const orig = new Set((rawBase.find((t) => t.id === s.takeoverId) ?? org).players.map((p) => p.id));
+      const fresh = starterIds.flatMap((id, i) => (orig.has(id) ? [] : [ten[i]]));
+      return takeoverTeamwork(org.teamwork, syn - orgRefSynergy(org), fresh);
+    }
+    return newOrgTeamwork(syn, togetherSplits(ten));
+  };
+  // técnico que o motor lê: estilo escolhido e potência pelo atributo da função
+  const userCoach = (s: CareerSave, coach: Coach): Coach =>
+    coachForMatch(coach, s.gestao?.staff?.members.find((m) => m.role === 'headCoach'));
+  const modeOf = (s: CareerSave): Difficulty => careerMode(s.difficulty);
+  const staffEdgeById = (id: string): number => { const ts = currentEra.find((t) => t.id === id); return ts ? aiStaffEdgeFor(ts) : 0; };
+
   const buildTeam = (s: CareerSave): TTeam | null => {
     if (!s.org || s.squad.length < 5 || !s.coachFromId) return null;
     // [fase 3 · vestiário] joga a ESCALAÇÃO (5 titulares); sem escalação salva,
@@ -3544,7 +3612,11 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     // premissa do draft). Sem isso, assumir a Yawara (teamwork 60) já a
     // promovia no ranking sem jogar nada — o teamwork é a semente do VRS.
     const org = s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined;
-    const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach, org?.teamwork, org ? orgRefSynergy(org) : 0);
+    const built = buildUserTeam(s.org.name, picks.slice(0, 5), coach, org?.teamwork, org ? orgRefSynergy(org) : 0);
+    // [equilíbrio] régua única: força = jogadores(entrosamento por convivência) + técnico
+    const team = balanceOn(s)
+      ? careerUserTeam(built, careerTeamwork(s, picks.slice(0, 5).map((pk) => pk.player.id), built.players), userCoach(s, coach))
+      : legacyUserTeam(built);
     return {
       ...team, tag: s.org.tag, colors: s.org.colors, logoUrl: s.org.logo,
       mapPrefs: { ...team.mapPrefs, ...(s.mapTraining ?? {}) }, // domínio treinado por mapa
@@ -3612,7 +3684,9 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     // invicta), com teto baixo pra força do circuito ficar igual à do Major, que
     // é a referência correta. Tiers de acesso (3/2) sobem ainda mais devagar.
     const tierScale = s.tier === 3 ? 0.6 : s.tier === 2 ? 0.85 : 1;
-    const aiBoost = CIRCUIT_AI_BOOST + Math.min(2.5, (s.split - 1) * 0.35 * tierScale);
+    // [equilíbrio] com a régua nova a IA não tem boost de circuito nem rampa: a
+    // vantagem é só a do modo, aplicada na partida (prepareTeams)
+    const aiBoost = balanceOn(s) ? 0 : CIRCUIT_AI_BOOST + Math.min(2.5, (s.split - 1) * 0.35 * tierScale);
     const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 15).map((t) => {
       const tt = teamSeasonToTTeam(t);
       tt.strength += aiBoost + aiStaffEdgeFor(t); // [fase 2 · STAFF] comissão da IA (|δ| ≤ 0,5)
@@ -3719,7 +3793,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const step = (i: number) => {
       const oppTs = opps[i];
       const oppT = teamSeasonToTTeam(oppTs);
-      oppT.strength += CIRCUIT_AI_BOOST + aiStaffEdgeFor(oppTs);
+      oppT.strength += (balanceOn(save) ? 0 : CIRCUIT_AI_BOOST) + aiStaffEdgeFor(oppTs);
       const pair = prepareTeams(user, oppT);
       if (!pair) return;
       const [a, b] = pair;
@@ -3801,6 +3875,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     blockedFor: (pid, party) => negotiationBlock(save, pid, party, save.split),
     onRecord: (n) => updateClube((s) => recordNegotiation(s, n)),
     split: save.split,
+    difficulty: careerDiff(save.difficulty),
   });
   const renewalBlockedFor = (pid: string): Negotiation | null => negotiationBlock(save, pid, 'player', save.split);
   // [fase 3] save migrado: grava o salário real (playerWage do jogador ATUAL)
@@ -4388,7 +4463,10 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     // seus empréstimos (emprestado por você ou stand-in acertado) também são
     // intocáveis: a IA não contrata quem já tem acordo com o seu clube
     const loanIds = userLoans(m).map((l) => l.playerId);
-    const protectedIds = new Set([...squadIds, ...loanIds]);
+    // [equilíbrio] quem já tem acordo fechado com você (entra na janela) também
+    const dealIds = (s.pendingDeals ?? []).map((d) => d.inPlayerId);
+    const protectedIds = new Set([...squadIds, ...loanIds, ...dealIds]);
+    const mm = AI_MARKET_BY_MODE[careerDiff(s.difficulty)];
     const teams = oppEra.filter((t) => t.id !== s.takeoverId);
     const byId = new Map(teams.map((t) => [t.id, t]));
     const forms = computeAllTeamForms(s);
@@ -4410,6 +4488,8 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       arrivals: m.arrivals,
       maxMoves: opts.maxMoves,
       seed: mundoOf(s).seed,                  // cada Carreira tem o seu mercado
+      budgetMul: mm.budgetMul,                // [equilíbrio] IA mais rica no Difícil/Lendário
+      faFirstOvr: mm.faFirstOvr,              // [equilíbrio] e chega antes nos free agents ≥ 80
     });
   };
   // propostas pelos SEUS jogadores (depois dos movimentos da IA)
@@ -4687,7 +4767,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
     const snap = stored
       ? { budgets: m.budgets, strategies: m.strategies ?? {} }
-      : clubsSnapshot({ teams, split: s.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(s, t) : 0; }, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut) });
+      : clubsSnapshot({ teams, split: s.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(s, t) : 0; }, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut), budgetMul: AI_MARKET_BY_MODE[careerDiff(s.difficulty)].budgetMul });
     return { teams, split: s.split, budgets: snap.budgets, strategies: snap.strategies, formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut), baseOvrOf };
   };
   const applyQuickSales = (s: CareerSave, leavingIds: string[]) => {
@@ -5363,7 +5443,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
     const snap = stored
       ? { budgets: m.budgets, strategies: m.strategies ?? {} }
-      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf: (p) => aiAgeOf(p, save.split, save.youthDebut), seed: mundoOf(save).seed });
+      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf: (p) => aiAgeOf(p, save.split, save.youthDebut), seed: mundoOf(save).seed, budgetMul: AI_MARKET_BY_MODE[careerDiff(save.difficulty)].budgetMul });
     const ageOf = (p: Player) => aiAgeOf(p, save.split, save.youthDebut);
     const rows: RivalRow[] = teams.map((t) => {
       const strategy = snap.strategies[t.id] ?? 'balanced';
@@ -5387,7 +5467,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const forms = computeAllTeamForms(save);
     const byId = new Map(teams.map((t) => [t.id, t]));
     const ageOf = (p: Player) => aiAgeOf(p, save.split, save.youthDebut);
-    const snap = clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf, seed: mundoOf(save).seed });
+    const snap = clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf, seed: mundoOf(save).seed, budgetMul: AI_MARKET_BY_MODE[careerDiff(save.difficulty)].budgetMul });
     const win = transferWindowOf({ split: save.split, eventInSplit: save.eventInSplit ?? 1, inMajor: !!save.majorT && save.majorT.phase !== 'done', majorSplit: isMajorSplit(save.split) });
     // na abertura ninguém paga cláusula: o mundo não força venda ao carregar o save
     const squad = squadEntries(save).map((e) => ({ ...e, clause: null }));
@@ -10712,8 +10792,9 @@ function ColorSwatch({ value, onChange, label }: { value: string; onChange: (v: 
 }
 
 // ---------- negociação de transferência (modal) ----------
-function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, split = 0, blocked, onRecord, onClose, onAgree }: {
+function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, split = 0, blocked, difficulty, onRecord, onClose, onAgree }: {
   player: Player; from: TeamSeason; budget: number;
+  difficulty?: Difficulty;  // [equilíbrio] mercado por modo (estrelas mais protegidas, ágio maior)
   split?: number;           // [fase 3] split da conversa (rodadas e bloqueio)
   blocked?: Negotiation | null; // [fase 3] o clube encerrou a conversa neste split
   onRecord?: (nego: Negotiation) => void; // [fase 3] grava conversa encerrada (bloqueia até o próximo split)
@@ -10729,7 +10810,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
   const ask = askingPrice(player, from.teamwork);
   // contexto multifatorial do clube vendedor — from.players já é o elenco
   // ATUAL (currentEra vem pós-applyMoves)
-  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount, buyoutFloor };
+  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount, buyoutFloor, difficulty: careerDiff(difficulty) };
   const mkt = playerValue(player);
   const wage = playerWage(player);
   const [offer, setOffer] = useState(Math.round(ask * 0.85));
@@ -11021,6 +11102,8 @@ interface ContractCtx {
   onRecord: (nego: Negotiation) => void;
   /** split da conversa (bloqueio): o atual, mesmo quando o contrato começa no próximo */
   split: number;
+  /** [equilíbrio] modo da Carreira (mercado mais duro no Difícil/Lendário) */
+  difficulty?: Difficulty;
 }
 function subjectOf(player: Player, age: number, fromLabel: string): ContractNegoSubject {
   return { id: player.id, nick: player.nick, name: player.name, country: player.country, role: player.role, ovr: playerOvr(player), age, fromLabel };
@@ -11033,11 +11116,13 @@ function TransferNegotiation({ player, from, budget, contract, clubProps, onClos
   onDone: (fee: number, outIds: string[], terms: ContractTerms) => void;
 }) {
   const [club, setClub] = useState<{ fee: number; outIds: string[] } | null>(null);
-  const profile = useMemo(() => contract.profileFor(player), [contract, player]);
+  // [equilíbrio] free agent sem taxa de transferência pede luvas pelo calibre
+  const profile = useMemo(() => ({ ...contract.profileFor(player), freeAgent: from.id === FREE_TEAM_ID }), [contract, player, from.id]);
   if (!club) {
     return (
       <NegotiationModal
         {...clubProps}
+        difficulty={contract.difficulty}
         player={player} from={from} budget={budget} split={contract.split}
         blocked={contract.blockedFor(player.id, 'club')}
         onRecord={contract.onRecord}
@@ -11927,6 +12012,7 @@ function MarketScreen({
                 name={ROOKIE_COACH.name}
                 country={ROOKIE_COACH.country ?? '??'}
                 rating={ROOKIE_COACH.rating}
+                style={ROOKIE_COACH.style}
                 fee={coachFee(ROOKIE_COACH)}
                 selected={coachId === ROOKIE_ID}
                 tag={ct('Estreante')}
@@ -11939,6 +12025,7 @@ function MarketScreen({
                   name={t.coach.name}
                   country={t.coach.country ?? '??'}
                   rating={t.coach.rating}
+                  style={t.coach.style}
                   fee={coachFee(t.coach)}
                   selected={coachId === t.id}
                   tag={t.tag}
@@ -12213,6 +12300,7 @@ function CoachRow({
   name,
   country,
   rating,
+  style,
   fee,
   selected,
   tag,
@@ -12222,11 +12310,13 @@ function CoachRow({
   name: string;
   country: string;
   rating: number;
+  style?: CoachStyle;
   fee: number;
   selected: boolean;
   tag?: string;
   onClick: () => void;
 }) {
+  const impact = coachMatchImpact({ rating });
   return (
     <button
       type="button"
@@ -12253,7 +12343,10 @@ function CoachRow({
           <Flag cc={country} /> {nick}
         </div>
         <div style={{ fontSize: '0.68rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {tag ? tag : name}
+          {tag ? tag : name}{style ? ` · ${ct(COACH_STYLE_LABELS[style])}` : ''}
+        </div>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.7rem', fontWeight: 700, color: impact.points > 0 ? 'var(--c-win)' : impact.points < 0 ? 'var(--c-loss)' : 'var(--em-muted)', marginTop: 2 }}>
+          {ct('Na partida:')} {impact.points > 0 ? '+' : impact.points < 0 ? '−' : '±'}{decPt(Math.abs(impact.points), 1)} (≈ {impact.pp > 0 ? '+' : impact.pp < 0 ? '−' : '±'}{Math.abs(impact.pp)} {ct('pp por série')})
         </div>
       </div>
       <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>

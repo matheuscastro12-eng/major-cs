@@ -50,6 +50,9 @@ export interface Coach {
   country: string;
   rating: number; // 50-99
   style: CoachStyle;
+  // [equilíbrio] potência do estilo no motor (0 ≈ nota 10 no atributo da função,
+  // ~1,6 no 20). Ausente = derivada do rating (times da IA, draft).
+  pow?: number;
 }
 
 export const COACH_STYLE_LABELS: Record<CoachStyle, string> = {
@@ -154,6 +157,9 @@ export interface TTeam {
   playbook?: Playbook; // esquema tático treinado (modo carreira)
   playbookFam?: number; // entrosamento no esquema, 0..1 (quão bem treinado)
   noEdge?: boolean; // Road to Pro: dispensa o AI_EDGE de dificuldade do modo carreira
+  // [equilíbrio] custo do plano Agressivo: pontos de força no lado T / no CT e
+  // forma do dia mais larga (±swing extra por mapa). Ausente = motor de antes.
+  planRisk?: { t: number; ct: number; swing: number };
   // [realismo FM fase 2 · tática por mapa] plano preparado (papéis, setup CT,
   // execuções T, instruções, familiaridade, anti-strat). Opt-in: sem ele o motor
   // v2 joga exatamente como antes; o v1 ignora. Ver engine/gestao/tatica.ts.
