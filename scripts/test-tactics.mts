@@ -152,7 +152,8 @@ test('política de eco: sempre forçar força mais, save total menos; o force/sa
 // ── sem contagem dupla ──────────────────────────────────────────────────────
 
 test('sem contagem dupla: call/postura ao vivo substitui ritmo e agressividade preparados', () => {
-  const tac = { ...aiTactics(T0), instr: { ...aiInstructions(T0), tempo: 'fast' as const, aggression: 'aggressive' as const, utility: 'balanced' as const } };
+  // [estilo de jogo] o estilo é outra camada (test-estilo.mts): aqui, Padrão
+  const tac = { ...aiTactics(T0), style: undefined, styleFam: undefined, instr: { ...aiInstructions(T0), tempo: 'fast' as const, aggression: 'aggressive' as const, utility: 'balanced' as const } };
   const p = planOf(tac);
   const prep = tacticDuelMods({ plan: p, opp: null, side: 't' });
   const live = tacticDuelMods({ plan: p, opp: null, side: 't', live: true });

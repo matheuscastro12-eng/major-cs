@@ -226,6 +226,9 @@ export interface MapResult {
   roundLog: (0 | 1)[];
   killFeed: KillEvent[];
   stats: Record<string, PlayerMapStats>;
+  // [estilo de jogo] motor v2 com tática: estatística de estilo por time e o estilo usado no fim do mapa
+  styleStats?: [import('./engine/gestao/estilo').StyleStats, import('./engine/gestao/estilo').StyleStats];
+  styles?: [import('./engine/gestao/model').TeamStyle | null, import('./engine/gestao/model').TeamStyle | null];
 }
 
 export interface SeriesResult {

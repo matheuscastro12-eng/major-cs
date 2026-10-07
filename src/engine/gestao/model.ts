@@ -89,11 +89,21 @@ export interface MapTactic {
   familiarity: number;              // 0–100: cresce com treino/partida no mapa
 }
 
+// [estilo de jogo] O jeito de o time jogar, por lado, por cima do plano por mapa
+// (engine/gestao/estilo.ts). Padrão = motor de antes, bit a bit.
+export type StyleT = 'standard' | 'aggressive' | 'passive' | 'control' | 'rush';
+export type StyleCT = 'standard' | 'aggressive' | 'passive' | 'control' | 'retake';
+export type StyleId = StyleT | StyleCT;
+export interface TeamStyle { t: StyleT; ct: StyleCT }
+
 export interface TacticsState {
   v: 1;
   instr: TeamInstructions;
   maps: Partial<Record<MapId, MapTactic>>;
   antiStrat?: { opponentTeamId: string; readiness: number } | null; // preparação contra o próximo adversário
+  // [estilo de jogo] opcionais (ausentes = Padrão nos dois lados; save continua v28)
+  style?: TeamStyle;
+  styleFam?: Partial<Record<string, number>>; // `${'t'|'ct'}:${StyleId}` → familiaridade 0–100
 }
 
 // Modificadores que a tática entrega ao motor v2 por situação do round.
@@ -108,6 +118,11 @@ export interface TacticDuelMods {
   timeMult?: number;                         // só no T: chance de o tempo acabar
   tradeMult?: number;                        // multiplicador de troca do time
   saveMult?: number;                         // propensão a salvar no eco (política de eco)
+  // [estilo de jogo] opcionais (ausentes = motor de antes):
+  engageMid?: Record<string, number>;        // playerId → multiplicador do engajamento no meio do round
+  engagePost?: Record<string, number>;       // playerId → multiplicador do engajamento no pós-plant/retake
+  kMult?: number;                            // peso da mira no duelo (< 1 = mais variância, > 1 = menos)
+  oppPlantMult?: number;                     // só no CT: multiplica o plant do T (ceder o site)
 }
 
 // ─── Comissão técnica ──────────────────────────────────────────────────────
