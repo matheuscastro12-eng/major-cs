@@ -50,7 +50,7 @@
 // step() e peekWinProb(): % mostrado = % rolado.
 
 import type { KillEvent, MapId, MapResult, PlayerMapStats, TPlayer, TTeam } from '../../types';
-import type { Call, MapSim, MapSimOpts, SiteCall, SiteRound, BombSite } from '../match';
+import type { Call, MapSim, MapSimOpts, SiteCall, SiteRound, BombSite, RoundPlayInfo } from '../match';
 import type { Rng } from '../rng';
 import { attrsOf } from '../attrs/model';
 import {
@@ -293,6 +293,7 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
   const killFeed: KillEvent[] = [];
   const siteLog: SiteRound[] = [];
   const traceLog: RoundTrace[] = [];
+  let lastPlayInfo: RoundPlayInfo | null = null;
   const aStartsCt = rng() < 0.5;
   let halfScore = '';
   let finished = false;
@@ -635,6 +636,13 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       if (play.end === 'time') sStats[ctI].timeWins++;
       for (const side of [0, 1] as const) if (play.clutch[side] && toTeam(side) === winner) sStats[winner].clutchWon++;
     }
+    let killsBeforePlant = 0;
+    for (const d of play.duels) if (!d.planted) killsBeforePlant += d.trader >= 0 ? 2 : 1;
+    lastPlayInfo = {
+      round, end: play.end, planted: play.planted,
+      planterId: play.planter >= 0 ? tc[tIdx].players[play.planter].id : null,
+      killsBeforePlant,
+    };
     const pistolRound = buys[0] === 'pistol';
     traceLog.push({
       round, aSide, buys, winner,
@@ -856,6 +864,7 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       modsCache.clear();
       peekCache = new Map();
     },
+    lastRoundPlay: () => lastPlayInfo,
     trace: () => traceLog,
     autoTimeouts: () => autoTimeouts,
   };
