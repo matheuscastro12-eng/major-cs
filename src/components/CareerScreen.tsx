@@ -14,8 +14,8 @@ import { mapRecordFromStats } from '../engine/teamMapStats';
 import { createSwissStage, createPlayoffStage, stageAdvancers, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
 // Hub: usado pela MajorTab; import movido pra page.
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
-import type { Coach, Difficulty, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TPlayer, TTeam } from '../types';
-import { DIFFICULTY_ECON, DIFFICULTY_LABELS, MAP_LABELS, MAP_POOL } from '../types';
+import type { Coach, CoachStyle, Difficulty, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TPlayer, TTeam } from '../types';
+import { COACH_STYLE_LABELS, DIFFICULTY_ECON, DIFFICULTY_LABELS, MAP_LABELS, MAP_POOL } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
@@ -172,7 +172,7 @@ import { JuventudeTab } from '../pages/career/JuventudeTab';
 import { getToken, useAccount } from '../state/account';
 import { CustomRosterBuilder } from './CustomRosterBuilder';
 import {
-  BALANCE_FIX_ID, MODE_AI_EDGE, applyGamePlan, coachForMatch, analystScoutingPrep, careerAiTeam, careerMode, careerUserTeam, estimateTenure, newOrgTeamwork, takeoverTeamwork, togetherSplits,
+  BALANCE_FIX_ID, MODE_AI_EDGE, applyGamePlan, coachForMatch, coachMatchImpact, analystScoutingPrep, careerAiTeam, careerMode, careerUserTeam, estimateTenure, newOrgTeamwork, takeoverTeamwork, togetherSplits,
   type CareerGamePlan,
 } from '../engine/career/equilibrio';
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
@@ -11964,6 +11964,7 @@ function MarketScreen({
                 name={ROOKIE_COACH.name}
                 country={ROOKIE_COACH.country ?? '??'}
                 rating={ROOKIE_COACH.rating}
+                style={ROOKIE_COACH.style}
                 fee={coachFee(ROOKIE_COACH)}
                 selected={coachId === ROOKIE_ID}
                 tag={ct('Estreante')}
@@ -11976,6 +11977,7 @@ function MarketScreen({
                   name={t.coach.name}
                   country={t.coach.country ?? '??'}
                   rating={t.coach.rating}
+                  style={t.coach.style}
                   fee={coachFee(t.coach)}
                   selected={coachId === t.id}
                   tag={t.tag}
@@ -12250,6 +12252,7 @@ function CoachRow({
   name,
   country,
   rating,
+  style,
   fee,
   selected,
   tag,
@@ -12259,11 +12262,13 @@ function CoachRow({
   name: string;
   country: string;
   rating: number;
+  style?: CoachStyle;
   fee: number;
   selected: boolean;
   tag?: string;
   onClick: () => void;
 }) {
+  const impact = coachMatchImpact({ rating });
   return (
     <button
       type="button"
@@ -12290,7 +12295,10 @@ function CoachRow({
           <Flag cc={country} /> {nick}
         </div>
         <div style={{ fontSize: '0.68rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {tag ? tag : name}
+          {tag ? tag : name}{style ? ` · ${ct(COACH_STYLE_LABELS[style])}` : ''}
+        </div>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.7rem', fontWeight: 700, color: impact.points > 0 ? 'var(--c-win)' : impact.points < 0 ? 'var(--c-loss)' : 'var(--em-muted)', marginTop: 2 }}>
+          {ct('Na partida:')} {impact.points > 0 ? '+' : impact.points < 0 ? '−' : '±'}{decPt(Math.abs(impact.points), 1)} (≈ {impact.pp > 0 ? '+' : impact.pp < 0 ? '−' : '±'}{Math.abs(impact.pp)} {ct('pp por série')})
         </div>
       </div>
       <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>
