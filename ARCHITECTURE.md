@@ -107,6 +107,16 @@ Migração nova na Carreira: `SAVE_VERSION += 1` em `saveMigrations.ts`, registr
 a função `vN → vN+1`, cubra em `scripts/test-save-migration.mts` e atualize a
 tabela acima.
 
+Evolução (out/2026, sem subir o SAVE_VERSION): CURVA ÚNICA — o mundo da IA evolui
+pela mesma `evolveAttrs` do seu elenco, por replay determinístico em contexto
+neutro (`src/engine/career/worldEvo.ts`, memo incremental por jogador); quem sai do
+seu elenco grava `save.worldEvo[id] = { attrDelta, split, pot }` e a IA continua
+dali (migração idempotente no carregamento a partir de `stints`/`evo`). O teto é um
+helper só (`src/engine/career/potential.ts#careerPotentialOvr`), usado pela evolução
+e por todas as telas. DECISÃO: 1 ano de idade = 1 temporada = 4 splits
+(`src/engine/clock.ts`; antes 3, mas a temporada da fase 4 tem 4 splits) — as curvas
+são escritas por ano e divididas por 4, e a aposentadoria da IA conta 4 splits/ano.
+
 Realismo FM fase 4 (o mundo): Carreira v30 grava o bloco `mundo` (calendário do circuito,
 resultados das outras cenas, VRS, jovens gerados e a base usada) — contrato em
 `src/engine/mundo/model.ts`. A base customizada do editor vive fora do save.

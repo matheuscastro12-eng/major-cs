@@ -18,7 +18,9 @@ import { ALL_ATTRS } from '../attributes';
 import { attrsOf, caFromOvr, withAttrs, type PlayerAttrs } from '../attrs/model';
 import { evolveAttrs } from '../attrs/progression';
 import type { Player } from '../../types';
-import { applyAttrDelta, attrDelta, type AttrDelta } from './attrEvo';
+import { applyAttrDelta, attrDelta, attrDeltaFromScalarEvo, type AttrDelta } from './attrEvo';
+import { playerOvr } from '../ratings';
+import type { StintsMap } from './stints';
 
 /** Estado de um jogador que saiu do seu elenco: a IA continua dali. */
 export interface WorldEvoEntry {
@@ -117,6 +119,39 @@ export function normalizeWorldEvo(raw: unknown): WorldEvoMap {
     }
     const pot = typeof e.pot === 'number' && Number.isFinite(e.pot) ? Math.max(40, Math.min(99, Math.round(e.pot))) : undefined;
     out[id] = { attrDelta: d, split, ...(pot != null ? { pot } : {}) };
+  }
+  return out;
+}
+
+/**
+ * Migração idempotente (sem subir o SAVE_VERSION) para quem saiu do seu elenco
+ * ANTES do worldEvo existir — voltava ao mundo com os atributos da base:
+ *   - passagem encerrada com OVR de saída (stints) de um jogador da base que não
+ *     está no elenco nem no worldEvo → o estado da saída (os 5 números da base
+ *     deslocados até o OVR de saída) no split da saída;
+ *   - declínio guardado no `evo` de quem já saiu (o antigo withDecline do
+ *     mercado) → o mesmo, no split atual.
+ * Academia/base/regen vendidos já guardam o estado na cópia (extraOnTeam).
+ */
+export function migrateWorldEvo(
+  s: { worldEvo?: unknown; squad?: { playerId: string }[]; stints?: StintsMap; evo?: Record<string, number>; split?: number },
+  baseById: ReadonlyMap<string, Player>,
+): WorldEvoMap {
+  const out: WorldEvoMap = normalizeWorldEvo(s.worldEvo);
+  const inSquad = new Set((s.squad ?? []).map((x) => x.playerId));
+  for (const [pid, arr] of Object.entries(s.stints ?? {})) {
+    if (out[pid] || inSquad.has(pid) || !Array.isArray(arr)) continue;
+    const last = arr[arr.length - 1];
+    if (!last || last.to == null || typeof last.endOvr !== 'number' || !(last.endOvr > 0)) continue;
+    const base = baseById.get(pid);
+    if (!base) continue;
+    const d = Math.round(last.endOvr) - playerOvr(base);
+    if (d) out[pid] = { attrDelta: attrDeltaFromScalarEvo(base, d), split: Math.max(1, Math.floor(last.to)) };
+  }
+  for (const [pid, d] of Object.entries(s.evo ?? {})) {
+    if (out[pid] || inSquad.has(pid) || typeof d !== 'number' || !d) continue;
+    const base = baseById.get(pid);
+    if (base) out[pid] = { attrDelta: attrDeltaFromScalarEvo(base, d), split: Math.max(1, Math.floor(s.split ?? 1)) };
   }
   return out;
 }

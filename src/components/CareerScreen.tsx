@@ -167,7 +167,7 @@ import {
   type UserYouthCtx, type JuventudeNews,
 } from '../engine/mundo/juventudeMundo';
 import { isNewgenId, newgenPlayer, careerYearOf, hasIntake, dropNewgens, storeNewgen } from '../engine/mundo/juventude';
-import { replayAttrs, worldEvoEntry, normalizeWorldEvo, type WorldEvoMap } from '../engine/career/worldEvo';
+import { replayAttrs, worldEvoEntry, migrateWorldEvo as migrateWorldEvoSave, type WorldEvoMap } from '../engine/career/worldEvo';
 import { careerPotentialOvr, careerPotentialBaseOvr, registerCareerBase } from '../engine/career/potential';
 import type { MundoState, WorldEventResult } from '../engine/mundo/model';
 import { JuventudeTab } from '../pages/career/JuventudeTab';
@@ -349,7 +349,7 @@ import {
 } from '../engine/coachCareer';
 import { retirementTick, evolveAttrs, type RetirementCandidate } from '../engine/attrs/progression';
 import { attrsOf, caFromOvr, legacyFromAttrs, ovrFromCa, withAttrs, type PlayerAttrs } from '../engine/attrs/model';
-import { activeAttrDelta, applyAttrDelta, attrDelta, attrDeltaFromScalarEvo, normalizeAttrEvo, type AttrEvoMap } from '../engine/career/attrEvo';
+import { activeAttrDelta, applyAttrDelta, attrDelta, normalizeAttrEvo, type AttrEvoMap } from '../engine/career/attrEvo';
 import { FACILITY_MAX_LEVEL } from '../engine/career/facilities';
 import { canScrimNow, runScrimVs, listScrimOpponents, type ScrimMatchReport } from '../engine/scrim';
 import { listJobOffers, applyForJob, rejectionReason, offerPitch, type JobOffer } from '../engine/career/jobHunt';
@@ -1481,33 +1481,12 @@ export function potentialTier(potOvr: number): PotTier {
 }
 
 
-// [evolução · out/2026] quem foi vendido/liberado ANTES do worldEvo existir
-// voltava ao mundo com os atributos da base. Migração idempotente (sem subir o
-// SAVE_VERSION): para cada passagem encerrada com OVR de saída de um jogador da
-// base que não está no elenco nem no worldEvo, grava o estado da saída (os 5
-// números da base deslocados até o OVR de saída) no split da saída.
-function migrateWorldEvo(s: CareerSave): WorldEvoMap {
-  const out: WorldEvoMap = normalizeWorldEvo(s.worldEvo);
-  const inSquad = new Set((s.squad ?? []).map((x) => x.playerId));
-  for (const [pid, arr] of Object.entries(s.stints ?? {})) {
-    if (out[pid] || inSquad.has(pid) || !Array.isArray(arr)) continue;
-    const last = arr[arr.length - 1];
-    if (!last || last.to == null || typeof last.endOvr !== 'number' || !(last.endOvr > 0)) continue;
-    const base = BASE_PLAYER_BY_ID.get(pid);
-    if (!base) continue; // academia/base/regen: a cópia da venda (extraOnTeam) já guarda o estado
-    const d = Math.round(last.endOvr) - playerOvr(base);
-    if (!d) continue;
-    out[pid] = { attrDelta: attrDeltaFromScalarEvo(base, d), split: Math.max(1, Math.floor(last.to)) };
-  }
-  // declínio guardado no evo de quem já saiu (o withDecline antigo): vira estado do mundo
-  for (const [pid, d] of Object.entries(s.evo ?? {})) {
-    if (out[pid] || inSquad.has(pid) || typeof d !== 'number' || !d) continue;
-    const base = BASE_PLAYER_BY_ID.get(pid);
-    if (base) out[pid] = { attrDelta: attrDeltaFromScalarEvo(base, d), split: Math.max(1, Math.floor(s.split ?? 1)) };
-  }
-  return out;
-}
+// [evolução] quem foi vendido antes do worldEvo existir: migração idempotente
+// (engine/career/worldEvo.ts#migrateWorldEvo), sem subir o SAVE_VERSION
 const BASE_PLAYER_BY_ID = new Map<string, Player>(CS2_REAL_2026.flatMap((t) => t.players.map((p) => [p.id, p] as [string, Player])));
+function migrateWorldEvo(s: CareerSave): WorldEvoMap {
+  return migrateWorldEvoSave(s, BASE_PLAYER_BY_ID);
+}
 
 // ─── POTENCIAL HONESTO (evolução · out/2026) ────────────────────────────────
 // Helper ÚNICO do teto (engine/career/potential.ts): o evolveSquad usa como PA e
