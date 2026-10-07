@@ -150,6 +150,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   useEffect(() => { radarOnRef.current = radarOn; }, [radarOn]);
   const onRadarBusy = useCallback((b: boolean) => { radarBusyRef.current = b; }, []);
   const [radarScore, setRadarScore] = useState<[number, number] | null>(null);
+  const [radarStats, setRadarStats] = useState<Record<string, PlayerMapStats> | null>(null);
   const toggleRadar = () => setRadarOn((v) => { try { localStorage.setItem('rtm.radar2d', v ? '0' : '1'); } catch { /* sem storage */ } return !v; });
   const [stance, setStance] = useState<Stance>('default');
   // hint de descoberta das calls ao vivo (some ao dispensar; 1ª vez forte)
@@ -801,6 +802,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
             timeoutsLeft={timeoutsLeft}
             onTipAction={onTipAction}
             onBusy={onRadarBusy}
+            onShownStats={setRadarStats}
           />
         )}
 
@@ -808,7 +810,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           <LiveScoreboard
             teams={teams}
             userIdx={userIdx}
-            stats={sim.stats()}
+            stats={radarOn && radarStats ? radarStats : sim.stats()}
             label={`${MAP_LABELS[currentMap]} · ${sa}:${sb}`}
           />
         )}

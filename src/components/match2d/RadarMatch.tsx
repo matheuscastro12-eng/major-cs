@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MapSim, Stance, BuyTier } from '../../engine/match';
 import { withFullRoster } from '../../engine/matchShared';
-import type { KillEvent, MapId, TTeam } from '../../types';
+import type { KillEvent, MapId, PlayerMapStats, TTeam } from '../../types';
 import { MAP_LABELS } from '../../types';
 import { map2dOf } from './maps';
 import { buildRoundScript, clockAt, posAt, type RoundScript, type ScriptEvent } from './choreo';
@@ -35,7 +35,11 @@ interface RoundView {
   money: [number, number];
   buys: [BuyTier, BuyTier] | null;
   sides: ['ct' | 't', 'ct' | 't'];
+  statsBefore: Stats;
+  statsAfter: Stats;
 }
+type Stats = Record<string, PlayerMapStats>;
+const snap = (s: Stats): Stats => JSON.parse(JSON.stringify(s)) as Stats;
 
 interface Props {
   sim: MapSim;
@@ -51,7 +55,8 @@ interface Props {
   stance: Stance;
   timeoutsLeft: number;
   onTipAction: (a: TipAction) => void;
-  onBusy?: (busy: boolean) => void;   // true enquanto há round para encenar (o MatchScreen segura a troca de mapa)
+  onBusy?: (busy: boolean) => void;
+  onShownStats?: (s: Record<string, PlayerMapStats> | null) => void; // stats do round ENCENADO (sem spoiler)   // true enquanto há round para encenar (o MatchScreen segura a troca de mapa)
 }
 
 const BUY_SHORT: Record<BuyTier, string> = { pistol: 'Pistol', eco: 'Eco', force: 'Force', full: 'Compra cheia' };
@@ -74,7 +79,7 @@ function useReducedMotion(): boolean {
 const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 export function RadarMatch(props: Props) {
-  const { sim, map, mapIdx, teams, userIdx, tick, gate, paused, requestStep, onShownScore, stance, timeoutsLeft, onTipAction, onBusy } = props;
+  const { sim, map, mapIdx, teams, userIdx, tick, gate, paused, requestStep, onShownScore, stance, timeoutsLeft, onTipAction, onBusy, onShownStats } = props;
   const reduced = useReducedMotion();
   const roster = useMemo(() => teams.map((t) => withFullRoster(t).players.slice(0, 5)) as [TTeam['players'], TTeam['players']], [teams]);
   const nickOf = useMemo(() => {
@@ -98,6 +103,7 @@ export function RadarMatch(props: Props) {
   const queueRef = useRef<RoundView[]>([]);
   const seenRef = useRef(0);
   const pendingRef = useRef(false);
+  const statsRef = useRef<Stats>({});
   const preRef = useRef<{ sides: ['ct' | 't', 'ct' | 't']; buys: [BuyTier, BuyTier]; money: [number, number]; score: [number, number] } | null>(null);
   const tRef = useRef(0);
   const doneAtRef = useRef<number | null>(null);
@@ -112,9 +118,11 @@ export function RadarMatch(props: Props) {
     preRef.current = { sides: sim.side(), buys: sim.buys(), money: sim.money(), score: sim.score() };
     setCurrent(null); setReplay(null); setFeed([]); setMomentCard(null); setHistory([]); setHalftime(false); setSkipping(false);
     onShownScore(sim.done() ? null : sim.score());
+    statsRef.current = snap(sim.stats());
+    onShownStats?.(sim.done() ? null : statsRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim, mapIdx]);
-  useEffect(() => () => { onShownScore(null); onBusy?.(false); }, [onShownScore, onBusy]);
+  useEffect(() => () => { onShownScore(null); onShownStats?.(null); onBusy?.(false); }, [onShownScore, onBusy, onShownStats]);
 
   // ── observa o sim: cada round novo vira um roteiro ──
   useEffect(() => {
@@ -144,14 +152,16 @@ export function RadarMatch(props: Props) {
       play: play && play.round === r ? play : null, buys,
     });
     const moments = detectMoments({ round: r, kills, winner, roundLog: log.slice(0, r + 1), buys });
-    const view: RoundView = { round: r, script, kills, moments, preScore, postScore, money: pre.money, buys, sides: pre.sides };
+    const statsBefore = statsRef.current;
+    statsRef.current = snap(sim.stats());
+    const view: RoundView = { round: r, script, kills, moments, preScore, postScore, money: pre.money, buys, sides: pre.sides, statsBefore, statsAfter: statsRef.current };
     const rec: RoundRecord = {
       round: r, sides: pre.sides, winner, tSite: script.site,
       openingTeam: kills.length ? kills[0].killerTeam : -1, buys, planted: script.planted,
     };
     setHistory((h) => [...h, rec]);
     preRef.current = { sides: sim.side(), buys: sim.buys(), money: sim.money(), score: postScore };
-    if (skipping) { onShownScore(postScore); return; }
+    if (skipping) { onShownScore(postScore); onShownStats?.(statsRef.current); return; }
     queueRef.current.push(view);
     force((x) => x + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,6 +177,7 @@ export function RadarMatch(props: Props) {
       tRef.current = 0; firedRef.current = 0; doneAtRef.current = null;
       setFeed([]);
       onShownScore(next.preScore);
+      onShownStats?.(next.statsBefore);
       setCurrent(next);
       return;
     }
@@ -174,12 +185,13 @@ export function RadarMatch(props: Props) {
       pendingRef.current = true;
       requestStep(1);
     }
-  }, [playing, halftime, gate, paused, sim, skipping, qv, tick, onBusy, onShownScore, requestStep]);
+  }, [playing, halftime, gate, paused, sim, skipping, qv, tick, onBusy, onShownScore, onShownStats, requestStep]);
 
 
   const finishRound = useCallback((v: RoundView, wasReplay: boolean) => {
     if (wasReplay) { setReplay(null); return; }
     onShownScore(v.postScore);
+    onShownStats?.(v.statsAfter);
     const top = v.moments[0];
     if (top && top.kind !== 'pistol') {
       setMomentCard({ m: top, view: v });
@@ -187,7 +199,7 @@ export function RadarMatch(props: Props) {
     }
     if (v.round === 11 && gate) setHalftime(true);
     setCurrent(null);
-  }, [gate, onShownScore]);
+  }, [gate, onShownScore, onShownStats]);
 
   // ── laço de animação ──
   const svgRef = useRef<SVGSVGElement | null>(null);
