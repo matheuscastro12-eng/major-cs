@@ -391,6 +391,10 @@ import { ContractsTab } from '../pages/career/ContractsTab';
 import { SquadTab } from '../pages/career/SquadTab';
 import { TrainingTab } from '../pages/career/TrainingTab';
 import { OverviewTab } from '../pages/career/OverviewTab';
+import { cenarioById, createRun, recordEvent, brokenMods, startingSquad, type CenarioRun, type CenarioDef } from '../engine/cenarios';
+import { CenariosPicker, CenarioPanel, CenariosEntry, type CenarioChoice } from './cenarios/Cenarios';
+import { postCenStart } from '../state/cenariosApi';
+type CenHookCtx = { phase: 'e' | 's' | 'm'; split: number; budget: number; broken: import('../engine/cenarios').ModifierId[] };
 // [fase 2 · frente STAFF] comissão técnica
 import { StaffTab } from '../pages/career/StaffTab';
 import type { ClubStrategy, IncomingOffer, MarketLoan, MarketState } from '../engine/clube/model';
@@ -766,6 +770,8 @@ interface OrgStart {
   board?: number;
   scenario?: NonNullable<CareerSave['scenario']>;
 }
+// [Modo Cenário] caixa inicial do cenário (override do catálogo ou a verba de quem assume)
+const cenarioBudget = (def: CenarioDef, tier: number) => def.start.budget ?? takeoverBudget(tier);
 // verba de quem ASSUME uma org com elenco: tier mais alto (time melhor) = menos
 // caixa; tier baixo = mais caixa. É a troca "elenco bom x dinheiro" que o user pediu.
 const takeoverBudget = (tier: number) => (tier === 1 ? 600_000 : tier === 2 ? 1_300_000 : 2_300_000);
@@ -907,7 +913,7 @@ function scenarioTeam(sc: CareerScenario, current: TeamSeason[]): TeamSeason | n
   return null;
 }
 // avalia uma meta de cenário no fim do split, com os resultados já calculados
-type ScenarioCtx = { isChampion: boolean; circuitTier: number; finalPos: number; qualified: boolean; endTier: number; wonMajor: boolean };
+type ScenarioCtx = { isChampion: boolean; circuitTier: number; finalPos: number; qualified: boolean; endTier: number; wonMajor: boolean } & Partial<CenHookCtx>;
 function evalScenarioGoal(type: ScenarioGoalType, ctx: ScenarioCtx): boolean {
   switch (type) {
     case 'winCircuit': return ctx.isChampion;
@@ -923,6 +929,11 @@ function evalScenarioGoal(type: ScenarioGoalType, ctx: ScenarioCtx): boolean {
 // marca como cumpridas as metas do desafio atingidas neste split
 function applyScenarioProgress(scenario: CareerSave['scenario'], ctx: ScenarioCtx): CareerSave['scenario'] {
   if (!scenario) return scenario ?? null;
+  // [Modo Cenário] registra o fechamento no log do run (objetivos com prazo/nota)
+  if (scenario.run && ctx.phase && ctx.split != null) {
+    const def = cenarioById(scenario.run.defId);
+    if (def) scenario = { ...scenario, run: recordEvent(def, scenario.run, { phase: ctx.phase, split: ctx.split, isChampion: ctx.isChampion, finalPos: ctx.finalPos, qualified: ctx.qualified, wonMajor: ctx.wonMajor, tier: ctx.endTier, budget: ctx.budget ?? 0, broken: ctx.broken }) };
+  }
   let changed = false;
   const goals = scenario.goals.map((g) => {
     if (g.done) return g;
@@ -1124,7 +1135,7 @@ interface CareerSave {
   youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
   youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
   youthDebut?: Record<string, YouthDebut>; // idade + split exatos da promoção
-  scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[] } | null; // desafio de carreira em curso
+  scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[]; run?: CenarioRun } | null; // desafio de carreira em curso (run = Modo Cenário, src/engine/cenarios)
   rivalries?: Record<string, number>; // intensidade por adversario; 4+ vira classico e gera foco extra
   fatigue?: Record<string, number>; // carga acumulada 0-100 por jogador
   // ----- MODO CUSTOM (Vitalícia) -----
@@ -2185,7 +2196,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   // outros useEffect deste componente; o de #1 do VRS roda quando vrsAll estiver
   // em escopo lá embaixo).
   const upsellWorld1Ref = useRef(false);
-  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario' | 'custom'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
+  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario' | 'custom' | 'cenarios'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
   // dificuldade da carreira (eixo de GESTÃO): escolhida na fundação, grava no save
   // e remodela caixa inicial / folha / patrocínios. Default 'normal'.
   const [careerDifficulty, setCareerDifficulty] = useState<Difficulty>('normal');
@@ -3211,6 +3222,12 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     [currentEra, save.squad, save.evo, save.moves, save.worldEvo, save.split, worldBase, rawBase],
   );
 
+  // [Modo Cenário] contexto do fechamento pro log do run (caixa + regras dos mods)
+  const cenCtx = (phase: 'e' | 's' | 'm'): CenHookCtx => {
+    const mods = save.scenario?.run?.mods ?? [];
+    const squad = mods.length ? save.squad.slice(0, 5).map((sg) => { const f = findSigning(sg); return { id: sg.playerId, age: f ? effectiveAge(f.player, save.split, save.youthAge, save.youthDebut) : 99, country: f?.player.country ?? '??' }; }) : [];
+    return { phase, split: save.split, budget: save.budget, broken: brokenMods(mods, squad) };
+  };
   const findSigningIn = (sv: CareerSave, s: Signing): ResolvedSigning | null => {
     // O jogador é resolvido SEMPRE pelos atributos da BASE (não-envelhecida); o
     // envelhecimento é aplicado UMA vez abaixo (worldAttrsNow). Resolver pelo
@@ -5844,8 +5861,35 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
         }}
       />;
     }
+    if (orgChoice === 'cenarios') {
+      // [Modo Cenário] largada: elenco filtrado pelos mods, caixa/diretoria do cenário;
+      // Desafio da Semana = seed fixa do mundo + dificuldade normal (justo pra todos)
+      const startCenario = (c: CenarioChoice) => {
+        const tier = teamTier(c.team);
+        const base = c.team.players.slice(0, 5).map((p) => ({ p, id: p.id, age: effectiveAge(p, save.split, save.youthAge, save.youthDebut), country: p.country }));
+        const kept = startingSquad(c.mods, base);
+        const diff: Difficulty = c.weekly ? 'normal' : careerDifficulty;
+        const budget = c.mods.includes('zeroBudget') ? 0 : Math.round(cenarioBudget(c.def, tier) * DIFFICULTY_ECON[diff].startBudgetMul);
+        const run = createRun(c.def, { startSplit: save.split, startTier: tier, mods: c.mods, weekly: c.weekly?.id, seed: c.weekly?.seed });
+        const mundo0 = save.mundo ?? (migrateMundo({}).mundo as MundoState);
+        update({
+          org: { name: c.team.team, tag: c.team.tag, colors: c.team.colors, logo: c.team.logoUrl ?? logoForTeam(c.team) },
+          squad: kept.map((k) => ({ playerId: k.id, fromId: c.team.id })),
+          coachFromId: c.team.id, budget, tier, takeoverId: c.team.id,
+          region: macroRegionPlurality(c.team.players.slice(0, 5).map((p) => p.country)),
+          board: c.def.start.board ?? 60,
+          scenario: { id: c.def.id, cat: 'atual', title: c.def.title.pt, context: c.def.context.pt, goals: [], run },
+          difficulty: diff,
+          ...(c.weekly ? { mundo: { ...mundo0, seed: c.weekly.seed } } : {}),
+          foundingOpen: true,
+        });
+        if (c.weekly) void postCenStart(c.weekly.id); // largada no servidor (tempo mínimo real)
+        setStage('market');
+      };
+      return <CenariosPicker current={currentEra} tierOf={teamTier} budgetOf={cenarioBudget} logoOf={(t) => t.logoUrl ?? logoForTeam(t)} onBack={() => setOrgChoice('scenario')} onStart={startCenario} />;
+    }
     if (orgChoice === 'scenario') {
-      return <ScenarioPicker current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} difficulty={careerDifficulty} onDifficulty={setCareerDifficulty} dbSlot={dbSlot} />;
+      return <ScenarioPicker onCenarios={() => setOrgChoice('cenarios')} current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} difficulty={careerDifficulty} onDifficulty={setCareerDifficulty} dbSlot={dbSlot} />;
     }
     return (
       <CareerDashFrame onExit={onExit} title={ct('Assumir organização')}>
@@ -6345,6 +6389,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
                     circuitTier: save.circuit?.tier ?? save.tier,
                     finalPos: rec?.position ?? 99,
                     qualified: !mr.rmrOut, endTier: save.tier, wonMajor: mr.champion,
+                    ...cenCtx('m'),
                   }),
                   ...evo,
                   ...majorWindowPatch,
@@ -6760,6 +6805,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
                         qualified: false,
                         endTier: save.tier,
                         wonMajor: false,
+                        ...cenCtx('e'),
                       }),
                       ...bankStats(save, { placement: finalPos, champion: isChampion }),
                       // folga curta entre etapas: compensa ~um campeonato jogado
@@ -6937,6 +6983,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
                     ...evolveAcademy(save),
                     scenario: applyScenarioProgress(save.scenario, {
                       isChampion, circuitTier, finalPos, qualified, endTier: tierResult.tier, wonMajor: false,
+                      ...cenCtx('s'),
                     }),
                     ...bankStats(save, { placement: finalPos, champion: isChampion }),
                     ...evo,
@@ -8094,6 +8141,9 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
 
       {/* ===== VISÃO GERAL (dashboard estilo análise pós-partida) ===== */}
       {/* T1.4: aba Overview extraída em src/pages/career/OverviewTab.tsx */}
+      {hubTab === 'overview' && save.scenario?.run && (
+        <CenarioPanel run={save.scenario.run} split={save.split} onSubmitted={(score) => { const sc = save.scenario; if (sc?.run) update({ scenario: { ...sc, run: { ...sc.run, submitted: Math.max(score, sc.run.submitted ?? 0) } } }); }} />
+      )}
       {hubTab === 'overview' && (
         <OverviewTab
           save={{ ...save, fatigue: fatigueView(save, save.squad.map((sg) => sg.playerId)) } as unknown as Parameters<typeof OverviewTab>[0]['save']}
@@ -10301,8 +10351,9 @@ function TeamPickCard({
 }
 
 // ----- DESAFIOS: assumir uma org real com contexto + metas (estilo Draft) -----
-function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty, dbSlot }: {
+function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty, dbSlot, onCenarios }: {
   dbSlot?: React.ReactNode;
+  onCenarios?: () => void;
   current: TeamSeason[];
   onBack: () => void;
   onStart: (s: OrgStart) => void;
@@ -10370,6 +10421,7 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty, db
         </button>
       </header>
 
+      {onCenarios && <CenariosEntry onOpen={onCenarios} />}
       {dbSlot}
       <DifficultyPicker value={difficulty} onChange={onDifficulty} />
 
