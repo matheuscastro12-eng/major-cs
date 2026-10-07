@@ -76,7 +76,6 @@ import { GamePlanScreen } from '../pages/career/GamePlanScreen';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { isPlayerCommittedForExit, matchesNegotiationFilters, sortMarketEntries, type MarketSort } from '../engine/career/market';
 import {
-  academyAgeAfterSplit,
   ageFromCareerStart,
   effectiveAge,
   legacyYouthBaseAgeAtPromotion,
@@ -169,6 +168,7 @@ import {
 import { isNewgenId, newgenPlayer, careerYearOf, hasIntake, dropNewgens, storeNewgen } from '../engine/mundo/juventude';
 import { replayAttrs, worldEvoEntry, migrateWorldEvo as migrateWorldEvoSave, type WorldEvoMap } from '../engine/career/worldEvo';
 import { careerPotentialOvr, careerPotentialBaseOvr, registerCareerBase } from '../engine/career/potential';
+import { academyGrowthMul, evolveAcademyProspect } from '../engine/career/academyGrowth';
 import type { MundoState, WorldEventResult } from '../engine/mundo/model';
 import { JuventudeTab } from '../pages/career/JuventudeTab';
 import { getToken, useAccount } from '../state/account';
@@ -4155,20 +4155,14 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   // (antes: +1..+3 de OVR por split, outra curva): titular da equipe de base
   // (12 mapas), o centro de treino e a formação de jovens da comissão aceleram,
   // o prospecto em foco treina mais; o teto é o potencial do prospecto.
-  const evolveAcademyEntries = (entries: AcademyEntry[], s: CareerSave): AcademyEntry[] =>
-    entries.map((a) => {
-      // A idade exibida no split N representa o começo daquele split: o
-      // aniversário acontece ao fechar o último split da temporada.
-      const aged = academyAgeAfterSplit(a.age, s.split);
-      const x = attrsOf({ ...a, age: a.age });
-      const growthMul = (1 + 0.35 * (normalizeFacilities(s.facilities).training / FACILITY_MAX_LEVEL))
-        * staffEffects(s.gestao?.staff).youthGrowth;
-      const r = evolveAttrs({ ...x, pa: Math.max(x.ca, caFromOvr(a.potential)) }, {
-        playerId: a.id, split: s.split, age: a.age, role: a.role, growthMul,
-        focusPlayer: s.academyFocus === a.id,
-      });
-      return { ...a, age: aged, ...legacyFromAttrs(r.attrs), attrs: r.attrs };
+  const evolveAcademyEntries = (entries: AcademyEntry[], s: CareerSave): AcademyEntry[] => {
+    // treino de base intenso (engine/career/academyGrowth.ts): estrutura + comissão
+    const mul = academyGrowthMul(normalizeFacilities(s.facilities).training, staffEffects(s.gestao?.staff).youthGrowth);
+    return entries.map((a) => {
+      const r = evolveAcademyProspect(a, s.split, mul, s.academyFocus === a.id);
+      return { ...a, age: r.age, ...legacyFromAttrs(r.attrs), attrs: r.attrs };
     });
+  };
 
   // ── [fase 4 · juventude] ──────────────────────────────────────────────────
   // a SUA geração: país dominante do elenco, região e qualidade da comissão

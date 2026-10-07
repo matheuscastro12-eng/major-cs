@@ -2389,6 +2389,8 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Em foco (★)': { en: 'In focus (★)', es: 'En foco (★)' },
   'Em jogo': { en: 'In game', es: 'En juego' },
   'Envelhecem 1 ano por temporada (4 splits).': { en: 'Age 1 year per season (4 splits).', es: 'Envejecen 1 año por temporada (4 splits).' },
+  'Treino de base intenso': { en: 'Intense youth training', es: 'Entrenamiento juvenil intenso' },
+  'Promovidos, voltam à curva normal do elenco.': { en: 'Once promoted, they return to the squad\'s normal curve.', es: 'Al subir, vuelven a la curva normal del plantel.' },
   'Mesma curva do elenco': { en: 'Same curve as the squad', es: 'Misma curva que el plantel' },
   'por atributo': { en: 'per attribute', es: 'por atributo' },
   'reflexo e mecânica crescem cedo; leitura de jogo até os 25': { en: 'reflexes and mechanics grow early; game reading until 25', es: 'reflejos y mecánica crecen temprano; lectura de juego hasta los 25' },

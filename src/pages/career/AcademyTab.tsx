@@ -13,9 +13,7 @@
 //     Aceitar adiciona caixa + remove prospect. Recusar mantém na Academia.
 
 import { SQUAD_MAX } from '../../engine/clube/vestiario';
-import { attrsOf, caFromOvr, ovrFromAttrs } from '../../engine/attrs/model';
-import { evolveAttrs } from '../../engine/attrs/progression';
-import { academyAgeAfterSplit } from '../../engine/career/playerAge';
+import { academyGrowthMul, projectAcademyOvr } from '../../engine/career/academyGrowth';
 import { FACILITY_MAX_LEVEL } from '../../engine/career/facilities';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashCard } from '../../components/ds';
@@ -151,21 +149,11 @@ function prospectOffer(prospectId: string, split: number, ovr: number): Prospect
 // perto do potencial. Não conta a formação de jovens da comissão.
 const PROJ_SPLITS = 16;
 function projectAcademy(p: AcademyEntry, focused: boolean, trainingLv: number, split: number): { perSplit: number; splitsToMax: number | null } {
-  const growthMul = 1 + 0.35 * (trainingLv / FACILITY_MAX_LEVEL);
-  let x = attrsOf({ ...p, age: p.age });
-  let age = p.age;
-  const ovr0 = ovrFromAttrs(x);
-  let ovr4 = ovr0;
-  let reached: number | null = ovr0 >= p.potential - 1 ? 0 : null;
-  for (let i = 0; i < PROJ_SPLITS; i++) {
-    const s = split + i;
-    x = evolveAttrs({ ...x, pa: Math.max(x.ca, caFromOvr(p.potential)) }, { playerId: p.id, split: s, age, role: p.role, growthMul, focusPlayer: focused }).attrs;
-    age = academyAgeAfterSplit(age, s);
-    const o = ovrFromAttrs(x);
-    if (i === 3) ovr4 = o;
-    if (reached == null && o >= p.potential - 1) reached = i + 1;
-  }
-  return { perSplit: Math.max(0, (ovr4 - ovr0) / 4), splitsToMax: reached };
+  const ovr0 = playerOvr(p);
+  if (ovr0 >= p.potential - 1) return { perSplit: 0, splitsToMax: 0 };
+  const o = projectAcademyOvr(p, split, PROJ_SPLITS, academyGrowthMul(trainingLv), focused);
+  const i = o.findIndex((v) => v >= p.potential - 1);
+  return { perSplit: Math.max(0, (o[3] - ovr0) / 4), splitsToMax: i < 0 ? null : i + 1 };
 }
 
 // ─── Simulação ao vivo de match academy (RNG não-determinístico) ─────────────
@@ -1669,6 +1657,7 @@ const td: React.CSSProperties = { padding: '8px', textAlign: 'center' };
 // Mostra o que cada bônus contribui em OVR/split, e o estado atual da facility.
 function EvoExplainer({ trainingLv }: { trainingLv: number }) {
   const trainingPct = Math.round(35 * (trainingLv / FACILITY_MAX_LEVEL));
+  const baseMul = academyGrowthMul(0).toFixed(1);
   return (
     <div
       style={{
@@ -1690,8 +1679,8 @@ function EvoExplainer({ trainingLv }: { trainingLv: number }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
         <EvoLine
           icon="📊"
-          label={ct('Mesma curva do elenco')}
-          value={ct('por atributo')}
+          label={ct('Treino de base intenso')}
+          value={`×${baseMul}`}
           hint={ct('reflexo e mecânica crescem cedo; leitura de jogo até os 25')}
         />
         <EvoLine
@@ -1710,7 +1699,7 @@ function EvoExplainer({ trainingLv }: { trainingLv: number }) {
         />
       </div>
       <div style={{ fontSize: '0.7rem', color: 'var(--em-muted)', borderTop: '1px solid rgba(95,164,232,0.18)', paddingTop: 6, marginTop: 2 }}>
-        {ct('Desaceleram perto do')} <b style={{ color: 'var(--em-gold)' }}>{ct('potencial')}</b> {ct('e não passam dele.')} {ct('Envelhecem 1 ano por temporada (4 splits).')}
+        {ct('Desaceleram perto do')} <b style={{ color: 'var(--em-gold)' }}>{ct('potencial')}</b> {ct('e não passam dele.')} {ct('Promovidos, voltam à curva normal do elenco.')} {ct('Envelhecem 1 ano por temporada (4 splits).')}
       </div>
     </div>
   );
