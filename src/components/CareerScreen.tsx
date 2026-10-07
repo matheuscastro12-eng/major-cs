@@ -117,8 +117,13 @@ import {
   ArrowLeftRight, Award, Binoculars, BookOpen, Building2, CalendarCheck, CalendarDays, ChartColumn, ChartNoAxesColumn,
   CircleHelp, Crosshair, DoorOpen, FileSignature, Globe, GraduationCap, Sprout, House, Inbox, Layers, ListOrdered, LogOut, MessageCircle,
   Medal, Network, PenLine, RotateCcw, ScrollText, Search, Shield, ShieldHalf, Sparkles, Star, Swords, Target,
-  Trophy, UserRound, Users, Wallet,
+  Trophy, UserRound, Users, Wallet, Megaphone,
 } from 'lucide-react';
+// [super atualização 2 · mídia viva] coletivas, feed da cena e narrativas
+import { MidiaTab, PressCallout } from '../pages/career/MidiaTab';
+import { midiaAfterSeries, answerPress, type MidiaSeriesArgs } from '../engine/midia/carreira';
+import { midiaOf, type MidiaState, type PressConf, type PressFx, type PressTone } from '../engine/midia/model';
+import { preMatchConference, koStageOf, openRumorOnSquad } from '../engine/midia/midia';
 import { CareerPlayerPage, PLAYER_TABS, type PlayerTab } from './career/CareerPlayerPage';
 import { CareerTeamPage } from './career/CareerTeamPage';
 // PlayerLink: usado pela SquadTab; import movido pra page.
@@ -1134,7 +1139,12 @@ interface CareerSave {
   majorPlan?: MajorFieldPlan | null;
   majorLog?: { stage: number; field: string[]; order: string[] }[];
   majorRegion?: RmrRegion | null; // RMR que você disputa (stage 0)
+  midia?: MidiaState; // [mídia viva] confronto direto, coletivas, rumores (bloco opcional e podado)
 }
+
+// [mídia viva] listas vazias estáveis (o feed é memoizado pela referência)
+const EMPTY_RESULTS: WorldEventResult[] = [];
+const EMPTY_MOVES: { nick: string; from: string; to: string }[] = [];
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
 export type NewsCat = 'result' | 'transfer' | 'board' | 'scene' | 'social' | 'scout';
@@ -2083,7 +2093,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: ct('Técnico Iniciante'), co
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar' | 'stats' | 'youth' | 'circuito';
+type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar' | 'stats' | 'youth' | 'circuito' | 'midia';
 
 // time sintético ct('Academia') usado como origem de um prospecto promovido ao elenco
 const ACADEMY_FROM: TeamSeason = {
@@ -2998,10 +3008,51 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
         maps: series.maps.length,
         unavailable: new Set(squadIds.filter((id) => isInjured(g0.condition[id]))),
       });
-      const next = { ...current, rivalries: rivalry.rivalries, fatigue: {}, gestao, restingPlayers: [], mapStats, recentRatings, board: bd.board, boardLog: bd.boardLog, clube: { ...clubeOfSave(current), dressing }, ...pushNews(current, items) };
+      // [mídia viva] confronto direto, narrativas, coletiva e rumores da série
+      const md = midiaAfterSeries(current.midia, midiaSeriesArgs(current, { series, teams, userIdx, label: shortLabel, fullLabel: label, rivalScore: rivalry.score, recentRatings, mvp: highlight?.nick, board: bd.board }));
+      items.push(...md.news.map((x) => ({ ...x, split: current.split })));
+      const next = { ...current, rivalries: rivalry.rivalries, fatigue: {}, gestao, restingPlayers: [], mapStats, recentRatings, board: bd.board, boardLog: bd.boardLog, clube: { ...clubeOfSave(current), dressing }, midia: md.midia, ...pushNews(current, items) };
       persist(next);
       return next;
     });
+  };
+
+  // [mídia viva] argumentos da mídia para a série (lidos do save VIVO)
+  const midiaSeed = (s: CareerSave) => `${s.org?.name ?? ''}|${s.org?.tag ?? ''}|${s.mundo?.seed ?? ''}`;
+  const midiaSeriesArgs = (s: CareerSave, x: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; fullLabel: string; rivalScore: number; recentRatings: Record<string, number[]>; mvp?: string; board: number }): MidiaSeriesArgs => {
+    const u = x.teams[x.userIdx], o = x.teams[x.userIdx === 0 ? 1 : 0];
+    const won = x.series.winner === x.userIdx;
+    const nickOf = (id: string) => u.players.find((p) => careerPlayerId(p.id) === id)?.nick ?? findSigning(s.squad.find((sg) => sg.playerId === id)!)?.player.nick ?? id;
+    const squadIds = s.squad.map((sg) => sg.playerId);
+    return {
+      lang, seed: midiaSeed(s), split: s.split, tag: s.org?.tag ?? 'ORG',
+      opp: { id: o.id, tag: o.tag, nicks: o.players.map((p) => p.nick) },
+      label: x.fullLabel, shortLabel: x.label, won, sc: `${x.series.mapScore[x.userIdx]}-${x.series.mapScore[x.userIdx === 0 ? 1 : 0]}`,
+      upset: won ? u.strength + 2 < o.strength : o.strength + 2 < u.strength,
+      mvp: x.mvp, rivalScore: x.rivalScore, board: x.board,
+      squad: squadIds.map((id) => { const w = x.recentRatings[id]; return { id, nick: nickOf(id), avg: w && w.length >= 3 ? w.reduce((a, b) => a + b, 0) / w.length : undefined }; }),
+      offers: (clubeOfSave(s).market?.incoming ?? []).filter((of) => of.status === 'open').map((of) => ({ pid: of.playerId, nick: of.nick ?? nickOf(of.playerId), toId: of.fromTeamId, to: of.fromTag ?? tagOfTeam(of.fromTeamId) })),
+      world: () => oppEra.filter((t) => !t.id.startsWith('__') && t.players.length)
+        .map((t) => ({ id: t.id, tag: t.tag, players: t.players.map((p) => ({ id: p.id, nick: p.nick, ovr: playerOvr(p) })) }))
+        .sort((a, b) => b.players.reduce((q, p) => q + p.ovr, 0) / b.players.length - a.players.reduce((q, p) => q + p.ovr, 0) / a.players.length),
+      teamOf: (pid) => (squadIds.includes(pid) ? 'user' : oppEra.find((t) => t.players.some((p) => p.id === pid))?.id ?? null),
+    };
+  };
+  const midiaSquad = (s: CareerSave) => s.squad.map((sg) => {
+    const w = s.recentRatings?.[sg.playerId];
+    return { id: sg.playerId, nick: findSigning(sg)?.player.nick ?? sg.playerId, avg: w && w.length >= 3 ? w.reduce((a, b) => a + b, 0) / w.length : undefined };
+  });
+  // [mídia viva] responde (ou dispensa) a coletiva: moral, diretoria e imprensa
+  const answerMidiaPress = (conf: PressConf, picks: PressTone[] | null): PressFx => {
+    const reason = `${ct('Coletiva')}${conf.o ? ` · ${conf.o}` : ''}`;
+    const fx = answerPress(save, conf, picks, save.squad.map((sg) => sg.playerId), reason, MORALE_DEFAULT).fx;
+    setSave((s) => {
+      const r = answerPress(s, conf, picks, s.squad.map((sg) => sg.playerId), reason, MORALE_DEFAULT);
+      const next = { ...s, ...r.patch };
+      persist(next);
+      return next;
+    });
+    return fx;
   };
 
   // SÓ tempos atuais: usa EXCLUSIVAMENTE os elencos REAIS de CS2 (2026) do
@@ -7008,6 +7059,17 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
             ) : null}
           </span>
         }>
+          {(() => {
+            // [mídia viva] coletiva antes do mata-mata (ou a pendente)
+            const om = userMatch ? (userMatch.a === 'user' ? userMatch.b : userMatch.a) : null;
+            const ot = om ? teamOf(om) : null;
+            const stageLbl = !userMatch ? '' : p.final === userMatch ? 'Final' : p.qf?.includes(userMatch) ? 'Quartas' : 'Semifinal';
+            const conf = midiaOf(save).pend ?? (ot ? preMatchConference(midiaOf(save), {
+              split: save.split, matchKey: `po:${p.circuit}:${stageLbl}:${ot.id}`, oid: ot.id, o: ot.tag, label: `${p.circuit.split('·')[0].trim()} · ${ct(stageLbl)}`, k: koStageOf(stageLbl),
+              rivalScore: rivalryScore(save.rivalries, ot.id), squad: midiaSquad(save), board: save.board, rumor: openRumorOnSquad(midiaOf(save), save.squad.map((sg) => sg.playerId)),
+            }) : null);
+            return conf ? <PressCallout key={conf.key} lang={lang} conf={conf} onAnswer={answerMidiaPress} nickOf={(id) => midiaSquad(save).find((x) => x.id === id)?.nick ?? id} /> : null;
+          })()}
           <PlayoffBracket p={p} teamOf={teamOf} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />
         </DashCard>
         {selSeries && (
@@ -7051,6 +7113,13 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
 
   const spots = save.circuit?.spots ?? MAJOR_SPOTS;
   const opp = myMatch ? leagueTeam(league, myMatch.a === 'user' ? myMatch.b : myMatch.a) : null;
+  // [mídia viva] coletiva: a pendente (pós-jogo/crise/glória) ou a pré-jogo de jogo grande
+  const midiaPre = opp && myMatch ? preMatchConference(midiaOf(save), {
+    split: save.split, matchKey: `${league.name}:${league.current}:${opp.id}`, oid: opp.id, o: opp.tag, label: league.name.split('·')[0].trim(),
+    rivalScore: rivalryScore(save.rivalries, opp.id), squad: midiaSquad(save), board: save.board, rumor: openRumorOnSquad(midiaOf(save), save.squad.map((sg) => sg.playerId)),
+  }) : null;
+  const midiaPress = midiaOf(save).pend ?? midiaPre;
+  const midiaOrg = { name: save.org?.name ?? '', tag: save.org?.tag ?? 'ORG' };
   const seasonStats = seasonStatsMemo;
   const mySquadIds = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
   const mySquadOids = new Set(save.squad.map((s) => s.playerId)); // ids ORIGINAIS (relabel HLTV pra sua org)
@@ -7477,7 +7546,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   const activeSection: string =
     hubTab === 'squad' ? squadSec
       : hubTab === 'finance' ? finSec
-        : ({ overview: 'ov', inbox: 'in', calendar: 'ag', stats: 'dh', market: 'tf', academy: 'ac', youth: 'jv', history: 'hi', major: 'mj', standings: 'cl', bracket: 'cl', results: 'cl', vrs: 'vr', top20: 'vr', world: 'vr', circuito: 'ci' } as Record<HubTab, string>)[hubTab] ?? 'ov';
+        : ({ overview: 'ov', inbox: 'in', calendar: 'ag', stats: 'dh', market: 'tf', academy: 'ac', youth: 'jv', history: 'hi', major: 'mj', standings: 'cl', bracket: 'cl', results: 'cl', vrs: 'vr', top20: 'vr', world: 'vr', circuito: 'ci', midia: 'md' } as Record<HubTab, string>)[hubTab] ?? 'ov';
   const goSection = (id: string) => {
     closeCareerOverlays();
     setSelSeries(null);
@@ -7486,7 +7555,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     if (id === 'x-tr') { openTrophiesTool(); return; }
     if (SQUAD_SECS.includes(id)) { setSquadSec(id); setHubTab('squad'); return; }
     if (id === 'fi' || id === 'ct') { setFinSec(id); setHubTab('finance'); return; }
-    const map: Record<string, HubTab> = { ov: 'overview', in: 'inbox', ag: 'calendar', dh: 'stats', tf: 'market', ac: 'academy', jv: 'youth', hi: 'history', mj: 'major', cl: 'standings', vr: 'vrs', ci: 'circuito' };
+    const map: Record<string, HubTab> = { ov: 'overview', in: 'inbox', ag: 'calendar', dh: 'stats', tf: 'market', ac: 'academy', jv: 'youth', hi: 'history', mj: 'major', cl: 'standings', vr: 'vrs', ci: 'circuito', md: 'midia' };
     const tab = map[id];
     if (!tab) return;
     setHubTab(tab);
@@ -7497,6 +7566,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       { id: 'ov', label: ct('Início'), icon: House },
       { id: 'in', label: ct('Caixa de entrada'), short: ct('Caixa'), icon: Inbox, badge: unread || undefined },
       { id: 'ag', label: ct('Calendário'), icon: CalendarDays },
+      { id: 'md', label: ct('Mídia'), icon: Megaphone, badge: midiaPress ? 1 : undefined, badgeTone: 'warn' },
     ] },
     { id: 'time', label: ct('Time'), items: [
       { id: 'sq', label: ct('Elenco'), icon: Users },
@@ -7542,6 +7612,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     else goSection(id);
   };
   const shellPending: ShellPending[] = [
+    ...(midiaPress ? [{ id: 'midia', label: ct('Coletiva de imprensa aguardando você'), icon: Megaphone, tone: 'warn' as const, onGo: () => goSection('md') }] : []),
     ...(unread > 0 ? [{ id: 'inbox', label: `${unread} ${ct('mensagem(ns) nova(s) na caixa')}`, icon: Inbox, tone: 'info' as const, onGo: () => goSection('in') }] : []),
     ...(expiringCount > 0 ? [{ id: 'contracts', label: `${expiringCount} ${ct('contrato(s) vencendo')}`, icon: FileSignature, tone: 'warn' as const, onGo: () => goSection('ct') }] : []),
     // [fase 3 · vestiário] pedidos de conversa e de saída
@@ -8168,6 +8239,25 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
           onTakeToAcademy={takeNewgenToAcademy}
           onOpenPlayer={openPlayerProfile}
           onGoAcademy={() => goSection('ac')}
+        />
+      )}
+
+      {/* ===== [mídia viva] MÍDIA: sala de imprensa, feed da cena, narrativas ===== */}
+      {hubTab === 'midia' && (
+        <MidiaTab
+          lang={lang}
+          seed={midiaSeed(save)}
+          split={save.split}
+          org={midiaOrg}
+          midia={midiaOf(save)}
+          pre={midiaPre}
+          rivalries={save.rivalries}
+          results={save.mundo?.results ?? EMPTY_RESULTS}
+          lastMoves={save.lastMoves ?? EMPTY_MOVES}
+          tagOf={tagOfTeam}
+          playerOf={(teamId, salt) => { const t = oppEra.find((x) => x.id === teamId); return t?.players.length ? t.players[hashStr(salt) % t.players.length].nick : undefined; }}
+          nickOf={(id) => midiaSquad(save).find((x) => x.id === id)?.nick ?? id}
+          onAnswer={answerMidiaPress}
         />
       )}
 

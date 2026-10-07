@@ -99,7 +99,7 @@ export function answerPress(
   squadIds: string[],
   reason: string,
   moraleDefault = 70,
-): { patch: Required<Pick<PressSaveSlice, 'midia' | 'morale' | 'board' | 'boardLog'>>; fx: PressFx } {
+): { patch: { midia: MidiaState; morale: Record<string, number>; board: number; boardLog: BoardLogEntry[] }; fx: PressFx } {
   const m = s.midia && s.midia.v === 1 ? s.midia : defaultMidia();
   const fx = picks ? pressEffects(conf, picks) : SKIP_FX;
   // relação ruim com a imprensa pesa um pouco mais na diretoria

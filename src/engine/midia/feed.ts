@@ -197,7 +197,7 @@ export function buildFeed(inp: FeedInput): FeedPost[] {
     });
   });
 
-  return posts.sort((a, b) => b.ord - a.ord).slice(0, inp.limit ?? 60);
+  return posts.sort((a, b) => b.ord - a.ord).slice(0, inp.limit ?? 40);
 }
 
 export function narrativeHeadline(lang: MidiaLang, n: Narrative, tag: string, v = 0): string {

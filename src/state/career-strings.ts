@@ -3823,4 +3823,8 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'vender (85%)': { en: 'sell (85%)', es: 'vender (85%)' },
   'remover': { en: 'remove', es: 'quitar' },
   '5 titulares + até 2 reservas no banco. Clique num jogador do elenco pra vendê-lo a um clube interessado (85% do valor); contratação desta janela sai com reembolso integral.': { en: '5 starters + up to 2 subs on the bench. Click a squad player to sell him to an interested club (85% of value); signings from this window are fully refunded.', es: '5 titulares + hasta 2 suplentes en el banquillo. Haz clic en un jugador de la plantilla para venderlo a un club interesado (85% del valor); los fichajes de esta ventana tienen reembolso completo.' },
+  // [mídia viva]
+  'Mídia': { en: 'Media', es: 'Medios' },
+  'Coletiva': { en: 'Press conference', es: 'Rueda de prensa' },
+  'Coletiva de imprensa aguardando você': { en: 'Press conference waiting for you', es: 'Rueda de prensa pendiente' },
 };
