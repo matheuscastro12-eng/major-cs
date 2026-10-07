@@ -8,6 +8,7 @@ import { CAREER_STR } from './career-strings';
 
 let _lang: Lang = 'pt';
 export function setCareerLang(l: Lang): void { _lang = l; }
+export function careerLang(): Lang { return _lang; }
 
 export function ct(pt: string): string {
   if (_lang === 'pt') return pt;

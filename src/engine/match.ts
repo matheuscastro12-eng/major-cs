@@ -276,6 +276,18 @@ export interface MapSim {
   // (vale a partir do próximo round; a % mostrada já o vê)
   style?: (team: 0 | 1) => import('./gestao/model').TeamStyle | null;
   setStyle?: (team: 0 | 1, style: import('./gestao/model').TeamStyle) => void;
+  // [apresentação 2D] como o ÚLTIMO round terminou (só leitura; motor v2).
+  // Ausente no v1: o radar infere do killFeed. Ler não consome o rng.
+  lastRoundPlay?: () => RoundPlayInfo | null;
+}
+
+// Resumo de UM round jogado, para a apresentação (radar 2D). Só leitura.
+export interface RoundPlayInfo {
+  round: number;                                  // 0-based
+  end: 'elim' | 'save' | 'time' | 'explode' | 'defuse';
+  planted: boolean;
+  planterId: string | null;
+  killsBeforePlant: number;                       // quantas entradas do killFeed do round vieram antes do plant
 }
 
 // Porta ÚNICA: despacha para o motor escolhido pela flag MATCH_ENGINE (v2 por
