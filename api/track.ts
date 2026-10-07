@@ -32,6 +32,12 @@ const ALLOWED_TYPES = new Set([
   'rtp_demo',
   // [U02] funil do Ultimate: {step, mode?, won?, product_kind?, src?, method?, orderId?} — marcos por sessão, sem evento por round
   'ult_funnel',
+  // conv/loop-20261007: o botão de pagar ficava simplesmente desabilitado quando
+  // faltava algo no cadastro (e-mail, senha, confirmação ou termos), sem dizer o
+  // quê — quem travava aqui desistia em silêncio, fora do funil (paywall_view
+  // tem ~2.1k sessões/28d, signup_start menos de 50). Agora o clique é sempre
+  // aceito e mostra o motivo; este evento mede QUAL motivo trava mais gente.
+  'checkout_blocked', // {src, reason} — clicou em pagar com o cadastro incompleto
 ]);
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
