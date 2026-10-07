@@ -152,7 +152,7 @@
 
 /* ── abertura ── */
 .mj-open { position: fixed; inset: 0; z-index: var(--z-overlay); background: radial-gradient(120% 80% at 50% 0%, var(--c-shell-glow), var(--c-surface-0) 70%); display: grid; place-items: center; overflow-y: auto; padding: var(--sp-4); }
-.mj-open-arena { position: fixed; inset: auto 0 0 0; height: 46vh; opacity: 0.7; pointer-events: none; }
+.mj-open-arena { position: fixed; inset: auto 0 0 0; height: 30vh; opacity: 0.35; pointer-events: none; }
 .mj-open-card { position: relative; max-width: 760px; width: 100%; display: grid; gap: var(--sp-3); text-align: center; }
 .mj-open-kicker { margin: 0; font-size: var(--fs-1); letter-spacing: 0.3em; text-transform: uppercase; color: var(--c-brand); }
 .mj-open-title { margin: 0; font-family: var(--font-display); font-size: clamp(30px, 8vw, 64px); line-height: 1; color: var(--c-ink); text-wrap: balance; }
@@ -171,7 +171,8 @@
 .mj-odds div { display: grid; }
 .mj-odds b { font-family: var(--font-num); font-size: 32px; color: var(--c-brand); line-height: 1.1; }
 .mj-odds small { color: var(--c-ink-faint); font-size: var(--fs-1); }
-.mj-open-go { justify-self: center; min-width: 220px; min-height: 44px; }
+.mj-open-go { justify-self: center; min-width: 220px; min-height: 44px; border: 0; border-radius: var(--rad-pill); background: var(--c-brand); color: var(--c-on-brand); font: inherit; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.mj-open-go:hover { background: var(--c-brand-strong); }
 .mj-in { animation: mj-rise 0.6s var(--ease-out) both; }
 @keyframes mj-rise { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
 
@@ -192,8 +193,9 @@
 .mj-cer-grid { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: var(--sp-3); }
 .mj-cer-mvp, .mj-cer-nums { background: var(--c-surface-1); border: 1px solid var(--c-line-strong); border-radius: var(--rad-3); padding: var(--sp-3); display: grid; gap: var(--sp-2); align-content: start; }
 .mj-cer-mvp { border-color: var(--c-brand-deep); }
-.mj-cer-mvp-row { display: flex; gap: var(--sp-3); align-items: center; }
-.mj-cer-mvp-row > div { display: grid; gap: 2px; }
+.mj-cer-mvp-row { display: flex; gap: var(--sp-3); align-items: center; justify-content: flex-start; }
+.mj-cer-mvp-row > * { flex: 0 0 auto; }
+.mj-cer-mvp-row > div { display: grid; gap: 2px; justify-items: start; text-align: left; flex: 1 1 auto; min-width: 0; }
 .mj-cer-mvp-row small { color: var(--c-ink-dim); font-size: var(--fs-1); display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .mj-cer-mvp-nick { font-family: var(--font-display); font-size: var(--fs-5); color: var(--c-brand); }
 .mj-cer-nums dl { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
@@ -247,6 +249,7 @@
   .mj-open { place-items: start center; }
   .mj-open-grid { grid-template-columns: 1fr; }
   .mj-cer-grid { grid-template-columns: 1fr; }
+  .mj-cer-top { position: relative; top: 0; right: 0; justify-self: end; }
   .mj-cer-nums dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mj-cer-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mj-tree { grid-template-columns: 1fr; }

@@ -96,7 +96,7 @@ export function MajorOpening({ t, save, teamOf, odds, onClose }: {
             <small className="mj-muted">{mt('Calculada pela força dos elencos (a mesma régua do VRS), simulando o que falta do Major.')}</small>
           </section>
         </div>
-        <button type="button" className="em-btn em-btn-primary mj-open-go mj-in" style={{ animationDelay: '1.7s' }} onClick={onClose} autoFocus>
+        <button type="button" className="mj-open-go mj-in" style={{ animationDelay: '1.7s' }} onClick={onClose} autoFocus>
           {mt('Entrar na arena')}
         </button>
       </div>

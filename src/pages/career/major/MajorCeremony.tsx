@@ -78,7 +78,7 @@ export function MajorCeremony({ result, org, split, worldChampion }: CeremonyPro
               <div>
                 <b className="mj-cer-mvp-nick">{mvp.nick}</b>
                 <small><Flag cc={mvp.country} /> {teamOf(mvp.teamId).tag}</small>
-                {nums.mvp && nums.mvp.nick === mvp.nick && <small>{mt('rating')} <b>{nums.mvp.rating.toFixed(2)}</b> · {nums.mvp.kills} {mt('abates')} · {nums.mvp.maps} {mt('mapas')}</small>}
+                {nums.mvp && (nums.mvp.nick === mvp.nick || (mvpExplicit && nums.mvp.id === mvpExplicit.id)) && <small>{mt('rating')} <b>{nums.mvp.rating.toFixed(2)}</b> · {nums.mvp.kills} {mt('abates')} · {nums.mvp.maps} {mt('mapas')}</small>}
               </div>
             </div>
           </article>
