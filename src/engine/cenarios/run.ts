@@ -31,7 +31,7 @@ export function recordEvent(def: CenarioDef, run: CenarioRun, ctx: CenEventCtx):
   if (evaluateRun(def, run, ctx.split).allDone) return run; // já cumpriu tudo: congela
   const e: CenLogEntry = { s: Math.floor(ctx.split), p: ctx.phase, t: clampTier(ctx.tier), b: Math.round((Number(ctx.budget) || 0) / 1000) };
   if (ctx.isChampion) e.c = 1;
-  if (ctx.finalPos != null && ctx.phase === 'e') e.pos = Math.max(1, Math.min(64, Math.round(ctx.finalPos)));
+  if (ctx.finalPos != null) e.pos = Math.max(1, Math.min(64, Math.round(ctx.finalPos)));
   if (ctx.qualified) e.q = 1;
   if (ctx.wonMajor) e.w = 1;
   const x = (ctx.broken ?? []).filter((m) => run.mods.includes(m));
@@ -43,7 +43,7 @@ export function recordEvent(def: CenarioDef, run: CenarioRun, ctx: CenEventCtx):
 
 function objectiveDoneAt(o: ObjectiveDef, run: CenarioRun, endSplit: number, currentSplit: number): { doneAt: number | null; failed: boolean } {
   const log = run.log;
-  const closes = log.filter((e) => e.p === 's');
+  const closes = log.filter((e) => e.p !== 'e'); // 's' = split sem Major, 'm' = split fechado pelo Major
   switch (o.kind) {
     case 'reachTier': {
       const hit = closes.find((e) => e.t <= (o.param ?? 1));
@@ -61,7 +61,7 @@ function objectiveDoneAt(o: ObjectiveDef, run: CenarioRun, endSplit: number, cur
       const need = Math.max(1, o.param ?? 1);
       let n = 0;
       for (const e of log) {
-        if (e.p !== 'e') continue;
+        if (e.pos == null) continue; // só registros com resultado de etapa
         if (o.kind === 'winTitles' ? e.c : (e.pos ?? 99) <= 4) n += 1;
         if (n >= need) return { doneAt: e.s, failed: false };
       }
@@ -114,7 +114,7 @@ export function evaluateRun(def: CenarioDef, run: CenarioRun, currentSplit: numb
   let titles = 0, top4 = 0, majorQ = 0, majorW = 0;
   const qSplits = new Set<number>();
   for (const e of run.log) {
-    if (e.p === 'e') { if (e.c) titles += 1; else if ((e.pos ?? 99) <= 4) top4 += 1; }
+    if (e.pos != null) { if (e.c) titles += 1; else if (e.pos <= 4) top4 += 1; }
     if (e.q && !qSplits.has(e.s)) { qSplits.add(e.s); majorQ += 1; }
     if (e.p === 'm' && e.w) majorW += 1;
   }

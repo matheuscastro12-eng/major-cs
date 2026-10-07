@@ -5,7 +5,7 @@ import type { CenarioDef } from './types.js';
 
 export const CENARIOS: CenarioDef[] = [
   {
-    id: 'mibr_rebuild', teamName: 'MIBR', deadline: 6, difficulty: 2,
+    id: 'mibr_rebuild', teamName: 'MIBR', deadline: 8, difficulty: 2,
     start: { board: 50 },
     title: { pt: 'Reconstruir a MIBR', en: 'Rebuild MIBR', es: 'Reconstruir a MIBR' },
     tagline: { pt: 'A sigla mais pesada do Brasil, longe da elite.', en: "Brazil's heaviest badge, far from the elite.", es: 'La sigla más pesada de Brasil, lejos de la élite.' },
@@ -21,7 +21,7 @@ export const CENARIOS: CenarioDef[] = [
     ],
   },
   {
-    id: 'tier3_ao_major', teamName: 'Fluxo', deadline: 6, difficulty: 3,
+    id: 'tier3_ao_major', teamName: 'Fluxo', deadline: 8, difficulty: 3,
     start: {},
     title: { pt: 'Do Tier 3 ao Major', en: 'From Tier 3 to the Major', es: 'Del Tier 3 al Major' },
     tagline: { pt: 'Um time de acesso sul-americano e um sonho.', en: 'A South American access team and a dream.', es: 'Un equipo sudamericano de acceso y un sueño.' },
@@ -37,7 +37,7 @@ export const CENARIOS: CenarioDef[] = [
     ],
   },
   {
-    id: 'org_sem_caixa', teamName: 'paiN', deadline: 6, difficulty: 2,
+    id: 'org_sem_caixa', teamName: 'paiN', deadline: 8, difficulty: 2,
     start: { budget: 80_000, board: 40 },
     title: { pt: 'Salvar uma org sem caixa', en: 'Save a broke org', es: 'Salvar una org sin caja' },
     tagline: { pt: 'Salários atrasados, patrocínio saindo, elenco bom.', en: 'Late wages, sponsors leaving, a good roster.', es: 'Salarios atrasados, patrocinios yéndose, buena plantilla.' },
@@ -53,14 +53,14 @@ export const CENARIOS: CenarioDef[] = [
     ],
   },
   {
-    id: 'dinastia_vitality', teamName: 'Vitality', deadline: 9, difficulty: 3,
+    id: 'dinastia_vitality', teamName: 'Vitality', deadline: 8, difficulty: 3,
     start: { board: 70 },
     title: { pt: 'Dinastia: Vitality no topo', en: 'Dynasty: Vitality on top', es: 'Dinastía: Vitality en la cima' },
     tagline: { pt: 'O melhor time do mundo, envelhecendo.', en: 'The best team in the world, getting older.', es: 'El mejor equipo del mundo, envejeciendo.' },
     context: {
-      pt: 'A Vitality é a número 1 do mundo, mas o núcleo está envelhecendo e todo mundo quer derrubar o rei. Três temporadas para manter a dinastia de pé e renovar o elenco no caminho.',
-      en: "Vitality is world number one, but the core is aging and everyone wants to dethrone the king. Three seasons to keep the dynasty standing and refresh the roster along the way.",
-      es: 'Vitality es la número 1 del mundo, pero el núcleo envejece y todos quieren derribar al rey. Tres temporadas para mantener la dinastía y renovar la plantilla en el camino.',
+      pt: 'A Vitality é a número 1 do mundo, mas o núcleo está envelhecendo e todo mundo quer derrubar o rei. Duas temporadas para manter a dinastia de pé e renovar o elenco no caminho.',
+      en: "Vitality is world number one, but the core is aging and everyone wants to dethrone the king. Two seasons to keep the dynasty standing and refresh the roster along the way.",
+      es: 'Vitality es la número 1 del mundo, pero el núcleo envejece y todos quieren derribar al rey. Dos temporadas para mantener la dinastía y renovar la plantilla en el camino.',
     },
     objectives: [
       { id: 'stay', kind: 'stayTier1', pts: 300, text: { pt: 'Terminar todos os splits no Tier 1', en: 'Finish every split in Tier 1', es: 'Terminar todos los splits en el Tier 1' } },
@@ -69,7 +69,7 @@ export const CENARIOS: CenarioDef[] = [
     ],
   },
   {
-    id: 'furia_major', teamName: 'FURIA', deadline: 3, difficulty: 3,
+    id: 'furia_major', teamName: 'FURIA', deadline: 4, difficulty: 3,
     start: { board: 55 },
     title: { pt: 'FURIA: o Major que falta', en: 'FURIA: the missing Major', es: 'FURIA: el Major que falta' },
     tagline: { pt: 'Uma temporada. Um troféu que o Brasil espera.', en: 'One season. One trophy Brazil is waiting for.', es: 'Una temporada. Un trofeo que Brasil espera.' },
@@ -85,7 +85,7 @@ export const CENARIOS: CenarioDef[] = [
     ],
   },
   {
-    id: 'falcons_superteam', teamName: 'Falcons', deadline: 3, difficulty: 2,
+    id: 'falcons_superteam', teamName: 'Falcons', deadline: 4, difficulty: 2,
     start: { budget: 400_000, board: 45 },
     title: { pt: 'Falcons: superteam sem desculpa', en: 'Falcons: no-excuse superteam', es: 'Falcons: superteam sin excusas' },
     tagline: { pt: 'Folha milionária, paciência zero.', en: 'Million-dollar payroll, zero patience.', es: 'Planilla millonaria, paciencia cero.' },

@@ -34,7 +34,7 @@ export interface CenarioDef {
   title: L;
   context: L;
   tagline: L;             // frase curta do card
-  deadline: number;       // prazo em splits (3 splits = 1 temporada)
+  deadline: number;       // prazo em splits (4 splits = 1 temporada; o 4º fecha no Major)
   start: { budget?: number; board?: number };
   objectives: ObjectiveDef[];
   difficulty: 1 | 2 | 3;  // estrelas de dificuldade (só exibição)
@@ -43,7 +43,11 @@ export interface CenarioDef {
 export type ModifierId = 'sub21' | 'zeroBudget' | 'national';
 export interface ModifierDef { id: ModifierId; mult: number; title: L; desc: L }
 
-/** Uma linha do log: um fechamento de etapa ('e'), de split ('s') ou do Major ('m'). */
+/**
+ * Uma linha do log: fechamento de etapa ('e'), de split sem Major ('s') ou do
+ * split pelo Major ('m'). 's' e 'm' também trazem o resultado da ÚLTIMA etapa
+ * do split (pos/c), então um split tem até 3 registros com `pos`.
+ */
 export interface CenLogEntry {
   s: number;              // split
   p: 'e' | 's' | 'm';

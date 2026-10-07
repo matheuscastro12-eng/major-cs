@@ -6,18 +6,21 @@ import {
   weeklyChallenge, weeklyFromId, weeklyId, multiplierOf, brokenMods, startingSquad, normalizeMods, parseRun,
   type CenarioDef, type CenarioRun, type CenEventCtx,
 } from '../src/engine/cenarios/index.js';
+import { MAJOR_EVERY } from '../src/engine/mundo/circuito.js';
+import { CEN_MAJOR_EVERY } from '../src/engine/cenarios/validate.js';
 import { acceptWeek, cenarioBoard, cenarioMe, cenarioStart, cenarioSubmit, maybeCleanup, resetCleanupClock, retentionCutoffId } from './cenarios.js';
 import type { SqlTag } from './ultimate-economy.js';
 
 const def = cenarioById('mibr_rebuild')!;
 const ev = (split: number, o: Partial<CenEventCtx> = {}): CenEventCtx => ({ phase: 'e', split, finalPos: 6, tier: 2, budget: 1_000_000, ...o });
 
-/** simula um split: 3 etapas + fechamento (+ Major) */
+/** simula um split: 2 etapas + fechamento (com a 3ª etapa); Major só nos splits de Major */
 function playSplit(d: CenarioDef, run: CenarioRun, split: number, o: { champ?: number; tier: number; q?: boolean; wonMajor?: boolean; budget?: number }): CenarioRun {
   let r = run;
-  for (let i = 0; i < 3; i++) r = recordEvent(d, r, ev(split, { isChampion: i === 0 && (o.champ ?? 0) > 0, finalPos: i === 0 && (o.champ ?? 0) > 0 ? 1 : 5, tier: r.log.length ? r.log[r.log.length - 1].t : r.startTier, budget: o.budget ?? 1_000_000 }));
-  r = recordEvent(d, r, { phase: 's', split, tier: o.tier, budget: o.budget ?? 1_000_000, qualified: o.q });
-  if (o.q) r = recordEvent(d, r, { phase: 'm', split, tier: o.tier, budget: o.budget ?? 1_000_000, qualified: true, wonMajor: o.wonMajor });
+  const tierNow = () => (r.log.length ? r.log[r.log.length - 1].t : r.startTier);
+  for (let i = 0; i < 2; i++) r = recordEvent(d, r, ev(split, { isChampion: i === 0 && (o.champ ?? 0) > 0, finalPos: i === 0 && (o.champ ?? 0) > 0 ? 1 : 5, tier: tierNow(), budget: o.budget ?? 1_000_000 }));
+  const major = !!o.q && split % 4 === 0;
+  r = recordEvent(d, r, { phase: major ? 'm' : 's', split, finalPos: 6, tier: o.tier, budget: o.budget ?? 1_000_000, qualified: o.q, wonMajor: major && o.wonMajor });
   return r;
 }
 
@@ -43,13 +46,13 @@ test('objetivos com prazo: cumpridos, velocidade e nota A; nada conta fora do pr
   assert.equal(recordEvent(def, run, ev(6)).log.length, run.log.length);
   // fora do prazo não registra
   const late = createRun(def, { startSplit: 1, startTier: 2, mods: [] });
-  assert.equal(recordEvent(def, late, ev(7)).log.length, 0);
+  assert.equal(recordEvent(def, late, ev(9)).log.length, 0);
 });
 
 test('nota B/C e medalha; stayTier1 só fecha no fim e falha ao cair', () => {
   let run = createRun(def, { startSplit: 1, startTier: 2, mods: [] });
-  for (let s = 1; s <= 6; s++) run = playSplit(def, run, s, { champ: s === 2 ? 1 : 0, tier: 2 });
-  const r = evaluateRun(def, run, 7);
+  for (let s = 1; s <= 8; s++) run = playSplit(def, run, s, { champ: s === 2 ? 1 : 0, tier: 2 });
+  const r = evaluateRun(def, run, 9);
   assert.equal(r.finished, true);
   assert.equal(r.objPts, 200);
   assert.equal(r.grade, 'C');
@@ -97,7 +100,9 @@ test('plausibilidade: logs impossíveis são recusados', () => {
   assert.equal(validateLog(def, mk([1, 2, 3, 4].map(() => ({ s: 1, p: 'e' as const, pos: 1, c: 1 as const, t: 2, b: 100 })))), 'too_many_events');
   assert.equal(validateLog(def, mk([{ s: 1, p: 's', t: 2, b: 1 }, { s: 1, p: 's', t: 1, b: 1 }])), 'too_many_closes');
   assert.equal(validateLog(def, mk([{ s: 1, p: 's', t: 3, b: 1 }, { s: 2, p: 's', t: 1, b: 1 }])), 'tier_jump');
-  assert.equal(validateLog(def, mk([{ s: 1, p: 'm', w: 1, t: 2, b: 1 }])), 'major_won_not_qualified');
+  assert.equal(validateLog(def, mk([{ s: 4, p: 'm', w: 1, t: 2, b: 1 }])), 'major_won_not_qualified');
+  assert.equal(validateLog(def, mk([{ s: 1, p: 'm', q: 1, t: 2, b: 1 }])), 'too_many_majors'); // Major fora do split de Major
+  assert.equal(CEN_MAJOR_EVERY, MAJOR_EVERY);
   assert.equal(validateLog(def, mk([{ s: 9, p: 'e', pos: 2, t: 2, b: 1 }])), 'split_out_of_range');
   assert.equal(validateLog(def, mk([{ s: 2, p: 's', t: 2, b: 1 }, { s: 1, p: 's', t: 2, b: 1 }])), 'out_of_order');
   // run de verdade passa e o teto cobre
