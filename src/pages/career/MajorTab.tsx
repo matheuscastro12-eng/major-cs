@@ -95,6 +95,7 @@ export function MajorTab({ majorT, save, playMajorMine, simMajorRound, setSelSer
         career={{ season: save.split, titles: save.titles, budget: save.budget }}
         pickem={pick.hub}
         onPick={pick.onPick}
+        hideBracket
         onPlay={playMajorMine}
         onSimRound={simMajorRound}
         onStats={() => {}}

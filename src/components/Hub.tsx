@@ -16,6 +16,8 @@ interface Props {
   onSimRound: () => void;
   onStats: () => void;
   onOpenSeries: (p: Pairing) => void;
+  /** [Major espetáculo] a Carreira mostra a chave nova (MajorSpectacle) no lugar desta */
+  hideBracket?: boolean;
 }
 
 function MatchLine({
@@ -79,7 +81,7 @@ function MatchLine({
   );
 }
 
-export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, onOpenSeries }: Props) {
+export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, onOpenSeries, hideBracket }: Props) {
   const { t: tr } = useLang();
   const up = userPairing(t);
   const user = getTeam(t, 'user');
@@ -130,7 +132,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
         </div>
       </div>
 
-      <TournamentBracket t={t} onOpen={onOpenSeries} />
+      {!hideBracket && <TournamentBracket t={t} onOpen={onOpenSeries} />}
 
       {inSwiss && (
         <div className="panel">
