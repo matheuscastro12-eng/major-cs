@@ -22,6 +22,7 @@
 import { ALL_ATTRS, type AttrKey } from '../attributes';
 import { hashStr } from '../../state/hash';
 import type { Role } from '../../types';
+import { SPLITS_PER_YEAR } from '../clock';
 import {
   caFromOvr, legacyFromA, ovrFromLegacy, LEGACY_GROUP_OF,
   type LegacyStats, type PlayerAttrs,
@@ -42,25 +43,54 @@ export const ATTR_CLASS_LABEL: Record<AttrClass, string> = {
   reflex: 'Reflexo', mechanical: 'Mecânica', mental: 'Leitura de jogo', leadership: 'Liderança',
 };
 
+// [evolução · out/2026] As curvas são escritas POR ANO (chance de +1/−1 num
+// atributo ao longo de um ano) e divididas pelos splits do ano (engine/clock.ts:
+// 1 ano = 1 temporada = 4 splits). Recalibradas com o diagnóstico da evolução:
+//   - crescimento jovem ~metade do antigo e ESPALHADO até os 23–25 (antes um
+//     jovem de 17 batia o PA aos 20 e estacionava);
+//   - queda de reflexo a partir dos 25 e da mecânica a partir dos 27; leitura de
+//     jogo segura até os ~31 e liderança até os ~34.
+// Medido em scripts/test-evolucao.mts: 27–29 cai 0,5–1 OVR/ano, 33+ cai 3–4,5.
+type Band = [maxAge: number, perYear: number][];
+const GROWTH_PER_YEAR: Record<AttrClass, Band> = {
+  reflex: [[19, 0.47], [21, 0.4], [23, 0.26], [24, 0.1], [99, 0]],
+  mechanical: [[19, 0.5], [21, 0.44], [23, 0.34], [25, 0.18], [99, 0]],
+  mental: [[21, 0.44], [25, 0.3], [29, 0.15], [31, 0.08], [99, 0]],
+  leadership: [[21, 0.3], [27, 0.25], [31, 0.18], [33, 0.1], [99, 0]],
+};
+const DECLINE_PER_YEAR: Record<AttrClass, Band> = {
+  reflex: [[24, 0], [26, 0.3], [28, 0.55], [30, 0.8], [32, 1.1], [99, 1.4]],
+  mechanical: [[26, 0], [28, 0.25], [30, 0.45], [32, 0.7], [34, 1.05], [99, 1.3]],
+  mental: [[30, 0], [32, 0.12], [34, 0.35], [99, 0.6]],
+  leadership: [[33, 0], [99, 0.25]],
+};
+const bandAt = (b: Band, age: number) => (b.find(([max]) => age <= max) ?? b[b.length - 1])[1];
+
+const unit = (seed: string) => (hashStr(seed) % 10_000) / 10_000;
+const REF_MAPS = 12; // um split cheio de titular (~3 etapas)
+
 // Chance por split de +1 num atributo (antes dos multiplicadores), por idade.
 export function classGrowth(cls: AttrClass, age: number): number {
-  switch (cls) {
-    case 'reflex': return age <= 19 ? 0.4 : age <= 21 ? 0.25 : age <= 22 ? 0.05 : 0;
-    case 'mechanical': return age <= 19 ? 0.45 : age <= 21 ? 0.4 : age <= 23 ? 0.06 : age <= 25 ? 0.03 : 0;
-    case 'mental': return age <= 21 ? 0.35 : age <= 25 ? 0.07 : age <= 29 ? 0.05 : age <= 31 ? 0.03 : 0;
-    case 'leadership': return age <= 21 ? 0.2 : age <= 27 ? 0.1 : age <= 31 ? 0.08 : age <= 33 ? 0.04 : 0;
-  }
+  return bandAt(GROWTH_PER_YEAR[cls], age) / SPLITS_PER_YEAR;
 }
 
 // Chance por split de −1 num atributo, pela idade EFETIVA (idade − longevidade).
 export function classDecline(cls: AttrClass, age: number): number {
-  switch (cls) {
-    case 'reflex': return age < 25 ? 0 : age <= 27 ? 0.06 : age <= 29 ? 0.14 : age <= 31 ? 0.24 : 0.34;
-    case 'mechanical': return age < 28 ? 0 : age <= 29 ? 0.04 : age <= 31 ? 0.1 : age <= 33 ? 0.2 : 0.3;
-    case 'mental': return age < 32 ? 0 : age <= 33 ? 0.04 : age <= 35 ? 0.1 : 0.2;
-    case 'leadership': return age < 35 ? 0 : 0.08;
-  }
+  return bandAt(DECLINE_PER_YEAR[cls], age) / SPLITS_PER_YEAR;
 }
+
+/**
+ * [evolução · desempenho] Multiplicador do crescimento pelo rating do split:
+ * rating 1.00 = neutro; cada 0,1 acima soma 8% (até +20%), abaixo tira (até
+ * −15%), ponderado pela rodagem (12 mapas = split cheio). A IA é neutra (1).
+ */
+export function perfMul(rating: number | undefined, maps: number | undefined): number {
+  if (rating == null || !Number.isFinite(rating)) return 1;
+  const play = Math.min(1, Math.max(0, (maps ?? REF_MAPS) / REF_MAPS));
+  return Math.max(0.85, Math.min(1.2, 1 + 0.8 * (rating - 1) * play));
+}
+/** IGL envelhece melhor na mecânica e no reflexo (a função não pede o duelo de entrada). */
+export const IGL_PHYSICAL_DECLINE = 0.75;
 
 /** Anos que a longevidade (determinística por jogador) adia o declínio: −1..+3. */
 export function longevityShift(playerId: string): number {
@@ -87,6 +117,12 @@ export interface EvolveContext {
    * segura um pouco o declínio dele. Ausente = neutro.
    */
   trainMul?: Partial<Record<AttrKey, number>>;
+  /**
+   * [evolução · desempenho] Rating médio do jogador no split que fecha
+   * (1.00 = neutro). Bom rating acelera o crescimento (até +20%) e boa forma
+   * segura a queda (até −20%). Ausente = neutro (a IA não usa).
+   */
+  rating?: number;
 }
 
 export interface EvolveResult {
@@ -99,8 +135,6 @@ export interface EvolveResult {
   atCeiling: boolean;
 }
 
-const unit = (seed: string) => (hashStr(seed) % 10_000) / 10_000;
-const REF_MAPS = 12; // um split cheio de titular (~3 etapas)
 
 function roll(mu: number, seed: string): number {
   if (mu === 0) return 0;
@@ -125,13 +159,19 @@ export function evolveAttrs(x: PlayerAttrs, ctx: EvolveContext): EvolveResult {
   const play = Math.min(1, Math.max(0, maps / REF_MAPS));
   const caBefore = caFromOvr(ovrBefore);
   const headroom = x.pa - caBefore;
-  const roomF = headroom <= 0 ? 0 : Math.max(0.15, Math.min(1, headroom / 12));
+  // espaço até o teto: o crescimento desacelera nos últimos 30 pontos de CA
+  // (≈ 9 de OVR) — antes (÷12) o jovem corria até o PA e parava de uma vez
+  const roomF = headroom <= 0 ? 0 : Math.max(0.1, Math.min(1, headroom / 30));
+  const pm = perfMul(ctx.rating, ctx.mapsPlayed);
+  // boa forma segura a queda (até −20% com o bônus cheio); má forma não acelera
+  const formHold = pm > 1 ? 1 - (pm - 1) : 1;
+  const igl = ctx.role === 'IGL';
 
   const a = { ...x.a };
   const deltas: Partial<Record<AttrKey, number>> = {};
   for (const k of ALL_ATTRS) {
     const cls = ATTR_CLASS[k];
-    let g = classGrowth(cls, ctx.age) * profGrowth * (ctx.growthMul ?? 1);
+    let g = classGrowth(cls, ctx.age) * profGrowth * (ctx.growthMul ?? 1) * pm;
     // rodagem: jogar dá leitura de jogo; mecânica depende menos disso (titular
     // regular = 1; banco inteiro: leitura ×0,4, mecânica ×0,7)
     g *= cls === 'mental' || cls === 'leadership' ? 0.4 + 0.6 * play : 0.7 + 0.3 * play;
@@ -141,7 +181,8 @@ export function evolveAttrs(x: PlayerAttrs, ctx: EvolveContext): EvolveResult {
     g *= tm;
     // teto: sem espaço, o crescimento só entra para repor declínio (via trim)
     g *= headroom > 0 ? roomF : 0.5;
-    let d = classDecline(cls, effAge) * profDecline;
+    let d = classDecline(cls, effAge) * profDecline * formHold;
+    if (igl && (cls === 'reflex' || cls === 'mechanical')) d *= IGL_PHYSICAL_DECLINE;
     if (ctx.focusPlayer) d *= 0.6; // veterano em foco treina pra perder menos
     if (tm !== 1) d *= Math.max(0.8, Math.min(1.1, 1.15 - 0.15 * tm)); // treinar o atributo segura a queda
     const step = roll(g, `evo:${ctx.playerId}:${ctx.split}:${k}:g`) - roll(d, `evo:${ctx.playerId}:${ctx.split}:${k}:d`);

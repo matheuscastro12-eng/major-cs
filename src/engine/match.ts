@@ -187,7 +187,7 @@ function effStrength(
 
   // estilo do coach
   const c = team.coach;
-  const cPow = Math.max(0, (c.rating - 75) / 12);
+  const cPow = c.pow ?? Math.max(0, (c.rating - 75) / 12); // [equilíbrio] potência pelo atributo da função
   if (c.style === 'tactical' && pickedOwnMap) s += 1.2 + cPow;
   if (c.style === 'tactical' && !flags.hasIgl) s += 1.2;
   if (c.style === 'aggressive' && side === 't') s += 0.9 + cPow * 0.6;
@@ -272,6 +272,10 @@ export interface MapSim {
   lastSite: () => SiteRound | null; // #20: leitura de site do ÚLTIMO round jogado
   stats: () => Record<string, PlayerMapStats>; // stats acumuladas ao vivo
   result: () => MapResult; // disponível quando done()
+  // [estilo de jogo] só o motor v2 com tática: estilo atual do time e troca ao vivo
+  // (vale a partir do próximo round; a % mostrada já o vê)
+  style?: (team: 0 | 1) => import('./gestao/model').TeamStyle | null;
+  setStyle?: (team: 0 | 1, style: import('./gestao/model').TeamStyle) => void;
 }
 
 // Porta ÚNICA: despacha para o motor escolhido pela flag MATCH_ENGINE (v2 por

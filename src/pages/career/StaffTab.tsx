@@ -29,6 +29,8 @@ import type { CustomDatabase } from '../../engine/mundo/model';
 import { applyCustomDatabase, resolveCareerDatabase } from '../../engine/mundo/editor';
 import { CS2_REAL_2026 } from '../../data/bo3';
 import { formatMoney } from '../../engine/ratings';
+import { coachForMatch, coachMatchImpact, stylePower, STYLE_ATTR } from '../../engine/career/equilibrio';
+import type { CoachStyle } from '../../types';
 import { ct } from '../../state/career-i18n';
 import '../../styles/staff.css';
 
@@ -91,6 +93,24 @@ function effectDelta(r: EffectRow, a: StaffEffects, b: StaffEffects): number {
   return r.kind === 'lowerBetter' ? -d : d;
 }
 
+// [equilíbrio] o que o técnico rende NA PARTIDA (bônus-base + estilo pela potência)
+const STYLE_LABEL: Record<CoachStyle, string> = { tactical: 'Tático', aggressive: 'Agressivo', discipline: 'Disciplinador' };
+const STYLE_WHAT: Record<CoachStyle, string> = {
+  tactical: 'Forte no mapa que vocês escolhem e quando falta IGL. Potência pela Tática.',
+  aggressive: 'Pressão no lado T e compra forçada mais cedo. Potência pela Motivação.',
+  discipline: 'Recupera o time depois de perder um round. Potência pela Disciplina.',
+};
+const COACH_STYLES: CoachStyle[] = ['tactical', 'aggressive', 'discipline'];
+const decTxt = (v: number) => { const x = Math.abs(v).toFixed(1); return ct('de força') === 'de força' ? x.replace('.', ',') : x; };
+export function coachImpactOf(m: StaffMember, style?: CoachStyle) {
+  return coachMatchImpact(coachForMatch(coachFromStaff(m), style ? { ...m, style } : m));
+}
+export function matchLine(i: { points: number; pp: number }): string {
+  const sign = i.points > 0 ? '+' : i.points < 0 ? '−' : '±';
+  const ppSign = i.pp > 0 ? '+' : i.pp < 0 ? '−' : '±';
+  return `${ct('Na partida:')} ${sign}${decTxt(i.points)} (≈ ${ppSign}${Math.abs(i.pp)} ${ct('pp por série')})`;
+}
+
 const keyAttrs = (role: StaffRole): StaffAttrKey[] =>
   (Object.entries(ROLE_WEIGHTS[role]) as [StaffAttrKey, number][]).sort((x, y) => y[1] - x[1]).map(([k]) => k);
 
@@ -133,6 +153,17 @@ export function StaffTab({ save, sponsorIncome, update }: Props) {
   const payroll = staffPayroll(staff);
   const cap = staffWageCap({ tier: save.tier, board: save.board, sponsorIncome });
   const expiring = members.filter((m) => staffContractLeft(m, split) <= 1 && m.role !== 'headCoach');
+  const headCoach = members.find((m) => m.role === 'headCoach');
+  const coachImpact = headCoach ? coachImpactOf(headCoach) : null;
+  // [equilíbrio] o estilo (a função) do técnico é escolha sua; a potência vem do atributo certo
+  const setCoachStyle = (style: CoachStyle) => {
+    if (!headCoach || headCoach.style === style) return;
+    const next = { ...staff, members: members.map((x) => (x.id === headCoach.id ? { ...x, style } : x)) };
+    const custom = save.coachFromId === CUSTOM_COACH_ID && save.customCoach ? { customCoach: { ...(save.customCoach as object), style } } : {};
+    update({ gestao: { ...gestao, staff: next }, ...custom });
+    setPicked((p) => (p && p.m.id === headCoach.id ? { ...p, m: { ...p.m, style } } : p));
+    toast.success(`${ct('Estilo do técnico')}: ${ct(STYLE_LABEL[style])}`);
+  };
 
   // [fase 4 · editor] base da Carreira (a customizada congelada no save, se houver)
   const dbSnap = (save.mundo as { database?: CustomDatabase | null } | undefined)?.database ?? null;
@@ -250,6 +281,14 @@ export function StaffTab({ save, sponsorIncome, update }: Props) {
     { key: 'nota', header: ct('Nota'), num: true, sort: rating, cell: (m) => <AttrValue value={rating(m)} /> },
     { key: 'keys', header: ct('Pontos do cargo'), cell: strengths },
     { key: 'wage', header: ct('Pede/split'), num: true, sort: (m) => m.wage, cell: (m) => <span className={payroll + m.wage > cap && m.role !== 'headCoach' ? 'staff-warn' : undefined}>{formatMoney(m.wage)}</span> },
+    {
+      key: 'match', header: ct('Na partida'), num: true, sort: (m) => (m.role === 'headCoach' ? coachImpactOf(m).points : -99),
+      cell: (m) => {
+        if (m.role !== 'headCoach') return <span className="ds-dim">—</span>;
+        const i = coachImpactOf(m);
+        return <span className="staff-match-cell" data-tone={i.points > 0 ? 'up' : i.points < 0 ? 'down' : 'flat'} title={matchLine(i)}>{i.points > 0 ? '+' : i.points < 0 ? '−' : '±'}{decTxt(i.points)} <small>≈{i.pp > 0 ? '+' : i.pp < 0 ? '−' : '±'}{Math.abs(i.pp)} pp</small></span>;
+      },
+    },
   ];
 
   const payTone = payroll > cap ? 'loss' : payroll > cap * 0.85 ? 'warn' : 'accent';
@@ -268,6 +307,12 @@ export function StaffTab({ save, sponsorIncome, update }: Props) {
 
       <div className="staff-grid">
         <Panel icon={<BadgeCheck size={16} />} title={ct('O que a comissão rende')} className="staff-effects">
+          {headCoach && (
+            <p className="staff-match" data-tone={coachImpact!.points > 0 ? 'up' : coachImpact!.points < 0 ? 'down' : 'flat'}>
+              <b>{matchLine(coachImpact!)}</b>
+              <small>{`${ct('Técnico')} ${headCoach.nick ?? headCoach.name} · ${ct(STYLE_LABEL[headCoach.style ?? 'tactical'])}. ${ct('Técnico de nota 10 = 0; o analista melhora a leitura automática do adversário.')}`}</small>
+            </p>
+          )}
           <p className="staff-note">{ct('Contra a comissão mediana (100%). Cargo vago é coberto no improviso e rende abaixo.')}</p>
           <ul className="staff-eff-list">
             {EFFECT_ROWS.map((r) => {
@@ -375,6 +420,7 @@ export function StaffTab({ save, sponsorIncome, update }: Props) {
           onHire={doHire}
           onFire={doFire}
           onRenew={doRenew}
+          onStyle={setCoachStyle}
         />
       )}
     </div>
@@ -382,7 +428,7 @@ export function StaffTab({ save, sponsorIncome, update }: Props) {
 }
 
 // ── Perfil do membro / candidato (sheet) ──
-function StaffProfile({ pick, staff, effects, split, budget, cap, onClose, onHire, onFire, onRenew }: {
+function StaffProfile({ pick, staff, effects, split, budget, cap, onClose, onHire, onFire, onRenew, onStyle }: {
   pick: NonNullable<Picked>;
   staff: StaffState;
   effects: StaffEffects;
@@ -393,6 +439,7 @@ function StaffProfile({ pick, staff, effects, split, budget, cap, onClose, onHir
   onHire: (m: StaffMember, term: number, replaceId?: string) => void;
   onFire: (m: StaffMember) => void;
   onRenew: (m: StaffMember) => void;
+  onStyle: (style: CoachStyle) => void;
 }) {
   const { m, mode } = pick;
   const [term, setTerm] = useState<'1' | '2' | '3'>('2');
@@ -464,6 +511,30 @@ function StaffProfile({ pick, staff, effects, split, budget, cap, onClose, onHir
             </section>
           ))}
         </div>
+
+        {m.role === 'headCoach' && (
+          <section className="staff-coach-style">
+            <h3 className="ds-eyebrow">{ct('Estilo do técnico na partida')}</h3>
+            <p className="staff-match" data-tone={coachImpactOf(m).points > 0 ? 'up' : coachImpactOf(m).points < 0 ? 'down' : 'flat'}><b>{matchLine(coachImpactOf(m))}</b></p>
+            {mode === 'member' ? (
+              <div className="staff-style-list" role="radiogroup" aria-label={ct('Estilo do técnico na partida')}>
+                {COACH_STYLES.map((st) => {
+                  const on = (m.style ?? 'tactical') === st;
+                  const pow = stylePower(m.attrs[STYLE_ATTR[st]]);
+                  return (
+                    <button key={st} type="button" role="radio" aria-checked={on} className={`staff-style${on ? ' is-on' : ''}`} onClick={() => onStyle(st)}>
+                      <b>{ct(STYLE_LABEL[st])}</b>
+                      <small>{ct(STYLE_WHAT[st])}</small>
+                      <span className="staff-style__pow">{ct(ATTR_LABEL[STYLE_ATTR[st]])} {m.attrs[STYLE_ATTR[st]]} · {ct('potência')} {decTxt(pow)} · {matchLine(coachImpactOf(m, st)).replace(`${ct('Na partida:')} `, '')}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="staff-note">{`${ct('Estilo')}: ${ct(STYLE_LABEL[m.style ?? 'tactical'])}. ${ct('Depois de contratado, você escolhe o estilo; a potência vem do atributo dele.')}`}</p>
+            )}
+          </section>
+        )}
 
         <section className="staff-impact">
           <h3 className="ds-eyebrow">{mode === 'member' ? ct('O que ele rende na comissão') : ct('O que muda se contratar')}</h3>

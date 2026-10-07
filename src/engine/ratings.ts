@@ -277,8 +277,32 @@ export function teamSeasonToTTeam(ts: TeamSeason): TTeam {
   };
 }
 
-export function coachBaseBonus(coach: Coach): number {
-  return Math.max(0, (coach.rating - 75) / 10);
+// [equilíbrio] Bônus-base do técnico na força, SIMÉTRICO em torno da mediana do
+// mercado (rating 66 = nota 10 na comissão = 0): técnico fraco tira um pouco,
+// técnico de elite soma até +2,5. Antes era zero abaixo de 75 — a maioria dos
+// técnicos (mediana real ~60) não fazia diferença nenhuma na partida.
+// Divisor 18 (e não 9): calibrado no espelho para técnico nota 18 × nota 10 dar
+// +8 a +10 pp numa MD3 (com o estilo) e nota 5 dar −3 a −4 pp.
+export const COACH_MEDIAN_RATING = 66;
+export const COACH_BONUS_DIV = 18;
+export const COACH_BONUS_MIN = -0.7;
+export const COACH_BONUS_MAX = 2.5;
+export function coachBaseBonus(coach: Pick<Coach, 'rating'> | null | undefined): number {
+  const r = typeof coach?.rating === 'number' && Number.isFinite(coach.rating) ? coach.rating : COACH_MEDIAN_RATING;
+  return Math.max(COACH_BONUS_MIN, Math.min(COACH_BONUS_MAX, (r - COACH_MEDIAN_RATING) / COACH_BONUS_DIV));
+}
+
+/** Bônus do técnico de antes do equilíbrio (zero abaixo de 75) — só para o split de transição. */
+export function legacyCoachBonus(coach: Pick<Coach, 'rating'> | null | undefined): number {
+  return Math.max(0, ((coach?.rating ?? 75) - 75) / 10);
+}
+
+// [equilíbrio] ESCALA ÚNICA da Carreira: a força de qualquer time — seu ou da
+// IA — é jogadores (com o entrosamento) + técnico. A sinergia do elenco não soma
+// por fora: ela entra no entrosamento (que vale 0,28 por ponto na força e ainda
+// mexe nas trocas do motor). É a mesma conta do teamSeasonToTTeam.
+export function careerStrength(players: TPlayer[], teamwork: number, coach: Pick<Coach, 'rating'> | null | undefined): number {
+  return teamStrengthFromPlayers(players, teamwork) + coachBaseBonus(coach);
 }
 
 // Aplica as funções escolhidas pelo técnico (save.roles) no time JÁ montado da
@@ -291,7 +315,9 @@ export function coachBaseBonus(coach: Coach): number {
 // assumiu uma org passa o teamwork REAL dela. Sem este parâmetro, trocar a
 // função de um jogador no meio do split reestampava 78 e desfazia a herança do
 // takeover (o fix valeria no começo e regrediria na virada de temporada).
-export function resyncUserRoles(user: TTeam, roleOf: (originalId: string) => Role | undefined, baseTeamwork = 78, refSynergy = 0): TTeam {
+// `legacyScale`: saves que ainda estão no split anterior à virada do equilíbrio
+// seguem a escala antiga (sinergia·0,7 − malus) até o split acabar.
+export function resyncUserRoles(user: TTeam, roleOf: (originalId: string) => Role | undefined, baseTeamwork = 78, refSynergy = 0, legacyScale = false): TTeam {
   let changed = false;
   const players = user.players.map((p) => {
     const oid = p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id;
@@ -302,7 +328,10 @@ export function resyncUserRoles(user: TTeam, roleOf: (originalId: string) => Rol
   if (!changed) return user;
   const synergy = draftSynergy(players);
   const teamwork = baseTeamwork + Math.max(-14, Math.min(12, (synergy.total - refSynergy) * 1.2));
-  const strength = teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(user.coach) - DREAM_TEAM_MALUS;
+  // [equilíbrio] escala única: sem sinergia·0,7 nem DREAM_TEAM_MALUS por fora
+  const strength = legacyScale
+    ? teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + legacyCoachBonus(user.coach) - DREAM_TEAM_MALUS
+    : careerStrength(players, teamwork, user.coach);
   return { ...user, players, teamwork, strength };
 }
 

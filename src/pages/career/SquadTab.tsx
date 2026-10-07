@@ -20,7 +20,7 @@ import {
   PHASE_LABEL,
   playerPhase,
   effectiveAge,
-  playerPotentialOvr,
+  careerPotentialOvr,
   BestPlayers,
   type Signing,
   type SeasonStat,
@@ -230,7 +230,7 @@ export function SquadTab({
               const fatigue = save.fatigue?.[p.id] ?? 0;
               const reduced = save.restingPlayers?.includes(p.id) ?? false;
               const age = effectiveAge(p, save.split, save.youthAge, save.youthDebut);
-              const potential = playerPotentialOvr(p, age);
+              const potential = careerPotentialOvr(save, p);
               const phase = playerPhase(p.id, age);
               return (
                 <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>

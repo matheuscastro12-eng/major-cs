@@ -15,7 +15,9 @@
 // mundo (total/contratados/titulares/no top 20), aposentados e o tamanho do
 // bloco de jovens no save.
 //
-//   npx tsx scripts/measure-mundo-10-splits.mts [splits=10] [--no-youth] [--json] [--seed=abc,def,ghi]
+//   npx tsx scripts/measure-mundo-10-splits.mts [splits=10] [--no-youth] [--json] [--seed=abc,def,ghi] [--mode=hard|legend]
+//
+// --mode: mercado da IA do modo da Carreira (orçamento × e free agents ≥80 primeiro).
 //
 // --seed: semente do save (mundo.seed) no mercado, no drift e na leva de jovens —
 // cada semente é uma Carreira diferente; sem ela, as chaves de sempre.
@@ -25,7 +27,7 @@ import type { TeamSeason } from '../src/types.ts';
 import { playerOvr } from '../src/engine/ratings.ts';
 import { buildAiWorld, agedFreeAgents, nextAiDrift, aiAgeOf, baseOvrOf } from '../src/engine/career/aiWorld.ts';
 import { computeAllTeamForms, type TeamFormSave } from '../src/engine/career/teamForm.ts';
-import { tickMarketWindow, squadOvr, type WorldMove } from '../src/engine/clube/mercadoIA.ts';
+import { tickMarketWindow, squadOvr, AI_MARKET_BY_MODE, type WorldMove } from '../src/engine/clube/mercadoIA.ts';
 import type { MarketLoan } from '../src/engine/clube/model.ts';
 import type { League } from '../src/engine/league.ts';
 import {
@@ -64,7 +66,7 @@ function resultsSave(world: TeamSeason[], split: number, aiDrift: Record<string,
 }
 const top5Ids = (t: TeamSeason) => [...t.players].sort((a, b) => playerOvr(b) - playerOvr(a)).slice(0, 5).map((p) => p.id);
 
-export function simulateMundo(splits = 10, opts: { youth?: boolean; seed?: string; onWorld?: (split: number, world: TeamSeason[]) => void; onSplit?: (split: number, world: TeamSeason[]) => void } = {}): { rows: MundoSplit[]; mundo: MundoJuv; moves: Record<string, string>; moveLog: WorldMove[] } {
+export function simulateMundo(splits = 10, opts: { youth?: boolean; seed?: string; market?: { budgetMul?: number; faFirstOvr?: number }; onWorld?: (split: number, world: TeamSeason[]) => void; onSplit?: (split: number, world: TeamSeason[]) => void } = {}): { rows: MundoSplit[]; mundo: MundoJuv; moves: Record<string, string>; moveLog: WorldMove[] } {
   const youth = opts.youth !== false;
   const seed = opts.seed;
   const SAVE = { org: { name: seed ? `Medição ${seed}` : 'Medição', tag: 'MED' }, split: 1, squad: [] };
@@ -116,7 +118,7 @@ export function simulateMundo(splits = 10, opts: { youth?: boolean; seed?: strin
     const mid = tickMarketWindow({
       teams: w0, freeAgents: agedFreeAgents(base(), moves, s, NO_SKIP), split: s, kind: 'mid',
       formOf: (id) => midForms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s), baseOvrOf, movableIds: movable, affinity,
-      budgets, loans, arrivals, seed,
+      budgets, loans, arrivals, seed, ...opts.market,
     });
     moveLog.push(...mid.log);
     moves = { ...moves, ...mid.moves }; arrivals = { ...arrivals, ...mid.arrivals }; loans = mid.loans;
@@ -126,7 +128,7 @@ export function simulateMundo(splits = 10, opts: { youth?: boolean; seed?: strin
     const off = tickMarketWindow({
       teams: w1, freeAgents: agedFreeAgents(base(), moves, s, NO_SKIP), split: s + 1, kind: 'offseason',
       formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s), baseOvrOf, movableIds: movable, affinity,
-      loans, arrivals, seed,
+      loans, arrivals, seed, ...opts.market,
     });
     moveLog.push(...off.log);
     moves = { ...moves, ...off.moves }; arrivals = { ...arrivals, ...off.arrivals }; loans = off.loans; budgets = off.budgets;
@@ -172,7 +174,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const seeds: (string | undefined)[] = seedArg ? seedArg.split(',') : [undefined];
   for (const seed of seeds) {
     const t0 = Date.now();
-    const { rows, mundo, moveLog } = simulateMundo(n, { youth: !process.argv.includes('--no-youth'), seed });
+    const mode = process.argv.find((x) => x.startsWith('--mode='))?.slice(7) as keyof typeof AI_MARKET_BY_MODE | undefined;
+    const { rows, mundo, moveLog } = simulateMundo(n, { youth: !process.argv.includes('--no-youth'), seed, market: mode ? AI_MARKET_BY_MODE[mode] : undefined });
     if (process.argv.includes('--json')) { console.log(JSON.stringify(rows, null, 2)); continue; }
     console.log(`Mundo da Carreira sem o usuário, ${n} splits${seed ? `, semente ${seed}` : ''} (${((Date.now() - t0) / 1000).toFixed(1)}s)\n`);
     console.log(mundoTable(rows));

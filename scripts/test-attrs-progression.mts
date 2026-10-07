@@ -14,6 +14,7 @@ import { ALL_ATTRS, type AttrKey } from '../src/engine/attributes.ts';
 import { applyAttrDelta, attrDelta, attrDeltaFromScalarEvo, activeAttrDelta, normalizeAttrEvo } from '../src/engine/career/attrEvo.ts';
 import { starsOf, paRange } from '../src/engine/attrs/stars.ts';
 import type { Role } from '../src/types.ts';
+import { SPLITS_PER_YEAR } from '../src/engine/clock.ts';
 
 const ROLES: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
 const mk = (id: string, age: number, lvl = 72, role: Role = 'Rifler') =>
@@ -23,7 +24,7 @@ function run(x0: PlayerAttrs, id: string, age0: number, splits: number, extra: P
   let x = x0;
   const byClass: Record<string, number> = { reflex: 0, mechanical: 0, mental: 0, leadership: 0 };
   for (let s = 1; s <= splits; s++) {
-    const r = evolveAttrs(x, { playerId: id, split: s, age: age0 + Math.floor((s - 1) / 3), ...extra });
+    const r = evolveAttrs(x, { playerId: id, split: s, age: age0 + Math.floor((s - 1) / SPLITS_PER_YEAR), ...extra });
     for (const [k, d] of Object.entries(r.deltas)) byClass[ATTR_CLASS[k as AttrKey]] += d as number;
     assert.ok(r.attrs.ca <= r.attrs.pa, 'CA nunca passa do PA');
     x = r.attrs;

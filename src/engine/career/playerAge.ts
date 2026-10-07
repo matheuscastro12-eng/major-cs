@@ -5,7 +5,10 @@ import bo3Ages from '../../data/bo3-ages.json';
 import { parseRegenPlayerId } from './signings';
 import { parseNewgenId } from '../mundo/juventude';
 
-export const CAREER_SPLITS_PER_YEAR = 3;
+import { SPLITS_PER_YEAR } from '../clock';
+
+// 1 ano de idade = 1 temporada = 4 splits (ver engine/clock.ts)
+export const CAREER_SPLITS_PER_YEAR = SPLITS_PER_YEAR;
 
 export interface YouthDebut {
   age: number;
@@ -42,7 +45,7 @@ export function legacyYouthBaseAgeAtPromotion(age: number, split: number): numbe
 }
 
 // idades REAIS do bo3 (196/240) por nick; quem falta recebe uma idade plausível
-// determinística. A idade efetiva sobe ~1 ano a cada 3 splits de carreira.
+// determinística. A idade efetiva sobe 1 ano a cada temporada (4 splits).
 export const REAL_AGES = bo3Ages as Record<string, { age: number; born: string }>;
 export function baseAge(p: Pick<Player, 'id' | 'nick' | 'age'>, youthAge?: Record<string, number>): number {
   // prospecto promovido da academia: idade-base guardada na promoção. Vem ANTES do

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LiveCanvasGame } from './LiveCanvasGame';
 import { analyzeSeries } from '../engine/insights';
+import { StyleLiveBar, StyleStatsPanel } from './MatchStyle';
+import type { TeamStyle } from '../engine/gestao/model';
 import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
 import { movesFor, isKeyRound, EFFECT_LABEL, type CallMove } from '../engine/career/battleCalls';
 // [W5] identidade tática: a sua (save.identity) + a derivada do adversário; opt-in no sim
@@ -218,11 +220,20 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
+  // [estilo de jogo] troca ao vivo do estilo do seu time (vale nos mapas seguintes também)
+  const liveStyleRef = useRef<TeamStyle | null>(null);
+  const changeStyle = (s: TeamStyle) => {
+    const cur = simsRef.current[Math.min(mapIdx, maps.length - 1)];
+    cur?.setStyle?.(userIdx, s);
+    liveStyleRef.current = s;
+    setTick((x) => x + 1);
+  };
   const getSim = (idx: number): MapSim => {
     const safe = Math.min(idx, maps.length - 1); // guarda defensiva contra índice além do veto
     if (!simsRef.current[safe]) {
       // mapIndex: fadiga (stamina) no motor v2; MD5 = final (jogo grande, oculto bigMatch)
       simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy, { identity: identityMods, mapIndex: safe, bigMatch: bestOf === 5, manualTimeouts: userIdx, ...(pressure ? { pressure } : {}) });
+      if (liveStyleRef.current) simsRef.current[safe].setStyle?.(userIdx, liveStyleRef.current);
     }
     return simsRef.current[safe];
   };
@@ -775,6 +786,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 );
               })}
             </div>
+            <StyleLiveBar sim={sim} userIdx={userIdx} onChange={changeStyle} />
             <div className="style-roster">
               {teams[userIdx].players.map((p) => {
                 const ps = p.playstyle ?? derivePlaystyle(p.role);
@@ -1046,6 +1058,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       )}
 
       {finished && series && <InsightPanel series={series} teams={teams} userIdx={userIdx} events={events} />}
+
+      {finished && series && <StyleStatsPanel series={series} teams={teams} userIdx={userIdx} />}
 
       {finished && series && (
         <>
