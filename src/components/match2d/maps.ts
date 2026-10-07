@@ -26,6 +26,10 @@ export interface Map2D {
   holds: { A: string[]; B: string[]; mid: string[] };
   // onde o T espera antes de decidir (default)
   stage: string[];
+  // planta baixa opcional: retângulos de piso [x, y, w, h] (canto superior
+  // esquerdo). Quando existe, o radar desenha o piso no lugar dos corredores.
+  // Traço próprio que segue o formato dos corredores reais.
+  floor?: [number, number, number, number][];
 }
 
 const R = (x: number, y: number, w: number, h: number) => ({ x, y, w, h });
@@ -34,25 +38,39 @@ const MAPS: Record<MapId, Map2D> = {
   mirage: {
     id: 'mirage',
     nodes: {
-      tS: { x: 86, y: 64 }, ctS: { x: 18, y: 46 },
-      A: { x: 30, y: 76 }, B: { x: 18, y: 18 },
-      aT: { x: 50, y: 80 }, ramp: { x: 66, y: 74 }, palace: { x: 60, y: 88 },
-      aCT: { x: 20, y: 62 }, jungle: { x: 36, y: 60 },
-      mid: { x: 52, y: 46 }, top: { x: 72, y: 46 }, conn: { x: 40, y: 50 },
-      bT: { x: 34, y: 14 }, apps: { x: 56, y: 16 }, appsIn: { x: 74, y: 26 },
-      bCT: { x: 20, y: 32 }, market: { x: 26, y: 38 }, short: { x: 38, y: 28 },
+      tS: { x: 88, y: 62 }, ctS: { x: 16, y: 48 },
+      A: { x: 32, y: 78 }, B: { x: 20, y: 16 },
+      aT: { x: 54, y: 82 }, ramp: { x: 68, y: 72 }, palace: { x: 78, y: 86 },
+      aCT: { x: 18, y: 64 }, jungle: { x: 36, y: 60 },
+      mid: { x: 54, y: 46 }, top: { x: 74, y: 46 }, conn: { x: 38, y: 50 },
+      bT: { x: 40, y: 15 }, apps: { x: 68, y: 15 }, appsIn: { x: 77, y: 26 },
+      bCT: { x: 16, y: 32 }, market: { x: 24, y: 34 }, short: { x: 38, y: 26 },
     },
     edges: [
       ['tS', 'ramp', 7], ['ramp', 'aT', 6], ['tS', 'palace', 5], ['palace', 'aT', 5], ['aT', 'A', 8],
       ['tS', 'top', 6], ['top', 'mid', 7], ['mid', 'conn', 5], ['conn', 'jungle', 5], ['jungle', 'A', 6],
       ['ctS', 'aCT', 6], ['aCT', 'A', 6], ['aCT', 'jungle', 4],
       ['tS', 'appsIn', 6], ['appsIn', 'apps', 6], ['apps', 'bT', 6], ['bT', 'B', 7],
-      ['ctS', 'bCT', 6], ['bCT', 'B', 6], ['mid', 'short', 4], ['short', 'B', 5], ['ctS', 'market', 4], ['market', 'B', 5],
+      ['ctS', 'bCT', 6], ['bCT', 'B', 6], ['conn', 'short', 4], ['short', 'B', 5], ['ctS', 'market', 4], ['market', 'B', 5],
     ],
-    sites: { A: R(30, 76, 20, 16), B: R(18, 18, 18, 16) },
-    spawns: { t: R(86, 64, 12, 16), ct: R(18, 46, 12, 12) },
+    sites: { A: R(32, 78, 26, 16), B: R(20, 16, 24, 16) },
+    spawns: { t: R(88, 62, 12, 22), ct: R(16, 48, 12, 14) },
     holds: { A: ['jungle', 'aCT'], B: ['bCT', 'market'], mid: ['conn'] },
     stage: ['ramp', 'top', 'appsIn', 'palace', 'top'],
+    floor: [
+      [82, 40, 12, 33],   // spawn TR
+      [56, 67, 28, 10],   // T ramp
+      [56, 84, 26, 8], [76, 72, 8, 16],   // palácio
+      [18, 69, 40, 17],   // bomb A
+      [10, 41, 12, 14], [12, 55, 10, 14], [22, 58, 10, 8],   // spawn CT + ticket + CT → jungle
+      [32, 52, 10, 14],   // jungle / connector
+      [44, 41, 38, 9],    // meio (top mid → mid)
+      [34, 24, 8, 30],    // catwalk / short
+      [72, 22, 11, 30],   // entrada do apps
+      [34, 10, 47, 10],   // apartamentos
+      [8, 8, 26, 17],     // bomb B
+      [12, 25, 18, 14],   // kitchen / market / CT do B
+    ],
   },
   inferno: {
     id: 'inferno',
@@ -145,12 +163,12 @@ const MAPS: Record<MapId, Map2D> = {
   dust2: {
     id: 'dust2',
     nodes: {
-      tS: { x: 40, y: 88 }, ctS: { x: 62, y: 22 },
-      A: { x: 82, y: 18 }, B: { x: 18, y: 16 },
-      aT: { x: 82, y: 40 }, longA: { x: 82, y: 66 }, longDoors: { x: 64, y: 70 },
-      short: { x: 66, y: 36 }, aCT: { x: 70, y: 18 },
-      mid: { x: 50, y: 50 }, xbox: { x: 52, y: 38 }, lower: { x: 44, y: 32 },
-      bT: { x: 20, y: 38 }, tunnels: { x: 22, y: 60 }, upperTun: { x: 34, y: 72 }, bCT: { x: 34, y: 18 },
+      tS: { x: 46, y: 88 }, ctS: { x: 60, y: 21 },
+      A: { x: 81, y: 15 }, B: { x: 20, y: 15 },
+      aT: { x: 86, y: 34 }, longA: { x: 86, y: 66 }, longDoors: { x: 66, y: 73 },
+      short: { x: 64, y: 33 }, aCT: { x: 70, y: 18 },
+      mid: { x: 49, y: 62 }, xbox: { x: 52, y: 38 }, lower: { x: 49, y: 26 },
+      bT: { x: 21, y: 33 }, tunnels: { x: 21, y: 56 }, upperTun: { x: 28, y: 80 }, bCT: { x: 40, y: 18 },
     },
     edges: [
       ['tS', 'longDoors', 6], ['longDoors', 'longA', 6], ['longA', 'aT', 7], ['aT', 'A', 7],
@@ -158,10 +176,28 @@ const MAPS: Record<MapId, Map2D> = {
       ['ctS', 'aCT', 6], ['aCT', 'A', 6], ['ctS', 'lower', 5],
       ['tS', 'upperTun', 6], ['upperTun', 'tunnels', 6], ['tunnels', 'bT', 6], ['bT', 'B', 7], ['ctS', 'bCT', 6], ['bCT', 'B', 6],
     ],
-    sites: { A: R(82, 18, 18, 16), B: R(18, 16, 20, 16) },
-    spawns: { t: R(40, 88, 18, 10), ct: R(62, 22, 12, 10) },
+    sites: { A: R(81, 15, 24, 18), B: R(20, 15, 24, 18) },
+    spawns: { t: R(42, 88, 26, 10), ct: R(60, 21, 14, 12) },
     holds: { A: ['A', 'short'], B: ['B', 'bCT'], mid: ['lower'] },
     stage: ['longDoors', 'mid', 'upperTun', 'longDoors', 'upperTun'],
+    floor: [
+      [29, 83, 26, 10],   // spawn TR
+      [55, 76, 9, 6], [60, 68, 12, 10],   // saída pro long + portas
+      [72, 60, 22, 16],   // pit / fim do long
+      [80, 24, 12, 38],   // long A
+      [69, 6, 24, 18],    // bomb A
+      [53, 15, 15, 12],   // spawn CT
+      [58, 27, 12, 12],   // short / catwalk
+      [45, 34, 13, 8],    // top mid / xbox
+      [45, 42, 9, 41],    // meio
+      [32, 32, 14, 8],    // lower túnel
+      [45, 22, 8, 14],    // CT mid
+      [32, 14, 21, 8],    // portas do B → CT
+      [8, 6, 24, 18],     // bomb B
+      [16, 24, 10, 16],   // saída do túnel no B
+      [16, 40, 10, 32],   // túnel superior
+      [16, 70, 14, 8], [24, 74, 10, 12],   // entrada do túnel desde o TR
+    ],
   },
   train: {
     id: 'train',

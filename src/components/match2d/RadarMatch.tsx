@@ -472,12 +472,25 @@ function MapArt({ map }: { map: MapId }) {
         {Array.from({ length: 9 }, (_, i) => <line key={`v${i}`} x1={(i + 1) * 10} y1={0} x2={(i + 1) * 10} y2={100} />)}
         {Array.from({ length: 9 }, (_, i) => <line key={`h${i}`} x1={0} y1={(i + 1) * 10} x2={100} y2={(i + 1) * 10} />)}
       </g>
-      <g className="r2d-walls">
-        {m.edges.map(([a, b, w], i) => <line key={i} x1={m.nodes[a].x} y1={m.nodes[a].y} x2={m.nodes[b].x} y2={m.nodes[b].y} strokeWidth={(w ?? 5) + 1.6} />)}
-      </g>
-      <g className="r2d-floor">
-        {m.edges.map(([a, b, w], i) => <line key={i} x1={m.nodes[a].x} y1={m.nodes[a].y} x2={m.nodes[b].x} y2={m.nodes[b].y} strokeWidth={w ?? 5} />)}
-      </g>
+      {m.floor ? (
+        <>
+          <g className="r2d-walls">
+            {m.floor.map(([x, y, w, h], i) => <rect key={i} x={x - 0.8} y={y - 0.8} width={w + 1.6} height={h + 1.6} rx={1} />)}
+          </g>
+          <g className="r2d-floor">
+            {m.floor.map(([x, y, w, h], i) => <rect key={i} x={x} y={y} width={w} height={h} rx={0.6} />)}
+          </g>
+        </>
+      ) : (
+        <>
+          <g className="r2d-walls">
+            {m.edges.map(([a, b, w], i) => <line key={i} x1={m.nodes[a].x} y1={m.nodes[a].y} x2={m.nodes[b].x} y2={m.nodes[b].y} strokeWidth={(w ?? 5) + 1.6} />)}
+          </g>
+          <g className="r2d-floor">
+            {m.edges.map(([a, b, w], i) => <line key={i} x1={m.nodes[a].x} y1={m.nodes[a].y} x2={m.nodes[b].x} y2={m.nodes[b].y} strokeWidth={w ?? 5} />)}
+          </g>
+        </>
+      )}
       {(['A', 'B'] as const).map((s) => {
         const r = m.sites[s];
         return (
