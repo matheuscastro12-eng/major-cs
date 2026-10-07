@@ -3126,6 +3126,34 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     }));
   }, [oppEra, save.split, save.eventInSplit, save.mundo?.vrs]);
 
+  // [evolução · curva única] atributos ATUAIS de um jogador no mundo da IA (fora
+  // do seu elenco), pela MESMA conta do buildAiWorld: titular da base desde o
+  // split 1, jovem da base (regen) pela vaga, vendido sem id na base pela cópia
+  // da venda — e quem saiu do seu elenco continua do save.worldEvo. null = o
+  // mundo não evolui esse jogador (newgen: a cópia do mundo já é a atual;
+  // academia/custom/base sintética).
+  const worldAttrsNow = (sv: CareerSave, base: Player): PlayerAttrs | null => {
+    const id = base.id;
+    if (isNewgenId(id) || id.includes('__aca') || sv.academy?.some((a) => a.id === id) || sv.customPlayers?.[id]) return null;
+    for (const list of Object.values(sv.extraOnTeam ?? {})) {
+      const e = list.find((x) => x.player.id === id);
+      if (e) return replayAttrs(e.player, sv.split, extraClock(e, sv.worldEvo, sv.youthDebut));
+    }
+    if (sv.youthDebut?.[id] || sv.youth?.[id]) return null; // base promovida que nunca saiu
+    const rg = parseRegenPlayerId(id);
+    if (rg) {
+      const orig = editedBase.find((t) => t.id === rg.teamId)?.players[rg.slot];
+      if (!orig) return null;
+      return replayAttrs(base, sv.split, aiClock(rg.debut, rg.ageAtDebut, regenPotOvr(id, playerOvr(orig)), sv.worldEvo?.[id]));
+    }
+    const a0 = baseAge(base, sv.youthAge);
+    return replayAttrs(base, sv.split, aiClock(1, a0, aiPotentialOvr(id, playerOvr(base), a0), sv.worldEvo?.[id]));
+  };
+  // o jogador como o mundo o tem agora (mercado: free agents e vitrines)
+  const worldPlayerNow = (p: Player): Player => {
+    const now = worldAttrsNow(save, p);
+    return now ? withAttrs(p, now) : p;
+  };
   // mercado: jogadores reais dos elencos atuais (CS2) + FREE AGENTS (pros sem
   // time), com preço de mercado. Free agents saem 25% mais barato (sem multa).
   const market = useMemo(
@@ -3326,34 +3354,6 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
 
   const findSigning = (s: Signing): ResolvedSigning | null => findSigningIn(save, s);
 
-  // [evolução · curva única] atributos ATUAIS de um jogador no mundo da IA (fora
-  // do seu elenco), pela MESMA conta do buildAiWorld: titular da base desde o
-  // split 1, jovem da base (regen) pela vaga, vendido sem id na base pela cópia
-  // da venda — e quem saiu do seu elenco continua do save.worldEvo. null = o
-  // mundo não evolui esse jogador (newgen: a cópia do mundo já é a atual;
-  // academia/custom/base sintética).
-  const worldAttrsNow = (sv: CareerSave, base: Player): PlayerAttrs | null => {
-    const id = base.id;
-    if (isNewgenId(id) || id.includes('__aca') || sv.academy?.some((a) => a.id === id) || sv.customPlayers?.[id]) return null;
-    for (const list of Object.values(sv.extraOnTeam ?? {})) {
-      const e = list.find((x) => x.player.id === id);
-      if (e) return replayAttrs(e.player, sv.split, extraClock(e, sv.worldEvo, sv.youthDebut));
-    }
-    if (sv.youthDebut?.[id] || sv.youth?.[id]) return null; // base promovida que nunca saiu
-    const rg = parseRegenPlayerId(id);
-    if (rg) {
-      const orig = editedBase.find((t) => t.id === rg.teamId)?.players[rg.slot];
-      if (!orig) return null;
-      return replayAttrs(base, sv.split, aiClock(rg.debut, rg.ageAtDebut, regenPotOvr(id, playerOvr(orig)), sv.worldEvo?.[id]));
-    }
-    const a0 = baseAge(base, sv.youthAge);
-    return replayAttrs(base, sv.split, aiClock(1, a0, aiPotentialOvr(id, playerOvr(base), a0), sv.worldEvo?.[id]));
-  };
-  // o jogador como o mundo o tem agora (mercado: free agents e vitrines)
-  const worldPlayerNow = (p: Player): Player => {
-    const now = worldAttrsNow(save, p);
-    return now ? withAttrs(p, now) : p;
-  };
   // [evolução] quem SAI do seu elenco grava o estado em save.worldEvo (a IA
   // continua dali) e o jovem gerado devolve os atributos ao bloco do mundo.
   // Central: compara o elenco de antes com o de agora (venda, troca, liberação,
