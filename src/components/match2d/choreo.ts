@@ -55,6 +55,7 @@ export interface RoundScript {
   end: RoundPlayInfo['end'];
   endT: number;
   winner: 0 | 1;
+  inferred: boolean;                    // true = motor v1 (sem cronologia do round): ordem dos abates rearrumada
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +120,10 @@ function insertKey(keys: Key[], k: Key) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function buildRoundScript(inp: RoundInput): RoundScript {
+export function buildRoundScript(input: RoundInput): RoundScript {
+  // motor v1 distribui os abates depois do resultado (sem cronologia): ordena
+  // para ninguém atirar depois de morto. No v2 a ordem do killFeed É a do round.
+  const inp = input.play ? input : { ...input, kills: chronological(input.kills) };
   const m = map2dOf(inp.map);
   const rnd = prng(hashStr(`${m.id}:${inp.round}:${inp.kills.length}:${inp.winner}`));
   const tTeam = inp.tTeam;
@@ -198,6 +202,10 @@ export function buildRoundScript(inp: RoundInput): RoundScript {
         } else {
           walk(m, keys, stage, entry, 0.22 + rnd() * 0.04, EXEC + rnd() * 0.04, off);
           walk(m, keys, entry, site, EXEC + 0.05, EXEC + 0.14 + rnd() * 0.05, off);
+          // no site, espalham pelas posições (não empilham no centro)
+          const sr = m.sites[site];
+          const t1 = keys[keys.length - 1].t;
+          keys.push({ t: t1 + 0.05, x: clamp(sr.x + (rnd() - 0.5) * sr.w * 0.8, 1, 99), y: clamp(sr.y + (rnd() - 0.5) * sr.h * 0.8, 1, 99) });
         }
       } else {
         const hold = ctPost[(s + ctRot) % 5];
@@ -295,7 +303,23 @@ export function buildRoundScript(inp: RoundInput): RoundScript {
   events.sort((a, b) => a.t - b.t);
   for (const tr of tracks) tr.keys.sort((a, b) => a.t - b.t);
 
-  return { map: m, tracks, events, site, planted: plantT != null, plantT, bombAt, end, endT, winner: inp.winner };
+  return { map: m, tracks, events, site, planted: plantT != null, plantT, bombAt, end, endT, winner: inp.winner, inferred: !input.play };
+}
+
+function chronological(kills: KillEvent[]): KillEvent[] {
+  const left = kills.slice();
+  const dead = new Set<string>();
+  const out: KillEvent[] = [];
+  while (left.length) {
+    // o primeiro abate cujo autor ainda está vivo e que não mata quem ainda vai matar
+    let i = left.findIndex((k) => !dead.has(k.killerId) && !left.some((o) => o !== k && o.killerId === k.victimId));
+    if (i < 0) i = left.findIndex((k) => !dead.has(k.killerId));
+    if (i < 0) i = 0;
+    const [k] = left.splice(i, 1);
+    dead.add(k.victimId);
+    out.push(k);
+  }
+  return out;
 }
 
 /** Relógio do round (s) mostrado no HUD: 1:55 até o plant, 40 s de bomba depois. */

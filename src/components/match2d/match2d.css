@@ -31,8 +31,8 @@
 .r2d-clock.bomb { color: var(--c-live); }
 .r2d-alive { font-family: var(--font-num); font-size: var(--fs-1); color: var(--c-brand); font-weight: 700; }
 
-.r2d-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; }
-.r2d-stage { position: relative; background: var(--c-surface-0); aspect-ratio: 1 / 1; max-height: 640px; margin: 0 auto; width: 100%; }
+.r2d-body { display: grid; grid-template-columns: minmax(0, 640px) minmax(280px, 1fr); gap: 0; }
+.r2d-stage { position: relative; background: var(--c-surface-0); aspect-ratio: 1 / 1; margin: 0 auto; width: 100%; }
 .r2d-svg { display: block; width: 100%; height: 100%; }
 .r2d-bg { fill: var(--c-surface-0); }
 .r2d-grid line { stroke: var(--c-line-soft); stroke-width: 0.15; }

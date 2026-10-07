@@ -771,7 +771,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
               </span>
             </div>
           </div>
-          {!finished && mom.team >= 0 && mom.len >= 2 && (
+          {!finished && !radarOn && mom.team >= 0 && mom.len >= 2 && (
             <MomentumMeter team={mom.team as 0 | 1} len={mom.len} teams={teams} userIdx={userIdx} />
           )}
           {pbLive && (
