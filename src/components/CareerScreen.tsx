@@ -116,7 +116,7 @@ import { usePeekResolver, peekFromPlayer, type PeekData } from './ds/shell/Playe
 import {
   ArrowLeftRight, Award, Binoculars, BookOpen, Building2, CalendarCheck, CalendarDays, ChartColumn, ChartNoAxesColumn,
   CircleHelp, Crosshair, DoorOpen, FileSignature, Globe, GraduationCap, Sprout, House, Inbox, Layers, ListOrdered, LogOut, MessageCircle,
-  Medal, Network, PenLine, RotateCcw, ScrollText, Search, Shield, ShieldHalf, Sparkles, Star, Swords, Target,
+  Crown, Medal, Network, PenLine, RotateCcw, ScrollText, Search, Shield, ShieldHalf, Sparkles, Star, Swords, Target,
   Trophy, UserRound, Users, Wallet,
 } from 'lucide-react';
 import { CareerPlayerPage, PLAYER_TABS, type PlayerTab } from './career/CareerPlayerPage';
@@ -169,6 +169,12 @@ import {
 import { isNewgenId, parseNewgenId, newgenPlayer, careerYearOf, hasIntake, dropNewgens } from '../engine/mundo/juventude';
 import type { MundoState, WorldEventResult } from '../engine/mundo/model';
 import { JuventudeTab } from '../pages/career/JuventudeTab';
+// [SA2 · legado] linha do tempo, prêmios da cena, lendas, recordes, Hall do manager e cards
+import { LegadoTab } from '../pages/career/LegadoTab';
+import { LegadoCeremony } from './career/LegadoCeremony';
+import { legadoOf, unseenCeremony, withShirt, type LegadoState } from '../engine/legado/model';
+import { closeLegadoYear } from '../engine/legado/carreira';
+import { buildLegado } from '../engine/legado/historia';
 import { getToken, useAccount } from '../state/account';
 import { CustomRosterBuilder } from './CustomRosterBuilder';
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
@@ -1134,6 +1140,7 @@ interface CareerSave {
   majorPlan?: MajorFieldPlan | null;
   majorLog?: { stage: number; field: string[]; order: string[] }[];
   majorRegion?: RmrRegion | null; // RMR que você disputa (stage 0)
+  legado?: LegadoState; // [SA2 · legado] prêmios da cena por ano + camisas aposentadas (opcional, podado; sem subir SAVE_VERSION)
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -2083,7 +2090,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: ct('Técnico Iniciante'), co
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar' | 'stats' | 'youth' | 'circuito';
+type HubTab = 'legado' | 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar' | 'stats' | 'youth' | 'circuito';
 
 // time sintético ct('Academia') usado como origem de um prospecto promovido ao elenco
 const ACADEMY_FROM: TeamSeason = {
@@ -2310,6 +2317,8 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   const lastSplitTickedRef = useRef<number>(save.split);
   // T3.7: player com modal de conversa aberto. null = nenhum.
   const [talkPlayer, setTalkPlayer] = useState<{ oid: string; nick: string; age?: number } | null>(null);
+  const [ceremonyYear, setCeremonyYear] = useState<number | null>(null); // [SA2 · legado] cerimônia aberta
+  const [legadoCards, setLegadoCards] = useState(0); // [SA2 · legado] >0 = abrir o Legado direto nos cards
   // T3.8: toast pra resultado de scrim (e outros eventos pontuais)
   const toast = useToast();
 
@@ -5290,6 +5299,18 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     }
     return rows.sort((a, b) => b.rating - a.rating).slice(0, 20);
   }, [save.careerStats, save.roles, save.org, currentEra, rawBase]);
+  // [SA2 · legado] fechamento do ano: prêmios da cena do último ano fechado (uma vez por ano)
+  const userCoachNick = save.coachFromId === '__custom__' ? save.customCoach?.nick : (currentEra.find((t) => t.id === save.coachFromId)?.coach.nick ?? ROOKIE_COACH.nick);
+  useEffect(() => {
+    if (!save.org || !userTeamSeason) return;
+    const next = closeLegadoYear(save.legado, save.split, {
+      teams: top20Pool, ovrOf: playerOvr, ageOf: (p) => aiAgeOf(p, save.split, save.youthDebut),
+      roleOf: (p, tid) => (tid === 'user' ? (save.roles?.[p.id] ?? p.role) : p.role) as Role,
+      userCoachNick, seasonStats: save.seasonStats, results: save.mundo?.results ?? [],
+    });
+    if (next) update({ legado: next });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fecha só quando o split vira (idempotente por ano)
+  }, [save.org, save.split, save.legado, userTeamSeason]);
   // feed do mercado da IA. No resumo do split (seasonEnd) é a PROJEÇÃO exata da
   // janela de pré-temporada que o fechamento vai aplicar (mesmo tick, mesmas
   // entradas); no resto da carreira é o que aconteceu na última janela.
@@ -7477,7 +7498,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
   const activeSection: string =
     hubTab === 'squad' ? squadSec
       : hubTab === 'finance' ? finSec
-        : ({ overview: 'ov', inbox: 'in', calendar: 'ag', stats: 'dh', market: 'tf', academy: 'ac', youth: 'jv', history: 'hi', major: 'mj', standings: 'cl', bracket: 'cl', results: 'cl', vrs: 'vr', top20: 'vr', world: 'vr', circuito: 'ci' } as Record<HubTab, string>)[hubTab] ?? 'ov';
+        : ({ overview: 'ov', inbox: 'in', calendar: 'ag', stats: 'dh', market: 'tf', academy: 'ac', youth: 'jv', history: 'hi', legado: 'lg', major: 'mj', standings: 'cl', bracket: 'cl', results: 'cl', vrs: 'vr', top20: 'vr', world: 'vr', circuito: 'ci' } as Record<HubTab, string>)[hubTab] ?? 'ov';
   const goSection = (id: string) => {
     closeCareerOverlays();
     setSelSeries(null);
@@ -7486,7 +7507,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     if (id === 'x-tr') { openTrophiesTool(); return; }
     if (SQUAD_SECS.includes(id)) { setSquadSec(id); setHubTab('squad'); return; }
     if (id === 'fi' || id === 'ct') { setFinSec(id); setHubTab('finance'); return; }
-    const map: Record<string, HubTab> = { ov: 'overview', in: 'inbox', ag: 'calendar', dh: 'stats', tf: 'market', ac: 'academy', jv: 'youth', hi: 'history', mj: 'major', cl: 'standings', vr: 'vrs', ci: 'circuito' };
+    const map: Record<string, HubTab> = { ov: 'overview', in: 'inbox', ag: 'calendar', dh: 'stats', tf: 'market', ac: 'academy', jv: 'youth', hi: 'history', lg: 'legado', mj: 'major', cl: 'standings', vr: 'vrs', ci: 'circuito' };
     const tab = map[id];
     if (!tab) return;
     setHubTab(tab);
@@ -7522,6 +7543,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       ...(openLockerRoomTool ? [{ id: 'x-lr', label: ct('Vestiário'), icon: DoorOpen }] : []),
       { id: 'x-tr', label: ct('Sala de troféus'), icon: Trophy },
       { id: 'hi', label: ct('História da org'), icon: ScrollText },
+      { id: 'lg', label: ct('Legado'), icon: Crown },
     ] },
     { id: 'comp', label: ct('Competições'), items: [
       { id: 'mj', label: 'Major', icon: Trophy, disabled: !majorT, alert: majorActive },
@@ -7541,7 +7563,9 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     if (id.startsWith('t:')) { setSelSeries(null); setHubTab(id.slice(2) as HubTab); }
     else goSection(id);
   };
+  const ceremonyNew = save.org ? unseenCeremony(legadoOf(save.legado)) : null;
   const shellPending: ShellPending[] = [
+    ...(ceremonyNew ? [{ id: 'cerimonia', label: `${ct('Cerimônia da cena')}: ${ct('Temporada')} ${ceremonyNew.year}`, icon: Crown, tone: 'info' as const, onGo: () => setCeremonyYear(ceremonyNew.year) }] : []),
     ...(unread > 0 ? [{ id: 'inbox', label: `${unread} ${ct('mensagem(ns) nova(s) na caixa')}`, icon: Inbox, tone: 'info' as const, onGo: () => goSection('in') }] : []),
     ...(expiringCount > 0 ? [{ id: 'contracts', label: `${expiringCount} ${ct('contrato(s) vencendo')}`, icon: FileSignature, tone: 'warn' as const, onGo: () => goSection('ct') }] : []),
     // [fase 3 · vestiário] pedidos de conversa e de saída
@@ -8381,9 +8405,54 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
           })}
         />
       )}
+      {/* [SA2 · legado] Clube › Legado */}
+      {hubTab === 'legado' && save.org && (() => {
+        const lg = legadoOf(save.legado);
+        const infoOf = (id: string) => {
+          const pl = resolvePlayerById(id);
+          if (pl) return { nick: pl.nick, country: pl.country, role: save.roles?.[id] ?? pl.role };
+          const e = lg.years.flatMap((y) => y.top20).find((x) => x.id === id);
+          return e ? { nick: e.nick, country: e.country, role: e.role } : null;
+        };
+        const view = buildLegado({
+          split: save.split, orgName: save.org.name, tier: save.tier, history: save.history, careerStats: save.careerStats,
+          seasonStats: save.seasonStats, stints: save.stints, peakOvr: save.peakOvr, squadIds: save.squad.map((sg) => sg.playerId),
+          retired: save.retired, coachStints: save.coachStints, legado: lg, academyTrophies: save.academyTrophies, infoOf,
+        });
+        return (
+          <LegadoTab
+            key={legadoCards} initialSection={legadoCards ? 'cards' : undefined}
+            view={view} legado={lg} split={save.split}
+            orgName={save.org.name} tag={save.org.tag} colors={save.org.colors}
+            roster={(userTeamSeason?.players ?? []).slice(0, 5).map((pl) => ({ nick: pl.nick, role: save.roles?.[pl.id] ?? pl.role, value: String(playerOvr(pl)) }))}
+            coachNick={userCoachNick}
+            onOpenCeremony={setCeremonyYear}
+            onOpenPlayer={(id) => { const pl = resolvePlayerById(id); if (pl) openPlayerProfile(pl); }}
+            onRetireShirt={(l) => askConfirm({
+              title: `${ct('Aposentar a camisa de')} ${l.nick}?`,
+              message: ct('A camisa sobe para o teto do clube e entra na história da org para sempre. Não dá para desfazer.'),
+              confirmLabel: ct('Aposentar a camisa'),
+              onConfirm: () => {
+                update({ legado: withShirt(legadoOf(save.legado), { playerId: l.id, nick: l.nick, split: save.split, maps: l.maps, titles: l.titles }) });
+                toast.success(`${ct('Camisa de')} ${l.nick} ${ct('aposentada')}`);
+              },
+            })}
+          />
+        );
+      })()}
       </>
       )}
     </CareerShell>
+      {ceremonyYear != null && (() => {
+        const y = legadoOf(save.legado).years.find((x) => x.year === ceremonyYear);
+        if (!y) return null;
+        const close = () => {
+          setCeremonyYear(null);
+          const lg = legadoOf(save.legado);
+          if ((lg.seenYear ?? 0) < y.year) update({ legado: { ...lg, seenYear: y.year } });
+        };
+        return <LegadoCeremony year={y} onClose={close} onShare={() => { close(); setLegadoCards((n) => n + 1); setHubTab('legado'); }} />;
+      })()}
 
       {selSeries && (
         <div className="modal-backdrop" onClick={() => setSelSeries(null)}>

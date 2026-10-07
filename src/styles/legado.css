@@ -1,0 +1,265 @@
+/* [super atualização 2 · LEGADO E DINASTIA] Clube › Legado + cerimônia.
+   Só tokens (var(--c-*), --sp-*, --fs-*, --rad-*). O dourado (--c-achievement)
+   aqui é legítimo: é a tela de conquista por definição. */
+
+.lg-tab { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.lg-tab .ds-panel { min-width: 0; }
+.lg-note { margin: var(--sp-3) 0 0; color: var(--c-ink-faint); font-size: var(--fs-2); line-height: 1.5; max-width: 72ch; }
+.lg-note--tight { margin: 0; }
+.lg-mine { color: var(--c-brand); font-weight: 600; }
+
+/* ── herói ───────────────────────────────────────────────────────────── */
+.lg-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'crest id stats' 'crest id actions';
+  align-items: center;
+  gap: var(--sp-2) var(--sp-5);
+  padding: var(--sp-5);
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--rad-4);
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--c-achievement) 16%, transparent), transparent 55%),
+    linear-gradient(180deg, var(--c-surface-2), var(--c-surface-1));
+  overflow: hidden;
+}
+.lg-hero::after {
+  content: '';
+  position: absolute; inset: auto 0 0 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--c-achievement), transparent);
+  opacity: 0.6;
+}
+.lg-hero__crest {
+  grid-area: crest;
+  width: 72px; height: 72px;
+  display: grid; place-items: center;
+  border-radius: var(--rad-4);
+  color: var(--c-on-achievement);
+  background: linear-gradient(135deg, var(--c-achievement-strong), var(--c-achievement));
+  box-shadow: 0 0 0 3px var(--c-surface-1), 0 0 0 5px var(--c1, var(--c-achievement)), var(--shadow-2);
+}
+.lg-hero__id { grid-area: id; min-width: 0; }
+.lg-hero__kicker { margin: 0; color: var(--c-achievement); font: 700 var(--fs-2) / 1.2 var(--font-title); letter-spacing: 0.08em; text-transform: uppercase; }
+.lg-hero__name { margin: 2px 0 4px; font: 800 var(--fs-6) / 1.05 var(--font-display); color: var(--c-ink); overflow-wrap: anywhere; }
+.lg-hero__tag { color: var(--c-ink-faint); font-weight: 700; }
+.lg-hero__sub { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-2); }
+.lg-hero__stats { grid-area: stats; display: grid; grid-template-columns: repeat(4, minmax(72px, auto)); gap: var(--sp-4); }
+.lg-hero__actions { grid-area: actions; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); }
+@media (max-width: 1100px) {
+  .lg-hero { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'crest id' 'stats stats' 'actions actions'; }
+  .lg-hero__actions { justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  .lg-hero { padding: var(--sp-4); gap: var(--sp-3); }
+  .lg-hero__crest { width: 52px; height: 52px; }
+  .lg-hero__name { font-size: var(--fs-5); }
+  .lg-hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+  .lg-hero__actions > * { flex: 1 1 auto; }
+}
+
+.lg-seg { align-self: flex-start; max-width: 100%; overflow-x: auto; }
+
+.lg-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: var(--sp-4); align-items: start; }
+.lg-grid--even { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .lg-grid, .lg-grid--even { grid-template-columns: minmax(0, 1fr); } }
+.lg-side { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+
+/* ── linha do tempo ──────────────────────────────────────────────────── */
+.lg-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
+.lg-tl__season {
+  display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: var(--sp-4);
+  padding: var(--sp-4); border: 1px solid var(--c-line); border-radius: var(--rad-3); background: var(--c-surface-1);
+}
+.lg-tl__year { display: flex; flex-direction: column; gap: 4px; }
+.lg-tl__ylabel { font: 800 var(--fs-5) / 1.1 var(--font-display); color: var(--c-ink); }
+.lg-tl__yrange { color: var(--c-ink-faint); font-size: var(--fs-2); }
+.lg-tl__ycount { display: flex; flex-wrap: wrap; gap: 4px; margin-top: var(--sp-1); }
+.lg-tl__list { list-style: none; margin: 0; padding: 0 0 0 var(--sp-1); display: flex; flex-direction: column; gap: 2px; border-left: 2px solid var(--c-line-strong); }
+.lg-tl__item { position: relative; display: grid; grid-template-columns: 28px 40px minmax(0, 1fr); align-items: center; gap: var(--sp-2); padding: 6px 0 6px var(--sp-2); color: var(--c-ink-dim); font-size: var(--fs-3); }
+.lg-tl__dot {
+  display: grid; place-items: center; width: 26px; height: 26px; margin-left: calc(-1 * var(--sp-2) - 15px);
+  border-radius: 50%; background: var(--c-surface-3); color: var(--c-ink-faint); border: 2px solid var(--c-surface-1);
+}
+.lg-tl__split { color: var(--c-ink-faint); font: 600 var(--fs-2) var(--font-num); font-variant-numeric: tabular-nums; }
+.lg-tl__text { min-width: 0; overflow-wrap: anywhere; }
+.lg-tl__item--title .lg-tl__dot, .lg-tl__item--sceneMvp .lg-tl__dot, .lg-tl__item--scene .lg-tl__dot { color: var(--c-win); }
+.lg-tl__item--signing .lg-tl__dot { color: var(--c-ct); }
+.lg-tl__item--legendLeft .lg-tl__dot { color: var(--c-warn); }
+.lg-tl__item.is-gold .lg-tl__dot { background: var(--c-achievement); color: var(--c-on-achievement); }
+.lg-tl__item.is-gold .lg-tl__text { color: var(--c-achievement-strong); font-weight: 700; }
+@media (max-width: 720px) {
+  .lg-tl__season { grid-template-columns: minmax(0, 1fr); padding: var(--sp-3); gap: var(--sp-3); }
+  .lg-tl__year { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); }
+  .lg-tl__item { font-size: var(--fs-2); grid-template-columns: 28px 34px minmax(0, 1fr); }
+}
+
+/* ── prêmios da cena ─────────────────────────────────────────────────── */
+.lg-yearpick { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.lg-select { background: var(--c-surface-3); color: var(--c-ink); border: 1px solid var(--c-line-strong); border-radius: var(--rad-2); padding: 4px 8px; font: inherit; font-size: var(--fs-2); }
+.lg-rank { font-variant-numeric: tabular-nums; color: var(--c-ink-dim); }
+.lg-rank--top { color: var(--c-achievement); }
+.lg-plink { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--c-ink); font: inherit; cursor: pointer; text-align: left; }
+.lg-plink:hover b, .lg-plink:focus-visible b { color: var(--c-brand); }
+.lg-top20 + .lg-note, .ds-panel--flush .lg-note { padding: 0 var(--sp-4) var(--sp-4); }
+.lg-awards { margin: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.lg-awards > div { display: flex; flex-direction: column; gap: 2px; }
+.lg-awards dt { color: var(--c-achievement); font: 700 var(--fs-1) var(--font-title); letter-spacing: 0.08em; text-transform: uppercase; }
+.lg-awards dd { margin: 0; color: var(--c-ink); font-size: var(--fs-4); }
+.lg-awards dd span { color: var(--c-ink-faint); font-size: var(--fs-2); }
+.lg-ideal, .lg-mvps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lg-ideal li { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); font-size: var(--fs-3); }
+.lg-ideal li span, .lg-mvps li span:last-child { color: var(--c-ink-faint); font-size: var(--fs-2); }
+.lg-ideal li.is-mine b, .lg-mvps li.is-mine b { color: var(--c-brand); }
+.lg-mvps li { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-2); color: var(--c-ink-dim); flex-wrap: wrap; }
+.lg-mvps__ev { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+
+/* ── lendas ──────────────────────────────────────────────────────────── */
+.lg-legends { display: flex; flex-direction: column; gap: var(--sp-4); }
+.lg-shirts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3); }
+.lg-shirt {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
+  padding: var(--sp-4) var(--sp-3); border-radius: var(--rad-3);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c-achievement) 14%, var(--c-surface-2)), var(--c-surface-2));
+  border: 1px solid color-mix(in srgb, var(--c-achievement) 40%, transparent);
+}
+.lg-shirt__jersey { color: var(--c-achievement); margin-bottom: var(--sp-1); }
+.lg-shirt__nick { font: 800 var(--fs-5) / 1.1 var(--font-display); color: var(--c-ink); }
+.lg-shirt__meta { color: var(--c-ink-faint); font-size: var(--fs-1); }
+.lg-legend-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--sp-3); }
+.lg-legend { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--rad-3); background: var(--c-surface-2); border: 1px solid var(--c-line-soft); min-width: 0; }
+.lg-legend--lenda { border-color: color-mix(in srgb, var(--c-epic) 45%, transparent); }
+.lg-legend--imortal { border-color: var(--c-achievement); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--c-achievement) 35%, transparent); }
+.lg-legend__head { display: flex; gap: 4px; flex-wrap: wrap; }
+.lg-legend__name { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--c-ink); cursor: pointer; font: 800 var(--fs-5) / 1.1 var(--font-display); text-align: left; }
+.lg-legend__name:hover b, .lg-legend__name:focus-visible b { color: var(--c-brand); }
+.lg-legend__nums { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.lg-legend__nums dt { color: var(--c-ink-faint); font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.05em; }
+.lg-legend__nums dd { margin: 0; color: var(--c-ink); font: 700 var(--fs-3) var(--font-num); font-variant-numeric: tabular-nums; }
+.lg-legend__foot { margin-top: auto; display: flex; }
+
+/* ── recordes ────────────────────────────────────────────────────────── */
+.lg-records-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
+.lg-records { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.lg-records li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'label value' 'who value'; column-gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--c-line-soft); }
+.lg-records li:last-child { border-bottom: 0; }
+.lg-records__label { grid-area: label; color: var(--c-ink-dim); font-size: var(--fs-2); }
+.lg-records__who { grid-area: who; color: var(--c-ink-faint); font-size: var(--fs-1); overflow-wrap: anywhere; }
+.lg-records__value { grid-area: value; align-self: center; font: 800 var(--fs-5) var(--font-display); color: var(--c-achievement-strong); font-variant-numeric: tabular-nums; }
+
+/* ── Hall do manager ─────────────────────────────────────────────────── */
+.lg-hall { display: flex; flex-direction: column; gap: var(--sp-4); }
+.lg-rep { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+.lg-rep__dial {
+  --deg: calc(var(--rep) * 3.6deg);
+  width: 132px; height: 132px; border-radius: 50%;
+  display: grid; place-items: center; align-content: center; gap: 2px;
+  background:
+    radial-gradient(closest-side, var(--c-surface-1) 78%, transparent 79%),
+    conic-gradient(var(--c-achievement) var(--deg), var(--c-surface-3) 0);
+}
+.lg-rep__dial b { font: 800 var(--fs-7) / 1 var(--font-display); color: var(--c-ink); }
+.lg-rep__dial span { color: var(--c-achievement); font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.06em; }
+.lg-rep__stats { display: grid; grid-template-columns: repeat(4, minmax(80px, auto)); gap: var(--sp-5); }
+@media (max-width: 720px) { .lg-rep__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); } .lg-rep { justify-content: center; } }
+.lg-badges { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-3); }
+.lg-badge { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3); padding: var(--sp-3); border-radius: var(--rad-3); background: var(--c-surface-1); border: 1px dashed var(--c-line-strong); opacity: 0.78; }
+.lg-badge.is-on { opacity: 1; border-style: solid; background: var(--c-surface-2); }
+.lg-badge__icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--c-surface-3); color: var(--c-ink-faint); }
+.lg-badge.is-on .lg-badge__icon { color: var(--c-on-achievement); background: var(--c-ink-dim); }
+.lg-badge--rara.is-on .lg-badge__icon { background: var(--c-ct); }
+.lg-badge--epica.is-on .lg-badge__icon { background: var(--c-epic); }
+.lg-badge--lendaria.is-on .lg-badge__icon { background: linear-gradient(135deg, var(--c-achievement-strong), var(--c-achievement)); box-shadow: 0 0 18px color-mix(in srgb, var(--c-achievement) 45%, transparent); }
+.lg-badge--lendaria.is-on { border-color: var(--c-achievement); }
+.lg-badge__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lg-badge__txt b { color: var(--c-ink); font-size: var(--fs-3); }
+.lg-badge__txt span { color: var(--c-ink-faint); font-size: var(--fs-1); line-height: 1.35; }
+.lg-badge__bar { display: block; height: 4px; margin-top: 4px; border-radius: var(--rad-pill); background: var(--c-surface-3); overflow: hidden; }
+.lg-badge__bar i { display: block; height: 100%; background: var(--c-ink-faint); }
+
+/* ── cards ───────────────────────────────────────────────────────────── */
+.lg-cards { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+@media (max-width: 900px) { .lg-cards { grid-template-columns: minmax(0, 1fr); } }
+.lg-cards__pick { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+@media (max-width: 900px) { .lg-cards__pick { flex-direction: row; overflow-x: auto; } .lg-cards__pick li { flex: 1 0 160px; } }
+.lg-cardpick {
+  width: 100%; display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; column-gap: var(--sp-2); row-gap: 2px;
+  padding: var(--sp-3); text-align: left; cursor: pointer;
+  background: var(--c-surface-1); color: var(--c-ink); border: 1px solid var(--c-line); border-radius: var(--rad-3); font: inherit;
+}
+.lg-cardpick span { grid-column: 2; color: var(--c-ink-faint); font-size: var(--fs-1); line-height: 1.35; }
+.lg-cardpick:hover { background: var(--c-surface-2); }
+.lg-cardpick.is-on { border-color: var(--c-achievement); background: var(--c-surface-2); }
+.lg-cardpick.is-on svg { color: var(--c-achievement); }
+.lg-cardpick.is-locked { color: var(--c-ink-dim); }
+.lg-cards__preview { display: grid; place-items: center; }
+.lg-cards__preview img { width: min(100%, 440px); height: auto; border-radius: var(--rad-3); box-shadow: var(--shadow-3); }
+.lg-cards__gen {
+  width: min(100%, 440px); aspect-ratio: 4 / 5; display: grid; place-items: center; align-content: center; gap: var(--sp-2);
+  border: 1px dashed var(--c-achievement); border-radius: var(--rad-3); cursor: pointer;
+  background: radial-gradient(80% 60% at 50% 20%, color-mix(in srgb, var(--c-achievement) 14%, transparent), var(--c-surface-1));
+  color: var(--c-achievement-strong); font: 700 var(--fs-4) var(--font-title);
+}
+.lg-cards__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-4); }
+.lg-cards .lg-note { text-align: center; margin-left: auto; margin-right: auto; }
+
+/* ════ cerimônia ═══════════════════════════════════════════════════════ */
+.lgc { min-height: 380px; }
+.lgc-foot { display: flex; justify-content: flex-end; gap: var(--sp-2); flex-wrap: wrap; width: 100%; }
+.lgc-intro { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--sp-3); padding: var(--sp-6) var(--sp-2); }
+.lgc-intro__trophy { color: var(--c-achievement); filter: drop-shadow(0 0 22px color-mix(in srgb, var(--c-achievement) 55%, transparent)); animation: lgc-float 3s var(--ease-in-out) infinite; }
+.lgc-intro__kicker { margin: 0; color: var(--c-achievement); font: 700 var(--fs-2) var(--font-title); letter-spacing: 0.1em; text-transform: uppercase; }
+.lgc-intro__title { margin: 0; font: 800 var(--fs-display) / 1 var(--font-display); color: var(--c-ink); }
+.lgc-intro__sub { margin: 0 0 var(--sp-2); color: var(--c-ink-dim); max-width: 52ch; line-height: 1.5; }
+
+.lgc-count { display: flex; flex-direction: column; gap: var(--sp-4); }
+.lgc-spot {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: var(--sp-5) var(--sp-3);
+  border-radius: var(--rad-4); background: radial-gradient(90% 120% at 50% 0%, var(--c-surface-3), var(--c-surface-1));
+  border: 1px solid var(--c-line-strong);
+  animation: lgc-in var(--dur-4) var(--ease-snap) both;
+}
+.lgc-spot--podium { border-color: var(--c-achievement); background: radial-gradient(90% 120% at 50% 0%, color-mix(in srgb, var(--c-achievement) 26%, var(--c-surface-2)), var(--c-surface-1)); }
+.lgc-spot.is-mine .lgc-spot__nick { color: var(--c-brand-strong); }
+.lgc-spot__rank { font: 800 var(--fs-6) / 1 var(--font-display); color: var(--c-achievement); }
+.lgc-spot__nick { display: inline-flex; align-items: center; gap: 8px; font: 800 var(--fs-display) / 1 var(--font-display); color: var(--c-ink); text-align: center; overflow-wrap: anywhere; }
+.lgc-spot__meta { color: var(--c-ink-dim); font-size: var(--fs-3); }
+.lgc-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px var(--sp-3); }
+.lgc-list li { display: flex; gap: 6px; align-items: baseline; color: var(--c-ink); font-size: var(--fs-2); animation: lgc-fade var(--dur-3) var(--ease-out) both; min-width: 0; }
+.lgc-list li b { color: var(--c-ink-faint); font-variant-numeric: tabular-nums; }
+.lgc-list li span { color: var(--c-ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lgc-list li.is-mine { color: var(--c-brand-strong); }
+
+.lgc-awards { display: flex; flex-direction: column; gap: var(--sp-3); }
+.lgc-awards > *, .lgc-row > * { animation: lgc-in var(--dur-4) var(--ease-snap) both; animation-delay: calc(var(--d, 0) * 260ms); }
+.lgc-label { margin: 0 0 4px; display: inline-flex; align-items: center; gap: 6px; color: var(--c-achievement); font: 700 var(--fs-1) var(--font-title); letter-spacing: 0.08em; text-transform: uppercase; }
+.lgc-poty {
+  position: relative; text-align: center; padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  border-radius: var(--rad-4); border: 1px solid var(--c-achievement);
+  background: radial-gradient(100% 140% at 50% 0%, color-mix(in srgb, var(--c-achievement) 30%, var(--c-surface-2)), var(--c-surface-1));
+}
+.lgc-poty__badge { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; margin-bottom: var(--sp-2); background: linear-gradient(135deg, var(--c-achievement-strong), var(--c-achievement)); color: var(--c-on-achievement); }
+.lgc-poty__nick { margin: 0; display: inline-flex; align-items: center; gap: 10px; font: 800 var(--fs-display) / 1 var(--font-display); color: var(--c-ink); }
+.lgc-poty.is-mine .lgc-poty__nick { color: var(--c-brand-strong); }
+.lgc-poty__meta { margin: var(--sp-2) 0 0; color: var(--c-ink-dim); font-size: var(--fs-3); }
+.lgc-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+@media (max-width: 720px) { .lgc-row { grid-template-columns: minmax(0, 1fr); } }
+.lgc-card { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-3) var(--sp-4); border-radius: var(--rad-3); background: var(--c-surface-2); border: 1px solid var(--c-line); min-width: 0; }
+.lgc-card b { font: 800 var(--fs-5) / 1.1 var(--font-display); color: var(--c-ink); }
+.lgc-card span { color: var(--c-ink-faint); font-size: var(--fs-2); }
+.lgc-ideal { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--sp-2); }
+.lgc-ideal li { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: var(--sp-2); border-radius: var(--rad-2); background: var(--c-surface-1); text-align: center; min-width: 0; }
+.lgc-ideal li b { font-size: var(--fs-4); overflow-wrap: anywhere; }
+.lgc-ideal li.is-mine b { color: var(--c-brand-strong); }
+@media (max-width: 720px) { .lgc-ideal { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.lgc-mvps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lgc-mvps li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); font-size: var(--fs-2); }
+.lgc-mvps__ev { color: var(--c-ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lgc-mvps li.is-mine b { color: var(--c-brand-strong); }
+
+@keyframes lgc-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes lgc-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lgc-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) {
+  .lgc-spot, .lgc-list li, .lgc-awards > *, .lgc-row > *, .lgc-intro__trophy { animation: none; }
+}

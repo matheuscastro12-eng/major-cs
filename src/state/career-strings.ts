@@ -1,8 +1,10 @@
 // Dicionario de traducao do modo carreira (chave = string PT normalizada -> EN/ES).
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 import { EDITOR_STR } from './career-strings-editor';
+import { LEGADO_STR } from './career-strings-legado';
 
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
+  ...LEGADO_STR, // [SA2 · legado]
   ...EDITOR_STR, // [fase 4 · editor de base] (as entradas abaixo, se repetidas, valem)
   // [fase 4 · frente CIRCUITO] calendário, circuito, VRS, qualificatórios, RMR, LAN, visto e bootcamp
   "sem field nesta etapa": { en: "no field this stage", es: "sin field en esta etapa" },
