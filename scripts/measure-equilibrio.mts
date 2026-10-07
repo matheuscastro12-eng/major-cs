@@ -13,7 +13,7 @@ const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 console.log(`espelho MD3 · ${N} séries × 8 elencos por linha`);
 console.log(`sem vantagem, sem plano            ${pct(mirror(null, 'none', N))}`);
 for (const mode of ['normal', 'hard', 'legend'] as const) {
-  for (const plan of ['disciplined', 'aggressive'] as const) {
+  for (const plan of ['none', 'disciplined', 'aggressive'] as const) {
     console.log(`${mode.padEnd(7)} (IA +${MODE_AI_EDGE[mode].toFixed(1)}) ${plan.padEnd(12)} ${pct(mirror(mode, plan, N))}`);
   }
 }

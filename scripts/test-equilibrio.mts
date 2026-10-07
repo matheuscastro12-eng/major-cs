@@ -8,8 +8,8 @@
 //
 // Cobertura:
 //   - espelho sem vantagem e sem plano: 50 ±3%
-//   - espelho por modo (plano Disciplinado): Normal 55, Difícil 45, Lendário 37 (±3)
-//   - Agressivo não é mais +2,5 de graça: fica a ±3 pp do Disciplinado
+//   - espelho por modo (estilo padrão, sem plano): Normal 55, Difícil 45, Lendário 37 (±3)
+//   - o plano virou atalho de estilo (sem bônus de força): Agressivo ≤ Disciplinado + 3 pp
 //   - takeover intacto = a mesma força da IA (±0,01)
 //   - org nova: entrosamento ≤ 74 no split 1; cresce +2/split até +12
 //   - takeover: −3 por titular novo, +2/split de volta
@@ -41,15 +41,15 @@ test('espelho sem vantagem e sem plano: o motor é neutro (50 ±3%)', () => {
   assert.ok(Math.abs(w - 0.5) <= 0.03, `espelho neutro deu ${pct(w)}`);
 });
 
-test('espelho por modo: Normal ~55%, Difícil ~45%, Lendário ~37% (±3)', () => {
+test('espelho por modo (estilo padrão, sem plano): Normal ~55%, Difícil ~45%, Lendário ~37% (±3)', () => {
   const target = { normal: 0.55, hard: 0.45, legend: 0.37 } as const;
   for (const mode of ['normal', 'hard', 'legend'] as const) {
-    const w = mirror(mode, 'disciplined', N);
+    const w = mirror(mode, 'none', N);
     assert.ok(Math.abs(w - target[mode]) <= 0.03, `${mode} (IA +${MODE_AI_EDGE[mode]}): ${pct(w)}, alvo ${pct(target[mode])}`);
   }
 });
 
-test('plano Agressivo tem custo: não passa o Disciplinado em mais de 3 pp', () => {
+test('plano é atalho de estilo, sem bônus de força: Agressivo não passa o Disciplinado em mais de 3 pp', () => {
   const d = mirror('normal', 'disciplined', N);
   const a = mirror('normal', 'aggressive', N);
   assert.ok(a - d <= 0.03, `Agressivo ${pct(a)} × Disciplinado ${pct(d)}`);
@@ -122,8 +122,8 @@ function runEvent(user: TTeam, field: TTeam[], seed: number): boolean {
   let k = 0;
   const play = (a: TTeam, b: TTeam): TTeam => {
     const s = seed * 131 + (k++) * 7919;
-    const A = a.isUser ? prepUser(a, b.id, 'disciplined') : a;
-    const B = b.isUser ? prepUser(b, a.id, 'disciplined') : b;
+    const A = a.isUser ? prepUser(a, b.id, 'none') : a;
+    const B = b.isUser ? prepUser(b, a.id, 'none') : b;
     return series(A, B, s) ? a : b;
   };
   const q: TTeam[][] = [];

@@ -174,19 +174,21 @@ import { JuventudeTab } from '../pages/career/JuventudeTab';
 import { getToken, useAccount } from '../state/account';
 import { CustomRosterBuilder } from './CustomRosterBuilder';
 import {
-  BALANCE_FIX_ID, MODE_AI_EDGE, applyGamePlan, coachForMatch, coachMatchImpact, analystScoutingPrep, careerAiTeam, careerMode, careerUserTeam, estimateTenure, newOrgTeamwork, takeoverTeamwork, togetherSplits,
+  BALANCE_FIX_ID, MODE_AI_EDGE, PLAN_STYLE, PLAN_STYLE_FIX, applyGamePlan, coachForMatch, coachMatchImpact, analystScoutingPrep, careerAiTeam, careerMode, careerUserTeam, estimateTenure, newOrgTeamwork, takeoverTeamwork, togetherSplits,
   type CareerGamePlan,
 } from '../engine/career/equilibrio';
+import { setStyle, styleOf } from '../engine/gestao/estilo';
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
-// PLANO DE JOGO: a decisão pré-partida do usuário. Cada plano dá um buff REAL na
-// simulação (some você do "modo espectador": sua escolha muda a partida).
+// PLANO DE JOGO: atalho da decisão pré-partida. [integração] Sem bônus de força:
+// Disciplinado/Agressivo escrevem o estilo (Plano de jogo › estilos), Anti-strat
+// foca a preparação no adversário e Foco no mapa forte puxa o veto.
 export type GamePlan = CareerGamePlan;
 const GAME_PLANS: { id: GamePlan; icon: CareerIconName; label: string; desc: string }[] = [
-  { id: 'disciplined', icon: 'brain', label: ct('Disciplinado'), desc: ct('Jogo seguro e constante. Baixa variância, base sólida.') },
-  { id: 'antistrat', icon: 'search', label: 'Anti-strat', desc: ct('Estuda o adversário: defesa mais sólida. Bom contra times melhores.') },
+  { id: 'disciplined', icon: 'brain', label: ct('Disciplinado'), desc: ct('Atalho do estilo Controle nos dois lados: jogo lento e seguro.') },
+  { id: 'antistrat', icon: 'search', label: 'Anti-strat', desc: ct('Foca a preparação no adversário: lê as tendências dele (sem mudar o estilo).') },
   { id: 'mapfocus', icon: 'map', label: ct('Foco no mapa forte'), desc: ct('Puxa o veto pro seu melhor mapa e joga mais forte nele.') },
-  { id: 'aggressive', icon: 'swords', label: ct('Agressivo'), desc: ct('Pressão no lado T: forte de TR, mais fraco de CT e mais oscilante. Bom para o azarão.') },
+  { id: 'aggressive', icon: 'swords', label: ct('Agressivo'), desc: ct('Atalho do estilo Agressivo nos dois lados: pressão e duelos de abertura, mais oscilante.') },
 ];
 // aplica o buff do plano no time do usuário antes da partida — mora em
 // engine/career/equilibrio.ts (o Agressivo ganhou custo: lado CT e variância).
@@ -777,7 +779,7 @@ const careerDiff = (d: Difficulty | undefined): Difficulty => (d === 'hard' || d
 // número com a vírgula do PT (en/es seguem com ponto)
 const decPt = (v: number, d: number) => { const x = v.toFixed(d); return ct('de força') === 'de força' ? x.replace('.', ',') : x; };
 const DIFF_MATCH: Record<Difficulty, string> = {
-  normal: 'Rivais um pouco acima de você na partida.',
+  normal: 'Partida equilibrada, com leve vantagem pra você.',
   hard: 'Rivais bem mais fortes na partida e mercado mais fechado.',
   legend: 'Rivais muito mais fortes, estrelas que não saem e IA que contrata primeiro.',
 };
@@ -816,7 +818,7 @@ function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d
                 {ct(DIFF_MATCH[d])} {ct(DIFF_ECON[d])}
               </div>
               <div style={{ fontSize: '0.66rem', fontWeight: 700, color: on ? tone : 'var(--em-muted,#8a99ab)', marginTop: 4 }}>
-                {ct('IA na partida:')} +{decPt(MODE_AI_EDGE[d], 1)} {ct('de força')}
+                {ct('IA na partida:')} {MODE_AI_EDGE[d] >= 0 ? '+' : '−'}{decPt(Math.abs(MODE_AI_EDGE[d]), 1)} {ct('de força')}
               </div>
             </button>
           );
@@ -2305,7 +2307,10 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
 
   const update = (patch: Partial<CareerSave>) => {
     setSave((s) => {
-      const next = { ...s, ...patch };
+      // [integração] o plano é atalho de estilo: escolher Agressivo/Disciplinado escreve tactics.style
+      const style = patch.gamePlan && patch.gamePlan !== s.gamePlan ? PLAN_STYLE[patch.gamePlan] : null;
+      const withStyle = style ? { ...patch, gestao: { ...gestaoOf(s), ...(patch.gestao ?? {}), tactics: setStyle(gestaoOf(s).tactics, style) } } : patch;
+      const next = { ...s, ...withStyle };
       persist(next);
       return next;
     });
@@ -2806,7 +2811,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
       tactics: mt.tactics,
     };
     // PLANO DE JOGO da partida: buff real escolhido pelo usuário antes de jogar
-    return applyAnalystPrep(applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined', mt.genericAntiStrat), normalizeFacilities(save.facilities).analyst);
+    return applyAnalystPrep(applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined'), normalizeFacilities(save.facilities).analyst);
   };
   const prepareTeams = (rawA: TTeam | undefined, rawB: TTeam | undefined): [TTeam, TTeam] | null => {
     // `leagueTeam(l, id)` mente sobre o tipo (non-null assertion) e devolve
@@ -3454,6 +3459,28 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save (flag)
   }, [faRepairDue]);
+
+  // [integração] plano antigo → estilo: quem escolheu Agressivo passa a jogar o
+  // estilo Agressivo/Agressivo (o bônus de força do plano acabou). Disciplinado é
+  // o padrão de todo save, então não força Controle em quem nunca escolheu nada.
+  const planStyleDue = !!save.org && save.fixes?.[PLAN_STYLE_FIX] == null;
+  useEffect(() => {
+    if (!planStyleDue) return;
+    setSave((s) => {
+      if (!s.org || s.fixes?.[PLAN_STYLE_FIX] != null) return s;
+      const g = gestaoOf(s);
+      const cur = styleOf(g.tactics);
+      const migrate = s.gamePlan === 'aggressive' && cur.t === 'standard' && cur.ct === 'standard';
+      const next: CareerSave = {
+        ...s,
+        ...(migrate ? { gestao: { ...g, tactics: setStyle(g.tactics, PLAN_STYLE.aggressive!) } } : {}),
+        fixes: { ...(s.fixes ?? {}), [PLAN_STYLE_FIX]: s.split },
+      };
+      persist(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save (flag)
+  }, [planStyleDue]);
 
   // [equilíbrio] saves de antes da régua única: a mudança vale a partir do
   // PRÓXIMO split (o split em curso termina com as forças que já tinha), com uma

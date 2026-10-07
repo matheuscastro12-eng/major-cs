@@ -69,8 +69,11 @@ test('save: tática sem estilo lê Padrão; defaultTactics não grava estilo', (
 test('perfil: o melhor estilo muda com o elenco; ideal × pior numa MD3 na faixa', () => {
   const N = 2400;
   // elenco de mira de entrada (entry/troca fortes, leitura/pós-plant fracos)
-  const miraAgg = mirrorStyle('mira', { t: 'aggressive', ct: 'aggressive' }, N, 31).mapWinA;
-  const miraPas = mirrorStyle('mira', { t: 'passive', ct: 'passive' }, N, 31).mapWinA;
+  // [integração] duas sementes (2×N mapas): com uma só, a margem de 2 pp ficava a
+  // ~0,1 pp do ruído de amostra e virava com qualquer mudança na ordem dos times
+  const two = (st: { t: 'aggressive' | 'passive'; ct: 'aggressive' | 'passive' }) => (mirrorStyle('mira', st, N, 31).mapWinA + mirrorStyle('mira', st, N, 41).mapWinA) / 2;
+  const miraAgg = two({ t: 'aggressive', ct: 'aggressive' });
+  const miraPas = two({ t: 'passive', ct: 'passive' });
   // elenco frio (pós-plant/clutch/retake fortes, entry/troca fracos)
   const friAgg = mirrorStyle('frieza', { t: 'aggressive', ct: 'aggressive' }, N, 31).mapWinA;
   const friPas = mirrorStyle('frieza', { t: 'passive', ct: 'passive' }, N, 31).mapWinA;

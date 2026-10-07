@@ -17,7 +17,7 @@ import { careerStrength, coachBaseBonus } from '../ratings';
 export const BALANCE_FIX_ID = 'equilibrio-v1';
 
 /** Vantagem ÚNICA da IA na força, por modo (substitui AI_EDGE 4 + 1,5 + rampa). */
-export const MODE_AI_EDGE: Record<Difficulty, number> = { normal: 0.6, hard: 2.7, legend: 4.0 };
+export const MODE_AI_EDGE: Record<Difficulty, number> = { normal: -0.8, hard: 1.2, legend: 2.7 };
 
 export const careerMode = (d: Difficulty | string | null | undefined): Difficulty => (d === 'hard' || d === 'legend' ? d : 'normal');
 
@@ -90,25 +90,29 @@ export function careerAiTeam(team: TTeam, mode: Difficulty, staffEdge = 0): TTea
 }
 
 // ─── Plano de jogo (decisão pré-partida) ─────────────────────────────────────
+// [integração] O plano virou ATALHO DE ESTILO (engine/gestao/estilo.ts) e perdeu
+// todo bônus plano de força: Agressivo = estilo Agressivo/Agressivo, Disciplinado
+// = Controle/Controle (o custo e a variância vêm do estilo no motor), Anti-strat
+// só foca a preparação contra o adversário (matchTacticsFor) e Foco no mapa forte
+// segue puxando o veto e o mapa forte.
+/** Reparo em save.fixes: plano antigo migrado para o estilo equivalente (uma vez por save). */
+export const PLAN_STYLE_FIX = 'plano-estilo-v1';
 export type CareerGamePlan = 'disciplined' | 'antistrat' | 'mapfocus' | 'aggressive';
-/** Custo do Agressivo: +1,5 no lado T, −1,5 no CT e forma do dia ±2 mais larga por mapa. */
-export const AGGRESSIVE_RISK = { t: 1.5, ct: -1.5, swing: 2 } as const;
-/**
- * Buff do plano no SEU time antes da partida. O Agressivo tinha +2,5 sem custo
- * nenhum (o melhor plano sempre); agora soma o mesmo +1,5 do Disciplinado na
- * média, mas concentrado no lado T, pior no CT e com mais variância — bom para
- * o azarão, arriscado para o favorito.
- */
-export function applyGamePlan(t: TTeam, plan: CareerGamePlan, genericAntiStrat = true): TTeam {
-  if (plan === 'aggressive') return { ...t, strength: t.strength + 1.5, planRisk: { ...AGGRESSIVE_RISK } };
-  if (plan === 'antistrat') return genericAntiStrat ? { ...t, strength: t.strength + 2 } : t;
+/** Estilo que cada plano escreve em tactics.style (null = o plano não mexe no estilo). */
+export const PLAN_STYLE: Record<CareerGamePlan, { t: 'aggressive' | 'control'; ct: 'aggressive' | 'control' } | null> = {
+  aggressive: { t: 'aggressive', ct: 'aggressive' },
+  disciplined: { t: 'control', ct: 'control' },
+  antistrat: null,
+  mapfocus: null,
+};
+export function applyGamePlan(t: TTeam, plan: CareerGamePlan): TTeam {
   if (plan === 'mapfocus') {
     const prefs: Record<string, number> = { ...t.mapPrefs };
     const best = Object.entries(prefs).sort((a, b) => b[1] - a[1])[0];
-    if (best) prefs[best[0]] = Math.min(5, best[1] + 2); // reforça o melhor mapa (veto + força)
-    return { ...t, mapPrefs: prefs, strength: t.strength + 1 };
+    if (best) prefs[best[0]] = Math.min(5, best[1] + 2); // reforça o melhor mapa (veto + força no mapa)
+    return { ...t, mapPrefs: prefs };
   }
-  return { ...t, strength: t.strength + 1.5 }; // disciplined
+  return t;
 }
 
 // ─── Técnico: estilo escolhido, potência pelo atributo certo ─────────────────

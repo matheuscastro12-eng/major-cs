@@ -14,7 +14,8 @@ import { aiTactics, matchTacticsFor, defaultTactics, autoAntiStratReadiness } fr
 import { scoutingOf } from '../../src/engine/career/teamIdentity.ts';
 import { applyConditionToTeam } from '../../src/engine/gestao/condicao.ts';
 import { defaultCondition } from '../../src/engine/gestao/treino.ts';
-import { applyGamePlan, careerAiTeam, careerUserTeam, takeoverTeamwork, type CareerGamePlan } from '../../src/engine/career/equilibrio.ts';
+import { setStyle } from '../../src/engine/gestao/estilo.ts';
+import { PLAN_STYLE, applyGamePlan, careerAiTeam, careerUserTeam, takeoverTeamwork, type CareerGamePlan } from '../../src/engine/career/equilibrio.ts';
 
 export type Plan = CareerGamePlan | 'none';
 
@@ -37,8 +38,9 @@ export function takeoverUser(org: TeamSeason, coach: Coach = org.coach): TTeam {
 
 /** syncUser + prepareTeams do lado do usuário: plano de jogo, tática e condição padrão. */
 export function prepUser(u: TTeam, oppId: string, plan: Plan = 'disciplined'): TTeam {
-  const mt = matchTacticsFor(defaultTactics(), plan === 'none' ? 'disciplined' : plan, oppId, autoAntiStratReadiness(scoutingOf(u)));
-  const planned = plan === 'none' ? u : applyGamePlan(u, plan, mt.genericAntiStrat);
+  const st = plan === 'none' ? null : PLAN_STYLE[plan];
+  const mt = matchTacticsFor(st ? setStyle(defaultTactics(), st) : defaultTactics(), plan === 'none' ? 'disciplined' : plan, oppId, autoAntiStratReadiness(scoutingOf(u)));
+  const planned = plan === 'none' ? u : applyGamePlan(u, plan);
   const cond = Object.fromEntries(u.players.map((p) => [p.id.replace(/^user__/, ''), defaultCondition()]));
   return applyConditionToTeam({ ...planned, tactics: mt.tactics }, cond);
 }

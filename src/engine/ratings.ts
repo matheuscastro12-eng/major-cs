@@ -281,10 +281,10 @@ export function teamSeasonToTTeam(ts: TeamSeason): TTeam {
 // mercado (rating 66 = nota 10 na comissão = 0): técnico fraco tira um pouco,
 // técnico de elite soma até +2,5. Antes era zero abaixo de 75 — a maioria dos
 // técnicos (mediana real ~60) não fazia diferença nenhuma na partida.
-// Divisor 16 (e não 9): calibrado no espelho para técnico nota 18 × nota 10 dar
+// Divisor 18 (e não 9): calibrado no espelho para técnico nota 18 × nota 10 dar
 // +8 a +10 pp numa MD3 (com o estilo) e nota 5 dar −3 a −4 pp.
 export const COACH_MEDIAN_RATING = 66;
-export const COACH_BONUS_DIV = 16;
+export const COACH_BONUS_DIV = 18;
 export const COACH_BONUS_MIN = -0.7;
 export const COACH_BONUS_MAX = 2.5;
 export function coachBaseBonus(coach: Pick<Coach, 'rating'> | null | undefined): number {

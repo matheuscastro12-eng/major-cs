@@ -157,9 +157,6 @@ export interface TTeam {
   playbook?: Playbook; // esquema tático treinado (modo carreira)
   playbookFam?: number; // entrosamento no esquema, 0..1 (quão bem treinado)
   noEdge?: boolean; // Road to Pro: dispensa o AI_EDGE de dificuldade do modo carreira
-  // [equilíbrio] custo do plano Agressivo: pontos de força no lado T / no CT e
-  // forma do dia mais larga (±swing extra por mapa). Ausente = motor de antes.
-  planRisk?: { t: number; ct: number; swing: number };
   // [realismo FM fase 2 · tática por mapa] plano preparado (papéis, setup CT,
   // execuções T, instruções, familiaridade, anti-strat). Opt-in: sem ele o motor
   // v2 joga exatamente como antes; o v1 ignora. Ver engine/gestao/tatica.ts.

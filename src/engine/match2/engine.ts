@@ -254,7 +254,7 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
     const tw = fin(t.teamwork, 70);
     return {
       team: t, players, prof, awper, igl, hasIgl, residual,
-      mapForm: MAP_SWING ? (rng() * 2 - 1) * (MAP_SWING + (t.planRisk?.swing ?? 0)) : 0, // [equilíbrio] Agressivo: dia mais largo
+      mapForm: MAP_SWING ? (rng() * 2 - 1) * MAP_SWING : 0,
       fixedMod,
       tradeTeam: clamp(1 + 0.012 * (tw - 70), 0.7, 1.3),
       utilAvg: prof.reduce((s, p) => s + p.util, 0) / 5,
@@ -349,7 +349,6 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
     const pickedOwnMap = pickedBy === ti;
     let s = t.residual + fin(team.mapPrefs?.[map], 0) * 1.35 + t.mapForm + (fin(team.teamwork, 70) - 70) * 0.12;
     if (!team.isUser && !team.noEdge) s += AI_EDGE;
-    if (team.planRisk) s += side === 't' ? team.planRisk.t : team.planRisk.ct; // [equilíbrio] plano Agressivo
     if (!t.hasIgl) {
       s -= 1.5;
       if (secondHalf) s -= 1.8;

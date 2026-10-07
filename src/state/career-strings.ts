@@ -3907,4 +3907,9 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Estilo do técnico na partida": { en: "Coach style in matches", es: "Estilo del entrenador en los partidos" },
   "potência": { en: "power", es: "potencia" },
   "Depois de contratado, você escolhe o estilo; a potência vem do atributo dele.": { en: "Once hired, you pick the style; the power comes from his matching attribute.", es: "Una vez fichado, eliges el estilo; la potencia sale de su atributo." },
+  // [integração] plano de jogo como atalho de estilo
+  "Atalho do estilo Controle nos dois lados: jogo lento e seguro.": { en: "Shortcut to the Control style on both sides: slow, safe play.", es: "Atajo del estilo Control en ambos lados: juego lento y seguro." },
+  "Foca a preparação no adversário: lê as tendências dele (sem mudar o estilo).": { en: "Focuses preparation on the opponent: reads his tendencies (style unchanged).", es: "Enfoca la preparación en el rival: lee sus tendencias (sin cambiar el estilo)." },
+  "Atalho do estilo Agressivo nos dois lados: pressão e duelos de abertura, mais oscilante.": { en: "Shortcut to the Aggressive style on both sides: pressure and opening duels, swingier.", es: "Atajo del estilo Agresivo en ambos lados: presión y duelos de apertura, más irregular." },
+  "Partida equilibrada, com leve vantagem pra você.": { en: "Even matches, with a slight edge for you.", es: "Partidos parejos, con una leve ventaja para ti." },
 };
