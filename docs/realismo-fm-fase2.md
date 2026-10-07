@@ -129,3 +129,28 @@ Travado em `scripts/test-fase2-integracao.mts` (±2 pp).
 
 ### Calibração final (2500 mapas, seed do teste)
 Todos os alvos na tolerância com e sem a tática da IA. Clutch 1v1: 49,6% → **55,4%** (linha de base) / 54,1% (tática), alvo 55,6 ± 7; clutch 1v2 14,4% (16,8 ± 6); curva força→vitória v1/v2: +0 49,3/49,7 · +4 71,8/67,2 · +8 85,0/84,8 · +14 95,2/98,3.
+
+## Estilo de jogo (`fx/estilo`)
+Pedido dos jogadores: "o time joga padrão, agressivo, passivo…". Camada por cima do plano por mapa, por LADO, com efeito no motor v2 por duelos (`engine/gestao/estilo.ts`).
+- Estilos: T = Padrão, Agressivo, Passivo (lurk), Controle (lento), Rush; CT = Padrão, Agressivo, Passivo, Controle, Stack/retake. **Padrão = nenhum modificador (motor bit a bit de antes)**.
+- Mecanismo: engajamento por fase (quem duela na abertura/meio/pós-plant, por papel e estilo do jogador), viés por fase que depende do PERFIL do elenco (`styleProfile`: entry, hold, leitura, pós-plant, retake, clutch, troca, utilitária em desvios da base, centrados — só a forma; IGL absoluto), trocas, plant, tempo, cessão do site (`oppPlantMult`) e peso da mira (`RoundSpec.kMult`: < 1 = mais variância, bom pro azarão). Confronto de estilos leve (`STYLE_RPS`, Padrão neutro).
+- Familiaridade por estilo (`TacticsState.styleFam`, 0–100, padrão 35): +4 por mapa jogado com o estilo, −1 por série parado (piso 25), em `tacticsAfterSeries`. Qualidade = familiaridade do estilo × familiaridade do mapa (fase 2).
+- Contrato (tudo opcional, save continua v28): `TacticsState.style?`/`styleFam?`; `TacticDuelMods.engageMid?`/`engagePost?`/`kMult?`/`oppPlantMult?`; `RoundSpec.kMult?`; `TeamPlan.style`/`styleQ`/`profile`/`players`; `MapResult.styleStats?`/`styles?` (só com tática); `MapSim.style?()`/`setStyle?()` (só v2; troca ao vivo, a % mostrada já vê).
+- IA: `aiStyle` (dentro de `aiTactics`) adota um estilo quando o encaixe estimado passa da margem, com viés do técnico/playbook; na base, ~1/3 dos times usa estilo no T e ~1/6 no CT.
+- Tela: painel "Estilo de jogo" no Plano de jogo (encaixe 0–100 + pp por round, familiaridade, o que valoriza, variância, contra o estilo do adversário); seletor ao vivo na partida; "Estilo em campo" no pós-jogo (aberturas, trocas, plant, pós-plant, retakes, tempo, clutches).
+
+### Efeitos medidos — `npx tsx scripts/measure-estilo.mts 4000`
+Espelho (mesmo elenco, perfil modificado ±0,35 × perfil, familiaridade de estilo 70) contra Padrão; ±0,8 pp por célula. Mapa do lado com estilo:
+
+| Perfil | melhor (T + CT) | pior (T + CT) | ideal × pior numa MD3 |
+|---|---|---|---|
+| médio (tier S real) | Rush + Controle 51,1% | Passivo + Passivo 49,3% | 2,7 pp (ruído) |
+| mira de entrada | Agressivo + Agressivo 53,4% | Passivo + Passivo 48,8% | 7,0 pp |
+| cabeça (leitura/IGL) | Passivo + Controle 51,2% | Agressivo + Agressivo 47,6% | 5,5 pp |
+| frieza (pós-plant/clutch) | Passivo + Controle 50,7% | Controle + Agressivo 47,1% | 5,4 pp |
+| coletivo (troca/utilitária) | Rush + Padrão 52,7% | Passivo + Passivo 44,9% | 11,6 pp |
+
+Travado em `scripts/test-estilo.mts` (neutralidade bit a bit, o melhor estilo muda com o perfil, faixa da MD3, encaixe da tela × motor, familiaridade, confronto, variância, troca ao vivo, IA). Calibração (`test-engine-calibration`, sem tática) e `test-tactics` (IA com tática e estilo) verdes; neutralidade da integração (`test-fase2-integracao`) verde.
+
+### Plano antigo (GamePlan) × estilo — como unificar
+O "plano de jogo" da partida (`CareerScreen` › `applyGamePlanBuff`: Disciplinado +1,5, Agressivo +2,5, Anti-strat +2, Foco no mapa +1 de força) é bônus plano de força e NÃO foi mexido aqui (outra frente mexe em força/dificuldade). Proposta: "Agressivo" vira atalho do estilo Agressivo/Agressivo (sem bônus de força), "Disciplinado" vira Controle/Controle, "Anti-strat" mantém só o foco da preparação (`matchTacticsFor`) e "Foco no mapa forte" fica como está (veto + mapPrefs). Assim o seletor da tela inicial escreve `tactics.style` e o bônus plano some.
