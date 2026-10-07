@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LiveCanvasGame } from './LiveCanvasGame';
+import { RadarMatch } from './match2d/RadarMatch';
+import type { TipAction } from './match2d/assistant';
 import { analyzeSeries } from '../engine/insights';
 import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
 import { movesFor, isKeyRound, EFFECT_LABEL, type CallMove } from '../engine/career/battleCalls';
@@ -139,6 +141,16 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [moments, setMoments] = useState<RoundNarration[]>([]); // todos os lances narrados (replay no fim)
   const buysByRound = useRef<Record<string, [BuyTier, BuyTier]>>({}); // compra de cada round (pra detectar eco/force)
   const [speedIdx, setSpeedIdx] = useState(DEFAULT_SPEED_IDX);
+  // [radar 2D] apresentação da partida: o radar dita o ritmo no modo automático
+  // (pede cada round quando terminou de encenar o anterior). Só leitura do sim.
+  const [radarOn, setRadarOn] = useState(() => { try { return localStorage.getItem('rtm.radar2d') !== '0'; } catch { return true; } });
+  const radarReqRef = useRef(0);
+  const radarBusyRef = useRef(false);
+  const radarOnRef = useRef(radarOn);
+  useEffect(() => { radarOnRef.current = radarOn; }, [radarOn]);
+  const onRadarBusy = useCallback((b: boolean) => { radarBusyRef.current = b; }, []);
+  const [radarScore, setRadarScore] = useState<[number, number] | null>(null);
+  const toggleRadar = () => setRadarOn((v) => { try { localStorage.setItem('rtm.radar2d', v ? '0' : '1'); } catch { /* sem storage */ } return !v; });
   const [stance, setStance] = useState<Stance>('default');
   // hint de descoberta das calls ao vivo (some ao dispensar; 1ª vez forte)
   const [callsHint, setCallsHint] = useState(() => {
@@ -237,12 +249,23 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     if (endedMapsRef.current.has(mapIdx)) return;
     endedMapsRef.current.add(mapIdx);
     resultsRef.current[mapIdx] = sim.result();
+    // [radar 2D] o resultado já está gravado; a TELA só avança quando o radar
+    // terminou de encenar o último round (sem spoiler do fim do mapa)
+    const afterRadar = (fn: () => void) => {
+      const wait = () => {
+        if (radarOnRef.current && radarBusyRef.current) mapTransitionRef.current = window.setTimeout(wait, 250);
+        else { mapTransitionRef.current = null; fn(); }
+      };
+      wait();
+    };
     if (seriesOver()) {
-      const s = buildSeries();
-      setSeries(s);
-      setEvents([...eventsLog.current]);
-      setFinished(true);
-    } else {
+      afterRadar(() => {
+        const s = buildSeries();
+        setSeries(s);
+        setEvents([...eventsLog.current]);
+        setFinished(true);
+      });
+    } else afterRadar(() => {
       const next = maps[mapIdx + 1];
       setPausedMsg(`${t('match.mapEnd')} ${mapIdx + 1}${next ? ` - ${t('match.preparing')} ${MAP_LABELS[next.map]}…` : '…'}`);
       // pausa maior pra dar tempo de ver como ficaram as stats do mapa
@@ -255,8 +278,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         setLastCall(null);
         setCallRecord({ made: 0, won: 0 });
         mapTransitionRef.current = null;
+        radarReqRef.current = 0;
       }, 3500);
-    }
+    });
   };
 
   // loop automático (0.5x..4x). Desligado no modo Tático.
@@ -270,9 +294,17 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       }
       const ms = SPEEDS[speedIdx].ms;
       const now = performance.now();
-      const due = Math.min(10, Math.floor((now - lastStepRef.current) / ms));
+      let due: number;
+      if (radarOn) {
+        // o radar pede os rounds; o relógio da velocidade fica parado
+        due = Math.min(10, radarReqRef.current);
+        radarReqRef.current -= due;
+        lastStepRef.current = now;
+      } else {
+        due = Math.min(10, Math.floor((now - lastStepRef.current) / ms));
+        lastStepRef.current += Math.max(0, due) * ms;
+      }
       if (due <= 0) return;
-      lastStepRef.current += due * ms;
 
       const sim = getSim(mapIdx);
       const stanceMod =
@@ -312,10 +344,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       if (boostsUsed > 0) setBoostRounds((b) => Math.max(0, b - boostsUsed));
       setTick((t) => t + 1);
       if (mapEnded) onMapEnded(sim);
-    }, Math.min(SPEEDS[speedIdx].ms, 250));
+    }, radarOn ? 50 : Math.min(SPEEDS[speedIdx].ms, 250));
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finished, mapIdx, boostRounds, pausedMsg, speedIdx, tactical]);
+  }, [finished, mapIdx, boostRounds, pausedMsg, speedIdx, tactical, radarOn]);
 
   // modo Tático: freezetime de 5s, depois joga UM round e repete
   useEffect(() => {
@@ -473,11 +505,20 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     window.setTimeout(() => setPausedMsg(''), 1400);
   };
 
+  // [radar 2D] o assistente técnico dispara ações que a tela já tem
+  const onTipAction = (a: TipAction) => {
+    if (a.kind === 'stance') setStance(a.mode);
+    else if (a.kind === 'call') { callRef.current = a.call; setPendingCall(a.call); }
+    else if (a.kind === 'timeout') callTimeout();
+    // 'style': ponto de integração do estilo T/CT (engine/gestao/estilo.ts) — sem efeito aqui
+  };
+  const radarRequest = useCallback((n: number) => { radarReqRef.current = Math.max(radarReqRef.current, n); }, []);
+
   // `tick` força o re-render a cada round simulado; os valores abaixo são
   // leituras baratas do sim atual, recalculadas a cada render de propósito.
   void tick;
   const sim = getSim(mapIdx);
-  const [sa, sb] = finished && series ? [0, 0] : sim.score();
+  const [sa, sb] = finished && series ? [0, 0] : radarOn && radarScore ? radarScore : sim.score();
   const roundLog = sim.roundLog();
   const buys = sim.buys();
   const myMoney = sim.money()[userIdx];
@@ -629,7 +670,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           {!finished && (
             <>
               <div className="seg" title={t('match.simSpeed')}>
-                {SPEEDS.map((s, i) => (
+                <button className={radarOn ? 'active' : ''} aria-pressed={radarOn} title={ct('Radar 2D ao vivo')} onClick={toggleRadar}>
+                  {ct('Radar 2D')}
+                </button>
+                {!radarOn && SPEEDS.map((s, i) => (
                   <button key={s.label} className={!tactical && speedIdx === i ? 'active' : ''} onClick={() => { setTactical(false); setSpeedIdx(i); }}>
                     {s.label}
                   </button>
@@ -654,7 +698,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           )}
         </div>
 
-        {!finished && caster && (() => {
+        {!finished && !radarOn && caster && (() => {
           const beats = caster.beats ?? [caster.text];
           const shown = beats.slice(0, Math.max(1, reveal)).join(' ');
           const pending = reveal < beats.length;
@@ -738,8 +782,27 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
             </div>
           )}
           {pausedMsg && <div className="timeout-flash">{pausedMsg}</div>}
-          {!finished && <KillFeed events={visibleKills} teams={teams} playerById={playerById} />}
+          {!finished && !radarOn && <KillFeed events={visibleKills} teams={teams} playerById={playerById} />}
         </div>
+
+        {!finished && radarOn && (
+          <RadarMatch
+            sim={sim}
+            map={currentMap}
+            mapIdx={mapIdx}
+            teams={teams}
+            userIdx={userIdx}
+            tick={tick}
+            gate={!tactical}
+            paused={!!pausedMsg}
+            requestStep={radarRequest}
+            onShownScore={setRadarScore}
+            stance={stance}
+            timeoutsLeft={timeoutsLeft}
+            onTipAction={onTipAction}
+            onBusy={onRadarBusy}
+          />
+        )}
 
         {!finished && (
           <LiveScoreboard
