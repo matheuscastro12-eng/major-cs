@@ -101,7 +101,7 @@ export interface TacticsState {
   instr: TeamInstructions;
   maps: Partial<Record<MapId, MapTactic>>;
   antiStrat?: { opponentTeamId: string; readiness: number } | null; // preparação contra o próximo adversário
-  // [estilo de jogo] opcionais (ausentes = Padrão nos dois lados; save continua v28)
+  // [estilo de jogo] opcionais (ausentes = Padrão nos dois lados; sem subir SAVE_VERSION: campo opcional, save antigo lê Padrão)
   style?: TeamStyle;
   styleFam?: Partial<Record<string, number>>; // `${'t'|'ct'}:${StyleId}` → familiaridade 0–100
 }

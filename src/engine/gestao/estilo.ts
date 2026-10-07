@@ -175,6 +175,10 @@ export interface StyleShape {
   engPost?: (role: MapRole, style: Playstyle) => number;
 }
 
+// Passivo: elenco fraco em pós-plant/clutch perde menos do que o forte ganha
+// (a falta pesa um quarto — o time ainda pode trocar de estilo).
+const soft = (x: number) => (x < 0 ? 0.25 * x : x);
+
 const NONE: StyleShape = { open: 0, mid: 0, post: 0, trade: 1, plant: 1, time: 1, k: 1, oppPlant: 1 };
 
 /** Forma do estilo para um perfil (sem familiaridade). */
@@ -195,8 +199,8 @@ export function styleShape(side: 't' | 'ct', s: StyleId, P0: StyleProfile): Styl
         engOpen: (r, st) => (st === 'aggressive' ? 1.3 : r === 'entry' || r === 'second' ? 1.15 : 1),
       };
       case 'passive': return {
-        open: -0.02, mid: 0.027 + 0.045 * P.sense, post: 0.01 + 0.045 * P.post + 0.04 * P.clutch - 0.03 * aggFit,
-        trade: 0.95, plant: 0.94, time: 1.3, k: 1, oppPlant: 1,
+        open: -0.02, mid: 0.027 + 0.045 * P.sense, post: 0.01 + 0.045 * soft(P.post) + 0.04 * soft(P.clutch) - 0.03 * aggFit,
+        trade: 0.97, plant: 0.94, time: 1.3, k: 1, oppPlant: 1,
         engOpen: (r, st) => (st === 'passive' || r === 'lurker' ? 0.8 : 1),
         engPost: (r, st) => (r === 'lurker' || st === 'passive' ? 1.3 : 1),
       };
@@ -220,8 +224,8 @@ export function styleShape(side: 't' | 'ct', s: StyleId, P0: StyleProfile): Styl
       engOpen: (r, st) => (st === 'aggressive' ? 1.3 : r === 'entry' || r === 'rotator' ? 1.15 : 1),
     };
     case 'passive': return {
-      open: -0.02 + 0.03 * P.hold, mid: -0.03 + 0.035 * P.sense, post: 0.0 + 0.035 * P.retake + 0.035 * P.clutch - 0.03 * aggFit,
-      trade: 0.97, plant: 1, time: 1, k: 1, oppPlant: 1,
+      open: -0.02 + 0.03 * P.hold, mid: -0.03 + 0.035 * P.sense, post: 0.0 + 0.035 * soft(P.retake) + 0.035 * soft(P.clutch) - 0.03 * aggFit,
+      trade: 0.99, plant: 1, time: 1, k: 1, oppPlant: 1,
       engOpen: (r, st) => (r === 'anchor' || r === 'awp' || st === 'passive' ? 1.2 : st === 'aggressive' ? 0.85 : 1),
     };
     case 'control': return {

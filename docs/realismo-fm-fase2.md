@@ -135,7 +135,7 @@ Pedido dos jogadores: "o time joga padrão, agressivo, passivo…". Camada por c
 - Estilos: T = Padrão, Agressivo, Passivo (lurk), Controle (lento), Rush; CT = Padrão, Agressivo, Passivo, Controle, Stack/retake. **Padrão = nenhum modificador (motor bit a bit de antes)**.
 - Mecanismo: engajamento por fase (quem duela na abertura/meio/pós-plant, por papel e estilo do jogador), viés por fase que depende do PERFIL do elenco (`styleProfile`: entry, hold, leitura, pós-plant, retake, clutch, troca, utilitária em desvios da base, centrados — só a forma; IGL absoluto), trocas, plant, tempo, cessão do site (`oppPlantMult`) e peso da mira (`RoundSpec.kMult`: < 1 = mais variância, bom pro azarão). Confronto de estilos leve (`STYLE_RPS`, Padrão neutro).
 - Familiaridade por estilo (`TacticsState.styleFam`, 0–100, padrão 35): +4 por mapa jogado com o estilo, −1 por série parado (piso 25), em `tacticsAfterSeries`. Qualidade = familiaridade do estilo × familiaridade do mapa (fase 2).
-- Contrato (tudo opcional, save continua v28): `TacticsState.style?`/`styleFam?`; `TacticDuelMods.engageMid?`/`engagePost?`/`kMult?`/`oppPlantMult?`; `RoundSpec.kMult?`; `TeamPlan.style`/`styleQ`/`profile`/`players`; `MapResult.styleStats?`/`styles?` (só com tática); `MapSim.style?()`/`setStyle?()` (só v2; troca ao vivo, a % mostrada já vê).
+- Contrato (tudo opcional, sem subir `SAVE_VERSION` — hoje 30; nada no estilo lê a versão): `TacticsState.style?`/`styleFam?`; `TacticDuelMods.engageMid?`/`engagePost?`/`kMult?`/`oppPlantMult?`; `RoundSpec.kMult?`; `TeamPlan.style`/`styleQ`/`profile`/`players`; `MapResult.styleStats?`/`styles?` (só com tática); `MapSim.style?()`/`setStyle?()` (só v2; troca ao vivo, a % mostrada já vê).
 - IA: `aiStyle` (dentro de `aiTactics`) adota um estilo quando o encaixe estimado passa da margem, com viés do técnico/playbook; na base, ~1/3 dos times usa estilo no T e ~1/6 no CT.
 - Tela: painel "Estilo de jogo" no Plano de jogo (encaixe 0–100 + pp por round, familiaridade, o que valoriza, variância, contra o estilo do adversário); seletor ao vivo na partida; "Estilo em campo" no pós-jogo (aberturas, trocas, plant, pós-plant, retakes, tempo, clutches).
 
@@ -144,11 +144,13 @@ Espelho (mesmo elenco, perfil modificado ±0,35 × perfil, familiaridade de esti
 
 | Perfil | melhor (T + CT) | pior (T + CT) | ideal × pior numa MD3 |
 |---|---|---|---|
-| médio (tier S real) | Rush + Controle 51,1% | Passivo + Passivo 49,3% | 2,7 pp (ruído) |
-| mira de entrada | Agressivo + Agressivo 53,4% | Passivo + Passivo 48,8% | 7,0 pp |
-| cabeça (leitura/IGL) | Passivo + Controle 51,2% | Agressivo + Agressivo 47,6% | 5,5 pp |
-| frieza (pós-plant/clutch) | Passivo + Controle 50,7% | Controle + Agressivo 47,1% | 5,4 pp |
-| coletivo (troca/utilitária) | Rush + Padrão 52,7% | Passivo + Passivo 44,9% | 11,6 pp |
+| médio (tier S real) | Rush + Controle 51,1% | Agressivo + Padrão 49,9% | 1,9 pp (ruído) |
+| mira de entrada | Agressivo + Agressivo 53,4% | Passivo + Padrão 50,0% | 5,2 pp |
+| cabeça (leitura/IGL) | Passivo + Controle 51,5% | Agressivo + Agressivo 47,6% | 5,9 pp |
+| frieza (pós-plant/clutch) | Passivo + Controle 51,1% | Controle + Agressivo 47,1% | 6,0 pp |
+| coletivo (troca/utilitária) | Rush + Padrão 52,7% | Passivo + Passivo 47,7% | 7,4 pp |
+
+Passivo: a falta de pós-plant/clutch/retake pesa ¼ do que a sobra ajuda, e o custo de troca é menor (T ×0,97, CT ×0,99) — o elenco fraco nisso não despenca no estilo errado.
 
 Travado em `scripts/test-estilo.mts` (neutralidade bit a bit, o melhor estilo muda com o perfil, faixa da MD3, encaixe da tela × motor, familiaridade, confronto, variância, troca ao vivo, IA). Calibração (`test-engine-calibration`, sem tática) e `test-tactics` (IA com tática e estilo) verdes; neutralidade da integração (`test-fase2-integracao`) verde.
 
