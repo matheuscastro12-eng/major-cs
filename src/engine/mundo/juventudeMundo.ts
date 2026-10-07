@@ -19,6 +19,7 @@ import type { YouthDebut } from '../career/playerAge';
 import { FREE_TEAM_ID } from '../career/transferAI';
 import { playerOvr } from '../ratings';
 import { hashStr } from '../../state/hash';
+import { SPLITS_PER_YEAR } from '../clock';
 import { attrsOf } from '../attrs/model';
 import type { RetiredSource } from '../gestao/staff';
 import type { MundoState, WorldRetiree } from './model';
@@ -106,7 +107,7 @@ export function ensureYearIntake(mundo: MundoJuv, a: {
   const year = careerYearOf(a.split);
   if (hasIntake(mundo, year)) return mundo;
   const seed = mundo.seed ?? youthSeedFor(a.save);
-  const r = generateIntake({ seed, year, split: Math.max(firstSplitOfYear(year), Math.min(a.split, firstSplitOfYear(year) + 2)), academies: academySources(a.world), user: a.user ?? null });
+  const r = generateIntake({ seed, year, split: Math.max(firstSplitOfYear(year), Math.min(a.split, firstSplitOfYear(year) + SPLITS_PER_YEAR - 1)), academies: academySources(a.world), user: a.user ?? null });
   return applyIntake({ ...mundo, seed }, r);
 }
 

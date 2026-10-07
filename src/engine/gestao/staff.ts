@@ -24,6 +24,7 @@ import type { Coach, CoachStyle, Role } from '../../types';
 import type { AttrKey } from '../attributes';
 import type { MacroRegion } from '../../data/regions';
 import { hashStr } from '../../state/hash';
+import { SPLITS_PER_YEAR } from '../clock';
 
 // ─── Catálogo ───────────────────────────────────────────────────────────────
 export const STAFF_ATTRS: StaffAttrKey[] = [
@@ -183,7 +184,7 @@ export function staffSeverance(m: StaffMember, split: number): number {
 }
 /** Idade exibida: envelhece 1 ano a cada 3 splits no clube (a mesma régua dos jogadores). */
 export function staffAge(m: StaffMember, split: number): number {
-  return m.age + Math.max(0, Math.floor((split - (m.since ?? split)) / 3));
+  return m.age + Math.max(0, Math.floor((split - (m.since ?? split)) / SPLITS_PER_YEAR));
 }
 
 export type StaffOp = { ok: true; staff: StaffState; cost: number; replaced?: StaffMember } | { ok: false; reason: string };
