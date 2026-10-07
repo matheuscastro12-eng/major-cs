@@ -6,6 +6,9 @@ import { Hub } from '../../components/Hub';
 import { ct } from '../../state/career-i18n';
 import { getTeam } from '../../engine/swiss';
 import type { Pairing, SeriesResult, Tournament, TTeam } from '../../types';
+import { useMemo } from 'react';
+import { MajorSpectacle } from './major/MajorSpectacle';
+import { useMajorPickem } from './major/store';
 
 interface MajorPre {
   stage: number;
@@ -21,6 +24,11 @@ interface Props {
     split: number;
     titles: number;
     budget: number;
+    // [Major espetáculo] só leitura: nome da org (pick'em), stages já jogados e seeds dos próximos
+    org?: { name: string; tag: string } | null;
+    majorHistory?: Tournament['history'];
+    majorSeed2?: TTeam[];
+    majorSeed3?: TTeam[];
   };
   playMajorMine: () => void;
   simMajorRound: () => void;
@@ -34,6 +42,13 @@ export function MajorTab({ majorT, save, playMajorMine, simMajorRound, setSelSer
   const stLabel = st === 0 ? ct('RMR · suíço de 16 (os melhores vão ao Stage 1)') : st >= 4 ? ct('Champions Stage (playoffs)') : `Stage ${st} ${ct('de 3 · fase Suíça')}`;
   const enterTop = entered === 3 ? 8 : entered === 2 ? 16 : 24;
   const path = entered === 0 ? [0, 1, 2, 3, 4] : [1, 2, 3, 4];
+  // [Major espetáculo] histórico combinado (stages anteriores + o ao vivo) e o pick'em
+  const history = useMemo(() => [...(save.majorHistory ?? []), ...majorT.history], [save.majorHistory, majorT.history]);
+  const pick = useMajorPickem(majorT, st, history, save.org?.name ?? '', save.split);
+  const openSeries = (p: Pairing) => {
+    const ta = getTeam(majorT, p.a); const tb = getTeam(majorT, p.b);
+    if (p.result && ta && tb) setSelSeries({ series: p.result, teams: [ta, tb] }); // stage passado: time pode não estar no field atual
+  };
 
   return (
     <>
@@ -74,11 +89,12 @@ export function MajorTab({ majorT, save, playMajorMine, simMajorRound, setSelSer
           </div>
         )}
       </div>
+      <MajorSpectacle majorT={majorT} save={save} history={history} grade={pick.grade} onPick={pick.onPick} onOpenSeries={openSeries} />
       <Hub
         t={majorT}
         career={{ season: save.split, titles: save.titles, budget: save.budget }}
-        pickem={{ picks: {}, score: 0, total: 0 }}
-        onPick={() => {}}
+        pickem={pick.hub}
+        onPick={pick.onPick}
         onPlay={playMajorMine}
         onSimRound={simMajorRound}
         onStats={() => {}}

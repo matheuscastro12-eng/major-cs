@@ -203,7 +203,7 @@ export interface OddsInput {
 export interface Odds { title: number; playoffs: number; favorites: { id: string; p: number }[] }
 
 type Rng = () => number;
-const series = (rng: Rng, a: { id: string; s: number }, b: { id: string; s: number }, bo: 1 | 3 | 5) => (rng() < pSeriesWin(a.s - b.s, bo) ? a : b);
+const series = <T extends { id: string; s: number }>(rng: Rng, a: T, b: T, bo: 1 | 3 | 5): T => (rng() < pSeriesWin(a.s - b.s, bo) ? a : b);
 
 function swissFrom(rng: Rng, field: { id: string; s: number; w: number; l: number }[]): { id: string; s: number; l: number }[] {
   const rec = field.map((t) => ({ ...t }));
