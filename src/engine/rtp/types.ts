@@ -538,6 +538,8 @@ export interface DemoCliff {
   status: 'teaser' | 'delivered' | 'expired';   // teaser = só visível; delivered = na mesa (pendingOffers)
   openedAt?: number;              // epoch ms — quando a trava abriu com a proposta (UI grava)
   expiresAt?: number;             // epoch ms — openedAt + 48h
+  round?: number;                 // rodada da proposta (1 = original; 2 = revisada, a "segunda chance"). Ausente = 1
+  expiredAt?: number;             // epoch ms — quando o prazo venceu (base do re-arm da 2ª rodada)
 }
 
 // Selo do pódio semanal da Série do Dia (1º = campeão; 2º/3º = pódio). Vem do

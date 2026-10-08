@@ -16,7 +16,7 @@ import { useEffect, useRef } from 'react';
 import { ct } from '../../state/career-i18n';
 import { trackPaywallView, setCheckoutSrc, trackRtpDemo } from '../../state/track';
 import { TIER_NAME } from '../../engine/rtp/league';
-import { DEMO_WEEKS, activeDemoCliff, isDemoCliffExpired, openDemoCliff, expireDemoCliff } from '../../engine/rtp/demoCliff';
+import { DEMO_WEEKS, activeDemoCliff, isDemoCliffExpired, openDemoCliff, expireDemoCliff, rearmDemoCliff, deliverDemoCliff, cliffRound } from '../../engine/rtp/demoCliff';
 import type { RoadToProSave } from '../../engine/rtp/types';
 import { FounderCounter } from '../FounderCounter';
 import { RtpCliffOfferCard } from './RtpDemoCliff';
@@ -41,27 +41,38 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate }: {
     if (armed.current) return;
     armed.current = true;
     trackPaywallView('rtp-demo-gate');
-    const c = save.demoCliff;
-    if (!c) return;
     const t = Date.now();
+    // SEGUNDA CHANCE: expirada há 3+ dias e ainda com rodada → o clube volta
+    // com a proposta revisada. Antes de tratar expiração (senão ela seria lida
+    // como expirada de novo). Passo próprio 'cliff_rearmed' fica pra depois:
+    // RtpDemoStep (state/track.ts) é union fechada e não é deste PR — a
+    // reabertura conta como 'cliff_view' (rodada 2 visível no save: round).
+    const base = rearmDemoCliff(save, t);
+    const c = base.demoCliff;
+    if (!c) return;
     if (isDemoCliffExpired(c, t)) {
       trackRtpDemo('cliff_expired');
-      if (c.status !== 'expired') onUpdate?.(expireDemoCliff(save));
+      if (c.status !== 'expired') onUpdate?.(expireDemoCliff(base, t));
       return;
     }
     trackRtpDemo('cliff_view');
-    if (!c.openedAt) onUpdate?.(openDemoCliff(save, t));
+    let next = c.openedAt ? base : openDemoCliff(base, t);
+    // a 1ª rodada foi pra mesa na virada da semana 4; a revisada nasce já com a
+    // trava aberta, então entra na mesa agora — quem compra a vê ao sair da trava.
+    if (base !== save) next = deliverDemoCliff(next, t);
+    if (next !== save) onUpdate?.(next);
   }, [save, onUpdate]);
   // o relógio venceu com a trava aberta: vira "expirada" na hora (sem reload).
   useEffect(() => {
     const c = save.demoCliff;
     if (c && c.status !== 'expired' && isDemoCliffExpired(c, now)) {
       trackRtpDemo('cliff_expired');
-      onUpdate?.(expireDemoCliff(save));
+      onUpdate?.(expireDemoCliff(save, now));
     }
   }, [now, save, onUpdate]);
 
   const p = save.player;
+  const revised = !!cliff && cliffRound(cliff) > 1;   // 2ª rodada: a proposta revisada
   const goUpgrade = () => { if (cliff) goUpgradeFromCliff(onUpgrade); else { setCheckoutSrc('rtp-demo'); onUpgrade(); } };
   // no shell (RtpFrame): trilho, topbar e Voltar, como as outras telas de
   // fluxo do RtP; antes ocupava a tela inteira, sem saída além do botão
@@ -72,7 +83,11 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate }: {
         {cliff ? (
           <>
             <span className="rtp-demogate-kicker">📩 {ct('PROPOSTA NA MESA')} · {ct('FIM DA DEMO')}</span>
-            <h1>{ct('O')} <b>{cliff.offer.orgName}</b> {ct('quer o')} <b>{p.nick}</b>. {ct('A proposta expira em 48h.')}</h1>
+            {revised ? (
+              <h1>{ct('O')} <b>{cliff.offer.orgName}</b> {ct('voltou com uma proposta revisada. Última chance: expira em 48h.')}</h1>
+            ) : (
+              <h1>{ct('O')} <b>{cliff.offer.orgName}</b> {ct('quer o')} <b>{p.nick}</b>. {ct('A proposta expira em 48h.')}</h1>
+            )}
             <RtpCliffOfferCard cliff={cliff} nick={p.nick} now={now} />
             <p className="rtp-demogate-pitch">
               {ct('Aceitar, negociar e virar a semana são da vitalícia. Compre agora e a proposta continua na mesa — exatamente esta, com o seu progresso intacto.')}

@@ -523,6 +523,20 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(WANTS_SIGNUP); // modal de login/conta acessível do header
   const [authMode, setAuthMode] = useState<'login' | 'signup'>(WANTS_SIGNUP ? 'signup' : 'login');
   const [utGateOpen, setUtGateOpen] = useState(false); // modal de escolha (convidado × conta)
+  // CHECKOUT IN-PLACE: o AccountModal abre POR CIMA da tela atual (trava do Road
+  // to Pro, upsell-card) em vez de trocar pra landing — o jogador, a proposta e o
+  // relógio continuam visíveis na hora da decisão. Mesmo atalho do onSignup do
+  // UltimateGate. `inlineCheckout` segura a tela ao concluir (onPlay não navega);
+  // `checkoutNick` é o jogador do RtP citado no reforço do Pix.
+  const [inlineCheckout, setInlineCheckout] = useState(false);
+  const [checkoutNick, setCheckoutNick] = useState('');
+  const openInlineCheckout = (src: string, nick?: string) => {
+    setCheckoutSrc(src); // first-touch: se a trava/cliff já marcou a origem, ela fica
+    setCheckoutNick(nick ?? '');
+    setInlineCheckout(true);
+    setAuthMode('signup');
+    setAuthOpen(true);
+  };
   // limpa o ?criar/#criar da URL depois que a intenção já foi capturada.
   useEffect(() => {
     if (!WANTS_SIGNUP) return;
@@ -1228,16 +1242,28 @@ export default function App() {
              sequer captura o erro — falha muda e o clique não faz nada). Manda
              pro mesmo caminho de convidado que a landing já usa (cadastro +
              pagamento na mesma tela). */
-          onGuestUpgrade={goToCheckout}
+          onGuestUpgrade={() => openInlineCheckout('upsell-card')}
           onPixPaid={async () => { setPaidToast(true); await refreshAccount(); }}
         />
       )}
-      {authOpen && !account && (
+      {/* !account?.paid (antes !account): o signup/login grava a conta no store
+          ANTES do QR Pix aparecer — com !account o modal desmontava no meio do
+          pagamento. Conta grátis já logada abre direto no passo de pagamento. */}
+      {authOpen && !account?.paid && (
         <AccountModal
           initialMode={authMode}
-          onClose={() => { setAuthOpen(false); setAuthMode('login'); }}
+          payingAccount={account}
+          pixFirst={screen === 'rtp'}
+          playerNick={checkoutNick}
+          onClose={() => { setAuthOpen(false); setAuthMode('login'); setInlineCheckout(false); }}
           onCheckout={startCheckout}
-          onPlay={async () => { setAuthOpen(false); await refreshAccount(); setScreen(hasIntent() ? 'ultimate' : manager ? 'home' : 'setup'); }} /* [U08] intenção de compra viva → volta pro Ultimate */
+          onPlay={async () => {
+            setAuthOpen(false); setInlineCheckout(false);
+            await refreshAccount();
+            // checkout in-place (trava do RtP, upsell): fica na mesma tela — o
+            // RoadToPro sai da trava sozinho (demo=false) no MESMO save.
+            setScreen(screen === 'rtp' || inlineCheckout ? screen : hasIntent() ? 'ultimate' : manager ? 'home' : 'setup'); /* [U08] intenção de compra viva → volta pro Ultimate */
+          }}
         />
       )}
       {utGateOpen && !account && (
@@ -1398,12 +1424,15 @@ export default function App() {
           rtp-demo-gate é vista por 15-40 sids/dia mas o checkout_open desse src
           sumiu (0-1/dia desde 25/08, contra 3-6/dia antes) — quem bate na trava
           cai na landing cheia e precisa achar OUTRO CTA pra abrir o pagamento.
-          goToCheckout pula esse passo, igual toda outra trava já faz. */}
+          goToCheckout pula esse passo, igual toda outra trava já faz.
+          Agora nem a landing: o AccountModal abre POR CIMA da trava (Pix
+          primeiro), com o jogador e a proposta visíveis enquanto paga. A
+          trava/cliff já marcam a origem (first-touch) antes do onUpgrade. */}
       {/* [O0-11] demo só depois do /me: com a conta ainda carregando, o RtP
           montava com demo=true, injetava o cliffhanger no save do pagante e
           disparava a trava + paywall_view. Espera accountReady. */}
       {RTP_ENABLED && screen === 'rtp' && (accountReady
-        ? <ModeErrorBoundary mode="rtp" onExit={() => setScreen('home')}><RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={goToCheckout} /></ModeErrorBoundary>
+        ? <ModeErrorBoundary mode="rtp" onExit={() => setScreen('home')}><RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={(nick) => openInlineCheckout('rtp-demo', nick)} /></ModeErrorBoundary>
         : <Loader text="…" />)}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
       {screen === 'daily' && <ModeErrorBoundary mode="daily" onExit={() => setScreen('home')}><DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} /></ModeErrorBoundary>}
