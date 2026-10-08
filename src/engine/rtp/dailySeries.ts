@@ -21,6 +21,7 @@ import type { MomentOutcome } from './moments';
 import type { RoadToProSave, ArchetypeKind } from './types';
 import type { MapId, Role } from '../../types';
 import type { PlayerPersonality } from '../career/personality';
+import { shareUrl } from '../../state/shareLink';
 
 export { dateKeyOf, dayNumberOf };
 
@@ -81,12 +82,15 @@ export function dailyScoreOf(result: ProMatchResult): DailyScore {
   return { rating: result.heroRating, won: result.won, mapScore: result.mapScore };
 }
 
+/** link da Série do Dia com atribuição (?ref=rtp-series) */
+export const DAILY_SERIES_URL = shareUrl('/', 'rtp-series');
+
 // texto de share (o print é o convite — mesmo padrão do Diário).
 export function dailyShareText(day: number, s: DailyScore, rank: number | null, streakDays = 0): string {
   const res = s.won ? `venci ${s.mapScore[0]}–${s.mapScore[1]}` : `caí ${s.mapScore[0]}–${s.mapScore[1]}`;
   const pos = rank ? ` · top #${rank}` : '';
   const streak = streakDays >= 2 ? ` · 🔥 ${streakDays} dias` : '';
-  return `SÉRIE DO DIA #${day} · ROAD TO MAJOR\nRating ${s.rating.toFixed(2)} — ${res}${pos}${streak}\nMesma série pra todo mundo. Consegue mais?\nroadtomajor.com.br`;
+  return `SÉRIE DO DIA #${day} · ROAD TO MAJOR\nRating ${s.rating.toFixed(2)} — ${res}${pos}${streak}\nMesma série pra todo mundo. Consegue mais?\n${DAILY_SERIES_URL}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

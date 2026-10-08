@@ -2,6 +2,7 @@
 // Puro, sem React. Os jogos são os MESMOS do dia (progresso/streaks/pings
 // contam normal) — a maratona é a moldura: ordem fixa, cronômetro e uma NOTA
 // única compartilhável no fim. Uma maratona por dia; o primeiro tempo vale.
+import { shareUrl } from '../../state/shareLink';
 
 export const MARATHON_ORDER = ['lines', 'whois', 'impostor', 'classic'] as const;
 
@@ -29,11 +30,14 @@ const GRADE_FLAIR: Record<MarathonGrade, string> = {
   D: '💀 NOTA D — amanhã tem revanche',
 };
 
+/** link da Maratona com atribuição (?ref=marathon) — usado no texto e no intent do X */
+export const MARATHON_URL = shareUrl('/diario', 'marathon');
+
 export function marathonShareText(day: number, wins: number, seconds: number, grade: MarathonGrade): string {
   return [
     `MARATONA DO DIÁRIO #${day} · ROAD TO MAJOR`,
     `${wins}/4 em ${fmtDuration(seconds)} — ${GRADE_FLAIR[grade]}`,
     'Os 4 desafios do dia, em sequência, contra o relógio. Encara?',
-    'roadtomajor.com.br/diario',
+    MARATHON_URL,
   ].join('\n');
 }

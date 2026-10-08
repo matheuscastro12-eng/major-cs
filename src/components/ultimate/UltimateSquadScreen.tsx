@@ -79,7 +79,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
-import { setCheckoutSrc, track, trackPaywallView, trackUltFunnel } from '../../state/track';
+import { setCheckoutSrc, trackPaywallView, trackShare, trackUltFunnel } from '../../state/track';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, beginPassPix, beginPassCheckout, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { collectPaidCoins, collectPaidPass } from '../../state/paidClaim'; // [O0-25] coleta única, crédito fora do ciclo de vida da tela
 import { ultFrozenNotice } from '../../state/ultimateShadow'; // [O0-02]
@@ -104,7 +104,8 @@ import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
 import { UltimateCast } from './UltimateCast';
 import { buildDramaScript, pickHighlights, starsFromPlayers, type DramaStar } from '../../engine/ultimate/liveDrama';
 import { buildTaleOfTape, finalCallOf, pickMatchStar, streakLine, type MatchStar } from '../../engine/ultimate/showtime';
-import { shareUltimateResult } from './shareCard';
+import { shareUltimateResult, downloadUltimateCard, ultimateXText, ULT_CARD_URL, ULT_DRAFT_URL, type UltShareData } from './shareCard';
+import { postOnX } from '../../state/shareX';
 import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQUAD_DUEL_CAP, type StyleId } from '../../engine/ultimate/traits';
@@ -1725,20 +1726,32 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
 
   // card de compartilhamento (iter42): mesmo padrão canvas→PNG do FinalScreen
   // (state/share.ts) — sem libs; Web Share quando dá, senão download+clipboard.
-  const doShare = async (r: LiveResult) => {
-    if (shareState === 'busy') return;
-    setShareState('busy');
-    track('share_card', { mode: 'ultimate' });
+  const ultShareData = (r: LiveResult): UltShareData => {
     const t = r.star ? traitById(r.star.trait) : null;
-    const outcome = await shareUltimateResult({
+    return {
       clubName: state.profile.club?.name || undefined, // [U10]
       won: r.won, score: r.score, mapName: r.mapName, mode: r.mode, oppName: r.oppName,
       mvp: r.mvp ? { nick: r.mvp.card.nick, kills: r.mvp.kills, deaths: r.mvp.deaths } : undefined,
       star: r.star && t ? { nick: r.star.nick, traitName: t.name, traitIcon: t.icon } : undefined,
       casterLine: r.casterFinal,
       divName: r.mode === 'pvp' || r.mode === 'rivals' ? `${div.def.name} · ${state.profile.elo} RP` : undefined,
-    });
+    };
+  };
+  const doShare = async (r: LiveResult) => {
+    if (shareState === 'busy') return;
+    setShareState('busy');
+    const outcome = await shareUltimateResult(ultShareData(r));
+    trackShare('ult-card', outcome === 'shared' ? 'native' : 'copy');
     setShareState(outcome);
+  };
+  // X: o intent não aceita arquivo — baixa o PNG e abre o compositor com o
+  // texto pronto; o toast lembra de anexar a imagem. Tudo síncrono no clique
+  // (window.open depois de await cai no bloqueador de popup).
+  const doShareX = (r: LiveResult) => {
+    const d = ultShareData(r);
+    try { downloadUltimateCard(d); } catch { /* canvas indisponível: segue só com texto */ }
+    postOnX('ult-card', ultimateXText(d), ULT_CARD_URL);
+    setToast(ct('Abriu o X: anexa a imagem que baixou 😉'));
   };
 
   // inicia/continua uma partida por modo. Gauntlet: abre o run se não estiver
@@ -3902,9 +3915,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                   const w = result.draft?.wins ?? 0;
                   const marks = Array.from({ length: DRAFT_TARGET }, (_, i) => (i < w ? '🟩' : '🟥')).join('');
                   const pos = draftDayRank != null ? ` · #${draftDayRank} do dia` : '';
-                  const txt = `🗓️ DRAFT DO DIA #${day} — ${marks} ${w}/${DRAFT_TARGET}${pos}\nTodo mundo no MESMO draft. Encara?\nhttps://roadtomajor.com.br/ultimate`;
+                  const txt = `🗓️ DRAFT DO DIA #${day} — ${marks} ${w}/${DRAFT_TARGET}${pos}\nTodo mundo no MESMO draft. Encara?\n${ULT_DRAFT_URL}`;
+                  trackShare('ult-draft', 'copy');
                   void navigator.clipboard?.writeText(txt).then(() => setToast(ct('Resultado copiado — cola no grupo!')));
                 }}>📋 {ct('Compartilhar')}</Button>
+                <Button variant="ghost" onClick={() => {
+                  const day = dayNumberOf(dateKey(new Date()));
+                  const w = result.draft?.wins ?? 0;
+                  const marks = Array.from({ length: DRAFT_TARGET }, (_, i) => (i < w ? '🟩' : '🟥')).join('');
+                  const pos = draftDayRank != null ? ` · #${draftDayRank} do dia` : '';
+                  postOnX('ult-draft', `draft do dia #${day} do road to major\n${marks} ${w}/${DRAFT_TARGET}${pos}\ntodo mundo no mesmo draft. encara?`, ULT_DRAFT_URL);
+                }}>{ct('Postar no X')}</Button>
               </div>
             )}
             <div className={result.won ? 'ut-score-pop' : 'ut-score-shake'} style={{ fontSize: '2rem', fontWeight: 900, fontFamily: 'var(--font-num)', color: result.won ? 'var(--c-win)' : 'var(--c-loss)' }}>{result.score}</div>
@@ -4002,6 +4023,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             <button className="ut-btn ut-btn--ghost ut-cere__share" disabled={shareState === 'busy'} onClick={() => void doShare(result)}>
               {shareState === 'shared' ? `✔ ${ct('Compartilhado!')}` : shareState === 'saved' ? `✔ ${ct('Card salvo · texto copiado')}` : `📤 ${ct('Compartilhar resultado')}`}
             </button>
+            <button className="ut-btn ut-btn--ghost ut-cere__share" onClick={() => doShareX(result)}>{ct('Postar no X')}</button>
           </div>
         </Modal>
       )}

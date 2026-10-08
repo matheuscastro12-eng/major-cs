@@ -2,6 +2,7 @@
 // share de carreira (src/state/share.ts): canvas puro → PNG, zero libs.
 // Fluxo: navigator.share com arquivo quando o device suporta (mobile); senão
 // download do PNG + texto no clipboard (mesmo fallback do FinalScreen).
+import { shareUrl } from '../../state/shareLink';
 
 export interface UltShareData {
   won: boolean;
@@ -106,6 +107,26 @@ export function drawUltimateShareCard(d: UltShareData): string {
   return canvas.toDataURL('image/png');
 }
 
+/** link do card do Ultimate com atribuição (?ref=ult-card). O PNG leva só o domínio. */
+export const ULT_CARD_URL = shareUrl('/ultimate', 'ult-card');
+/** link do resultado do Draft do Dia (?ref=ult-draft). */
+export const ULT_DRAFT_URL = shareUrl('/ultimate', 'ult-draft');
+
+/** texto do post no X (tom de post: minúsculo, curto; o link vai via &url=). */
+export function ultimateXText(d: UltShareData): string {
+  const head = `${d.won ? 'venci' : 'perdi'} ${d.score} no ultimate do road to major${d.mapName ? ` (${d.mapName.toLowerCase()})` : ''}`;
+  const mvp = d.mvp ? `\nmvp: ${d.mvp.nick} ${d.mvp.kills}/${d.mvp.deaths}` : '';
+  return `${head}${mvp}\nmonta o teu squad e me enfrenta`;
+}
+
+/** Baixa o PNG do card (síncrono — chamado no clique, antes de abrir o X). */
+export function downloadUltimateCard(d: UltShareData): void {
+  const a = document.createElement('a');
+  a.href = drawUltimateShareCard(d);
+  a.download = 'ultimate-duelo.png';
+  a.click();
+}
+
 // compartilha: Web Share API (arquivo) → senão download + texto no clipboard.
 export async function shareUltimateResult(d: UltShareData): Promise<'shared' | 'saved'> {
   const url = drawUltimateShareCard(d);
@@ -114,7 +135,7 @@ export async function shareUltimateResult(d: UltShareData): Promise<'shared' | '
     d.oppName ? `vs ${d.oppName}` : '',
     d.mvp ? `MVP: ${d.mvp.nick} (${d.mvp.kills}K/${d.mvp.deaths}D)` : '',
     d.star ? `Craque do duelo: ${d.star.traitIcon} ${d.star.nick} · ${d.star.traitName}` : '',
-    'Monte seu Ultimate Squad: https://roadtomajor.com.br',
+    `Monte seu Ultimate Squad: ${ULT_CARD_URL}`,
   ].filter(Boolean).join('\n');
   try {
     const blob = await (await fetch(url)).blob();

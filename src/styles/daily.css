@@ -339,3 +339,12 @@
 }
 @keyframes rtm-daily-toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .rtm-daily-streak-kept { font-family: var(--dl-mono); font-size: 0.78rem; font-weight: 800; color: var(--dl-t); }
+
+/* [growth] botão secundário "Postar no X" ao lado do compartilhar (shareX.ts) */
+.rtm-lines-share.x,
+.rtm-daily-dayrow button.x,
+.rtm-daily-marathon button.x {
+  background: transparent; color: var(--dl-t);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dl-t) 70%, transparent);
+}
+.rtm-daily-dayrow button.x { margin-left: 0; }

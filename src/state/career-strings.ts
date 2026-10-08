@@ -3920,4 +3920,7 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Mídia': { en: 'Media', es: 'Medios' },
   'Coletiva': { en: 'Press conference', es: 'Rueda de prensa' },
   'Coletiva de imprensa aguardando você': { en: 'Press conference waiting for you', es: 'Rueda de prensa pendiente' },
+  // [growth] botão de postar no X com texto pronto (shareX.ts)
+  'Postar no X': { en: 'Post on X', es: 'Publicar en X' },
+  'Abriu o X: anexa a imagem que baixou 😉': { en: 'X is open: attach the image you just downloaded 😉', es: 'X está abierto: adjunta la imagen que descargaste 😉' },
 };

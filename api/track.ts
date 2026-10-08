@@ -4,6 +4,9 @@ import { parseJsonBody } from '../server/http.js';
 import { clientIp, memoryRateHit, respondLimited } from '../server/rate-limit.js';
 
 const ALLOWED_TYPES = new Set([
+  // {ref?, utm_source?, utm_medium?, utm_campaign?, path?, referrer, mobile} — ref/utm
+  // vêm do ?ref= dos links de share (src/state/shareLink.ts). ATENÇÃO: antes de
+  // out/2026 `ref` guardava o document.referrer; hoje o referrer vai em `referrer`.
   'visit',
   'game_start',
   'game_end',
@@ -13,6 +16,10 @@ const ALLOWED_TYPES = new Set([
   'online_done',
   'donate_click',
   'ad_click',
+  // {kind, channel: 'x'|'native'|'copy'} — 1 por clique em compartilhar/postar
+  // no X (src/state/shareX.ts). kind = ref do link ('daily', 'ult-card', 'legado-major'…).
+  // Os eventos de venda (paywall_view, checkout_*, signup_*) passam a levar
+  // `ref` = primeiro ?ref= da sessão (first-touch, sessionStorage 'rtm-ref').
   'share_card',
   'presence',
   // funil de conversão da vitalícia (iter39): visão de paywall → checkout → abandono
