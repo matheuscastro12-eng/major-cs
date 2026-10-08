@@ -8,7 +8,7 @@ import { hashStr } from '../../state/hash';
 import { regionOf } from '../../data/regions';
 import { playerOvr } from '../ratings';
 import type { TeamSeason } from '../../types';
-import { dayNumberOf, normalizeGuess } from './lines';
+import { dayNumberOf, normalizeGuess, DAILY_URL } from './lines';
 
 export const WHOIS_MAX = 8;      // chutes até o pro se revelar
 export const WHOIS_MIN_OVR = 76; // piso do pool — só gente que a base conhece
@@ -121,5 +121,5 @@ export function shareTextOfWhois(dateKey: string, p: WhoisProgress, streak: numb
     ? `Cravei em ${p.guesses.length}/${WHOIS_MAX}`
     : `O pro misterioso me escapou (${WHOIS_MAX} chutes)`;
   const tail = streak >= 2 ? ` · 🔥 ${streak} dias seguidos` : '';
-  return `QUEM É O PRO? #${day} · ROAD TO MAJOR\n${head}${tail}\n${rows}\nroadtomajor.com.br/diario`;
+  return `QUEM É O PRO? #${day} · ROAD TO MAJOR\n${head}${tail}\n${rows}\n${DAILY_URL}`;
 }

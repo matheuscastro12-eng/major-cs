@@ -3,6 +3,7 @@
 // O gancho visual é a FITA DA CARREIRA: um quadradinho por split (dourado =
 // campeão, verde = top 4, cinza = meio, vermelho = fundo) com ⭐ nos Majors —
 // a "grade do Wordle" da sua gestão.
+import { shareUrl } from './shareLink';
 
 export interface CareerShareSplit {
   champion: boolean;
@@ -153,13 +154,29 @@ export function drawCareerShareCard(d: CareerShareData): string {
   return canvas.toDataURL('image/png');
 }
 
+/** link do card de carreira com atribuição (?ref=career-card). O PNG leva só o domínio. */
+export const CAREER_CARD_URL = shareUrl('/carreira', 'career-card');
+
+/** texto do post no X (minúsculo; o link vai via &url=). */
+export function careerXText(d: CareerShareData): string {
+  return `minha carreira no road to major: ${d.splits} splits, ${d.titles} títulos e ${d.majorsWon} major${d.majorsWon === 1 ? '' : 's'} 🏆\nmelhor campanha: ${d.bestLabel}`;
+}
+
+/** Baixa o PNG do card (síncrono — chamado no clique, antes de abrir o X). */
+export function downloadCareerCard(d: CareerShareData): void {
+  const a = document.createElement('a');
+  a.href = drawCareerShareCard(d);
+  a.download = 'minha-carreira.png';
+  a.click();
+}
+
 // compartilha: Web Share API (arquivo) → senão download + texto no clipboard.
 export async function shareCareerCard(d: CareerShareData): Promise<'shared' | 'saved'> {
   const url = drawCareerShareCard(d);
   const text = [
     `Minha carreira no Road to Major: ${d.splits} splits, ${d.titles} títulos, ${d.majorsWon} Major${d.majorsWon === 1 ? '' : 's'} 🏆`,
     `Melhor campanha: ${d.bestLabel} · Prêmios: ${d.prizeLabel}`,
-    'Construa a sua: https://roadtomajor.com.br',
+    `Construa a sua: ${CAREER_CARD_URL}`,
   ].join('\n');
   try {
     const blob = await (await fetch(url)).blob();

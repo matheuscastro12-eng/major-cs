@@ -27,7 +27,35 @@ export function sessionId(): string {
 // FUNIL DE CONVERSÃO (visitante → vitalícia R$20): eventos raros e de alto
 // valor — liberados no cliente junto com 'visit'/'ad_click'. Volume é ínfimo
 // (1x por sessão por superfície), então não mexe no controle de custo do Neon.
-const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel']);
+// share_card {kind, channel} entra aqui: 1 evento por clique em compartilhar —
+// volume ínfimo e é o numerador do K-factor (quanto compartilhamento vira visita).
+const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card']);
+// eventos de VENDA que carregam o ref de compartilhamento da sessão (first-touch)
+const REF_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done']);
+
+// ─── ATRIBUIÇÃO DE COMPARTILHAMENTO ──────────────────────────────────────────
+// Links gerados por state/shareLink.ts chegam com ?ref=daily&utm_source=share…
+// O PRIMEIRO ref da sessão fica em sessionStorage e é injetado nos eventos de
+// venda acima — assim dá pra ligar "post no X / grade no grupo" → Pix.
+const REF_KEY = 'rtm-ref';
+let memoryRef = '';
+
+/** só [a-z0-9-_], até `max` chars — o que vier fora disso é descartado. */
+function attrParam(v: string | null, max = 40): string {
+  if (!v) return '';
+  const s = v.toLowerCase().slice(0, max);
+  return /^[a-z0-9_-]+$/.test(s) ? s : '';
+}
+
+function getShareRef(): string {
+  try { return sessionStorage.getItem(REF_KEY) || memoryRef; } catch { return memoryRef; }
+}
+
+function rememberShareRef(ref: string): void {
+  if (!ref || getShareRef()) return; // first-touch
+  memoryRef = ref;
+  try { sessionStorage.setItem(REF_KEY, ref); } catch { /* storage bloqueado: fica em memória */ }
+}
 
 // CORTE DE CUSTO: só 'visit', 'ad_click' e os eventos do FUNIL vão pro servidor.
 // Eventos de jogo (game_start, online_*, etc.) viram no-op pra não gerar
@@ -39,12 +67,24 @@ export function track(type: string, data: Record<string, unknown> = {}): void {
     fetch('/api/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, sid: sessionId(), data }),
+      body: JSON.stringify({ type, sid: sessionId(), data: withShareRef(type, data) }),
       keepalive: true,
     }).catch(() => {});
   } catch {
     /* offline/dev: ignora */
   }
+}
+
+function withShareRef(type: string, data: Record<string, unknown>): Record<string, unknown> {
+  if (!REF_TYPES.has(type) || data.ref !== undefined) return data;
+  const ref = getShareRef();
+  return ref ? { ...data, ref } : data;
+}
+
+/** Clique num botão de compartilhar. channel: 'x' (intent), 'native' (navigator.share), 'copy' (clipboard/download). */
+export type ShareChannel = 'x' | 'native' | 'copy';
+export function trackShare(kind: string, channel: ShareChannel): void {
+  track('share_card', { kind: kind.slice(0, 40), channel });
 }
 
 export function startPresenceHeartbeat(): () => void {
@@ -204,6 +244,24 @@ export function trackSignup(step: 'start' | 'done'): void {
 
 // visita: no máximo 1 evento por sessão de navegação (por hora)
 export function trackVisit(): void {
+  // ATENÇÃO: até out/2026 `data.ref` do visit era o document.referrer. Agora
+  // `ref` é a origem do link compartilhado (?ref=) e o referrer vai em `referrer`.
+  // Só LÊ a query — limpar a URL é responsabilidade do App.tsx. Lido ANTES do
+  // dedupe: quem volta pelo link de um post dentro da mesma hora ainda grava o ref.
+  let attr: Record<string, string> = {};
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const ref = attrParam(q.get('ref'));
+    rememberShareRef(ref);
+    attr = {
+      ref,
+      utm_source: attrParam(q.get('utm_source')),
+      utm_medium: attrParam(q.get('utm_medium')),
+      utm_campaign: attrParam(q.get('utm_campaign')),
+      path: window.location.pathname.slice(0, 80),
+    };
+    for (const k of Object.keys(attr)) if (!attr[k]) delete attr[k];
+  } catch { /* URL inacessível: segue sem atribuição */ }
   try {
     const key = 'rtm-visit-at';
     const last = Number(sessionStorage.getItem(key) ?? 0);
@@ -213,5 +271,5 @@ export function trackVisit(): void {
     // sem sessionStorage, envia uma visita por carregamento; track() já é
     // fire-and-forget e não interfere no jogo.
   }
-  track('visit', { ref: document.referrer.slice(0, 120), mobile: window.innerWidth < 720 });
+  track('visit', { ...attr, referrer: document.referrer.slice(0, 120), mobile: window.innerWidth < 720 });
 }

@@ -5,7 +5,7 @@
 
 import { makeRng } from '../rng';
 import { hashStr } from '../../state/hash';
-import { dayNumberOf } from './lines';
+import { dayNumberOf, DAILY_URL } from './lines';
 
 export interface ClassicFinal {
   id: string;
@@ -117,5 +117,5 @@ export function shareTextOfClassic(dateKey: string, round: ClassicRound, p: Clas
       : `Cravei o placar de ${round.event} ${grid}`
     : `${round.event} me pegou ${grid}`;
   const tail = streak >= 2 ? ` · 🔥 ${streak} dias seguidos` : '';
-  return `PLACAR DO CLÁSSICO #${day} · ROAD TO MAJOR\n${head}${tail}\nroadtomajor.com.br/diario`;
+  return `PLACAR DO CLÁSSICO #${day} · ROAD TO MAJOR\n${head}${tail}\n${DAILY_URL}`;
 }

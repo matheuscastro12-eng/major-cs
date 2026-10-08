@@ -6,10 +6,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ct } from '../../state/career-i18n';
 import { track } from '../../state/track';
+import { postOnX, shareText } from '../../state/shareX';
 import { useSectionHistory } from '../../state/app-history';
 import {
   DAILY_GAMES, dateKeyOf, dayNumberOf, lineOfDay, slotOrderOf,
-  applyGuess, freshProgress, giveUp, shareTextOf, MAX_ERRORS,
+  applyGuess, freshProgress, giveUp, shareTextOf, MAX_ERRORS, DAILY_URL,
   type LinesProgress,
 } from '../../engine/daily/lines';
 import {
@@ -33,7 +34,7 @@ import { loadStreakState, recordStreakPlay, syncStreakWithServer } from '../../s
 import { frameById } from '../../engine/ultimate/cosmetics';
 import { nextMilestone, pendingMilestones, streakStatus, STREAK_MILESTONES, type StreakState } from '../../engine/daily/streak';
 import { evaluateDailyBadges } from '../../engine/daily/badges';
-import { MARATHON_ORDER, marathonGrade, marathonShareText, fmtDuration } from '../../engine/daily/marathon';
+import { MARATHON_ORDER, MARATHON_URL, marathonGrade, marathonShareText, fmtDuration } from '../../engine/daily/marathon';
 import '../../styles/daily.css';
 import { GameShell } from '../ds/shell/GameShell';
 import type { ShellNavGroup } from '../ds/shell/types';
@@ -117,10 +118,19 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
     const perfect = dayStatus.perfect
       ? `\n✨ DIA PERFEITO${perfectStreak.streak >= 2 ? ` · 🔥 ${perfectStreak.streak} dias perfeitos seguidos` : ''}`
       : '';
-    const text = `DIÁRIO #${day} · ROAD TO MAJOR\n${cells} — ${dayStatus.won}/${dayStatus.total}${perfect}\nroadtomajor.com.br/diario`;
+    const text = `DIÁRIO #${day} · ROAD TO MAJOR\n${cells} — ${dayStatus.won}/${dayStatus.total}${perfect}\n${DAILY_URL}`;
     track('daily_share', { game: 'day', day, won: dayStatus.perfect });
-    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
-    try { await navigator.clipboard.writeText(text); setDayCopied(true); setTimeout(() => setDayCopied(false), 1800); } catch { /* sem clipboard */ }
+    if (await shareText('daily', text) === 'copy') { setDayCopied(true); setTimeout(() => setDayCopied(false), 1800); }
+  };
+  // X: texto curto e minúsculo (tom de post, não de cartaz), grade sem spoiler.
+  const shareDayX = () => {
+    if (!dayStatus) return;
+    const cells = DAILY_GAMES.map((g) => {
+      const p = dayStatus.perGame[g.id];
+      return `${g.icon}${p?.done ? (p.won ? '✅' : '❌') : '▫️'}`;
+    }).join(' ');
+    const tail = dayStatus.perfect ? ' · dia perfeito ✨' : '';
+    postOnX('daily', `diário #${day} do road to major\n${cells}\n${dayStatus.won}/${dayStatus.total}${tail}`, DAILY_URL);
   };
 
   // 🏁 MARATONA — moldura sobre os 4 jogos: ordem fixa + cronômetro + nota
@@ -159,8 +169,13 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
     const wins = marathon.wins ?? 0;
     const text = marathonShareText(day, wins, secs, marathonGrade(wins, secs));
     track('daily_share', { game: 'marathon', day, won: wins >= 4 });
-    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
-    try { await navigator.clipboard.writeText(text); setMarCopied(true); setTimeout(() => setMarCopied(false), 1800); } catch { /* sem clipboard */ }
+    if (await shareText('marathon', text) === 'copy') { setMarCopied(true); setTimeout(() => setMarCopied(false), 1800); }
+  };
+  const shareMarathonX = () => {
+    if (!marathon || marathon.finishedAt == null) return;
+    const secs = Math.round((marathon.finishedAt - marathon.startedAt) / 1000);
+    const wins = marathon.wins ?? 0;
+    postOnX('marathon', `maratona do diário #${day} do road to major\nnota ${marathonGrade(wins, secs)} · ${wins}/4 em ${fmtDuration(secs)}\nencara?`, MARATHON_URL);
   };
 
   type DView = 'hub' | 'lines' | 'whois' | 'impostor' | 'classic';
@@ -267,6 +282,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
                   <button type="button" onClick={() => { void shareMarathon(); }}>
                     {marCopied ? ct('Copiado! 😉') : ct('Compartilhar a nota')}
                   </button>
+                  <button type="button" className="x" onClick={shareMarathonX}>{ct('Postar no X')}</button>
                 </div>
               );
             }
@@ -312,6 +328,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
               <button type="button" onClick={() => { void shareDay(); }}>
                 {dayCopied ? ct('Copiado! 😉') : ct('Compartilhar meu dia')}
               </button>
+              <button type="button" className="x" onClick={shareDayX}>{ct('Postar no X')}</button>
             </div>
           )}
           {/* 📱 INSTALAR — só depois de jogar pelo menos um jogo do dia: pedir
@@ -454,15 +471,9 @@ function LinesGame({ dateKey, streakNow, onDone, streakDays }: { dateKey: string
     const st = loadDailyStreak('lines');
     const text = shareTextOf(dateKey, line, progress, st.streak || streakNow);
     track('daily_share', { game: 'lines', day: dayNumberOf(dateKey), won: progress.won });
-    try {
-      if (navigator.share) { await navigator.share({ text }); return; }
-    } catch { /* cancelado — cai pro clipboard */ }
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch { /* sem clipboard */ }
+    if (await shareText('daily-lines', text) === 'copy') { setCopied(true); setTimeout(() => setCopied(false), 1800); }
   };
+  const doShareX = () => postOnX('daily-lines', shareTextOf(dateKey, line, progress, loadDailyStreak('lines').streak || streakNow), DAILY_URL);
 
   const livesLeft = MAX_ERRORS - progress.errors;
 
@@ -536,6 +547,7 @@ function LinesGame({ dateKey, streakNow, onDone, streakDays }: { dateKey: string
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
+          <button type="button" className="rtm-lines-share x" onClick={doShareX}>{ct('Postar no X')}</button>
           <span className="rtm-daily-streak-kept"><Flame size={14} aria-hidden /> {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próxima line à meia-noite.')}</span>
         </div>
@@ -582,9 +594,9 @@ function WhoisGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone: (
     const st = loadDailyStreak('whois');
     const text = shareTextOfWhois(dateKey, progress, st.streak);
     track('daily_share', { game: 'whois', day: dayNumberOf(dateKey), won: progress.won });
-    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
-    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* sem clipboard */ }
+    if (await shareText('daily-whois', text) === 'copy') { setCopied(true); setTimeout(() => setCopied(false), 1800); }
   };
+  const doShareX = () => postOnX('daily-whois', shareTextOfWhois(dateKey, progress, loadDailyStreak('whois').streak), DAILY_URL);
 
   return (
     <div className="rtm-lines">
@@ -649,6 +661,7 @@ function WhoisGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone: (
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
+          <button type="button" className="rtm-lines-share x" onClick={doShareX}>{ct('Postar no X')}</button>
           <span className="rtm-daily-streak-kept"><Flame size={14} aria-hidden /> {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próximo pro à meia-noite.')}</span>
         </div>
@@ -681,9 +694,9 @@ function ImpostorGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone
     const st = loadDailyStreak('impostor');
     const text = shareTextOfImpostor(dateKey, round, progress, st.streak);
     track('daily_share', { game: 'impostor', day: dayNumberOf(dateKey), won: progress.won });
-    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
-    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* sem clipboard */ }
+    if (await shareText('daily-impostor', text) === 'copy') { setCopied(true); setTimeout(() => setCopied(false), 1800); }
   };
+  const doShareX = () => postOnX('daily-impostor', shareTextOfImpostor(dateKey, round, progress, loadDailyStreak('impostor').streak), DAILY_URL);
 
   return (
     <div className="rtm-lines">
@@ -733,6 +746,7 @@ function ImpostorGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
+          <button type="button" className="rtm-lines-share x" onClick={doShareX}>{ct('Postar no X')}</button>
           <span className="rtm-daily-streak-kept"><Flame size={14} aria-hidden /> {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próximo impostor à meia-noite.')}</span>
         </div>
@@ -765,9 +779,9 @@ function ClassicGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone:
     const st = loadDailyStreak('classic');
     const text = shareTextOfClassic(dateKey, round, progress, st.streak);
     track('daily_share', { game: 'classic', day: dayNumberOf(dateKey), won: progress.won });
-    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
-    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* sem clipboard */ }
+    if (await shareText('daily-classic', text) === 'copy') { setCopied(true); setTimeout(() => setCopied(false), 1800); }
   };
+  const doShareX = () => postOnX('daily-classic', shareTextOfClassic(dateKey, round, progress, loadDailyStreak('classic').streak), DAILY_URL);
 
   const answerLabel = round.options.find((o) => o.key === round.answerKey)?.label ?? '';
   // dica após o 1º erro (só enquanto o jogo está aberto)
@@ -819,6 +833,7 @@ function ClassicGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone:
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
+          <button type="button" className="rtm-lines-share x" onClick={doShareX}>{ct('Postar no X')}</button>
           <span className="rtm-daily-streak-kept"><Flame size={14} aria-hidden /> {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próximo clássico à meia-noite.')}</span>
         </div>

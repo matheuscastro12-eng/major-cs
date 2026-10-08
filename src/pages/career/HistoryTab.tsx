@@ -6,8 +6,9 @@ import { CareerTimeline, type TimelineExtras } from '../../components/career/Car
 import { PLACE_SHORT, type SplitRecord } from '../../components/CareerScreen';
 import { ct } from '../../state/career-i18n';
 import { formatMoney } from '../../engine/ratings';
-import { shareCareerCard, type CareerShareData } from '../../state/careerShareCard';
-import { track } from '../../state/track';
+import { shareCareerCard, downloadCareerCard, careerXText, CAREER_CARD_URL, type CareerShareData } from '../../state/careerShareCard';
+import { track, trackShare } from '../../state/track';
+import { postOnX } from '../../state/shareX';
 import type { YearAwards } from '../../engine/awards';
 
 interface OrgAggregate {
@@ -33,11 +34,9 @@ interface Props {
 
 export function HistoryTab({ save, org, identity, awards, hallOfFame, timelineExtras }: Props) {
   const [sharing, setSharing] = useState<'idle' | 'busy' | 'saved'>('idle');
+  const [xHint, setXHint] = useState(false);
 
-  const doShareCard = async () => {
-    if (sharing === 'busy') return;
-    setSharing('busy');
-    const data: CareerShareData = {
+  const careerCardData = (): CareerShareData => ({
       orgName: identity?.name || 'Minha org',
       tag: identity?.tag,
       splits: Math.max(save.split - 1, save.history.length),
@@ -52,9 +51,14 @@ export function HistoryTab({ save, org, identity, awards, hallOfFame, timelineEx
         bottom: h.position >= 9,
         major: h.major ? (h.major.champion ? 'won' as const : 'played' as const) : undefined,
       })),
-    };
+  });
+  const doShareCard = async () => {
+    if (sharing === 'busy') return;
+    setSharing('busy');
+    const data = careerCardData();
     track('career_share_card', { splits: data.splits, titles: data.titles, majors: data.majorsWon });
     const how = await shareCareerCard(data);
+    trackShare('career-card', how === 'shared' ? 'native' : 'copy');
     setSharing(how === 'saved' ? 'saved' : 'idle');
     if (how === 'saved') setTimeout(() => setSharing('idle'), 2200);
   };
@@ -81,6 +85,23 @@ export function HistoryTab({ save, org, identity, awards, hallOfFame, timelineEx
           {sharing === 'busy' ? ct('Gerando…') : sharing === 'saved' ? ct('PNG salvo + texto copiado 😉') : `📸 ${ct('Minha carreira em 1 print')}`}
         </button>
       )}
+      {save.history.length > 0 && (
+        <button
+          type="button"
+          className="btn-ghost"
+          style={{ margin: '10px 0 4px 8px', padding: '8px 14px', border: '1px solid var(--em-gold)', borderRadius: 6, background: 'transparent', color: 'var(--em-gold)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.8rem' }}
+          onClick={() => {
+            // intent do X não aceita arquivo: baixa o PNG e abre o post com o texto pronto
+            const data = careerCardData();
+            try { downloadCareerCard(data); } catch { /* canvas indisponível */ }
+            postOnX('career-card', careerXText(data), CAREER_CARD_URL);
+            setXHint(true);
+          }}
+        >
+          {ct('Postar no X')}
+        </button>
+      )}
+      {xHint && <div className="muted small">{ct('Abriu o X: anexa a imagem que baixou 😉')}</div>}
       {/* #27: GALERIA DE PRÊMIOS — as noites de premiação da sua era, pra sempre */}
       {awards && awards.length > 0 && (
         <>

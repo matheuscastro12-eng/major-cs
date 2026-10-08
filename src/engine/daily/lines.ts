@@ -8,6 +8,7 @@
 import { makeRng } from '../rng';
 import { hashStr } from '../../state/hash';
 import { HISTORIC_LINES, type HistoricLine, type LinePlayer } from './lineups';
+import { shareUrl } from '../../state/shareLink';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Registry dos minigames diários (o hub renderiza a partir daqui)
@@ -60,6 +61,9 @@ export function dateKeyOf(d: Date): string {
 }
 
 // nº do dia (1-based) a partir da chave — datas antes da época contam do 1.
+/** link do Diário com atribuição (?ref=daily) — vai no fim de toda grade e no intent do X */
+export const DAILY_URL = shareUrl('/diario', 'daily');
+
 export function dayNumberOf(dateKey: string): number {
   const [y, m, d] = dateKey.split('-').map(Number);
   const [ey, em, ed] = DAILY_EPOCH.split('-').map(Number);
@@ -170,5 +174,5 @@ export function shareTextOf(dateKey: string, line: HistoricLine, p: LinesProgres
     ? `Lembrei a line ${line.team} ${line.year} — ${grid}${errors ? ` ${errors}` : ''}`
     : `A line ${line.team} ${line.year} me pegou — ${grid} ${errors}`;
   const tail = streak >= 2 ? ` · 🔥 ${streak} dias seguidos` : '';
-  return `LINES HISTÓRICAS #${day} · ROAD TO MAJOR\n${head}${tail}\nroadtomajor.com.br/diario`;
+  return `LINES HISTÓRICAS #${day} · ROAD TO MAJOR\n${head}${tail}\n${DAILY_URL}`;
 }
