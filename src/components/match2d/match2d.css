@@ -38,6 +38,8 @@
 .r2d-grid line { stroke: var(--c-line-soft); stroke-width: 0.15; }
 .r2d-walls line { stroke: var(--c-line-strong); stroke-linecap: round; }
 .r2d-floor line { stroke: var(--c-surface-2); stroke-linecap: round; }
+.r2d-walls rect { fill: var(--c-line-strong); }
+.r2d-floor rect { fill: var(--c-surface-2); }
 .r2d-site rect { fill: color-mix(in srgb, var(--c-brand) 10%, var(--c-surface-2)); stroke: color-mix(in srgb, var(--c-brand) 55%, transparent); stroke-width: 0.35; }
 .r2d-site text { fill: var(--c-brand); font-family: var(--font-display); font-size: 6.5px; text-anchor: middle; opacity: 0.55; }
 .r2d-spawn { stroke-width: 0.3; }
