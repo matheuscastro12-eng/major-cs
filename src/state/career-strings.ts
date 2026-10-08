@@ -2,10 +2,12 @@
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 import { EDITOR_STR } from './career-strings-editor';
 import { LEGADO_STR } from './career-strings-legado';
+import { CHECKOUT_STR } from './career-strings-checkout';
 
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   ...LEGADO_STR, // [SA2 · legado]
   ...EDITOR_STR, // [fase 4 · editor de base] (as entradas abaixo, se repetidas, valem)
+  ...CHECKOUT_STR, // [growth · checkout in-place da trava do RtP]
   // [fase 4 · frente CIRCUITO] calendário, circuito, VRS, qualificatórios, RMR, LAN, visto e bootcamp
   "sem field nesta etapa": { en: "no field this stage", es: "sin field en esta etapa" },
   "não disputado": { en: "not held", es: "no disputado" },

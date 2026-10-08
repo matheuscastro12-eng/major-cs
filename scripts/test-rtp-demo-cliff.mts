@@ -90,7 +90,7 @@ test('cliffhanger: entrega na virada pra depois da demo (pendingOffers), sem dup
 test('cliffhanger: jogo PAGO (sem demoCliff) passa intacto — economia inalterada', () => {
   const paid = fixture(13, DEMO_WEEKS + 1);
   assert.equal(deliverDemoCliff(paid, Date.UTC(2026, 8, 1)), paid);
-  assert.equal(expireDemoCliff(paid), paid);
+  assert.equal(expireDemoCliff(paid, 0), paid);
   assert.equal(activeDemoCliff(paid, 0), null);
   // turnWeek não inventa proposta nenhuma
   const after = turnWeek(paid);
@@ -120,7 +120,7 @@ test('cliffhanger: prazo de 48h em relógio de parede — abre 1x, expira, some 
   assert.equal(bought.demoCliff?.status, 'delivered');
   assert.equal(bought.world.pendingOffers?.length, 1);
   // ...e se o prazo vence com ela na mesa, expirar tira da mesa
-  const gone = expireDemoCliff(bought);
+  const gone = expireDemoCliff(bought, t0 + CLIFF_TTL_MS);
   assert.equal(gone.demoCliff?.status, 'expired');
   assert.equal(gone.world.pendingOffers?.length, 0);
   assert.equal(activeDemoCliff(gone, t0), null);

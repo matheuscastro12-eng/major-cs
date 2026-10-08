@@ -383,8 +383,22 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
 // módulo). Honesto e descartável — sem timer fake, sem segunda modal.
 const nudgeShownThisSession = new Set<string>();
 
-export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup' }: { onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
-  const [mode, setMode] = useState<'signup' | 'login' | 'reset'>(initialMode);
+export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup', pixFirst = false, payingAccount = null, playerNick = '' }: {
+  onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login';
+  /** Checkout aberto por cima da trava do Road to Pro: o QR Pix é o passo
+   *  seguinte automático e, com ele na tela, o formulário sai do caminho (o QR
+   *  e a troca pro cartão cabem sem rolar no celular). O cartão continua. */
+  pixFirst?: boolean;
+  /** Conta grátis já logada (sem pagar): pula o cadastro e vai direto pro pagamento. */
+  payingAccount?: { email: string; nick: string } | null;
+  /** Nick do jogador do RtP, citado no reforço do Pix. */
+  playerNick?: string;
+}) {
+  // 'pay': conta grátis existente — só o passo de pagamento. Lido 1x (useState):
+  // o signup/login de dentro do modal também grava a conta, e o modal NÃO pode
+  // trocar de passo no meio do fluxo por causa disso.
+  const [mode, setMode] = useState<'signup' | 'login' | 'reset' | 'pay'>(() => (payingAccount ? 'pay' : initialMode));
+  const [payAcct] = useState(payingAccount);
   // reset de senha em 2 passos: pedir o código por e-mail → código + senha nova.
   const [resetStep, setResetStep] = useState<'ask' | 'code'>('ask');
   const [code, setCode] = useState('');
@@ -464,15 +478,21 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const input: CSSProperties = { width: '100%' };
   const lbl: CSSProperties = { fontSize: '0.72rem', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: 'var(--em-muted)', display: 'block', marginBottom: '6px' };
   const pwMismatch = mode === 'signup' && pw2.length > 0 && pw !== pw2;
-  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6
-    && (mode === 'login' || (accepted && pw === pw2));
+  const valid = mode === 'pay' || (/\S+@\S+\.\S+/.test(email) && pw.length >= 6
+    && (mode === 'login' || (accepted && pw === pw2)));
+  // conta (nova, login ou a grátis já logada) que vai pagar
+  const resolveAccount = async () => {
+    if (mode === 'pay' && payAcct) return { ...payAcct, paid: false };
+    if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
+    const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
+    if (mode === 'signup') trackSignup('done');  // funil: cadastro criado com sucesso
+    return acct;
+  };
   const go = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
     try {
-      if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
-      const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
-      if (mode === 'signup') trackSignup('done');  // funil: cadastro criado com sucesso
+      const acct = await resolveAccount();
       if (acct.paid) { onPlay(); return; }           // já tem conta vitalícia: entra direto
       await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento (checkout_open é do App.startCheckout)
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
@@ -484,9 +504,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     if (!valid || busy) return;
     setBusy(true); setErr('');
     try {
-      if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
-      const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
-      if (mode === 'signup') trackSignup('done');  // funil: cadastro criado com sucesso
+      const acct = await resolveAccount();
       if (acct.paid) { onPlay(); return; }
       const charge = await beginPix();
       if (!charge) { onPlay(); return; } // já estava paga
@@ -507,8 +525,19 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     if (!pix || cardSwitching) return;
     setCardSwitching(true);
     pixSwitchedMethod.current = true;
-    await onCheckout(pix.email, nick.trim());
+    await onCheckout(pix.email, nick.trim() || payAcct?.nick || '');
   };
+  // pixFirst + conta grátis já logada: não há o que cadastrar — o QR Pix abre
+  // sozinho (1x). Quem prefere cartão tem o botão logo abaixo do QR.
+  const autoPix = useRef(false);
+  useEffect(() => {
+    if (!pixFirst || mode !== 'pay' || autoPix.current) return;
+    autoPix.current = true;
+    void goPix();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pixFirst, mode]);
+  // com o QR na tela (pixFirst), o formulário sai do caminho: QR + cartão sem rolar
+  const pixFocus = pixFirst && !!pix;
   // fechar com o QR Pix aberto e sem pagamento confirmado: UM nudge leve inline
   // (1x por sessão), honesto e descartável. Depois disso, fechar fecha mesmo.
   const requestClose = () => {
@@ -523,7 +552,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const title = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
       <BrandMark size={22} />
-      <span>{mode === 'signup' ? ct('Criar conta') : mode === 'reset' ? ct('Recuperar senha') : ct('Entrar')}</span>
+      <span>{mode === 'signup' ? ct('Criar conta') : mode === 'pay' ? ct('Ativar a vitalícia') : mode === 'reset' ? ct('Recuperar senha') : ct('Entrar')}</span>
     </span>
   );
 
@@ -550,7 +579,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   };
   return (
     <Modal open onClose={requestClose} title={title} size="sm">
-      {mode === 'signup' && (
+      {(mode === 'signup' || mode === 'pay') && !pixFocus && (
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
             <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--em-gold)' }}>R$20</span>
@@ -562,12 +591,24 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             <span>✔ {ct('Acesso imediato')}</span>
             <span>✔ {ct('Pix ou cartão')}</span>
           </div>
+          {pixFirst && (
+            <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--c-win)', fontWeight: 700 }}>
+              {playerNick
+                ? <>{ct('Pix aprova na hora · o')} {playerNick} {ct('continua de onde parou')}</>
+                : ct('Pix aprova na hora · seu jogador continua de onde parou')}
+            </p>
+          )}
           {/* prova social REAL (servidor); fetch falhou → não renderiza nada */}
           <FounderCounter style={{ marginTop: '8px' }} />
         </div>
       )}
+      {pixFocus && playerNick && (
+        <p style={{ margin: '0 0 4px', fontSize: '0.78rem', color: 'var(--em-muted)', fontWeight: 600 }}>
+          {ct('Pix aprova na hora · o')} {playerNick} {ct('continua de onde parou')}
+        </p>
+      )}
       {info && mode !== 'signup' && <p style={{ color: 'var(--c-win)', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
-      {mode !== 'reset' ? (
+      {mode === 'pay' || pixFocus ? null : mode !== 'reset' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
           <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
@@ -634,7 +675,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           )}
         </div>
       )}
-      {mode === 'signup' && (
+      {mode === 'signup' && !pixFocus && (
         <label className="checkout-legal-accept">
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
           <span>{ct('Li e aceito os')} <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">{ct('Termos')}</a> {ct('e a')} <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">{ct('Política de Reembolso')}</a>{ct(', consultei a')} <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">{ct('Privacidade')}</a> {ct('e confirmo ser maior de 18 anos ou responsável legal pela compra.')}</span>
@@ -645,7 +686,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           confirmando a imensa maioria dos checkouts abertos, enquanto o cartão perde
           a maior parte no redirect pro Stripe — então o Pix vira o CTA primário
           (ouro) e o cartão passa a secundário, sem tirar a opção de ninguém. */}
-      {mode === 'signup' ? (
+      {pixFocus ? null : mode === 'signup' || mode === 'pay' ? (
         <>
           <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={goPix}>
             {busy ? ct('Aguarde…') : ct('Pagar com Pix')}

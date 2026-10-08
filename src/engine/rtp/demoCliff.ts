@@ -22,6 +22,12 @@ import type { RoadToProSave, DemoCliff, TransferOffer } from './types';
 
 export const DEMO_WEEKS = 3;                       // semanas jogáveis na demo (a trava fecha na 4ª)
 export const CLIFF_TTL_MS = 48 * 60 * 60 * 1000;   // a proposta expira 48h depois da trava abrir
+// Segunda chance: 3 dias depois de expirar, o clube volta com uma proposta
+// REVISADA (15% menor) — no máximo MAX_CLIFF_ROUNDS rodadas no total. Antes, quem
+// voltava depois do prazo achava a proposta morta: beco sem saída na trava.
+export const REARM_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
+export const MAX_CLIFF_ROUNDS = 2;
+const REVISED_CUT = 0.85;                          // proposta revisada = 85% da original
 
 // Sal fixo: o cliffhanger é uma função do seed do save (o mesmo save gera a
 // mesma proposta em qualquer aparelho/rebuild), independente do tick de ações.
@@ -81,7 +87,7 @@ export function deliverDemoCliff(save: RoadToProSave, now: number): RoadToProSav
   const c = save.demoCliff;
   if (!c || c.status !== 'teaser') return save;
   if (save.world.week <= c.week) return save;
-  if (isDemoCliffExpired(c, now)) return expireDemoCliff(save);
+  if (isDemoCliffExpired(c, now)) return expireDemoCliff(save, now);
   const pending = save.world.pendingOffers ?? [];
   const already = pending.some((o) => o.id === c.offer.id);
   return {
@@ -92,11 +98,40 @@ export function deliverDemoCliff(save: RoadToProSave, now: number): RoadToProSav
 }
 
 // Prazo vencido: a proposta some da mesa e a trava volta ao texto normal.
-export function expireDemoCliff(save: RoadToProSave): RoadToProSave {
+// `expiredAt` (= now) é a base do re-arm da segunda chance.
+export function expireDemoCliff(save: RoadToProSave, now: number): RoadToProSave {
   const c = save.demoCliff;
   if (!c || c.status === 'expired') return save;
   const pending = (save.world.pendingOffers ?? []).filter((o) => o.id !== c.offer.id);
-  return { ...save, world: { ...save.world, pendingOffers: pending }, demoCliff: { ...c, status: 'expired' } };
+  return { ...save, world: { ...save.world, pendingOffers: pending }, demoCliff: { ...c, status: 'expired', expiredAt: now } };
+}
+
+export function cliffRound(cliff: DemoCliff | undefined): number {
+  return cliff?.round ?? 1;
+}
+
+// SEGUNDA CHANCE: expirou há REARM_AFTER_MS ou mais e ainda há rodada → o clube
+// volta com a proposta REVISADA (mesmo clube, salário e luvas 15% menores),
+// como teaser e com o relógio zerado (a trava reabre as 48h via openDemoCliff).
+// Save expirado antes desta versão não tem expiredAt: o prazo vencido
+// (expiresAt) é o momento da expiração. Fora disso devolve o save intacto.
+export function rearmDemoCliff(save: RoadToProSave, now: number): RoadToProSave {
+  const c = save.demoCliff;
+  if (!c || c.status !== 'expired') return save;
+  const round = cliffRound(c);
+  if (round >= MAX_CLIFF_ROUNDS) return save;
+  const since = c.expiredAt ?? c.expiresAt;
+  if (typeof since !== 'number' || now - since < REARM_AFTER_MS) return save;
+  const base = buildDemoCliffOffer(save) ?? c.offer;
+  const next = round + 1;
+  const offer: TransferOffer = {
+    ...base,
+    id: `${base.id}-r${next}`,     // id novo: a 1ª rodada já saiu da mesa e a entrega é idempotente por id
+    wage: Math.round(base.wage * REVISED_CUT),
+    signingBonus: Math.round(base.signingBonus * REVISED_CUT),
+    note: 'Proposta revisada: voltaram à mesa, com valores menores. Desta vez não tem prorrogação.',
+  };
+  return { ...save, demoCliff: { offer, week: c.week, status: 'teaser', round: next } };
 }
 
 // Cliffhanger "vivo" (visível na demo / válido pra quem comprou)?
