@@ -50,7 +50,22 @@ installPwa()          // registra o SW e guarda o convite de instalacao (ver sta
 // entrada do `Screen` union quando o último uso sair. Habilitar o BrowserRouter
 // agora desbloqueia o uso dos hooks (useNavigate, useLocation, useParams) sem
 // quebrar o sistema atual.
-createRoot(document.getElementById('root')!).render(
+// Clutch Mode (/clutch ou ?clutch=1): tela cheia isolada, sem os modais globais
+// (novidades, ajuda, etc.) por cima do jogo.
+const CLUTCH_ROUTE = (() => {
+  try {
+    return window.location.pathname.replace(/\/+$/, '').toLowerCase() === '/clutch'
+      || new URLSearchParams(window.location.search).get('clutch') === '1';
+  } catch { return false; }
+})();
+
+createRoot(document.getElementById('root')!).render(CLUTCH_ROUTE ? (
+  <StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  </StrictMode>
+) : (
   <StrictMode>
     {/* ConfirmDialogHost vive FORA de qualquer boundary porque as telas de erro
         (ErrorBoundary global e ModeErrorBoundary de cada modo) usam o confirm()
@@ -78,5 +93,5 @@ createRoot(document.getElementById('root')!).render(
         </ToastProvider>
       </BrowserRouter>
     </ErrorBoundary>
-  </StrictMode>,
-)
+  </StrictMode>
+))

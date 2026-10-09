@@ -335,7 +335,24 @@ const WANTS_SIGNUP = (() => {
   } catch { return false; }
 })();
 
+// Clutch Mode (fase 1): rota isolada, sem link no app. O chunk (com three) só
+// carrega aqui, via import().
+const ClutchRoute = lazyWithReload(() => import('./clutch/ClutchRoute').then((m) => ({ default: m.ClutchRoute })));
+function isClutchLocation(): boolean {
+  try {
+    const path = window.location.pathname.replace(/\/+$/, '').toLowerCase();
+    return path === '/clutch' || new URLSearchParams(window.location.search).get('clutch') === '1';
+  } catch { return false; }
+}
+
 export default function App() {
+  if (isClutchLocation()) {
+    return <Suspense fallback={<Loader text="…" />}><ClutchRoute /></Suspense>;
+  }
+  return <MainApp />;
+}
+
+function MainApp() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
