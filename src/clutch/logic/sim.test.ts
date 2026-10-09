@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createSim, step, NO_INPUT, type SimInput, traceShot, yawTo, EYE_H } from './sim';
 import { demoConfig } from './testkit';
-import { lineClear, solidAt } from './level';
+import { lineClear, moveWithCollision, solidAt } from './level';
 
 function scripted(tick: number, yaw0: number): SimInput {
   // anda para frente, gira devagar e atira em rajadas
@@ -52,4 +52,30 @@ test('hitscan: cabeça dá headshot e mira baixa dá perna', () => {
   const legs = traceShot(s, s.player.x, EYE_H, s.player.z, yaw, Math.atan2(0.4 - EYE_H, 3));
   assert.equal(legs.bot, b);
   assert.equal(legs.group, 'legs');
+});
+
+test('invariante: nenhum bot nasce vendo o spawn nem preso', () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    const s = createSim(demoConfig(seed, 5));
+    for (const b of s.bots) {
+      assert.ok(!lineClear(s.ctx.level, b.x, b.z, s.player.x, s.player.z), `seed ${seed} ${b.id} vê o spawn`);
+      assert.ok(!solidAt(s.ctx.level, b.x, b.z), `seed ${seed} ${b.id} dentro de sólido`);
+      const free = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => {
+        const q = { x: b.x, z: b.z };
+        moveWithCollision(s.ctx.level, q, dx * 0.1, dz * 0.1);
+        return Math.hypot(q.x - b.x, q.z - b.z) > 1e-4;
+      });
+      assert.ok(free, `seed ${seed} ${b.id} nasceu preso`);
+    }
+  }
+});
+
+test('ALERT persiste depois de ouvir um som', () => {
+  const s = createSim(demoConfig(7, 1));
+  const b = s.bots[0];
+  b.heard = { pos: { x: b.x + 6, z: b.z }, kind: 'step' };
+  step(s, NO_INPUT);
+  assert.equal(b.state, 'ALERT');
+  for (let i = 0; i < 30; i++) step(s, NO_INPUT);
+  assert.equal(b.state, 'ALERT', 'deveria continuar em ALERT por alguns segundos');
 });

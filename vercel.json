@@ -10,6 +10,7 @@
   ],
   "rewrites": [
     { "source": "/jogar", "destination": "/" },
+    { "source": "/clutch", "destination": "/" },
     { "source": "/criar-manager", "destination": "/" },
     { "source": "/perfil", "destination": "/" },
     { "source": "/ranking", "destination": "/" },

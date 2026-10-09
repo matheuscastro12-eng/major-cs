@@ -72,7 +72,7 @@ export function createAudio(): ClutchAudio {
     hurt() { burst(0.12, 0.6, 300, 1, 0); tone(90, 0.15, 0.3, 'sine', -40); },
     beep() { tone(1550, 0.07, 0.18, 'square'); },
     defuse() { burst(0.08, 0.25, 4000, 2, 0, 'highpass'); },
-    reload() { burst(0.04, 0.3, 3000, 4, 0, 'bandpass'); setTimeout(() => burst(0.05, 0.35, 2000, 4, 0, 'bandpass'), 450); },
+    reload() { burst(0.04, 0.3, 3000, 4, 0, 'bandpass'); setTimeout(() => { if (ctx.state !== 'closed') burst(0.05, 0.35, 2000, 4, 0, 'bandpass'); }, 450); },
     end(won) { tone(won ? 523 : 220, 0.4, 0.25, 'triangle', won ? 260 : -80); },
     dispose() { void ctx.close().catch(() => {}); },
   };

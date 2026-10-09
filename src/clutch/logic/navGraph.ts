@@ -20,7 +20,7 @@ function clearWide(l: Level, ax: number, az: number, bx: number, bz: number): bo
   return lineClear(l, ax, az, bx, bz) && lineClear(l, ax + ox, az + oz, bx + ox, bz + oz) && lineClear(l, ax - ox, az - oz, bx - ox, bz - oz);
 }
 
-function freeSpot(l: Level, x: number, z: number): boolean {
+export function freeSpot(l: Level, x: number, z: number): boolean {
   const r = BODY_R + 0.15;
   return !solidAt(l, x, z) && !solidAt(l, x - r, z - r) && !solidAt(l, x + r, z - r) && !solidAt(l, x - r, z + r) && !solidAt(l, x + r, z + r);
 }

@@ -12,7 +12,7 @@ import { applyDamage, type HitGroup } from './damage';
 import {
   buildLevel, lineClear, moveWithCollision, raycastGrid, toWorld, BOMB_MAP, PLAYER_SPAWN_MAP, type Level,
 } from './level';
-import { buildNavGraph, nodeByName, planPath, type NavGraph } from './navGraph';
+import { buildNavGraph, freeSpot, nodeByName, planPath, type NavGraph } from './navGraph';
 import { recoilAt, recoverShotIndex } from './recoil';
 import { gauss, makeRng, rand, type RngState } from './rng';
 import { WEAPONS, fireInterval, type WeaponId } from './weapons';
@@ -144,7 +144,7 @@ export function createSim(cfg: ClutchConfig): SimState {
     if (rand(rng) < profile.offAngleWeight * 0.7) {
       const ang = rand(rng) * Math.PI * 2;
       const cand = { x: hold.x + Math.cos(ang) * 1.4, z: hold.z + Math.sin(ang) * 1.4 };
-      if (!seesSpawn(cand) && lineClear(ctx.level, hold.x, hold.z, cand.x, cand.z) && raycastGrid(ctx.level, cand.x, cand.z, 1, 0, 0.5) >= 0.5 && raycastGrid(ctx.level, cand.x, cand.z, -1, 0, 0.5) >= 0.5) hold = cand;
+      if (!seesSpawn(cand) && lineClear(ctx.level, hold.x, hold.z, cand.x, cand.z) && freeSpot(ctx.level, cand.x, cand.z)) hold = cand;
     }
     // ângulo: segura a entrada do CT (bCT); de lá não vendo, segura a bomba
     const holdAim: Vec2 = lineClear(ctx.level, hold.x, hold.z, entry.x, entry.z) && dist(hold, entry) > 2 ? { x: entry.x, z: entry.z } : { x: bombPos.x, z: bombPos.z };
@@ -381,7 +381,7 @@ function stepBots(s: SimState, dt: number) {
     );
     b.heard = null;
     b.tradeCue = null;
-    if (intent.state !== b.state) { b.state = intent.state; b.stateTime = 0; if (intent.state === 'TRADE' && intent.moveTo) b.lastKnown = intent.moveTo; }
+    if (intent.state !== b.state) { b.state = intent.state; b.stateTime = 0; if (intent.state === 'TRADE' && intent.moveTo) b.lastKnown = intent.moveTo; if (intent.state === 'ALERT' && intent.aimAt) b.lastKnown = { x: intent.aimAt.x, z: intent.aimAt.z }; }
     else b.stateTime += dt;
 
     // mira (yaw) com mola até o alvo
@@ -424,10 +424,10 @@ function stepBots(s: SimState, dt: number) {
     if (b.reloadT > 0) { b.reloadT -= dt; if (b.reloadT <= 0) { b.reloadT = 0; b.ammo = 30; } }
     if (b.sees) {
       b.reactT -= dt;
-      b.aimErr = Math.max(b.aimBase * 0.35, b.aimErr * Math.exp(-2.5 * dt));
+      b.aimErr = Math.max(b.aimBase * 0.6, b.aimErr * Math.exp(-2.5 * dt));
     }
     const facing = Math.abs(wrapAng(yawTo(b.x, b.z, p.x, p.z) - b.yaw)) < 0.26;
-    if (intent.fire && b.sees && p.alive && b.reactT <= 0 && facing && b.cooldown === 0 && b.reloadT === 0) {
+    if (intent.fire && b.sees && p.alive && b.reactT <= 0 && facing && b.cooldown === 0 && b.reloadT === 0 && lineClear(lvl, b.x, b.z, p.x, p.z)) {
       botShoot(s, b);
     }
   });
@@ -476,7 +476,7 @@ function stepBombAndDefuse(s: SimState, inp: SimInput, dt: number) {
   const p = s.player;
   const d = dist(p, s.bombPos);
   const look = d < 0.8 || Math.abs(wrapAng(yawTo(p.x, p.z, s.bombPos.x, s.bombPos.z) - p.yaw)) < 0.7;
-  const inRange = p.alive && d <= DEFUSE_RANGE_M && look;
+  const inRange = p.alive && p.y <= 0 && d <= DEFUSE_RANGE_M && look;
   s.canDefuse = inRange;
   const ev = stepBomb(s.bomb, dt, { holding: inp.use && p.alive, inRange, moving: p.moving });
   for (const e of ev) s.events.push({ t: e });

@@ -183,6 +183,7 @@ export function createClutchGame(canvas: HTMLCanvasElement, cfg: ClutchConfig, o
       audio.dispose();
       view.dispose();
       renderer.dispose();
+      renderer.forceContextLoss();
       botFlash = new Float32Array(0);
     },
   };
