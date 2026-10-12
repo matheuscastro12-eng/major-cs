@@ -202,6 +202,7 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'home-rtp': 'Home · card Road to Pro',
   'home-rtp-direto': 'Home · RtP, pulou a demo',
   'home-ultimate': 'Home · card Ultimate',
+  'ultimate-guest': 'Ultimate · aviso de convidado',
   'home-pill': 'Home · pill Fundador',
   'acct-chip': 'Chip de conta (dropdown)',
   'upsell-card': 'Card de upsell',
