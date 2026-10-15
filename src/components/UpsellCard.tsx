@@ -57,25 +57,26 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
   const [copied, setCopied] = useState(false);
   const pixOpenedAt = useRef(0);
   const pixConfirmed = useRef(false);
-  // funil: dado real (checkout_abandon, method=pix, 28d) mostra abandono
-  // concentrado bem depois dos primeiros segundos — mediana de ~79s pra fechar
-  // sem pagar — mas esta superfície (upsell in-game) nunca deu nenhuma
-  // reassurance de espera, diferente do modal de conta da Landing. Mesma
-  // lógica honesta aplicada aqui: depois de 1min sem confirmar, troca o
-  // silêncio por uma expectativa real de quanto falta.
+  // funil: dado real (checkout_abandon, method=pix, 28d) mostra 35,6% dos
+  // QRs abertos (21 de 59) fechando sem pagar, com quase 40% desses abandonos
+  // (9 de 24, bucket <15s–<60s) acontecendo ANTES dos 60s — ou seja, antes de
+  // qualquer reassurance aparecer aqui. A Landing já validou antecipar esse
+  // mesmo aviso pra 25s (commit 113cc3d) com base num achado idêntico; esta
+  // superfície (upsell in-game, a que mais abre checkout_open do funil) ficou
+  // parada nos 60s antigos. Alinha no mesmo timer já comprovado.
   const [pixWaitLong, setPixWaitLong] = useState(false);
   useEffect(() => {
     if (!pix) { setPixWaitLong(false); return; }
-    const t = window.setTimeout(() => setPixWaitLong(true), 60_000);
+    const t = window.setTimeout(() => setPixWaitLong(true), 25_000);
     return () => window.clearTimeout(t);
   }, [pix]);
-  // funil: dado real (checkout_abandon, method=pix, 21d) mostra abandono
-  // concentrado bem antes dos 60s daqui de cima — boa parte desiste rápido
-  // demais pra ver a reassurance. A Landing já validou uma saída honesta pro
-  // cartão desde a abertura do QR (não só depois do timer), mas essa troca
-  // nunca chegou nesta superfície — que sozinha abre mais checkout do que
-  // qualquer outra (upsell-card lidera checkout_open no funil). Mesmo padrão
-  // aqui: Pix continua o CTA primário, o QR não some, só ganha uma saída.
+  useEffect(() => {
+    if (pixWaitLong) trackPaywallView('upsell-pix-wait-longo'); // funil: reassurance exibida — src próprio (mede esta superfície, como 'pix-wait-longo' mede a Landing)
+  }, [pixWaitLong]);
+  // funil: dado real (checkout_abandon, method=pix, 21d, achado anterior) já
+  // mostrava abandono concentrado antes dos 60s — motivou a saída honesta pro
+  // cartão desde a abertura do QR (não só depois do timer). A Landing já
+  // validou essa saída (não é novidade aqui, só o alinhamento do timer acima).
   const [cardSwitching, setCardSwitching] = useState(false);
   const pixSwitchedMethod = useRef(false); // trocou pro cartão em vez de desistir — não conta como abandono
   useEffect(() => {
