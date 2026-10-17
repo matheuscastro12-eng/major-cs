@@ -328,7 +328,16 @@ export function Home(props: Props) {
               <p className="ds-dim">{ct('Carregando…')}</p>
             ) : !account ? (
               <div className="home-acct">
-                <p>{ct('Você está jogando sem conta. Crie a sua pra salvar na nuvem e jogar no PC e no celular.')}</p>
+                <p>{ct('Você está jogando sem conta — o progresso fica só neste navegador.')}</p>
+                {/* funil: este card (acct-chip-guest, 1.4k paywall_view/28d — a maior
+                    exposição do funil) só vendia "salvar na nuvem", o motivo mais frio
+                    da vitalícia. Toda outra trava do jogo (mkt-lock, rtp-demo-gate) lista
+                    os recursos de verdade que ela libera; alinha esta aqui no mesmo
+                    padrão. Amostra pequena pra provar isoladamente (mesmo src de sempre,
+                    só a copy muda), mas o padrão já se mostrou certo nas outras travas. */}
+                <p style={{ margin: 0, fontSize: '0.76rem', lineHeight: 1.5, color: 'var(--em-gold, #e8c170)', fontWeight: 600 }}>
+                  ✓ {ct('Ultimate Squad · Major da Semana · ranqueada no ladder real · save na nuvem em 5 slots')}
+                </p>
                 <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · R$20</Button>
                 <small className="ds-dim">{ct('pagamento único · sem mensalidade')}</small>
                 <FounderCounter style={{ fontSize: '11px' }} />
