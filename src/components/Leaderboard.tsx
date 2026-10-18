@@ -1,6 +1,7 @@
 // Ranking competitivo do online — temporada atual, sua posição, ladder top 50 e
 // campeões da temporada passada. Estilo da tabela espelha o RankingTeams.jsx do design.
 import { useEffect, useState, type CSSProperties } from 'react';
+import { Crown } from 'lucide-react';
 import { Button, Panel } from './ds';
 import { useAccountStore, type Account } from '../state/account';
 import { getLadder, getChampions, fetchMyRank, type RankRow, type MyRank, type Champion } from '../state/ranking';
@@ -132,10 +133,13 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
           </Panel>
 
           {!paid && (
+            // funil: a copy antiga vendia "infraestrutura" (frio, não convertia).
+            // Troquei pro mesmo framing "Vire Fundador" que já funciona na Home —
+            // o benefício real (MMR e histórico salvos) continua explícito.
             <Panel title={ct('Entre no ranking')} accent="gold">
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{ct('Você joga ranqueada de graça. A conta de R$20 cobre a infraestrutura que mantém MMR e histórico entre sessões.')}</p>
+              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{ct('Você joga ranqueada de graça. Vire Fundador pra salvar seu MMR e histórico na nuvem — selo #001–#500, cloud sync e 5 carreiras.')}</p>
               <FounderCounter style={{ marginBottom: '10px', display: 'block' }} />
-              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{ct('Ativar ranking persistente (R$20)')}</Button>
+              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}><Crown size={16} aria-hidden /> {ct('Vire Fundador')} · R$20</Button>
             </Panel>
           )}
 
