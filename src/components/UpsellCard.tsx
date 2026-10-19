@@ -98,7 +98,10 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
       if (!force && Date.now() - last < COOLDOWN_MS) return; // respeita cooldown só nos disparos automáticos
       setHook(HOOKS[trigger ?? 'default'] ?? HOOKS.default);
       setOpen(true);
-      trackPaywallView('upsell-card'); // funil: card de upsell exibido (1x/sessão)
+      // funil: gancho novo (trigger 'market', ver App.tsx/confirmTransfer) com
+      // src próprio pra medir o efeito isolado dele — os demais ganchos (major,
+      // promotion, draft-win...) dividem 'upsell-card' e não dá pra separar.
+      trackPaywallView(trigger === 'market' ? 'upsell-card-market' : 'upsell-card'); // funil: card de upsell exibido (1x/sessão/src)
       localStorage.setItem(LAST_KEY, String(Date.now()));
     };
     window.addEventListener('rtm:upsell', onEvt);
