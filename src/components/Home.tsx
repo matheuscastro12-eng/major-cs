@@ -299,8 +299,13 @@ export function Home(props: Props) {
               extra={premiumLocked ? (
                 <span className="home-mode__extra">
                   <FounderCounter style={{ fontSize: '11px' }} />
+                  {/* funil: Fundadores esgotados (500/500, dado real) desde antes
+                      deste período — esse botão continuava prometendo "virar
+                      Fundador" bem embaixo do FounderCounter avisando "esgotada",
+                      a mesma contradição na mesma tela já corrigida no pill de
+                      baixo (founderSoldOut) e no UpsellCard. Alinha a copy aqui. */}
                   <button type="button" className="home-skip" onClick={(e) => { e.stopPropagation(); setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
-                    {ct('Já quero virar Fundador · pular a demo')} →
+                    {founderSoldOut ? ct('Já quero virar vitalícia · pular a demo') : ct('Já quero virar Fundador · pular a demo')} →
                   </button>
                 </span>
               ) : undefined}
