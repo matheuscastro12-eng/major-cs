@@ -11,6 +11,20 @@
 @media (max-width: 1279px) { .home-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .home-grid > :last-child { grid-column: span 2; } }
 @media (max-width: 760px) { .home-grid { grid-template-columns: minmax(0, 1fr); } .home-grid > :last-child { grid-column: auto; } }
 
+/* CTA de conta do convidado, duplicado no topo só pro mobile: no empilhamento
+   de 1 coluna o painel "Sua conta" (3ª coluna do desktop) vira o último bloco
+   da página, depois de "Continue de onde parou" e "Modos de jogo". */
+.home-guest-top { display: none; }
+@media (max-width: 760px) {
+  .home-guest-top {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 12px 14px;
+    border-radius: var(--rad-3); background: var(--c-surface-2); box-shadow: inset 0 0 0 1px var(--c-line-soft);
+  }
+  .home-guest-top__ic { color: var(--c-brand-strong); flex-shrink: 0; }
+  .home-guest-top__txt { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; line-height: 1.25; }
+  .home-guest-top__txt small { color: var(--c-ink-faint); font-size: var(--fs-1); }
+}
+
 /* continuar */
 .home-resume { border-bottom: 1px solid var(--c-line-soft); }
 .home-resume:last-child { border-bottom: 0; }
