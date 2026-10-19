@@ -214,6 +214,8 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'pix-troca-cartao': 'Pix · troca pro cartão (aos 25s, antigo)',
   'pix-wait-longo': 'Pix · reassurance de espera',
   'upsell-pix-cartao-cedo': 'Upsell in-game · Pix→cartão (cedo)',
+  'checkout-nudge': 'Checkout · nudge anti-abandono',
+  'upsell-nudge': 'Upsell in-game · nudge anti-abandono',
   profile: 'Perfil do manager',
   leaderboard: 'Leaderboard',
   direto: 'Direto (sem origem)',
