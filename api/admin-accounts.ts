@@ -56,6 +56,8 @@ export default async function handler(
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
     sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS token_version BIGINT NOT NULL DEFAULT 0`,
+    sql`ALTER TABLE rtm_pending_signups ADD COLUMN IF NOT EXISTS token_version BIGINT NOT NULL DEFAULT 0`,
     sql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ)`,
     sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`,
     // mesma DDL do api/ranking.ts — garante a tabela mesmo se o ranking nunca rodou nesta instância
@@ -119,10 +121,10 @@ export default async function handler(
     await sql.transaction([
       sql`INSERT INTO rtm_paid_emails (email) VALUES (${email}) ON CONFLICT DO NOTHING`,
       // se houver cadastro pendente, promove em conta paga
-      sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
-          SELECT email, nick, pass_hash, true, ${accountReference(email)} FROM rtm_pending_signups WHERE email=${email}
-          ON CONFLICT (email) DO UPDATE SET paid=true`,
-      sql`UPDATE rtm_accounts SET paid=true, payment_method=COALESCE(payment_method, 'admin') WHERE email=${email}`,
+      sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref, token_version)
+          SELECT email, nick, pass_hash, true, ${accountReference(email)}, GREATEST(COALESCE(token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) FROM rtm_pending_signups WHERE email=${email}
+          ON CONFLICT (email) DO UPDATE SET paid=true, token_version=CASE WHEN rtm_accounts.paid THEN rtm_accounts.token_version ELSE GREATEST(COALESCE(rtm_accounts.token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) END`,
+      sql`UPDATE rtm_accounts SET paid=true, token_version=CASE WHEN paid THEN token_version ELSE GREATEST(COALESCE(token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) END, payment_method=COALESCE(payment_method, 'admin') WHERE email=${email}`,
       sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
     ]);
     // Edição Fundador (O0-42): acesso concedido NÃO consome vaga de Fundador

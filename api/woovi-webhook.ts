@@ -55,6 +55,8 @@ async function ensureWebhookSchema(sql: NeonQueryFunction<false, false>): Promis
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
     sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS token_version BIGINT NOT NULL DEFAULT 0`,
+    sql`ALTER TABLE rtm_pending_signups ADD COLUMN IF NOT EXISTS token_version BIGINT NOT NULL DEFAULT 0`,
   ]);
   schemaReady = true;
 }
@@ -96,11 +98,11 @@ async function processPaid(sql: NeonQueryFunction<false, false>, body: Record<st
   await sql.transaction([
     sql`INSERT INTO rtm_paid_emails (email) VALUES (${email}) ON CONFLICT DO NOTHING`,
     // promove o cadastro pendente em conta paga (regra: só pago tem conta)
-    sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
-        SELECT email, nick, pass_hash, true, ${accountReference(email)} FROM rtm_pending_signups WHERE email=${email}
-        ON CONFLICT (email) DO UPDATE SET paid=true`,
+    sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref, token_version)
+        SELECT email, nick, pass_hash, true, ${accountReference(email)}, GREATEST(COALESCE(token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) FROM rtm_pending_signups WHERE email=${email}
+        ON CONFLICT (email) DO UPDATE SET paid=true, token_version=CASE WHEN rtm_accounts.paid THEN rtm_accounts.token_version ELSE GREATEST(COALESCE(rtm_accounts.token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) END`,
     // método real vence o 'admin' de um grant antigo (senão a conta nunca entraria na fila de Fundador)
-    sql`UPDATE rtm_accounts SET paid=true, stripe_ref=COALESCE(stripe_ref, ${accountReference(email)}),
+    sql`UPDATE rtm_accounts SET paid=true, token_version=CASE WHEN paid THEN token_version ELSE GREATEST(COALESCE(token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) END, stripe_ref=COALESCE(stripe_ref, ${accountReference(email)}),
         payment_method=CASE WHEN payment_method IS NULL OR payment_method='admin' THEN 'pix' ELSE payment_method END
         WHERE email=${email}`,
     sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,

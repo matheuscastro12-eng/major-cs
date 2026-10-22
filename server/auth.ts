@@ -1,5 +1,5 @@
 // Identidade do servidor num lugar só: o segredo que assina os tokens
-// (APP_SECRET), o token de conta ("body.sig", body = email|exp) e a sessão de
+// (APP_SECRET), o token de conta ("body.sig", body = email|exp|versão) e a sessão de
 // admin (token curto com claim de admin). Antes cada rota tinha a própria cópia
 // de sign/verify e um fallback `fallback:${DATABASE_URL}` — quem visse a
 // DATABASE_URL (log, preview, .env vazado) forjava token de QUALQUER e-mail,
@@ -22,32 +22,21 @@ export class AppSecretMissingError extends Error {
   }
 }
 
-// HOTFIX 2026-09-29: a produção nunca teve APP_SECRET e todos os tokens de conta
-// (e referências de pagamento) em circulação foram assinados com o reserva
-// legado `fallback:${DATABASE_URL}`. A falha fechada derrubou o login de todo
-// mundo no lançamento. Enquanto APP_SECRET não estiver configurada, volta o
-// reserva legado — mesma segurança de antes do lançamento, sessões preservadas.
-// Sem APP_SECRET E sem DATABASE_URL continua falha fechada. Configurar
-// APP_SECRET = o valor do reserva mantém as sessões; um valor novo desloga todos.
-function legacyFallbackSecret(): string {
-  const db = cleanEnv(process.env.DATABASE_URL);
-  return db ? `fallback:${db}` : '';
-}
-let warnedFallback = false;
-
+// [SEC 2026-10-22] O reserva legado `fallback:${DATABASE_URL}` (HOTFIX
+// 2026-09-29) SAIU: quem visse a DATABASE_URL (env de preview, .env de dev,
+// log) forjava token de qualquer conta, inclusive admin. Sem APP_SECRET é falha
+// fechada de novo — configure APP_SECRET (>= 32 bytes aleatórios) ANTES do
+// deploy. Trocar o segredo desloga todo mundo (tokens antigos param de valer).
 export function appSecretConfigured(): boolean {
-  return cleanEnv(process.env.APP_SECRET).length > 0 || legacyFallbackSecret().length > 0;
+  return cleanEnv(process.env.APP_SECRET).length > 0;
 }
 
-// Lança AppSecretMissingError sem APP_SECRET e sem o reserva. Quem chama num
-// caminho público deve checar appSecretConfigured() antes (ver respondMissingSecret).
+// Lança AppSecretMissingError sem APP_SECRET. Quem chama num caminho público
+// deve checar appSecretConfigured() antes (ver respondMissingSecret).
 export function appSecret(): string {
   const secret = cleanEnv(process.env.APP_SECRET);
-  if (secret) return secret;
-  const legacy = legacyFallbackSecret();
-  if (!legacy) throw new AppSecretMissingError();
-  if (!warnedFallback) { warnedFallback = true; console.warn('app_secret_legacy_fallback'); }
-  return legacy;
+  if (!secret) throw new AppSecretMissingError();
+  return secret;
 }
 
 // Resposta padrão da falha fechada. Devolve true quando respondeu (a rota para).
@@ -66,21 +55,63 @@ function safeEqualStr(a: string, b: string): boolean {
   return ab.length === bb.length && timingSafeEqual(ab, bb);
 }
 
-export function signAccountToken(email: string, ttlSec = ACCOUNT_TOKEN_TTL_SEC): string {
-  const body = `${email}|${nowSec() + ttlSec}`;
+// [SEC 2026-10-22] body = email|exp|token_version. A versão mora no banco
+// (rtm_accounts.token_version / rtm_pending_signups.token_version) e sobe no
+// cadastro pendente repetido, na ativação (pagamento/grant) e no reset de
+// senha: token emitido antes disso morre (ver verifyAccountSession). Token
+// antigo sem a 3ª parte vale como versão 0.
+export function signAccountToken(email: string, ttlSec = ACCOUNT_TOKEN_TTL_SEC, version = 0): string {
+  const v = Math.max(0, Math.trunc(Number(version) || 0));
+  const body = `${email}|${nowSec() + ttlSec}|${v}`;
   return `${Buffer.from(body).toString('base64url')}.${hmac(body)}`;
 }
 
-// E-mail do token, ou null (inválido, expirado ou servidor sem APP_SECRET).
-export function verifyAccountToken(token: string): string | null {
+// E-mail + versão do token, ou null (inválido, expirado ou servidor sem APP_SECRET).
+export function parseAccountToken(token: string): { email: string; version: number } | null {
   if (!appSecretConfigured()) return null;
   const [b64, sig] = String(token ?? '').split('.');
   if (!b64 || !sig) return null;
   const body = Buffer.from(b64, 'base64url').toString();
   if (!safeEqualStr(sig, hmac(body))) return null;
-  const [email, exp] = body.split('|');
+  const [email, exp, ver] = body.split('|');
   if (!email || !(Number(exp) >= nowSec())) return null;
-  return email;
+  const version = ver === undefined ? 0 : Number(ver);
+  if (!Number.isInteger(version) || version < 0) return null;
+  return { email, version };
+}
+
+// Só a assinatura/expiração (sem revogação). Rotas devem preferir
+// verifyAccountSession, que também confere a token_version no banco.
+export function verifyAccountToken(token: string): string | null {
+  return parseAccountToken(token)?.email ?? null;
+}
+
+// Tag SQL mínima (neon) — evita importar o driver aqui.
+export type TokenSql = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<Record<string, unknown>[]>;
+
+// Versão atual da conta (ou do cadastro pendente). null = e-mail sem conta nem
+// cadastro pendente.
+export async function currentTokenVersion(sql: TokenSql, email: string): Promise<number | null> {
+  const r = await sql`SELECT COALESCE(token_version, 0) AS v, 0 AS k FROM rtm_accounts WHERE email=${email}
+    UNION ALL SELECT COALESCE(token_version, 0) AS v, 1 AS k FROM rtm_pending_signups WHERE email=${email}
+    ORDER BY k LIMIT 1`;
+  return r.length ? Number(r[0].v ?? 0) : null;
+}
+
+// Token assinado com a versão atual do banco (login, cadastro).
+export async function issueAccountToken(sql: TokenSql, email: string): Promise<string> {
+  return signAccountToken(email, ACCOUNT_TOKEN_TTL_SEC, (await currentTokenVersion(sql, email)) ?? 0);
+}
+
+// Verificação com revogação: assinatura + expiração + token_version igual à do
+// banco. E-mail sem linha em nenhuma das tabelas segue o comportamento antigo
+// (só assinatura) — as rotas já tratam "conta não encontrada".
+export async function verifyAccountSession(sql: TokenSql, token: string): Promise<string | null> {
+  const parsed = parseAccountToken(token);
+  if (!parsed) return null;
+  const current = await currentTokenVersion(sql, parsed.email);
+  if (current !== null && current !== parsed.version) return null;
+  return parsed.email;
 }
 
 // ── Sessão de admin (O0-16) ──────────────────────────────────────────────────

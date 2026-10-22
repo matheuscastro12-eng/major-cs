@@ -8,7 +8,7 @@
 // Ações (POST body.action): me | ladder | report | champions | dailyWeekClaim | dailyWeekChampions | dailyStreak [URG-4]
 //   | communityGoal (público) | communityGoalClaim [URG-5].
 import { neon } from '@neondatabase/serverless';
-import { verifyAccountToken } from '../server/auth.js'; // [O0-15] token num módulo só, falha fechada
+import { verifyAccountSession, type TokenSql } from '../server/auth.js'; // [O0-15] token num módulo só, falha fechada
 import { adoptNickIfMissing, normalizeNick } from '../server/nick.js'; // [O1-10]
 import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
 import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
@@ -24,7 +24,8 @@ interface Res { status: (code: number) => { json: (b: unknown) => void }; setHea
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 // [O0-15] sem o fallback derivado de DATABASE_URL: sem APP_SECRET nenhum token
 // vale (server/auth.ts), e o ranking responde 401 em vez de aceitar forjado.
-const verifyToken = verifyAccountToken;
+// [SEC 2026-10-22] com revogação (token_version no banco)
+const verifyToken = (sql: unknown, token: string): Promise<string | null> => verifyAccountSession(sql as TokenSql, token);
 
 // divisões estilo CS (do menor ao maior). Antes de calibrar, "Calibrando".
 const DIVISIONS: [number, string][] = [[0, 'Prata'], [1200, 'Ouro Nova'], [1600, 'Mestre Guardião'], [1900, 'Águia'], [2200, 'Global Elite']];
@@ -279,14 +280,14 @@ async function handle(req: Req, res: Res) {
   // contribuição e o prêmio pendente da semana passada. Só o GET anônimo é
   // cacheado no edge (a resposta com token é por conta).
   if (action === 'communityGoal') {
-    const who = req.method === 'POST' && body.token ? verifyToken(String(body.token)) : null;
+    const who = req.method === 'POST' && body.token ? await verifyToken(sql, String(body.token)) : null;
     const st = await communityGoalStatus(sql as unknown as SqlTag, Date.now(), who);
     if (!who) res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=120');
     res.status(200).json({ ok: true, ...st });
     return;
   }
 
-  const email = verifyToken(String(body.token ?? ''));
+  const email = await verifyToken(sql, String(body.token ?? ''));
   if (!email) { res.status(401).json({ error: 'Entre na sua conta pra acessar o ranking.' }); return; }
 
   // só conta paga tem ranking salvo

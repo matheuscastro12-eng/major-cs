@@ -2,7 +2,7 @@
 // Modelo last-write-wins por timestamp do cliente. Só conta PAGA persiste.
 // Ações (POST body.action): pull | push.
 import { neon } from '@neondatabase/serverless';
-import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { respondMissingSecret, verifyAccountSession, verifyAccountToken, type TokenSql } from '../server/auth.js';
 import { CloudSavePayloadError, decodeCloudSavePayload } from '../server/cloud-save-codec.js';
 import { CLOUD_MAX_FUTURE_MS, clampUpdatedAt, cloudSlotAllowed } from '../server/cloud-save-policy.js';
 
@@ -67,6 +67,8 @@ export default async function handler(
     await sql`CREATE TABLE IF NOT EXISTS rtm_saves (email TEXT, slot TEXT, data TEXT, updated_at BIGINT DEFAULT 0, PRIMARY KEY (email, slot))`;
     schemaReady = true;
   }
+  // [SEC 2026-10-22] revogação: token_version do banco (reset/ativação derrubam tokens antigos).
+  if (!(await verifyAccountSession(sql as unknown as TokenSql, String(body.token ?? '')))) { res.status(401).json({ error: 'Sessão inválida. Entre novamente na conta.' }); return; }
 
   const acc = await sql`SELECT paid FROM rtm_accounts WHERE email=${email}`;
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }

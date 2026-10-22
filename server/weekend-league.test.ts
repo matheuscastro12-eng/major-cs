@@ -36,7 +36,13 @@ class WlFakeDb extends FakeDb {
   reports: WlReportRow[] = [];
   ranking = new Map<string, number>(); // email → mmr
   nicks = new Map<string, string>();
+  // [SEC] salas (lobbies + lobby_players.email) que o wlReport confere
+  rooms = new Map<string, { ranked: boolean; mode: string; createdAt: string; seats: (string | null)[] }>();
   seq = 0;
+
+  room(code: string, seats: (string | null)[], opts: { ranked?: boolean; mode?: string; createdAt?: string } = {}) {
+    this.rooms.set(code, { ranked: opts.ranked ?? true, mode: opts.mode ?? 'ultimate', createdAt: opts.createdAt ?? '2026-07-01T11:00:00Z', seats });
+  }
 
   entry(email: string, windowId: string) {
     return this.entries.find((e) => e.email === email && e.windowId === windowId);
@@ -68,10 +74,18 @@ class WlFakeDb extends FakeDb {
       this.reports.push({ windowId, matchCode, email, oppNick, won, roundsFor, roundsAgainst, status: 'pending' });
       return [{ match_code: matchCode }];
     }
-    if (text.includes('FROM rtm_wl_reports WHERE window_id=') && text.includes('email<>')) {
+    if (text.startsWith('SELECT ranked, mode, created_at FROM lobbies WHERE code=')) {
+      const r = this.rooms.get(String(params[0]));
+      return r ? [{ ranked: r.ranked, mode: r.mode, created_at: r.createdAt }] : [];
+    }
+    if (text.startsWith('SELECT email FROM lobby_players WHERE code=')) {
+      const r = this.rooms.get(String(params[0]));
+      return r ? r.seats.map((email) => ({ email })) : [];
+    }
+    if (text.startsWith('SELECT email, won, status, rounds_for, rounds_against FROM rtm_wl_reports WHERE window_id=')) {
       const [windowId, matchCode, email] = params.map(String);
-      const o = this.reports.find((r) => r.windowId === windowId && r.matchCode === matchCode && r.email !== email);
-      return o ? [{ email: o.email, won: o.won, status: o.status }] : [];
+      const o = this.reports.find((r) => r.windowId === windowId && r.matchCode === matchCode && r.email === email);
+      return o ? [{ email: o.email, won: o.won, status: o.status, rounds_for: o.roundsFor, rounds_against: o.roundsAgainst }] : [];
     }
     if (text.startsWith("UPDATE rtm_wl_reports SET status='conflict'")) {
       const [windowId, matchCode] = params.map(String);
@@ -79,8 +93,8 @@ class WlFakeDb extends FakeDb {
       return [];
     }
     if (text.startsWith("UPDATE rtm_wl_reports SET status='applied'")) {
-      const [windowId, matchCode] = params.map(String);
-      const claimed = this.reports.filter((r) => r.windowId === windowId && r.matchCode === matchCode && r.status === 'pending');
+      const [windowId, matchCode, e1, e2] = params.map(String);
+      const claimed = this.reports.filter((r) => r.windowId === windowId && r.matchCode === matchCode && (r.email === e1 || r.email === e2) && r.status === 'pending');
       for (const r of claimed) r.status = 'applied';
       return claimed.map((r) => ({ email: r.email, won: r.won, rounds_for: r.roundsFor, rounds_against: r.roundsAgainst }));
     }
@@ -212,6 +226,7 @@ async function setupPair(db: WlFakeDb) {
 test('report: par consistente conta vitória e derrota pros dois lados', async () => {
   const db = new WlFakeDb();
   await setupPair(db);
+  db.room('M0001', ['a@x', 'b@x']);
   const r1 = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0001', won: true, oppNick: 'B' }, WED_MORNING);
   assert.ok(r1.ok && r1.outcome === 'pending');
   const r2 = await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0001', won: false, oppNick: 'A' }, WED_MORNING);
@@ -225,6 +240,7 @@ test('report: par consistente conta vitória e derrota pros dois lados', async (
 test('report: conflito (dois "ganhei") não conta pra ninguém', async () => {
   const db = new WlFakeDb();
   await setupPair(db);
+  db.room('M0002', ['a@x', 'b@x']);
   await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0002', won: true, oppNick: 'B' }, WED_MORNING);
   const r2 = await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0002', won: true, oppNick: 'A' }, WED_MORNING);
   assert.ok(r2.ok && r2.outcome === 'conflict');
@@ -236,6 +252,7 @@ test('report: conflito (dois "ganhei") não conta pra ninguém', async () => {
 test('report: duplicado não re-aplica; não-registrado e código curto rejeitados', async () => {
   const db = new WlFakeDb();
   await setupPair(db);
+  db.room('M0003', ['a@x', 'b@x']);
   await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0003', won: true, oppNick: 'B' }, WED_MORNING);
   const dup = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0003', won: false, oppNick: 'B' }, WED_MORNING);
   assert.ok(dup.ok && dup.outcome === 'duplicate');
@@ -251,6 +268,9 @@ test('report: duplicado não re-aplica; não-registrado e código curto rejeitad
 test('report: cap de 60 partidas — report além do cap rejeitado; lado capado não conta no apply', async () => {
   const db = new WlFakeDb();
   await setupPair(db);
+  db.room('M0011', ['a@x', 'b@x']);
+  db.room('M0012', ['b@x', 'c@x']);
+  db.room('M0013', ['b@x', 'd@x']);
   const a = db.entry('a@x', WID)!;
   a.wins = 40; a.losses = 20; // run completo (60)
   const r = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0011', won: true, oppNick: 'B' }, WED_MORNING);
@@ -271,6 +291,49 @@ test('report: cap de 60 partidas — report além do cap rejeitado; lado capado 
   assert.ok(rd.ok && rd.outcome === 'applied');
   assert.equal(b.wins + b.losses, 60); // capado: não passou de 60
   assert.equal(db.entry('d@x', WID)?.losses, 1); // lado com espaço conta
+});
+
+test('[SEC] report: matchCode tem de ser sala ranqueada do servidor com as DUAS contas', async () => {
+  const db = new WlFakeDb();
+  await setupPair(db);
+  await wlRegister(db.sql, 'c@x', WID, WED_MORNING);
+  const rep = (email: string, matchCode: string, won: boolean) => wlReport(db.sql, email, { windowId: WID, matchCode, won, oppNick: 'X', roundsFor: won ? 13 : 0, roundsAgainst: won ? 0 : 13 }, WED_MORNING);
+  const bad = { ok: false, error: 'bad_match_code' };
+  // código inventado (sem sala)
+  assert.deepEqual(await rep('a@x', 'COMBINADO', true), bad);
+  // sala de cliente (não ranqueada)
+  db.room('PRIV1', ['a@x', 'b@x'], { ranked: false });
+  assert.deepEqual(await rep('a@x', 'PRIV1', true), bad);
+  // sala ranqueada de OUTRAS contas: a não está nela
+  db.room('OTHR1', ['b@x', 'c@x']);
+  assert.deepEqual(await rep('a@x', 'OTHR1', true), bad);
+  // rival sem conta ligada (fila sem token) não vale
+  db.room('ANON1', ['a@x', null]);
+  assert.deepEqual(await rep('a@x', 'ANON1', true), bad);
+  // sala criada antes da janela abrir
+  db.room('OLD01', ['a@x', 'b@x'], { createdAt: '2026-06-30T12:00:00Z' });
+  assert.deepEqual(await rep('a@x', 'OLD01', true), bad);
+  // um terceiro (c) não consegue "parear" com o report de a numa sala a×b
+  db.room('REAL1', ['a@x', 'b@x']);
+  assert.ok((await rep('a@x', 'REAL1', true)).ok);
+  assert.deepEqual(await rep('c@x', 'REAL1', false), bad);
+  assert.equal(db.entry('a@x', WID)?.wins, 0);
+  assert.equal(db.reports.length, 1);
+});
+
+test('[SEC] report: placar que não bate dos dois lados vira conflito', async () => {
+  const db = new WlFakeDb();
+  await setupPair(db);
+  db.room('SCOR1', ['a@x', 'b@x']);
+  await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'SCOR1', won: true, oppNick: 'B', roundsFor: 200, roundsAgainst: 0 }, WED_MORNING);
+  const r = await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'SCOR1', won: false, oppNick: 'A', roundsFor: 5, roundsAgainst: 13 }, WED_MORNING);
+  assert.ok(r.ok && r.outcome === 'conflict');
+  assert.equal(db.entry('a@x', WID)?.wins, 0);
+  db.room('SCOR2', ['a@x', 'b@x']);
+  await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'SCOR2', won: true, oppNick: 'B', roundsFor: 13, roundsAgainst: 5 }, WED_MORNING);
+  const ok = await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'SCOR2', won: false, oppNick: 'A', roundsFor: 5, roundsAgainst: 13 }, WED_MORNING);
+  assert.ok(ok.ok && ok.outcome === 'applied');
+  assert.equal(db.entry('a@x', WID)?.roundsFor, 13);
 });
 
 // ------------------------------------------------------------------ status

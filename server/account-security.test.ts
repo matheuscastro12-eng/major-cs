@@ -100,3 +100,32 @@ test('me: flood do mesmo IP leva 429', async () => {
     assert.equal(last, 429);
   } finally { uninstall(); }
 });
+
+// [SEC 2026-10-22] O1: atacante cadastra (pendente) o e-mail da vítima e guarda
+// o token; a ativação (pagamento) sobe a token_version e esse token morre.
+test('[SEC] token do cadastro pendente não controla a conta depois da ativação', async () => {
+  const VERSION_AFTER_PAY = 1761100000;
+  const { uninstall } = setup((text, params) => {
+    if (text.includes('AS v, 0 AS k FROM rtm_accounts')) return params[0] === 'vitima@example.com' ? [{ v: VERSION_AFTER_PAY, k: 0 }] : [];
+    if (text.startsWith('SELECT 1 FROM rtm_accounts WHERE email=') && text.includes('AND paid')) return params[0] === 'vitima@example.com' ? [{ '?column?': 1 }] : [];
+    return undefined;
+  });
+  try {
+    const attackerToken = signAccountToken('vitima@example.com'); // versão 0 (do cadastro pendente)
+    const me = await call({ action: 'me', token: attackerToken });
+    assert.equal(me.code, 401);
+    assert.equal(me.body.relogin, true);
+    for (const action of ['export', 'coinsClaim', 'adminSession', 'setNick']) {
+      assert.equal((await call({ action, token: attackerToken, nick: 'Novo' })).code, 401, action);
+    }
+  } finally { uninstall(); }
+});
+
+test('[SEC] cadastro pendente repetido sobe a token_version no SQL', async () => {
+  const { db, uninstall } = setup();
+  try {
+    await call({ action: 'signup', email: 'novo@example.com', password: 'senha-forte-123' });
+    const upsert = db.seen.find((q) => q.text.startsWith('INSERT INTO rtm_pending_signups'));
+    assert.ok(upsert && /token_version=GREATEST\(COALESCE\(rtm_pending_signups\.token_version, 0\) \+ 1/.test(upsert.text));
+  } finally { uninstall(); }
+});

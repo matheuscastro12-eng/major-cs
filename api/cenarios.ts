@@ -4,7 +4,7 @@
 // Segurança: token assinado (server/auth), rate limit no Postgres por conta e IP,
 // pontuação recalculada no servidor a partir do log (o número do cliente é ignorado).
 import { neon } from '@neondatabase/serverless';
-import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { respondMissingSecret, verifyAccountSession, type TokenSql } from '../server/auth.js';
 import { cenarioBoard, cenarioMe, cenarioSchemaQueries, cenarioStart, cenarioSubmit, maybeCleanup } from '../server/cenarios.js';
 import { parseJsonBody } from '../server/http.js';
 import { internalError } from '../server/internalError.js';
@@ -50,7 +50,7 @@ async function handle(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
   if (respondMissingSecret(res)) return;
   const body = parseJsonBody(req.body) ?? {};
-  const email = verifyAccountToken(String(body.token ?? ''));
+  const email = await verifyAccountSession(sql as unknown as TokenSql, String(body.token ?? '')); // [SEC 2026-10-22] com revogação
   if (!email) { res.status(401).json({ error: 'Entre na sua conta pra disputar o Desafio da Semana.' }); return; }
   const action = String(body.action ?? '');
   const weekId = String(body.week ?? '').slice(0, 16);

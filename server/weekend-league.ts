@@ -236,6 +236,21 @@ export async function wlReport(sql: SqlTag, email: string, p: WlReportParams, no
   const entryNow = () => entryFromRow(p.windowId, my[0]);
   if (Number(my[0].wins ?? 0) + Number(my[0].losses ?? 0) >= WL_MAX_MATCHES) return { ok: false, error: 'run_complete' };
 
+  // [SEC 2026-10-22] o matchCode TEM de ser uma sala ranqueada criada pelo
+  // servidor (fila — sala de cliente nunca é ranked), aberta nesta janela, com
+  // exatamente 2 jogadores e as DUAS contas ligadas a ela (lobby_players.email,
+  // gravado no pareamento a partir do token). Antes era texto livre: duas contas
+  // combinadas inventavam partidas e levavam o prêmio de colocação.
+  const lob = await sql`SELECT ranked, mode, created_at FROM lobbies WHERE code=${code}`;
+  if (!lob.length || lob[0].ranked !== true || String(lob[0].mode) !== 'ultimate') return { ok: false, error: 'bad_match_code' };
+  const lobAt = new Date(String(lob[0].created_at)).getTime();
+  if (!Number.isFinite(lobAt) || lobAt < Date.parse(win.startsAt)) return { ok: false, error: 'bad_match_code' };
+  const seats = await sql`SELECT email FROM lobby_players WHERE code=${code} AND COALESCE(spectator, false) = false`;
+  const seatEmails = seats.map((r) => (r.email == null ? '' : String(r.email)));
+  if (seatEmails.length !== 2 || !seatEmails.includes(email)) return { ok: false, error: 'bad_match_code' };
+  const oppEmail = seatEmails.find((e) => e !== email) ?? '';
+  if (!oppEmail) return { ok: false, error: 'bad_match_code' };
+
   const freshEntry = async (): Promise<WlEntry> => {
     const r = await sql`SELECT division, elo, wins, losses, rounds_for, rounds_against, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${p.windowId}`;
     return r.length ? entryFromRow(p.windowId, r[0]) : entryNow();
@@ -248,12 +263,17 @@ export async function wlReport(sql: SqlTag, email: string, p: WlReportParams, no
     ON CONFLICT (window_id, match_code, email) DO NOTHING RETURNING match_code`;
   if (!ins.length) return { ok: true, outcome: 'duplicate', entry: entryNow() };
 
-  const other = await sql`SELECT email, won, status FROM rtm_wl_reports WHERE window_id=${p.windowId} AND match_code=${code} AND email<>${email} LIMIT 1`;
-  const outcome = decidePair(
+  // só o report do OPONENTE da sala conta como o outro lado
+  const other = await sql`SELECT email, won, status, rounds_for, rounds_against FROM rtm_wl_reports WHERE window_id=${p.windowId} AND match_code=${code} AND email=${oppEmail} LIMIT 1`;
+  // placar tem de bater dos dois lados (meu for = against dele); senão conflito
+  const roundsMismatch = other.length > 0
+    && (Number(other[0].rounds_for ?? 0) !== ra || Number(other[0].rounds_against ?? 0) !== rf);
+  const decided = decidePair(
     p.won,
     other.length ? !!other[0].won : null,
     other.length ? (String(other[0].status) as 'pending' | 'applied' | 'applied-solo' | 'conflict') : null,
   );
+  const outcome = roundsMismatch && decided !== 'wait' ? 'conflict' : decided;
 
   if (outcome === 'wait') return { ok: true, outcome: 'pending', entry: entryNow() };
   if (outcome === 'conflict') {
@@ -263,7 +283,7 @@ export async function wlReport(sql: SqlTag, email: string, p: WlReportParams, no
   // consistente ('apply-both'; 'apply-mine' não existe aqui — sem carência solo).
   // CLAIM atômico pending→applied: só a invocação que transicionar credita
   // (dois requests quase simultâneos não contam a partida em dobro).
-  const claimed = await sql`UPDATE rtm_wl_reports SET status='applied' WHERE window_id=${p.windowId} AND match_code=${code} AND status='pending' RETURNING email, won, rounds_for, rounds_against`;
+  const claimed = await sql`UPDATE rtm_wl_reports SET status='applied' WHERE window_id=${p.windowId} AND match_code=${code} AND email IN (${email}, ${oppEmail}) AND status='pending' RETURNING email, won, rounds_for, rounds_against`;
   for (const row of claimed) {
     const em = String(row.email);
     const w = !!row.won;
