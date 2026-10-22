@@ -13,6 +13,7 @@ import { activeWeekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 import { rarityInfo } from '../src/engine/ultimate/rarities.js';
 import { createHash } from 'node:crypto';
 import { internalError } from '../server/internalError.js'; // [O0-43]
+import { verifyAccountSession, type TokenSql } from '../server/auth.js';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
@@ -83,6 +84,11 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     sql`CREATE TABLE IF NOT EXISTS mm_queue (nick text PRIMARY KEY, elo int DEFAULT 1000, enqueued_at timestamptz DEFAULT now(), last_seen timestamptz DEFAULT now(), matched_code text)`,
     sql`CREATE INDEX IF NOT EXISTS mm_queue_open_idx ON mm_queue (matched_code, last_seen)`,
     sql`ALTER TABLE mm_queue ADD COLUMN IF NOT EXISTS bucket text DEFAULT 'open'`, // [U12] fila por evento ('open' = ranqueada normal)
+    // [SEC 2026-10-22] conta (do token) de quem entrou na fila e de cada jogador
+    // da sala ranqueada: o Major da Semana só aceita report de sala do servidor
+    // com as DUAS contas como participantes (server/weekend-league.ts).
+    sql`ALTER TABLE mm_queue ADD COLUMN IF NOT EXISTS email text`,
+    sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS email text`,
     sql`CREATE INDEX IF NOT EXISTS lobby_players_code_idx ON lobby_players (code)`,
     // CUSTO NEON: os sweeps filtram por COALESCE(last_ping/last_seen, ...) — sem
     // índice de expressão viravam SEQ SCAN em todo poll (milhões/mês, CPU que
@@ -235,12 +241,13 @@ function serverCatalogByPid(): Map<string, { region?: string; country?: string; 
   _byPid = m; _byPidMonth = mi; return m;
 }
 // [U12] `bucket` segmenta a fila: 'open' (ranqueada) ou 'ev:<eventId>' (evento) — só pareia no mesmo bucket.
-async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, myElo: number, enqueuedAtMs: number, bucket = 'open'): Promise<string | null> {
+async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, myElo: number, enqueuedAtMs: number, bucket = 'open', meEmail: string | null = null): Promise<string | null> {
   const windowRp = mmWindow(Date.now() - enqueuedAtMs);
   const myEnqueuedIso = new Date(enqueuedAtMs).toISOString();
   const cands = await sql`
-    SELECT nick FROM mm_queue
+    SELECT nick, email FROM mm_queue
     WHERE matched_code IS NULL AND lower(nick) <> ${meNick.toLowerCase()}
+      AND (${meEmail}::text IS NULL OR email IS NULL OR email <> ${meEmail}::text)
       AND COALESCE(bucket, 'open') = ${bucket}
       AND last_seen > now() - interval '8 seconds'
       AND abs(elo - ${myElo}) <= ${windowRp}
@@ -248,13 +255,14 @@ async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, my
     ORDER BY enqueued_at ASC LIMIT 5`;
   for (const cand of cands) {
     const candNick = String(cand.nick);
+    const candEmail = cand.email ? String(cand.email) : null;
     for (let attempt = 0; attempt < 3; attempt++) {
       const newCode = genCode();
       const exists = await sql`SELECT 1 FROM lobbies WHERE code = ${newCode}`;
       if (exists.length > 0) continue;
       const seed = Math.floor(Math.random() * 2147483647);
       await sql`INSERT INTO lobbies (code, mode, host, status, seed, run_seed, pool, is_public, ranked, ruleset, event_id) VALUES (${newCode}, 'ultimate', ${candNick}, 'drafting', ${seed}, ${seed}, 'world', false, true, ${bucket === 'open' ? 'open' : 'event'}, ${bucket.startsWith('ev:') ? bucket.slice(3) : null})`;
-      await sql`INSERT INTO lobby_players (code, nick) VALUES (${newCode}, ${candNick}), (${newCode}, ${meNick})`;
+      await sql`INSERT INTO lobby_players (code, nick, email) VALUES (${newCode}, ${candNick}, ${candEmail}), (${newCode}, ${meNick}, ${meEmail})`;
       const claimed = await sql`UPDATE mm_queue SET matched_code = ${newCode} WHERE nick = ${candNick} AND matched_code IS NULL RETURNING nick`;
       if (claimed.length === 0) {
         // rival já foi levado por outro — desfaz a sala e tenta o próximo
@@ -424,6 +432,7 @@ export default async function handler(
   try { if (typeof req.body === 'string') parsed = JSON.parse(req.body); } catch { res.status(400).json({ error: 'corpo inválido' }); return; }
   const body = (parsed ?? {}) as {
     action?: string;
+    token?: string;
     code?: string;
     nick?: string;
     mode?: string;
@@ -531,14 +540,18 @@ export default async function handler(
         await sql`DELETE FROM mm_queue WHERE (matched_code IS NULL AND last_seen < now() - interval '90 seconds') OR last_seen < now() - interval '5 minutes'`;
       }
       await dropQueueTicket(sql, nick); // reset (com compensação se tinha par não-coletado)
+      // [SEC 2026-10-22] conta opcional (token): liga o ticket — e a sala que nascer
+      // dele — à conta. Sem token a fila funciona, mas a partida não vale pro
+      // Major da Semana.
+      const qEmail = body.token ? await verifyAccountSession(sql as unknown as TokenSql, String(body.token)) : null;
       // ticket entra ANTES do pareamento: fecha a janela check-then-insert em
       // que dois queueJoin simultâneos não se enxergavam.
       // [U12] fila de evento: só entra se o evento estiver ATIVO agora (kind 'event', janela)
       const evId = typeof body.eventId === 'string' ? body.eventId.slice(0, 64) : '';
       if (evId) { const ev = await activeEventById(sql, evId); if (!ev) { res.status(400).json({ error: 'evento indisponível' }); return; } }
       const bucket = evId ? `ev:${evId}` : 'open';
-      await sql`INSERT INTO mm_queue (nick, elo, bucket) VALUES (${nick}, ${elo}, ${bucket}) ON CONFLICT (nick) DO UPDATE SET elo = ${elo}, bucket = ${bucket}, last_seen = now(), matched_code = NULL, enqueued_at = now()`;
-      const matchedCode = await tryMatchUltimate(sql, nick, elo, Date.now(), bucket);
+      await sql`INSERT INTO mm_queue (nick, elo, bucket, email) VALUES (${nick}, ${elo}, ${bucket}, ${qEmail}) ON CONFLICT (nick) DO UPDATE SET elo = ${elo}, bucket = ${bucket}, email = ${qEmail}, last_seen = now(), matched_code = NULL, enqueued_at = now()`;
+      const matchedCode = await tryMatchUltimate(sql, nick, elo, Date.now(), bucket, qEmail);
       if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
       // posso ter sido claimado por outro DURANTE o tryMatch — colhe na hora
       const mineNow = await sql`SELECT matched_code FROM mm_queue WHERE nick = ${nick}`;
@@ -549,7 +562,7 @@ export default async function handler(
 
     if (action === 'queuePoll') {
       if (!nick) { res.status(400).json({ error: 'nick obrigatório' }); return; }
-      const mine = await sql`UPDATE mm_queue SET last_seen = now() WHERE nick = ${nick} RETURNING elo, enqueued_at, matched_code, bucket`;
+      const mine = await sql`UPDATE mm_queue SET last_seen = now() WHERE nick = ${nick} RETURNING elo, enqueued_at, matched_code, bucket, email`;
       if (mine.length === 0) { res.status(200).json({ ok: true, queued: false }); return; }
       const ticket = mine[0];
       if (ticket.matched_code) {
@@ -566,7 +579,7 @@ export default async function handler(
       // [O0-21] o bucket vem no RETURNING do heartbeat (sem SELECT extra por
       // poll). Antes ele ia como 2º argumento de Number() e era descartado: a
       // fila de evento pareava no bucket 'open' da ranqueada.
-      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs, ticketBucket(ticket.bucket));
+      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs, ticketBucket(ticket.bucket), ticket.email ? String(ticket.email) : null);
       if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
       const open = await sql`SELECT COUNT(*)::int AS n FROM mm_queue WHERE matched_code IS NULL AND last_seen > now() - interval '30 seconds'`;
       res.status(200).json({ ok: true, queued: true, waiting: Number(open[0]?.n ?? 1), waitedMs, window: mmWindow(waitedMs) });

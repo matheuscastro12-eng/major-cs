@@ -83,25 +83,26 @@ test('fila ranqueada desligada: queueJoin/queuePoll = 503, queueLeave segue', as
 });
 
 // fila em memória: tickets com bucket, pareamento do tryMatchUltimate
-function queueDb(tickets: { nick: string; elo: number; enqueuedAt: number; bucket: string }[]) {
-  const q = tickets.map((t) => ({ ...t, matched: null as string | null }));
+function queueDb(tickets: { nick: string; elo: number; enqueuedAt: number; bucket: string; email?: string | null }[]) {
+  const q = tickets.map((t) => ({ ...t, email: t.email ?? null, matched: null as string | null }));
   const lobbies = new Set<string>();
+  const seats: unknown[][] = [];
   const route: FakeRoute = (sql, p) => {
     if (/^(CREATE|ALTER)/.test(sql)) return [];
     if (sql.startsWith('UPDATE mm_queue SET last_seen = now()')) {
       const t = q.find((x) => x.nick === p[0]);
-      return t ? [{ elo: t.elo, enqueued_at: new Date(t.enqueuedAt).toISOString(), matched_code: t.matched, bucket: t.bucket }] : [];
+      return t ? [{ elo: t.elo, enqueued_at: new Date(t.enqueuedAt).toISOString(), matched_code: t.matched, bucket: t.bucket, email: t.email }] : [];
     }
     if (sql.startsWith('SELECT bucket FROM mm_queue')) throw new Error('SELECT extra de bucket por poll');
-    if (sql.startsWith('SELECT nick FROM mm_queue')) {
-      const [me, bucket, elo, win, myIso] = p as [string, string, number, number, string];
+    if (sql.startsWith('SELECT nick, email FROM mm_queue')) {
+      const [me, meEmail, , bucket, elo, win, myIso] = p as [string, string | null, string | null, string, number, number, string];
       const mine = Date.parse(myIso);
-      return q.filter((x) => x.matched == null && x.nick.toLowerCase() !== me && x.bucket === bucket && Math.abs(x.elo - elo) <= win && x.enqueuedAt < mine)
-        .sort((a, b) => a.enqueuedAt - b.enqueuedAt).slice(0, 5).map((x) => ({ nick: x.nick }));
+      return q.filter((x) => x.matched == null && x.nick.toLowerCase() !== me && (meEmail == null || x.email == null || x.email !== meEmail) && x.bucket === bucket && Math.abs(x.elo - elo) <= win && x.enqueuedAt < mine)
+        .sort((a, b) => a.enqueuedAt - b.enqueuedAt).slice(0, 5).map((x) => ({ nick: x.nick, email: x.email }));
     }
     if (sql.startsWith('SELECT 1 FROM lobbies')) return lobbies.has(String(p[0])) ? [{ '?column?': 1 }] : [];
     if (sql.startsWith('INSERT INTO lobbies')) { lobbies.add(String(p[0])); return []; }
-    if (sql.startsWith('INSERT INTO lobby_players')) return [];
+    if (sql.startsWith('INSERT INTO lobby_players')) { seats.push(p); return []; }
     if (sql.startsWith('UPDATE mm_queue SET matched_code')) {
       const t = q.find((x) => x.nick === p[1] && x.matched == null);
       if (!t) return [];
@@ -111,7 +112,7 @@ function queueDb(tickets: { nick: string; elo: number; enqueuedAt: number; bucke
     if (sql.startsWith('SELECT COUNT(*)::int AS n FROM mm_queue')) return [{ n: q.filter((x) => x.matched == null).length }];
     return undefined;
   };
-  return { q, route };
+  return { q, route, seats };
 }
 
 test('queuePoll: pareia só no MESMO bucket e sem SELECT extra de bucket', async () => {
@@ -131,8 +132,27 @@ test('queuePoll: pareia só no MESMO bucket e sem SELECT extra de bucket', async
     assert.equal(body.matched, true);
     assert.equal(q.find((x) => x.nick === 'Caio')!.matched, body.code, 'pareou com o rival do mesmo evento');
     assert.equal(q.find((x) => x.nick === 'Beto')!.matched, null, 'o ticket da ranqueada normal fica na fila');
-    const cand = db.queries.find((x) => x.sql.startsWith('SELECT nick FROM mm_queue'))!;
-    assert.equal(cand.params[1], 'ev:wknd-2026-38');
+    const cand = db.queries.find((x) => x.sql.startsWith('SELECT nick, email FROM mm_queue'))!;
+    assert.equal(cand.params[3], 'ev:wknd-2026-38');
+  } finally { db.restore(); delete process.env.RANKED_QUEUE_ENABLED; }
+});
+
+test('[SEC] queuePoll: a sala pareada grava a conta de cada jogador e nunca pareia a conta com ela mesma', async () => {
+  process.env.RANKED_QUEUE_ENABLED = 'true';
+  const now = Date.now();
+  const { q, route, seats } = queueDb([
+    { nick: 'Alt', elo: 1000, enqueuedAt: now - 40_000, bucket: 'open', email: 'ana@example.com' },
+    { nick: 'Beto', elo: 1000, enqueuedAt: now - 30_000, bucket: 'open', email: 'beto@example.com' },
+    { nick: 'Ana', elo: 1000, enqueuedAt: now - 10_000, bucket: 'open', email: 'ana@example.com' },
+  ]);
+  const db = installFakeNeon(route);
+  try {
+    const r = await post({ action: 'queuePoll', nick: 'Ana', elo: 1000 });
+    const body = r.body as { matched?: boolean; code?: string };
+    assert.equal(body.matched, true);
+    assert.equal(q.find((x) => x.nick === 'Alt')!.matched, null, 'segundo nick da MESMA conta não é rival');
+    assert.equal(q.find((x) => x.nick === 'Beto')!.matched, body.code);
+    assert.deepEqual(seats[0], [body.code, 'Beto', 'beto@example.com', body.code, 'Ana', 'ana@example.com']);
   } finally { db.restore(); delete process.env.RANKED_QUEUE_ENABLED; }
 });
 

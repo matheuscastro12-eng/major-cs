@@ -1,12 +1,12 @@
 // Contas (e-mail + senha) + entitlement da conta vitalícia R$20.
 // Ações (POST body.action): signup | login | me | checkout | claim | export | delete.
 // - senha: scrypt (node:crypto), guardada como "salt:hash".
-// - token: HMAC-SHA256 stateless ("body.sig", body = email|exp), env APP_SECRET.
+// - token: HMAC-SHA256 ("body.sig", body = email|exp|token_version), env APP_SECRET; revogável (server/auth.ts verifyAccountSession).
 // - checkout: cria a URL do Payment Link ligada à conta autenticada.
 // - claim: confirma a sessão do Stripe no retorno; o webhook é a fonte principal.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
-import { ADMIN_SESSION_TTL_SEC, respondMissingSecret, signAccountToken, signAdminSession, verifyAccountToken } from '../server/auth.js';
+import { ADMIN_SESSION_TTL_SEC, issueAccountToken, parseAccountToken, respondMissingSecret, signAdminSession, verifyAccountSession, type TokenSql } from '../server/auth.js';
 import {
   accountReference,
   assignFounderNumbers,
@@ -90,6 +90,10 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       // índice não é UNIQUE porque a base pode ter duplicatas antigas).
       sql`CREATE INDEX IF NOT EXISTS rtm_accounts_nick_lower_idx ON rtm_accounts (lower(nick))`,
       sql`CREATE TABLE IF NOT EXISTS rtm_password_resets (email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, attempts INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT now())`,
+      // [SEC 2026-10-22] revogação de token (server/auth.ts verifyAccountSession).
+      // Também em scripts/migrations/2026-10-22-token-version.sql.
+      sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS token_version BIGINT NOT NULL DEFAULT 0`,
+      sql`ALTER TABLE rtm_pending_signups ADD COLUMN IF NOT EXISTS token_version BIGINT NOT NULL DEFAULT 0`,
     ]).then(() => undefined).catch((error) => {
       accountSchemaPromise = null;
       throw error;
@@ -126,9 +130,9 @@ function verifyPw(pw: string, stored: string): boolean {
   const orig = Buffer.from(h, 'hex');
   return calc.length === orig.length && timingSafeEqual(calc, orig);
 }
-// token de conta (HMAC com APP_SECRET, 180 dias) — implementação em server/auth.ts.
-const sign = signAccountToken;
-const verifyToken = verifyAccountToken;
+// token de conta (HMAC com APP_SECRET, 180 dias, com token_version) —
+// implementação em server/auth.ts. sign/verifyToken são criados no handler
+// (precisam do sql pra ler a versão atual).
 // Tiers de coins do Ultimate: COIN_TIERS em server/payments.ts (fonte única,
 // o woovi-webhook usa a mesma tabela).
 
@@ -181,6 +185,9 @@ export default async function handler(
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl);
   await ensureAccountSchema(sql);
+  const tsql = sql as unknown as TokenSql;
+  const sign = (em: string): Promise<string> => issueAccountToken(tsql, em);
+  const verifyToken = (token: string): Promise<string | null> => verifyAccountSession(tsql, token);
 
   // Backfill de fundador: dá número a quem pagou e ficou sem (webhook que caiu no
   // meio), na ordem do pagamento, sem mexer em número já dado. Guardado por um
@@ -205,7 +212,7 @@ export default async function handler(
   };
 
   if (action === 'export' || action === 'delete') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida. Entre novamente na conta.' }); return; }
     const accounts = await sql`SELECT email, nick, pass_hash, paid, is_founder, founder_no, created_at FROM rtm_accounts WHERE email=${em}`;
     if (!accounts.length) { res.status(404).json({ error: 'Conta não encontrada.' }); return; }
@@ -260,10 +267,13 @@ export default async function handler(
   const markPaid = async (em: string, sessionId?: string): Promise<void> => {
     const stmts = [
       sql`INSERT INTO rtm_paid_emails (email) VALUES (${em}) ON CONFLICT DO NOTHING`,
-      sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
-          SELECT email, nick, pass_hash, true, ${accountReference(em)} FROM rtm_pending_signups WHERE email=${em}
-          ON CONFLICT (email) DO UPDATE SET paid=true`,
-      sql`UPDATE rtm_accounts SET paid=true, stripe_ref=${accountReference(em)}, payment_method=COALESCE(payment_method, 'stripe') WHERE email=${em}`,
+      // [SEC 2026-10-22] ativação sobe a token_version: token emitido no
+      // cadastro pendente (e-mail nunca verificado) não controla a conta paga.
+      sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref, token_version)
+          SELECT email, nick, pass_hash, true, ${accountReference(em)}, GREATEST(COALESCE(token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) FROM rtm_pending_signups WHERE email=${em}
+          ON CONFLICT (email) DO UPDATE SET paid=true, token_version=CASE WHEN rtm_accounts.paid THEN rtm_accounts.token_version ELSE GREATEST(COALESCE(rtm_accounts.token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) END`,
+      sql`UPDATE rtm_accounts SET paid=true, stripe_ref=${accountReference(em)}, payment_method=COALESCE(payment_method, 'stripe'),
+          token_version=CASE WHEN paid THEN token_version ELSE GREATEST(COALESCE(token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) END WHERE email=${em}`,
       sql`DELETE FROM rtm_pending_signups WHERE email=${em}`,
     ];
     if (sessionId) stmts.push(sql`INSERT INTO rtm_payment_sessions (session_id, email) VALUES (${sessionId}, ${em}) ON CONFLICT (session_id) DO NOTHING`);
@@ -315,16 +325,18 @@ export default async function handler(
     const passHash = hashPw(password);
     const alreadyPaid = await resolvePaid(email, false, true);
     if (alreadyPaid) {
-      await sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref) VALUES (${email}, ${nick}, ${passHash}, true, ${accountReference(email)})
-                ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, paid=true`;
+      await sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref, token_version) VALUES (${email}, ${nick}, ${passHash}, true, ${accountReference(email)}, EXTRACT(EPOCH FROM now())::bigint)
+                ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, paid=true, token_version=GREATEST(COALESCE(rtm_accounts.token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint)`;
       await sql`DELETE FROM rtm_pending_signups WHERE email=${email}`;
       await claimFounder();
-      res.status(200).json({ token: sign(email), email, nick, paid: true, ...(await founderOf(email)) });
+      res.status(200).json({ token: await sign(email), email, nick, paid: true, ...(await founderOf(email)) });
       return;
     }
-    await sql`INSERT INTO rtm_pending_signups (email, nick, pass_hash) VALUES (${email}, ${nick}, ${passHash})
-              ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, created_at=now()`;
-    res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, url: checkoutUrl(email) });
+    // [SEC 2026-10-22] cadastro pendente repetido sobe a token_version: o token
+    // de quem cadastrou antes com o mesmo e-mail (não verificado) morre aqui.
+    await sql`INSERT INTO rtm_pending_signups (email, nick, pass_hash, token_version) VALUES (${email}, ${nick}, ${passHash}, EXTRACT(EPOCH FROM now())::bigint)
+              ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, created_at=now(), token_version=GREATEST(COALESCE(rtm_pending_signups.token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint)`;
+    res.status(200).json({ token: await sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, url: checkoutUrl(email) });
     return;
   }
 
@@ -335,7 +347,7 @@ export default async function handler(
     await ensureReference(email);
     const paid = await resolvePaid(email, Boolean(r[0].paid), true);
     if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento do save na nuvem.', url: checkoutUrl(email) }); return; }
-    res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: true, ...(await founderOf(email)) });
+    res.status(200).json({ token: await sign(email), email, nick: r[0].nick, paid: true, ...(await founderOf(email)) });
     return;
   }
 
@@ -404,8 +416,9 @@ export default async function handler(
       return;
     }
     const newHash = hashPw(password);
-    await sql`UPDATE rtm_accounts SET pass_hash=${newHash} WHERE email=${email}`;
-    await sql`UPDATE rtm_pending_signups SET pass_hash=${newHash} WHERE email=${email}`;
+    // [SEC 2026-10-22] reset revoga todos os tokens emitidos antes (token_version).
+    await sql`UPDATE rtm_accounts SET pass_hash=${newHash}, token_version=GREATEST(COALESCE(token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) WHERE email=${email}`;
+    await sql`UPDATE rtm_pending_signups SET pass_hash=${newHash}, token_version=GREATEST(COALESCE(token_version, 0) + 1, EXTRACT(EPOCH FROM now())::bigint) WHERE email=${email}`;
     await sql`DELETE FROM rtm_password_resets WHERE email=${email}`;
     res.status(200).json({ ok: true });
     return;
@@ -413,8 +426,16 @@ export default async function handler(
 
   if (action === 'me') {
     if (await limited('me')) return;
-    const em = verifyToken(String(body.token ?? ''));
-    if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
+    const em = await verifyToken(String(body.token ?? ''));
+    if (!em) {
+      // token do cadastro pendente revogado pela ativação: pede login (com a senha).
+      const stale = parseAccountToken(String(body.token ?? ''));
+      const paidNow = stale ? await sql`SELECT 1 FROM rtm_accounts WHERE email=${stale.email} AND paid` : [];
+      res.status(401).json(paidNow.length
+        ? { error: 'Pagamento confirmado! Entre com seu e-mail e senha para continuar.', relogin: true }
+        : { error: 'Sessão inválida.' });
+      return;
+    }
     let r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
     let paid = r.length ? Boolean(r[0].paid) : false;
     if (!paid) {
@@ -432,7 +453,7 @@ export default async function handler(
   // no Draft e no aviso de rival — O1-10). Mesmas regras do cadastro; no máx.
   // 5 trocas por dia por conta.
   if (action === 'setNick') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
     if (await limited('setNick', em)) return;
     const problem = nickProblem(nick);
@@ -452,7 +473,7 @@ export default async function handler(
   // hora se a conta perder o is_admin (conferido no banco a cada request).
   // Não-admin recebe 403 (o painel nem aparece pra ele no cliente).
   if (action === 'adminSession') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
     const r = await sql`SELECT is_admin FROM rtm_accounts WHERE email=${em}`;
     if (!r.length || !r[0].is_admin) { res.status(403).json({ error: 'not admin' }); return; }
@@ -461,7 +482,7 @@ export default async function handler(
   }
 
   if (action === 'checkout') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login antes de pagar.' }); return; }
     await ensureReference(em); // 0 linhas se ainda não há conta (cadastro pendente)
     if (await resolvePaid(em, false, true)) {
@@ -476,7 +497,7 @@ export default async function handler(
   // O webhook (/api/woovi-webhook) marca pago quando o Pix cai. Retorna o QR e
   // o BR Code (copia-e-cola) pra mostrar inline no jogo. Requer env OPENPIX_APP_ID.
   if (action === 'pix') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login antes de pagar.' }); return; }
     if (await resolvePaid(em, false, true)) { res.status(200).json({ paid: true }); return; }
     const appId = cleanEnv(process.env.OPENPIX_APP_ID);
@@ -515,7 +536,7 @@ export default async function handler(
   // coins pagos NÃO ativam conta vitalícia. Fluxo: pending → paid (webhook)
   // → claimed (coinsClaim credita no save do cliente).
   if (action === 'coinsPix') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login antes de comprar coins.' }); return; }
     const tier = String(body.tier ?? '');
     const pack = COIN_TIERS[tier];
@@ -564,7 +585,7 @@ export default async function handler(
   // stripe-webhook o marca paid quando o cartão aprova. O correlationID reusa o
   // prefixo "ultcoins:" (o webhook filtra por ele → coins NÃO ativam conta).
   if (action === 'coinsCheckout') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login antes de comprar coins.' }); return; }
     const tier = String(body.tier ?? '');
     const pack = COIN_TIERS[tier];
@@ -612,7 +633,7 @@ export default async function handler(
   // vouchers que o save ainda não viu. Pedidos de PASSE (tier "pass-s<N>")
   // ficam de fora — quem os coleta é o passClaim.
   if (action === 'coinsClaim') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
     const esql = sql as unknown as SqlTag;
     await ensureUltSchema(esql);
@@ -627,7 +648,7 @@ export default async function handler(
   // [O0-04] restorable é sempre 0: o "Recuperar compras" foi desligado — um
   // cliente antigo em cache que ainda lê este campo não mostra mais o card.
   if (action === 'coinsSummary') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
     const orders = await sql`SELECT coins FROM rtm_coin_orders WHERE email=${em} AND status='claimed'`;
     const purchased = orders.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
@@ -652,7 +673,7 @@ export default async function handler(
 
   // passPix: gera a cobrança Pix (Woovi) do Passe Premium da temporada corrente.
   if (action === 'passPix') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login antes de comprar o passe.' }); return; }
     const season = Math.floor(Number(body.season ?? 0));
     if (!Number.isInteger(season) || season < 1 || season > 9999) { res.status(400).json({ error: 'temporada inválida' }); return; }
@@ -713,7 +734,7 @@ export default async function handler(
   // passCheckout: paga o Passe Premium com CARTÃO (Stripe) — Checkout Session
   // dinâmica em BRL (sem price id no dashboard), espelho do coinsCheckout.
   if (action === 'passCheckout') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login antes de comprar o passe.' }); return; }
     const season = Math.floor(Number(body.season ?? 0));
     if (!Number.isInteger(season) || season < 1 || season > 9999) { res.status(400).json({ error: 'temporada inválida' }); return; }
@@ -768,7 +789,7 @@ export default async function handler(
   // desbloqueio) antes de marcar 'claimed'; devolve os pedidos (orderId +
   // temporada) e os vouchers pro cliente ligar o premium no save.
   if (action === 'passClaim') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
     const esql = sql as unknown as SqlTag;
     await ensureUltSchema(esql);
@@ -782,7 +803,7 @@ export default async function handler(
 
   // claim: confirma o pagamento pela sessão do Stripe e marca a conta como paga.
   if (action === 'claim') {
-    const em = verifyToken(String(body.token ?? ''));
+    const em = await verifyToken(String(body.token ?? ''));
     const cs = String(body.cs ?? '').trim();
     if (!em) { res.status(401).json({ error: 'Faça login antes de confirmar o pagamento.' }); return; }
     if (!cs) { res.status(400).json({ error: 'sessão ausente' }); return; }

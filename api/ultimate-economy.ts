@@ -6,7 +6,7 @@
 // (spend/pack/sbc/quicksell valorado no servidor); todo crédito positivo nasce
 // em fluxo do servidor. Carteira congelada (frozen_at) bloqueia mercado e packs.
 import { neon } from '@neondatabase/serverless';
-import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { respondMissingSecret, verifyAccountSession, verifyAccountToken, type TokenSql } from '../server/auth.js';
 import {
   applyClientUltTx,
   getUltState,
@@ -98,6 +98,8 @@ export default async function handler(
     for (const q of ultMarketSchemaQueries(sql)) await q;
     schemaReady = true;
   }
+  // [SEC 2026-10-22] revogação: token_version do banco (reset/ativação derrubam tokens antigos).
+  if (!(await verifyAccountSession(sql as unknown as TokenSql, String(body.token ?? '')))) { res.status(401).json({ error: 'Sessão inválida. Entre novamente na conta.' }); return; }
 
   const acc = await (sql`SELECT paid FROM rtm_accounts WHERE email=${email}`);
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }

@@ -7,7 +7,7 @@
 // Ações (POST body.action): status | register | report | settleAck [O0-22]. Só conta PAGA.
 // [O0-08] a ação legada 'claim' (faixa de vitórias) saiu — ver server.
 import { neon } from '@neondatabase/serverless';
-import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { respondMissingSecret, verifyAccountSession, verifyAccountToken, type TokenSql } from '../server/auth.js';
 import { requireAdmin } from '../server/admin-auth.js';
 import type { RateSql } from '../server/rate-limit.js';
 import {
@@ -116,6 +116,8 @@ export default async function handler(
     for (const q of [...ultEconomySchemaQueries(sql), ...wlSchemaQueries(sql), ...communityGoalSchemaQueries(sql)]) await q;
     schemaReady = true;
   }
+  // [SEC 2026-10-22] revogação: token_version do banco (reset/ativação derrubam tokens antigos).
+  if (!(await verifyAccountSession(sql as unknown as TokenSql, String(body.token ?? '')))) { res.status(401).json({ error: 'Sessão inválida. Entre novamente na conta.' }); return; }
 
   const acc = await (sql`SELECT paid FROM rtm_accounts WHERE email=${email}`);
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }

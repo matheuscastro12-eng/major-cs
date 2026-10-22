@@ -4,12 +4,16 @@ import test from 'node:test';
 import {
   adminPasswordMatches,
   appSecret,
+  appSecretConfigured,
   AppSecretMissingError,
+  parseAccountToken,
   respondMissingSecret,
   signAccountToken,
   signAdminSession,
+  verifyAccountSession,
   verifyAccountToken,
   verifyAdminSession,
+  type TokenSql,
 } from './auth.js';
 import { accountReference } from './payments.js';
 import cloudSave from '../api/cloud-save.js';
@@ -47,15 +51,16 @@ test('sem APP_SECRET e sem DATABASE_URL: nada é assinado nem aceito (falha fech
   },
 ));
 
-test('HOTFIX: sem APP_SECRET, usa o reserva legado e aceita os tokens já em circulação', () => withEnv(
+test('[SEC] sem APP_SECRET o reserva `fallback:${DATABASE_URL}` NÃO vale mais (nem com DATABASE_URL)', () => withEnv(
   { APP_SECRET: undefined, DATABASE_URL: 'postgresql://prod' },
   () => {
-    assert.equal(appSecret(), 'fallback:postgresql://prod');
-    // token assinado do jeito antigo (api/account.ts em 7e4fba8) continua valendo
-    const body = `jogador@example.com|${Math.floor(Date.now() / 1000) + 3600}`;
+    assert.equal(appSecretConfigured(), false);
+    assert.throws(() => appSecret(), AppSecretMissingError);
+    // token forjado com o reserva legado (quem viu a DATABASE_URL) é recusado
+    const body = `admin@example.com|${Math.floor(Date.now() / 1000) + 3600}`;
     const sig = createHmac('sha256', 'fallback:postgresql://prod').update(body).digest('base64url');
-    assert.equal(verifyAccountToken(`${Buffer.from(body).toString('base64url')}.${sig}`), 'jogador@example.com');
-    // e com APP_SECRET configurada ela vence o reserva
+    assert.equal(verifyAccountToken(`${Buffer.from(body).toString('base64url')}.${sig}`), null);
+    // e com APP_SECRET configurada o token do reserva continua recusado
     process.env.APP_SECRET = 'novo';
     assert.equal(appSecret(), 'novo');
     assert.equal(verifyAccountToken(`${Buffer.from(body).toString('base64url')}.${sig}`), null);
@@ -122,3 +127,28 @@ test('senha mestra: comparação exata, sem aceitar vazio nem env ausente', () =
     assert.equal(adminPasswordMatches('undefined'), false);
   });
 });
+
+// SQL falso: versão por e-mail (null = sem conta nem cadastro pendente)
+const versionSql = (versions: Record<string, number>): TokenSql => (async (_s: TemplateStringsArray, ...vals: unknown[]) => {
+  const em = String(vals[0]);
+  return em in versions ? [{ v: versions[em], k: 0 }] : [];
+}) as TokenSql;
+
+test('[SEC] token_version: token velho morre quando a versão do banco sobe (reset/ativação)', () => withEnv({ APP_SECRET: 'segredo' }, async () => {
+  const v0 = signAccountToken('vitima@example.com');
+  assert.deepEqual(parseAccountToken(v0), { email: 'vitima@example.com', version: 0 });
+  assert.equal(await verifyAccountSession(versionSql({ 'vitima@example.com': 0 }), v0), 'vitima@example.com');
+  // ativação/reset subiu a versão: o token do cadastro pendente (do atacante) não vale mais
+  assert.equal(await verifyAccountSession(versionSql({ 'vitima@example.com': 1761100000 }), v0), null);
+  const fresh = signAccountToken('vitima@example.com', 3600, 1761100000);
+  assert.equal(await verifyAccountSession(versionSql({ 'vitima@example.com': 1761100000 }), fresh), 'vitima@example.com');
+  // token legado (email|exp, sem versão) = versão 0
+  const body = `velho@example.com|${Math.floor(Date.now() / 1000) + 3600}`;
+  const legacy = `${Buffer.from(body).toString('base64url')}.${createHmac('sha256', 'segredo').update(body).digest('base64url')}`;
+  assert.deepEqual(parseAccountToken(legacy), { email: 'velho@example.com', version: 0 });
+  assert.equal(await verifyAccountSession(versionSql({ 'velho@example.com': 5 }), legacy), null);
+  // adulterar a versão quebra a assinatura
+  const [b64, sig] = fresh.split('.');
+  const forged = Buffer.from(Buffer.from(b64, 'base64url').toString().replace(/\|\d+$/, '|0')).toString('base64url');
+  assert.equal(parseAccountToken(`${forged}.${sig}`), null);
+}));

@@ -8,6 +8,7 @@ import { duelInviteText } from '../../engine/ultimate/duelInvite';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchLobby, lobbyApi, listOpenLobbies, type LobbyState, type OpenRoom, type UltimatePvpSquad } from '../../state/online';
 import { ct } from '../../state/career-i18n';
+import { getToken } from '../../state/account';
 import { Copy, Globe, LogOut, Plus, RefreshCw, Swords, Users, Zap } from 'lucide-react';
 
 export interface DuelPlayArgs {
@@ -84,7 +85,9 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
   const enterQueue = async () => {
     setBusy(true); setError(''); matchedRef.current = false;
     try {
-      const r = await lobbyApi({ action: 'queueJoin', nick, elo: squad.elo, ...(eventId ? { eventId } : {}) });
+      // [SEC 2026-10-22] token liga o ticket à conta (Major da Semana só conta sala com as duas contas)
+      const token = getToken();
+      const r = await lobbyApi({ action: 'queueJoin', nick, elo: squad.elo, ...(token ? { token } : {}), ...(eventId ? { eventId } : {}) });
       if (r.matched && r.code) { matchedRef.current = true; setCode(r.code); setView('room'); setState(null); }
       else if (r.queued) setQueue({ since: Date.now(), window: r.window });
       else setError(r.error ?? ct('Não foi possível entrar na fila.'));

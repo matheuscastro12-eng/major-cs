@@ -7,7 +7,7 @@
 // devolve só os campos que a tela usa — nunca o blob cru, então até uma linha
 // antiga envenenada não derruba a listagem.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
-import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { respondMissingSecret, verifyAccountSession, type TokenSql } from '../server/auth.js';
 import { sanitizeHallEntry } from '../server/hall.js';
 import { parseJsonBody } from '../server/http.js';
 import { internalError } from '../server/internalError.js';
@@ -79,7 +79,7 @@ export default async function handler(
     if (respondLimited(res, await rateLimitHit(rsql, [{ key: `hall:ip:${clientIp(req.headers)}`, limit: 10, windowSec: 3600 }]))) return;
     const body = parseJsonBody(req.body);
     if (!body) { res.status(400).json({ error: 'JSON inválido' }); return; }
-    const email = verifyAccountToken(String(body.token ?? ''));
+    const email = await verifyAccountSession(sql as unknown as TokenSql, String(body.token ?? '')); // [SEC 2026-10-22] com revogação
     if (!email) { res.status(401).json({ error: 'Entre na sua conta pra registrar a campanha no Hall da Fama.' }); return; }
     if (respondLimited(res, await rateLimitHit(rsql, [{ key: `hall:email:${email}`, limit: 10, windowSec: 86400 }]))) return;
     try {
