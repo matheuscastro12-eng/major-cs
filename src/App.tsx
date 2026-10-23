@@ -1177,7 +1177,17 @@ export default function App() {
   if (screen === 'leaderboard') {
     return withShell(
       <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Ranking')} crumbs={[{ label: ct('Você') }]} nav={homeNav('leaderboard')} active="leaderboard" onNav={onHomeNav}>
-        <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); goToCheckout(); }} />
+        <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => {
+          setCheckoutSrc('leaderboard');
+          /* funil: dado real (28d) — 59 paywall_view / 52 sids no Ranking e
+             NENHUM checkout_open. goToCheckout manda pra Landing com o modal
+             em modo CADASTRO sempre, mesmo pra quem já tem conta grátis
+             logada aqui — o mesmo buraco já corrigido no home-rtp-direto/
+             mkt-lock/ultimate-guest (cai num formulário de "criar conta" com
+             o e-mail que já existe). Quem já tem conta pula direto pro
+             pagamento. */
+          if (account) startCheckout(); else goToCheckout();
+        }} />
       </GameShell>,
     );
   }
