@@ -72,7 +72,15 @@
 .home-mode__txt small { color: var(--c-ink-faint); font-size: var(--fs-1); font-weight: 600; }
 .home-mode__cta { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; color: var(--c-brand-strong); font-size: var(--fs-2); font-weight: 800; white-space: nowrap; }
 .home-mode__extra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 14px 12px 74px; }
-.home-skip { padding: 0; border: 0; background: none; color: var(--c-brand-strong); font: inherit; font-size: var(--fs-2); font-weight: 700; text-decoration: underline; cursor: pointer; }
+.home-skip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--c-brand) 45%, transparent);
+  background: color-mix(in srgb, var(--c-brand) 12%, transparent);
+  color: var(--c-brand-strong); font: inherit; font-size: var(--fs-2); font-weight: 800; cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+.home-skip:hover { background: color-mix(in srgb, var(--c-brand) 20%, transparent); }
 @media (max-width: 760px) {
   .home-mode__cta { display: none; }
   .home-mode__extra { padding-left: 14px; }
@@ -121,6 +129,6 @@
    área clicável (o padding vertical compensado não muda o layout) */
 @media (max-width: 1023px), (pointer: coarse) {
   .home-daily { min-height: var(--tap); }
-  .home-link,
-  .home-skip { display: inline-flex; align-items: center; min-height: var(--tap); margin-block: -12px; }
+  .home-link { display: inline-flex; align-items: center; min-height: var(--tap); margin-block: -12px; }
+  .home-skip { min-height: var(--tap); padding-block: 10px; }
 }
