@@ -299,8 +299,16 @@ export function Home(props: Props) {
               extra={premiumLocked ? (
                 <span className="home-mode__extra">
                   <FounderCounter style={{ fontSize: '11px' }} />
+                  {/* funil: home-rtp é a maior exposição de paywall do jogo (1,4k
+                      sids/28d) e o único jeito de pagar direto daqui era um link de
+                      texto sublinhado, sem preço — bem mais discreto que qualquer
+                      outro CTA de venda do app (todos os outros já são botão com
+                      preço visível). 0,3% de clique nesse CTA secundário contra
+                      0,85%+ nos outros pontos de venda. Não muda o fluxo (continua
+                      o mesmo src/rota), só dá ao botão o mesmo peso visual e preço
+                      explícito que os demais já têm. */}
                   <button type="button" className="home-skip" onClick={(e) => { e.stopPropagation(); setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
-                    {ct('Já quero virar Fundador · pular a demo')} →
+                    <Crown size={13} aria-hidden /> {ct('Pular a demo e virar Fundador')} · R$20
                   </button>
                 </span>
               ) : undefined}
