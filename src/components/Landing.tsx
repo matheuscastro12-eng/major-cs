@@ -705,12 +705,25 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 8px var(--c-win)', animation: 'pulse 1.4s infinite' }} />
             <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
           </div>
+          {/* funil: dos checkout_abandon de Pix (28d), uma fração relevante fecha
+              em menos de 15s — rápido demais pra ser "decidiu não pagar" (e não
+              bate com pagamento feito por fora: sem rtm_paid_emails próximo). A
+               1ª frase que a tela mostrava era passiva ("confirma sozinha...não
+              precisa fazer nada"), sem dizer que a AÇÃO (abrir o banco e
+              escanear/colar) é de quem está pagando. Passos numerados, explícitos,
+              antes da reassurance de espera — ninguém decide em <15s que não quer
+              pagar R$20 depois de já ter chegado até aqui. */}
+          <ol style={{ margin: '0 0 10px', paddingLeft: '18px', fontSize: '0.76rem', color: 'var(--em-text)', lineHeight: 1.6, fontWeight: 600 }}>
+            <li>{ct('Abra o app do seu banco')}</li>
+            <li>{ct('Escaneie o QR abaixo ou copie o código Pix e cole no app')}</li>
+            <li>{ct('Confirme o pagamento de R$20 — esta tela libera sozinha')}</li>
+          </ol>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
             {/* funil: a mediana real de espera do Pix é ~133s — "aprovado em
                 segundos" prometia rápido demais e pode ter puxado parte dos 30%
                 de abandonos que saem em menos de 1min. Troca por expectativa
                 honesta desde o primeiro segundo, sem depender só do timer acima. */}
-            {ct('Esta tela confirma sozinha assim que o Pix cair — não precisa recarregar. Costuma levar de 1 a 3 minutos.')}
+            {ct('Depois de confirmar, não precisa recarregar — costuma levar de 1 a 3 minutos pra liberar.')}
           </p>
           {pix.charge.qrCodeImage && (
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
