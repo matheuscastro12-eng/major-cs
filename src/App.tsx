@@ -1012,7 +1012,7 @@ export default function App() {
     ...(RTP_ENABLED ? [{ id: 'rtp' as const, label: 'Road to Pro', short: 'Road to Pro', icon: Crosshair, hint: account?.paid ? undefined : ct('Demo grátis'), onSelect: () => setScreen('rtp') }] : []),
     ...(ULTIMATE_ENABLED ? [{ id: 'ultimate' as const, label: 'Ultimate', short: 'Ultimate', icon: Star, onSelect: () => openUltimateMode('hub') }] : []),
     { id: 'major', label: 'Draft', short: 'Draft', icon: Layers, hint: tournament || savedSession?.tournament ? ct('Campeonato em andamento') : undefined, onSelect: openDraftMode },
-    { id: 'majorsg', label: 'Major Singapore', short: 'Singapore', icon: Medal, hint: 'PGL · 24/11 – 13/12', onSelect: () => setScreen('majorSg') },
+    { id: 'majorsg', label: 'Singapore', short: 'Singapore', icon: Medal, hint: 'PGL · 24/11 – 13/12', onSelect: () => setScreen('majorSg') },
     { id: 'diario', label: ct('Diário'), short: ct('Diário'), icon: CalendarDays, onSelect: () => setScreen('daily') },
     ...(ULTIMATE_ENABLED ? [{ id: 'online' as const, label: 'Online', short: 'Online', icon: Swords, hint: ct('Ranqueada, duelo e Major da Semana'), onSelect: () => openUltimateMode('ranked') }] : []),
   ];
