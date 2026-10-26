@@ -1,0 +1,431 @@
+{
+ "event": {
+  "name": "PGL Major Singapore 2026",
+  "city": "Singapura",
+  "start": "2026-11-24",
+  "end": "2026-12-13",
+  "playoffsStart": "2026-12-10",
+  "listDate": "2026-11-02",
+  "status": "projecao",
+  "updatedAt": "2026-10-26",
+  "sources": []
+ },
+ "teams": [
+  {
+   "id": "vitality",
+   "name": "Team Vitality",
+   "tag": "VIT",
+   "country": "fr",
+   "seed": 1,
+   "rating": 1700,
+   "colors": [
+    "#0f0f0f",
+    "#f5e400"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "mouz",
+   "name": "MOUZ",
+   "tag": "MOUZ",
+   "country": "eu",
+   "seed": 2,
+   "rating": 1640,
+   "colors": [
+    "#1a0f14",
+    "#e4002b"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "falcons",
+   "name": "Team Falcons",
+   "tag": "FLC",
+   "country": "sa",
+   "seed": 3,
+   "rating": 1650,
+   "colors": [
+    "#0b1d14",
+    "#00c06b"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "spirit",
+   "name": "Team Spirit",
+   "tag": "SPR",
+   "country": "ru",
+   "seed": 4,
+   "rating": 1630,
+   "colors": [
+    "#111111",
+    "#d9d9d9"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "furia",
+   "name": "FURIA",
+   "tag": "FUR",
+   "country": "br",
+   "seed": 5,
+   "rating": 1640,
+   "colors": [
+    "#111111",
+    "#f0f0f0"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "navi",
+   "name": "Natus Vincere",
+   "tag": "NAVI",
+   "country": "ua",
+   "seed": 6,
+   "rating": 1620,
+   "colors": [
+    "#111111",
+    "#ffe500"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "mongolz",
+   "name": "The MongolZ",
+   "tag": "MGLZ",
+   "country": "mn",
+   "seed": 7,
+   "rating": 1610,
+   "colors": [
+    "#121212",
+    "#e94b3c"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "aurora",
+   "name": "Aurora Gaming",
+   "tag": "AUR",
+   "country": "eu",
+   "seed": 8,
+   "rating": 1590,
+   "colors": [
+    "#0e1726",
+    "#8be0ff"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "g2",
+   "name": "G2 Esports",
+   "tag": "G2",
+   "country": "eu",
+   "seed": 9,
+   "rating": 1590,
+   "colors": [
+    "#111111",
+    "#f0f0f0"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "faze",
+   "name": "FaZe Clan",
+   "tag": "FAZE",
+   "country": "eu",
+   "seed": 10,
+   "rating": 1570,
+   "colors": [
+    "#111111",
+    "#e43d30"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "pain",
+   "name": "paiN Gaming",
+   "tag": "PAIN",
+   "country": "br",
+   "seed": 11,
+   "rating": 1570,
+   "colors": [
+    "#111111",
+    "#e0001b"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "3dmax",
+   "name": "3DMAX",
+   "tag": "3DM",
+   "country": "fr",
+   "seed": 12,
+   "rating": 1560,
+   "colors": [
+    "#101010",
+    "#ff7a00"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "liquid",
+   "name": "Team Liquid",
+   "tag": "TL",
+   "country": "us",
+   "seed": 13,
+   "rating": 1550,
+   "colors": [
+    "#0b1a2a",
+    "#2c8fff"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "astralis",
+   "name": "Astralis",
+   "tag": "AST",
+   "country": "dk",
+   "seed": 14,
+   "rating": 1550,
+   "colors": [
+    "#14161b",
+    "#e2231a"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "vp",
+   "name": "Virtus.pro",
+   "tag": "VP",
+   "country": "ru",
+   "seed": 15,
+   "rating": 1550,
+   "colors": [
+    "#1d0f05",
+    "#ff7a00"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "heroic",
+   "name": "HEROIC",
+   "tag": "HER",
+   "country": "dk",
+   "seed": 16,
+   "rating": 1540,
+   "colors": [
+    "#111111",
+    "#f6a700"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "mibr",
+   "name": "MIBR",
+   "tag": "MIBR",
+   "country": "br",
+   "seed": 17,
+   "rating": 1530,
+   "colors": [
+    "#111111",
+    "#f0f0f0"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "legacy",
+   "name": "Legacy",
+   "tag": "LGC",
+   "country": "br",
+   "seed": 18,
+   "rating": 1520,
+   "colors": [
+    "#101820",
+    "#4ab3ff"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "tyloo",
+   "name": "TYLOO",
+   "tag": "TYL",
+   "country": "cn",
+   "seed": 19,
+   "rating": 1510,
+   "colors": [
+    "#1a0606",
+    "#e30613"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "b8",
+   "name": "B8",
+   "tag": "B8",
+   "country": "ua",
+   "seed": 20,
+   "rating": 1510,
+   "colors": [
+    "#0e0e0e",
+    "#d1ff3c"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "gamerlegion",
+   "name": "GamerLegion",
+   "tag": "GL",
+   "country": "eu",
+   "seed": 21,
+   "rating": 1510,
+   "colors": [
+    "#0b0f1a",
+    "#7c4dff"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "nemiga",
+   "name": "Nemiga",
+   "tag": "NMG",
+   "country": "by",
+   "seed": 22,
+   "rating": 1500,
+   "colors": [
+    "#101010",
+    "#3ec1ff"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "fut",
+   "name": "FUT Esports",
+   "tag": "FUT",
+   "country": "tr",
+   "seed": 23,
+   "rating": 1500,
+   "colors": [
+    "#101010",
+    "#ffcc00"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "bigclan",
+   "name": "BIG",
+   "tag": "BIG",
+   "country": "de",
+   "seed": 24,
+   "rating": 1490,
+   "colors": [
+    "#101010",
+    "#f0f0f0"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "lynnvision",
+   "name": "Lynn Vision",
+   "tag": "LVG",
+   "country": "cn",
+   "seed": 25,
+   "rating": 1480,
+   "colors": [
+    "#0f1a12",
+    "#47d18c"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "imperial",
+   "name": "Imperial",
+   "tag": "IMP",
+   "country": "br",
+   "seed": 26,
+   "rating": 1480,
+   "colors": [
+    "#111111",
+    "#ffd200"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "nrg",
+   "name": "NRG",
+   "tag": "NRG",
+   "country": "us",
+   "seed": 27,
+   "rating": 1470,
+   "colors": [
+    "#111111",
+    "#ff5a00"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "flyquest",
+   "name": "FlyQuest",
+   "tag": "FLY",
+   "country": "au",
+   "seed": 28,
+   "rating": 1470,
+   "colors": [
+    "#0b1d14",
+    "#2fd583"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "wildcard",
+   "name": "Wildcard",
+   "tag": "WC",
+   "country": "us",
+   "seed": 29,
+   "rating": 1460,
+   "colors": [
+    "#121212",
+    "#c69cff"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "oddik",
+   "name": "ODDIK",
+   "tag": "ODK",
+   "country": "br",
+   "seed": 30,
+   "rating": 1450,
+   "colors": [
+    "#121212",
+    "#8a52ff"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "rare",
+   "name": "Rare Atom",
+   "tag": "RA",
+   "country": "cn",
+   "seed": 31,
+   "rating": 1440,
+   "colors": [
+    "#141414",
+    "#ff4d6d"
+   ],
+   "confirmed": false
+  },
+  {
+   "id": "fluxo",
+   "name": "Fluxo",
+   "tag": "FLX",
+   "country": "br",
+   "seed": 32,
+   "rating": 1440,
+   "colors": [
+    "#111111",
+    "#9b5cff"
+   ],
+   "confirmed": false
+  }
+ ]
+}

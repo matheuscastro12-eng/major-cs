@@ -86,6 +86,7 @@ const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m)
 // style guide do design system "Broadcast Desk" (/design) — fora do bundle das telas
 const DesignScreen = lazyWithReload(() => import('./pages/DesignScreen').then((m) => ({ default: m.DesignScreen })));
 const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
+const MajorSingaporeScreen = lazyWithReload(() => import('./components/major/MajorSingaporeScreen').then((m) => ({ default: m.MajorSingaporeScreen })));
 const RoadToPro = lazyWithReload(() => import('./components/rtp/RoadToPro').then((m) => ({ default: m.RoadToPro })));
 
 // Ultimate Squad: VISÍVEL em localhost (dev/preview local), OCULTO no site real
@@ -174,7 +175,8 @@ type Screen =
   | 'privacy'
   | 'terms'
   | 'refund'
-  | 'design';
+  | 'design'
+  | 'majorsg';
 
 const SCREEN_PATH: Record<Screen, string> = {
   landing: '/',
@@ -207,6 +209,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   terms: '/termos',
   refund: '/reembolso',
   design: '/design',
+  majorsg: '/major-singapore',
 };
 
 // Modo de cada tela → acento do design system (tokens.css: [data-mode]). Telas
@@ -657,7 +660,7 @@ export default function App() {
     const TITLES: Partial<Record<Screen, string>> = {
       draft: 'Draft', hub: 'Campeonato', veto: 'Veto de mapas', match: 'Partida ao vivo',
       final: 'Resultado', online: 'Online', career: 'Modo Carreira', hall: 'Hall da Fama', editor: 'Editor de base',
-      design: 'Design system',
+      design: 'Design system', majorsg: 'PGL Major Singapore',
       stats: 'Estatísticas', admin: 'Admin',
       privacy: 'Privacidade', terms: 'Termos', refund: 'Reembolso',
     };
@@ -1013,6 +1016,7 @@ export default function App() {
     ...(ULTIMATE_ENABLED ? [{ id: 'online' as const, label: 'Online', short: 'Online', icon: Swords, hint: ct('Ranqueada, duelo e Major da Semana'), onSelect: () => openUltimateMode('ranked') }] : []),
   ];
   const shellCommands: ShellCommand[] = [
+    { id: 'major-sg', label: ct('Modo Major: PGL Major Singapore'), group: ct('Ações'), icon: Trophy, keywords: 'major singapore pickem pick em chave bracket pgl', run: () => setScreen('majorsg') },
     { id: 'new-major', label: ct('Novo Major (draft)'), group: ct('Ações'), icon: Plus, keywords: 'draft major rapido', run: newMajor },
     { id: 'editor', label: ct('Editor de base'), group: ct('Ações'), icon: PencilRuler, keywords: 'editor base database jogadores times fm', run: () => openEditor('home') },
     { id: 'achievements', label: ct('Conquistas'), group: ct('Você'), icon: Medal, run: () => setAchOpen(true) },
@@ -1044,6 +1048,7 @@ export default function App() {
     { id: 'principal', label: ct('Principal'), icon: House, items: [
       { id: 'home', label: ct('Portal'), icon: LayoutDashboard },
       { id: 'news', label: ct('Novidades'), icon: Newspaper, alert: hasNewPatch() },
+      { id: 'majorsg', label: ct('Modo Major'), icon: Trophy },
     ] },
     { id: 'voce', label: ct('Você'), icon: CircleUser, items: [
       { id: 'profile', label: ct('Perfil do manager'), icon: CircleUser },
@@ -1131,6 +1136,18 @@ export default function App() {
       <Suspense fallback={<Loader text="…" />}>
         <DesignScreen onBack={() => setScreen(manager ? 'home' : 'landing')} />
       </Suspense>
+    );
+  }
+
+  // Modo Major (PGL Major Singapore): aberto a qualquer um, sem manager — o link
+  // do pick'em compartilhado tem que abrir direto pra quem não joga ainda
+  if (screen === 'majorsg') {
+    return withShell(
+      <GameShell mode="inicio" identity={{ title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> }} title={ct('Modo Major')} crumbs={[{ label: ct('Início') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav}>
+        <Suspense fallback={<Loader text="…" />}>
+          <MajorSingaporeScreen />
+        </Suspense>
+      </GameShell>,
     );
   }
 
