@@ -1,0 +1,15 @@
+.msg-screen { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+.msg-head { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
+.msg-head h1 { margin: 0; font-size: 1.6rem; }
+.msg-sub { opacity: .7; font-size: .85rem; margin: 4px 0 12px; }
+.msg-back, .msg-tabs button, .msg-table th button, .msg-cta { background: none; border: 1px solid currentColor; color: inherit; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.msg-warn { border-left: 3px solid var(--c-accent, #f5a524); padding: 8px 12px; background: rgba(245,165,36,.08); font-size: .85rem; }
+.msg-tabs { display: flex; gap: 8px; margin: 12px 0; }
+.msg-tabs button[aria-pressed='true'], .msg-table th button.on, .msg-cta { background: var(--c-accent, #f5a524); color: #111; border-color: transparent; }
+.msg-table-wrap { overflow-x: auto; }
+.msg-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.msg-table th, .msg-table td { padding: 6px 8px; text-align: right; border-bottom: 1px solid rgba(255,255,255,.08); }
+.msg-table th:nth-child(-n+3), .msg-table td:nth-child(-n+3) { text-align: left; }
+.msg-table th button { border: none; padding: 2px 6px; font: inherit; }
+.msg-table td.on { font-weight: 700; }
+.msg-run { margin-top: 16px; line-height: 1.5; }

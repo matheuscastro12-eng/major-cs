@@ -73,6 +73,7 @@ if (typeof window !== 'undefined') {
 // telas pesadas e/ou pouco usadas: carregadas sob demanda (code-splitting) pra
 // deixar o carregamento inicial bem mais leve.
 const Admin = lazyWithReload(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
+const MajorSingaporeScreen = lazyWithReload(() => import('./components/MajorSingaporeScreen').then((m) => ({ default: m.MajorSingaporeScreen })));
 const CareerScreen = lazyWithReload(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
 const CareerSaves = lazyWithReload(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
 const CareerCRM = lazyWithReload(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
@@ -165,6 +166,7 @@ type Screen =
   | 'ultimate'
   | 'rtp'
   | 'daily'
+  | 'majorSg'
   | 'career'
   | 'careerSaves'
   | 'editor'
@@ -186,6 +188,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   ultimate: '/ultimate',
   rtp: '/road-to-pro',
   daily: '/diario',
+  majorSg: '/major-singapore',
   career: '/carreira',
   careerSaves: '/carreira/saves',
   editor: '/editor',
@@ -1315,6 +1318,7 @@ export default function App() {
           onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onDaily={() => setScreen('daily')}
+          onMajorSg={() => setScreen('majorSg')}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
@@ -1436,6 +1440,9 @@ export default function App() {
         : <Loader text="…" />)}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
       {screen === 'daily' && <ModeErrorBoundary mode="daily" onExit={() => setScreen('home')}><DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} /></ModeErrorBoundary>}
+
+      {/* MAJOR SINGAPORE 2026 — modo próprio: previsões Monte Carlo + simular o Major */}
+      {screen === 'majorSg' && <Suspense fallback={<Loader text="…" />}><MajorSingaporeScreen onExit={() => setScreen('home')} /></Suspense>}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (
