@@ -17,6 +17,8 @@ import type { ShellNavGroup } from './ds/shell/types';
 import { Flag, TeamBadge } from './ui';
 import type { TeamSeason, Tournament } from '../types';
 import { MajorPickem } from './MajorPickem';
+import { MajorErrorBoundary } from './MajorErrorBoundary';
+import { majorCardData, postMajorCardOnX, shareMajorCard } from '../state/majorShareCard';
 import '../styles/major-singapore.css';
 
 type View = 'geral' | 'previsoes' | 'pickem' | 'simular';
@@ -53,6 +55,10 @@ function useCountdown(target: number) {
 }
 
 export function MajorSingaporeScreen({ onExit }: { onExit: () => void }) {
+  return <MajorErrorBoundary onExit={onExit}><MajorSingaporeInner onExit={onExit} /></MajorErrorBoundary>;
+}
+
+function MajorSingaporeInner({ onExit }: { onExit: () => void }) {
   const [view, setView] = useState<View>('geral');
   const [stage, setStage] = useState<StageFilter>('all');
   const [run, setRun] = useState<MajorRun | null>(null);
@@ -60,19 +66,26 @@ export function MajorSingaporeScreen({ onExit }: { onExit: () => void }) {
   const src = useMemo(() => new Map<string, TeamSeason>(MAJOR_SG_DATASET.map((t) => [t.id, t])), []);
   const provisional = MAJOR_SG_CONFIG.listStatus !== 'oficial';
   const nProv = MAJOR_SG_CONFIG.teams.filter((t) => t.provisional).length;
+  const guessByStage = (s: number) => MAJOR_SG_CONFIG.teams.filter((t) => t.stageGuess && t.stage === s).length;
+  const [shareMsg, setShareMsg] = useState<string | null>(null);
   const cd = useCountdown(START);
   const small = useSmall();
 
   const badge = (id: string, size = 24) => {
     const t = src.get(id);
-    if (!t) return null;
+    if (!t) return <span className="msg-nobadge" style={{ width: size, height: size }} title={ct('Sem dados no bo3.gg')}>?</span>;
     return <TeamBadge tag={t.tag} colors={t.colors as [string, string]} size={size} logoUrl={t.logoUrl ?? logoForTeam(t)} />;
   };
   const nameOf = (id: string) => src.get(id)?.team ?? id;
   const isProv = (id: string) => field.provisional.has(id);
-  const provDot = (id: string) => (isProv(id) ? <span className="msg-provdot" title={ct('Vaga provisória (ranking) até a lista oficial de 02/11')} aria-label={ct('vaga provisória')} /> : null);
+  const isGuess = (id: string) => field.stageGuess.has(id);
+  const GUESS_TIP = ct('Vaga praticamente garantida, mas o Stage de entrada é palpite (ranking VRS) até a lista oficial de 02/11');
+  const provDot = (id: string) => (isProv(id)
+    ? <span className="msg-provdot" title={ct('Vaga provisória (ranking) até a lista oficial de 02/11')} aria-label={ct('vaga provisória')} />
+    : isGuess(id) ? <span className="msg-guess" title={GUESS_TIP}>{ct('Stage palpite')}</span> : null);
 
-  const simulate = () => { setRun(simulateMajor(field, makeRng(randomSeed()))); setView('simular'); };
+  const cardData = () => majorCardData(run!, (id) => { const t = src.get(id); return t && { name: t.team, tag: t.tag, colors: t.colors as [string, string] }; });
+  const simulate = () => { setShareMsg(null); setRun(simulateMajor(field, makeRng(randomSeed()))); setView('simular'); };
 
   const nav: ShellNavGroup[] = [
     { id: 'evento', label: ct('Evento'), items: [
@@ -92,7 +105,7 @@ export function MajorSingaporeScreen({ onExit }: { onExit: () => void }) {
   const teamCard = (id: string) => {
     const t = src.get(id);
     return (
-      <li key={id} className={`msg-tcard${isProv(id) ? ' is-prov' : ''}`} title={isProv(id) ? ct('Vaga provisória (ranking) até a lista oficial de 02/11') : undefined}>
+      <li key={id} className={`msg-tcard${isProv(id) ? ' is-prov' : isGuess(id) ? ' is-guess' : ''}`} title={isProv(id) ? ct('Vaga provisória (ranking) até a lista oficial de 02/11') : isGuess(id) ? GUESS_TIP : undefined}>
         <span className="msg-tcard__logo">{badge(id, small ? 40 : 56)}</span>
         <span className="msg-tcard__name">{nameOf(id)}</span>
         <span className="msg-tcard__meta">{t?.country && <Flag cc={t.country} />}{t?.tag}{provDot(id)}</span>
@@ -172,8 +185,12 @@ export function MajorSingaporeScreen({ onExit }: { onExit: () => void }) {
                       <h2 className="msg-sec__title">Stage {s}</h2>
                       <p className="msg-sec__sub">{info.dates} · {ct(info.sub)}</p>
                     </div>
-                    {s === 1 && provisional && (
-                      <p className="msg-sec__note"><span className="msg-provdot" aria-hidden /> {nProv} {ct('vagas provisórias pelo ranking até a lista oficial (02/11)')}</p>
+                    {provisional && (s === 1 || guessByStage(s) > 0) && (
+                      <p className="msg-sec__note">
+                        {s === 1 && <><span className="msg-provdot" aria-hidden /> {nProv} {ct('vagas provisórias pelo ranking')}{guessByStage(s) ? ' · ' : ''}</>}
+                        {guessByStage(s) > 0 && <>{guessByStage(s)} {guessByStage(s) === 1 ? ct('time com Stage palpite') : ct('times com Stage palpite')}</>}
+                        {' '}{ct('até a lista oficial (02/11)')}
+                      </p>
                     )}
                   </header>
                   <ul className="msg-grid">{ids.map(teamCard)}</ul>
@@ -264,7 +281,12 @@ export function MajorSingaporeScreen({ onExit }: { onExit: () => void }) {
                   {series('FINAL')[0]?.pairing.result && <b> {series('FINAL')[0].pairing.result!.mapScore.join(' – ')}</b>}
                 </p>
               </div>
-              <Button variant="primary" size="lg" onClick={simulate}>{ct('Simular de novo')}</Button>
+              <div className="msg-champ__act">
+                <Button variant="primary" size="lg" onClick={simulate}>{ct('Simular de novo')}</Button>
+                <Button variant="secondary" onClick={() => void shareMajorCard(cardData()).then((r) => setShareMsg(r === 'shared' ? ct('Compartilhado!') : ct('Imagem baixada e texto copiado.')))}>{ct('Compartilhar chave')}</Button>
+                <Button variant="ghost" onClick={() => { window.open(postMajorCardOnX(cardData()), '_blank', 'noopener'); setShareMsg(ct('Imagem baixada: anexe no post do X.')); }}>{ct('Postar no X')}</Button>
+                {shareMsg && <span className="msg-champ__msg" role="status">{shareMsg}</span>}
+              </div>
             </section>
 
             <section className="msg-sec">

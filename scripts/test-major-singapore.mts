@@ -46,3 +46,47 @@ test('Monte Carlo: reprodutível e probabilidades coerentes', () => {
     if (t.entryStage === 3) { assert.equal(t.passStage1, null); assert.equal(t.passStage2, null); }
   }
 });
+
+// ---- predição publicada × lista: sem time a mais/a menos, mesmo Stage e status
+import predJson from '../src/data/major-singapore-2026-prediction.json' with { type: 'json' };
+import { majorCardData } from '../src/state/majorShareCard.ts';
+
+test('odds/predição batem com a lista de times (sem time a mais nem a menos)', () => {
+  const pred = predJson as { listStatus: string; teams: { id: string; entryStage: number; provisional: boolean; stageGuess?: boolean }[] };
+  const list = new Map(MAJOR_SG_CONFIG.teams.map((t) => [t.bo3Id, t]));
+  const predIds = pred.teams.map((t) => t.id);
+  assert.equal(new Set(predIds).size, predIds.length, 'id repetido na predição');
+  assert.deepEqual([...predIds].sort(), [...list.keys()].sort(), 'predição desatualizada: rode scripts/major-singapore-predict.mts');
+  for (const t of pred.teams) {
+    const e = list.get(t.id)!;
+    assert.equal(t.entryStage, e.stage, `${e.team}: Stage diferente na predição`);
+    assert.equal(t.provisional, e.provisional, `${e.team}: provisório diferente na predição`);
+    assert.equal(!!t.stageGuess, !!e.stageGuess, `${e.team}: Stage palpite diferente na predição`);
+  }
+  assert.equal(pred.listStatus, MAJOR_SG_CONFIG.listStatus);
+});
+
+test('times com Stage chutado estão marcados como palpite (não aparecem como confirmados)', () => {
+  const guess = MAJOR_SG_CONFIG.teams.filter((t) => /chute|indefinido/i.test(t.note ?? ''));
+  assert.ok(guess.length > 0);
+  for (const t of guess) assert.equal(t.stageGuess, true, `${t.team} deveria ter stageGuess`);
+  const field = buildField(MAJOR_SG_CONFIG, MAJOR_SG_DATASET);
+  assert.equal(field.stageGuess.size, guess.length);
+});
+
+test('time sem dados no bo3.gg gera erro legível (vira aviso no error boundary)', () => {
+  const bad = { ...MAJOR_SG_CONFIG, teams: MAJOR_SG_CONFIG.teams.map((t, i) => (i === 0 ? { ...t, bo3Id: 'bo3_team_999999' } : t)) };
+  assert.throws(() => buildField(bad, MAJOR_SG_DATASET), /bo3Id desconhecido/);
+});
+
+test('card da chave: QF/SF/Final completos e time sem dados não quebra', () => {
+  const field = buildField(MAJOR_SG_CONFIG, MAJOR_SG_DATASET);
+  const run = simulateMajor(field, makeRng(7));
+  const byId = new Map(MAJOR_SG_DATASET.map((t) => [t.id, t]));
+  const d = majorCardData(run, (id) => (id === run.championId ? undefined : { name: byId.get(id)!.team, tag: byId.get(id)!.tag }));
+  assert.deepEqual(d.rounds.map((r) => r.series.length), [4, 2, 1]);
+  assert.equal(d.champion.id, run.championId);
+  assert.equal(d.champion.name, run.championId); // fallback: id, sem exceção
+  const f = d.rounds[2].series[0];
+  assert.equal((f.winner === 0 ? f.a : f.b).id, run.championId);
+});

@@ -290,3 +290,15 @@
   .msg-pk__teams { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .msg-pk__foot .ds-btn { width: 100%; }
 }
+/* ---------- stage palpite, sem dados, compartilhar, fallback ---------- */
+.msg-tcard.is-guess { border-style: dashed; border-color: color-mix(in srgb, var(--c-warn) 45%, var(--c-line)); }
+.msg-guess { display: inline-block; margin-left: var(--sp-1); padding: 0 var(--sp-2); border-radius: 999px; font-family: var(--font-ui); font-size: var(--fs-1); letter-spacing: 0; text-transform: none; color: var(--c-warn); background: var(--c-warn-soft); vertical-align: middle; white-space: nowrap; }
+.msg-nobadge { display: inline-grid; place-items: center; border-radius: 50%; border: 1px dashed var(--c-line-strong); color: var(--c-ink-faint); font-weight: 700; }
+.msg-champ__act { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-left: auto; }
+.msg-champ__msg { flex-basis: 100%; font-size: var(--fs-2); color: var(--c-ink-dim); }
+.msg-fallback { display: flex; flex-direction: column; gap: var(--sp-4); max-width: 640px; margin: var(--sp-10) auto; padding: var(--sp-8); border: 1px solid var(--c-line); border-radius: var(--rad-4); background: var(--c-surface-1); }
+.msg-fallback__title { margin: 0; font-family: var(--font-display); font-size: var(--fs-6); text-transform: uppercase; color: var(--c-ink); }
+.msg-fallback__txt { margin: 0; color: var(--c-ink-dim); line-height: var(--lh-body); }
+.msg-fallback__err { margin: 0; padding: var(--sp-3); border-radius: var(--rad-2); background: var(--c-surface-2); color: var(--c-ink-faint); font-size: var(--fs-1); white-space: pre-wrap; }
+.msg-fallback__act { display: flex; gap: var(--sp-2); }
+@media (max-width: 767px) { .msg-champ__act { margin-left: 0; width: 100%; } .msg-champ__act .ds-btn { flex: 1; } }
