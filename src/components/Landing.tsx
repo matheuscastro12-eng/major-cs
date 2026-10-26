@@ -25,6 +25,7 @@ import { fetchActiveLiveops } from '../state/liveops';
 import { weekendEventView, weekendExclusiveCard, type WeekendEventView } from '../state/weekendEvent';
 import { formatCountdown } from '../engine/ultimate/weekendEvent';
 import { useCommunityGoalPublic } from '../state/communityGoal'; // [URG-5]
+import { LANDING_FAQ } from '../seo/content';
 import '../styles/landing.css';
 
 // capturas reais da interface do jogo (public/landing/, WebP)
@@ -315,15 +316,7 @@ function How() {
 }
 
 function Faq() {
-  const Q: [string, string][] = [
-    ['Preciso pagar pra jogar?', 'Não. Carreira, Ultimate, Draft, Diário e Online são de graça, incluindo a ranqueada online, e o Road to Pro tem demo grátis. O save fica no seu navegador. A conta de R$20 guarda o progresso na nuvem e libera o Road to Pro completo.'],
-    ['O que a conta vitalícia me dá?', 'O Road to Pro completo com a Série do Dia, save na nuvem pra jogar no PC e no celular, compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. É um pagamento único, sem mensalidade.'],
-    ['Funciona no celular?', 'Sim. O jogo roda no navegador do celular com a mesma interface do PC, e dá pra instalar na tela inicial como um app.'],
-    ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça: a conta só entra pra salvar na nuvem e comprar coins.'],
-    ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
-    ['Como pago os R$20?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
-    ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, do CS 1.6 ao CS2.'],
-  ];
+  const Q = LANDING_FAQ;
   const [open, setOpen] = useState(0);
   return (
     <section id="faq" className="lp-section" aria-labelledby="lp-faq-title">
