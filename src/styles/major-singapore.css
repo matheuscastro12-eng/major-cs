@@ -1,15 +1,80 @@
-.msg-screen { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
-.msg-head { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
-.msg-head h1 { margin: 0; font-size: 1.6rem; }
-.msg-sub { opacity: .7; font-size: .85rem; margin: 4px 0 12px; }
-.msg-back, .msg-tabs button, .msg-table th button, .msg-cta { background: none; border: 1px solid currentColor; color: inherit; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
-.msg-warn { border-left: 3px solid var(--c-accent, #f5a524); padding: 8px 12px; background: rgba(245,165,36,.08); font-size: .85rem; }
-.msg-tabs { display: flex; gap: 8px; margin: 12px 0; }
-.msg-tabs button[aria-pressed='true'], .msg-table th button.on, .msg-cta { background: var(--c-accent, #f5a524); color: #111; border-color: transparent; }
+/* Modo Major Singapore 2026 — só tokens (tokens.css) e primitivos .ds-* */
+.msg { display: flex; flex-direction: column; gap: var(--sp-4); }
+.msg-dim { color: var(--c-ink-dim); font-size: var(--fs-2); }
+.msg-kicker { font-family: var(--font-display); font-size: var(--fs-1); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-accent); display: inline-flex; gap: var(--sp-1); align-items: center; }
+.msg-kicker--gold { color: var(--c-achievement); }
+
+/* header do evento */
+.msg-hero { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: var(--sp-4); padding: var(--sp-6); background: var(--c-surface-1); border: 1px solid var(--c-line); border-left: 4px solid var(--c-accent); border-radius: var(--rad-3); }
+.msg-hero__title { font-family: var(--font-display); font-size: var(--fs-display); line-height: var(--lh-tight); text-transform: uppercase; margin: var(--sp-1) 0 var(--sp-2); color: var(--c-ink); }
+.msg-hero__meta { display: flex; flex-wrap: wrap; gap: var(--sp-4); margin: 0; color: var(--c-ink-dim); font-size: var(--fs-3); }
+.msg-hero__meta span { display: inline-flex; gap: var(--sp-1); align-items: center; }
+.msg-hero__stats { display: flex; gap: var(--sp-6); }
+
+/* cards por Stage */
+.msg-stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); align-items: start; }
+.msg-stage-n { font-family: var(--font-display); color: var(--c-accent); }
+.msg-list { list-style: none; margin: 0; padding: 0; }
+.msg-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 40px; padding: var(--sp-1) var(--sp-4); border-top: 1px solid var(--c-line); font-size: var(--fs-3); }
+.msg-list li:first-child { border-top: 0; }
+.msg-list li.is-adv { box-shadow: inset 3px 0 0 var(--c-win); }
+.msg-list li.is-out { color: var(--c-ink-dim); }
+.msg-list__num { font-family: var(--font-num); font-variant-numeric: tabular-nums; color: var(--c-ink-dim); font-size: var(--fs-2); }
+.msg-team { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.msg-team__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* favoritos */
+.msg-favs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.msg-favs li { display: grid; grid-template-columns: 24px 32px minmax(90px, 160px) 1fr 64px; align-items: center; gap: var(--sp-3); }
+.msg-favs__pos { font-family: var(--font-display); font-size: var(--fs-5); color: var(--c-ink-faint); text-align: center; }
+.msg-favs__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-favs__pct { font-family: var(--font-num); text-align: right; color: var(--c-achievement); font-size: var(--fs-4); }
+
+/* tabela de previsões */
 .msg-table-wrap { overflow-x: auto; }
-.msg-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.msg-table th, .msg-table td { padding: 6px 8px; text-align: right; border-bottom: 1px solid rgba(255,255,255,.08); }
-.msg-table th:nth-child(-n+3), .msg-table td:nth-child(-n+3) { text-align: left; }
-.msg-table th button { border: none; padding: 2px 6px; font: inherit; }
-.msg-table td.on { font-weight: 700; }
-.msg-run { margin-top: 16px; line-height: 1.5; }
+.msg-table-wrap .ds-table { min-width: 860px; }
+.msg-pct { display: inline-flex; align-items: center; gap: var(--sp-2); justify-content: flex-end; width: 100%; }
+.msg-pct .ds-bar { width: 56px; }
+.msg-pct b { min-width: 48px; font-weight: 600; }
+.msg-foot { margin: 0; padding: var(--sp-3) var(--sp-4); color: var(--c-ink-faint); font-size: var(--fs-2); border-top: 1px solid var(--c-line); }
+
+/* simulação */
+.msg-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); color: var(--c-ink-dim); }
+.msg-champ__body { display: flex; align-items: center; gap: var(--sp-6); flex-wrap: wrap; }
+.msg-champ__body > div { flex: 1; min-width: 180px; }
+.msg-champ__name { font-family: var(--font-display); font-size: var(--fs-display); line-height: var(--lh-tight); text-transform: uppercase; margin: var(--sp-1) 0; color: var(--c-ink); }
+.msg-bracket { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); align-items: center; }
+.msg-bracket__col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.msg-bracket__h { font-family: var(--font-title, var(--font-display)); font-size: var(--fs-2); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--c-ink-dim); margin: 0; }
+.msg-series { background: var(--c-surface-2); border: 1px solid var(--c-line); border-radius: var(--rad-2); overflow: hidden; }
+.msg-series__row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); color: var(--c-ink-dim); font-size: var(--fs-3); }
+.msg-series__row + .msg-series__row { border-top: 1px solid var(--c-line); }
+.msg-series__row .msg-team__name { flex: 1; }
+.msg-series__row b { font-family: var(--font-num); }
+.msg-series__row.is-win { color: var(--c-ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--c-win); }
+
+@media (max-width: 1023px) {
+  .msg-stages, .msg-bracket { grid-template-columns: 1fr; }
+  .msg-hero { padding: var(--sp-4); }
+  .msg-hero__stats { gap: var(--sp-4); }
+  .msg-favs li { grid-template-columns: 20px 28px minmax(70px, 1fr) 1fr 56px; gap: var(--sp-2); }
+}
+
+.msg-hero--compact { padding: var(--sp-4); }
+.msg-hero--compact .msg-hero__title { font-size: var(--fs-6); }
+.msg-hero--compact .msg-hero__stats { display: none; }
+.msg-gold { color: var(--c-achievement); }
+.msg-mlist { display: none; list-style: none; margin: 0; padding: 0; }
+.msg-mlist li { display: grid; grid-template-columns: 24px 1fr; gap: var(--sp-1) var(--sp-2); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--c-line); }
+.msg-mlist li:first-child { border-top: 0; }
+.msg-mlist__team { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.msg-mlist__bars { grid-column: 2; display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: var(--sp-1) var(--sp-2); font-size: var(--fs-2); color: var(--c-ink-dim); }
+.msg-mlist__lab b { font-family: var(--font-num); color: var(--c-ink); }
+.msg-mlist__lab b.msg-gold { color: var(--c-achievement); }
+@media (max-width: 767px) {
+  .msg-mlist { display: block; }
+  .msg-table-wrap { display: none; }
+  .msg-hero__title { font-size: var(--fs-6); }
+  .msg-champ__name { font-size: var(--fs-6); }
+  .msg-hero__meta { gap: var(--sp-2) var(--sp-4); font-size: var(--fs-2); }
+}
