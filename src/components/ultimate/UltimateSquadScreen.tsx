@@ -80,7 +80,8 @@ import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { setCheckoutSrc, trackPaywallView, trackShare, trackUltFunnel } from '../../state/track';
-import { useAccount, beginCoinsPix, beginCoinsCheckout, beginPassPix, beginPassCheckout, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
+import { useAccount, beginCoinsPix, beginCoinsCheckout, beginPassPix, beginPassCheckout, type CoinCharge, type PassCharge } from '../../state/account';
+import { COIN_PACKS, type CoinPack } from './coinPacks';
 import { collectPaidCoins, collectPaidPass } from '../../state/paidClaim'; // [O0-25] coleta única, crédito fora do ciclo de vida da tela
 import { ultFrozenNotice } from '../../state/ultimateShadow'; // [O0-02]
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank, type OvertakenBy } from '../../state/ranking';
@@ -148,17 +149,6 @@ const CONFETTI = Array.from({ length: 18 }, (_, i) => ({
 }));
 // chip de recurso: abrevia valores gigantes pra não estourar a nav.
 const fmtChip = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace('.', ',')}M` : fmt(n));
-
-// Pacotes de coins via Pix (Woovi). MESMOS tiers do servidor (COIN_TIERS em
-// api/account.ts) — valor por real cresce no tier maior pra recompensar quem
-// apoia mais (R$10=3.0k/R$, R$15=3.3k/R$, R$30=4.0k/R$). `link` é o checkout
-// estático do Woovi, usado só como fallback se a cobrança dinâmica falhar.
-interface CoinPack { tier: CoinTierId; price: string; coins: number; name: string; bonus?: string; best?: boolean; link: string }
-const COIN_PACKS: CoinPack[] = [
-  { tier: 'p10', price: 'R$ 10', coins: 30_000, name: 'Arsenal', link: 'https://woovi.com/pay/af6a46c9-ee7a-4f9a-9900-f13db6deda51' },
-  { tier: 'p15', price: 'R$ 15', coins: 50_000, name: 'Elite', bonus: '+11%', link: 'https://woovi.com/pay/2f276830-759b-4542-a32e-418c0f66797f' },
-  { tier: 'p30', price: 'R$ 30', coins: 120_000, name: 'Lendário', bonus: '+33%', best: true, link: 'https://woovi.com/pay/5b275b87-f9f2-4dc9-9a80-1e43fba9471a' },
-];
 
 // As paletas de rank/raridade/química/título foram feitas pra fundo ESCURO.
 // Sobre branco (placa clara das cartas comuns, tema claro opcional) usar essas
@@ -662,7 +652,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     setCoinModal({ pack, charge: null });
     beginCoinsPix(pack.tier)
       .then((charge) => setCoinModal((m) => (m && m.pack.tier === pack.tier ? { ...m, charge } : m)))
-      .catch(() => setCoinModal((m) => (m && m.pack.tier === pack.tier ? { ...m, error: true } : m)));
+      .catch((e: unknown) => {
+        // cobrança dinâmica falhou: antes caía num link fixo do Woovi que o webhook ignora (sem correlationID)
+        trackUltFunnel('checkout_error', { product_kind: 'coins', method: 'pix', tier: pack.tier, reason: (e instanceof Error ? e.message : String(e)).slice(0, 120) });
+        setCoinModal((m) => (m && m.pack.tier === pack.tier ? { ...m, error: true } : m));
+      });
   };
   // Pagar coins com CARTÃO (Stripe) — pra quem não tem Pix (gringos). Redireciona
   // pro checkout do Stripe; na volta (/ultimate?coins=ok) os coins são creditados.
@@ -4252,11 +4246,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           size="md">
           {coinModal.error ? (
             <div className="ut-coinpay">
-              <p className="muted small" style={{ margin: 0 }}>{ct('Não consegui gerar o QR agora. Você ainda pode pagar pelo checkout do Woovi:')}</p>
-              <a className="ut-btn ut-btn--gold" href={coinModal.pack.link} target="_blank" rel="noreferrer">{ct('Abrir checkout Woovi')} · {coinModal.pack.price}</a>
-              <p className="muted small" style={{ margin: 0 }}>
-                {ct('Importante: no checkout, informe o MESMO e-mail da sua conta')} (<strong>{account?.email}</strong>) {ct('— é assim que os coins encontram você. Depois, reabra o Ultimate.')}
-              </p>
+              <p className="muted small" style={{ margin: 0 }}>{ct('Não consegui gerar o QR agora. Tente de novo em alguns segundos, ou pague com cartão logo abaixo.')}</p>
+              <button className="ut-btn ut-btn--gold" onClick={() => buyCoins(coinModal.pack)}>{ct('Tentar de novo')} · {coinModal.pack.price}</button>
             </div>
           ) : !coinModal.charge ? (
             <div className="ut-coinpay"><p className="muted small" style={{ margin: 0 }}>{ct('Gerando cobrança Pix…')}</p></div>

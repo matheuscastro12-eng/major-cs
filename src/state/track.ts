@@ -221,7 +221,8 @@ export type UltFunnelStep =
   | 'second_match_started' | 'offer_viewed' | 'purchase_intent' | 'purchase_fulfilled' | 'target_selected'
   | 'weekend_event_enter' // [URG-2] entrou na fila do evento de fim de semana {eventId}
   | 'streak_at_risk_seen' | 'season_pack_open' | 'rival_overtaken_seen' // [URG-4] viu o aviso vermelho "você perde N dias em Xh" {days, hoursLeft}
-  | 'community_goal_share' | 'community_goal_claim';
+  | 'community_goal_share' | 'community_goal_claim'
+  | 'checkout_error'; // cobrança falhou antes de abrir (ex.: beginCoinsPix rejeitou) {product_kind, method, tier, reason}
 export type UltProductKind = 'coins' | 'pass' | 'account';
 
 export function trackUltFunnel(step: UltFunnelStep, data: Record<string, string | number | boolean> = {}): void {
