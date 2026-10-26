@@ -1,4 +1,4 @@
-// Conta do jogador (e-mail + senha) + entitlement da conta vitalícia R$20.
+// Conta do jogador (e-mail + senha) + entitlement da conta vitalícia (preço: state/price.ts).
 // Token fica no localStorage; o backend (api/account.ts) valida e diz se é paga.
 //
 // [O0-10/O1-33] Estado da conta é UM só (store Zustand `useAccountStore`): um

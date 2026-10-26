@@ -2219,7 +2219,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           Ultimate e a de maior exposição relativa (119 paywall_view), mas
           convertia pior que o resto do funil (1 signup_start). O botão era o
           único CTA do app que vendia a conta vitalícia sem citar o preço — dado
-          real (acct-chip-guest, upsell-card) já mostrou que repetir "R$20" no
+          real (acct-chip-guest, upsell-card) já mostrou que repetir o preço no
           próprio texto do botão, e não só num parágrafo ao lado, melhora clique
           em telas pequenas. Aplica o mesmo padrão aqui. */}
       {guest && (
@@ -2835,7 +2835,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     0% — 53 sessões, zero signup_start/checkout_open desde então. O
                     preço já aparece no parágrafo acima, mas nenhum outro CTA do
                     funil deixa o botão sem o preço (acct-chip-guest, upsell-card,
-                    RtP demo, home-pill todos repetem "R$20" no próprio texto do
+                    RtP demo, home-pill todos repetem o preço no próprio texto do
                     botão — dado real já validou que isso ajuda o clique, principalmente
                     no mobile onde o parágrafo fica longe do botão). Heurística de
                     baixo risco: aplica o mesmo padrão aqui — amostra pequena demais

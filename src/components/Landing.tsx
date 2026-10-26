@@ -1,7 +1,7 @@
 // Landing page de marketing (rota /). Mesma identidade da interface nova do
 // jogo: marinho + dourado da marca, escudo, Oswald/Barlow. Hero com UMA ação
 // principal (jogar de graça), a vitrine com capturas reais de cada modo, o
-// destaque da sala do Road to Pro, planos (grátis x conta vitalícia de R$20),
+// destaque da sala do Road to Pro, planos (grátis x conta vitalícia; preço via state/price.ts),
 // como funciona, FAQ, CTA final e o modal de conta (checkout real: Pix/Stripe).
 // Estilos em src/styles/landing.css (só tokens).
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
@@ -64,7 +64,7 @@ function Wordmark() {
 }
 
 // Nav fixa: fica sólida quando o topo sai da tela (sentinela observada, sem
-// listener de scroll). "Criar conta · R$20" é o único CTA de cadastro com preço
+// listener de scroll). "Criar conta · {preço}" é o único CTA de cadastro com preço
 // no próprio texto (src landing-nav); some no celular pra caber o essencial.
 function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: () => void; onPlay: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
