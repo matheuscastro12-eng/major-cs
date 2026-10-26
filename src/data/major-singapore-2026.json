@@ -1,5 +1,5 @@
 {
- "_doc": "ÚNICA fonte da lista do modo Major Singapore. Trocar aqui quando sair a lista oficial (02/11/2026). Regras: 32 times, 8 stage 3, 8 stage 2, 16 stage 1; bo3Id = id em src/data/bo3-2026.json; ordem dentro do stage = seed. stand-ins: 'standIns' {sai: nick, entra: {...player}}.",
+ "_doc": "ÚNICA fonte da lista do modo Major Singapore. Trocar aqui quando sair a lista oficial (02/11/2026). Regras: 32 times, 8 stage 3, 8 stage 2, 16 stage 1; bo3Id = id em src/data/bo3-2026.json; ordem dentro do stage = seed. stand-ins: 'standIns' {sai: nick, entra: {...player}}. stageGuess=true: vaga ~garantida mas Stage de entrada é palpite.",
  "event": "PGL Major Singapore 2026",
  "dates": "2026-11-24/2026-12-13",
  "listStatus": "provisoria",
@@ -71,56 +71,64 @@
    "bo3Id": "bo3_team_20832",
    "stage": 2,
    "provisional": false,
-   "note": "stage indefinido na fonte; chute por ranking VRS"
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
   },
   {
    "team": "BetBoom",
    "bo3Id": "bo3_team_7498",
    "stage": 2,
    "provisional": false,
-   "note": "stage indefinido na fonte; chute por ranking VRS"
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
   },
   {
    "team": "Astralis",
    "bo3Id": "bo3_team_794",
    "stage": 2,
    "provisional": false,
-   "note": "stage indefinido na fonte; chute por ranking VRS"
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
   },
   {
    "team": "HEROIC",
    "bo3Id": "bo3_team_759",
    "stage": 2,
    "provisional": false,
-   "note": "stage indefinido na fonte; chute por ranking VRS"
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
   },
   {
    "team": "MIBR",
    "bo3Id": "bo3_team_755",
    "stage": 2,
    "provisional": false,
-   "note": "stage indefinido na fonte; chute por ranking VRS"
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
   },
   {
    "team": "M80",
    "bo3Id": "bo3_team_7430",
    "stage": 2,
    "provisional": false,
-   "note": "stage indefinido na fonte; chute por ranking VRS"
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
   },
   {
    "team": "Liquid",
    "bo3Id": "bo3_team_790",
    "stage": 2,
    "provisional": false,
-   "note": "stage indefinido na fonte; chute por ranking VRS"
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
   },
   {
    "team": "BC.Game",
    "bo3Id": "xls_team_bc",
    "stage": 1,
    "provisional": false,
-   "note": "stage indefinido na fonte; chute por ranking VRS"
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
   },
   {
    "team": "GamerLegion",

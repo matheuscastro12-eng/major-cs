@@ -9,7 +9,9 @@ import { teamSeasonToTTeam } from '../ratings';
 import { makeRng, type Rng } from '../rng';
 import { createPlayoffStage, createSwissStage, resolveRound, stageAdvancers } from '../swiss';
 
-export interface MajorEntry { team: string; bo3Id: string; stage: 1 | 2 | 3; provisional: boolean; note?: string }
+// provisional = vaga é placeholder do ranking; stageGuess = time praticamente garantido,
+// mas o Stage de entrada é palpite (fonte não define) até a lista oficial.
+export interface MajorEntry { team: string; bo3Id: string; stage: 1 | 2 | 3; provisional: boolean; stageGuess?: boolean; note?: string }
 export interface StandIn { bo3Id: string; out: string; in: Player }
 export interface MajorConfig {
   event: string; dates: string; listStatus: string; updatedAt: string;
@@ -41,7 +43,7 @@ export function validateConfig(cfg: MajorConfig, dataset: TeamSeason[]): string[
   return errs;
 }
 
-export interface MajorField { s1: TTeam[]; s2: TTeam[]; s3: TTeam[]; all: TTeam[]; provisional: Set<string> }
+export interface MajorField { s1: TTeam[]; s2: TTeam[]; s3: TTeam[]; all: TTeam[]; provisional: Set<string>; stageGuess: Set<string> }
 
 // Monta os TTeam (força/elencos) a partir da base bo3.gg, aplicando stand-ins.
 export function buildField(cfg: MajorConfig, dataset: TeamSeason[]): MajorField {
@@ -60,7 +62,7 @@ export function buildField(cfg: MajorConfig, dataset: TeamSeason[]): MajorField 
   };
   const of = (s: 1 | 2 | 3) => cfg.teams.filter((t) => t.stage === s).map(toTT);
   const s1 = of(1), s2 = of(2), s3 = of(3);
-  return { s1, s2, s3, all: [...s1, ...s2, ...s3], provisional: new Set(cfg.teams.filter((t) => t.provisional).map((t) => t.bo3Id)) };
+  return { s1, s2, s3, all: [...s1, ...s2, ...s3], provisional: new Set(cfg.teams.filter((t) => t.provisional).map((t) => t.bo3Id)), stageGuess: new Set(cfg.teams.filter((t) => t.stageGuess).map((t) => t.bo3Id)) };
 }
 
 export interface MajorRun {
@@ -101,7 +103,7 @@ export function simulateMajor(field: MajorField, rng: Rng): MajorRun {
 }
 
 export interface TeamOdds {
-  id: string; team: string; tag: string; entryStage: 1 | 2 | 3; provisional: boolean; strength: number;
+  id: string; team: string; tag: string; entryStage: 1 | 2 | 3; provisional: boolean; stageGuess?: boolean; strength: number;
   // probabilidades (0..1). passStage1 só faz sentido pra quem entra no Stage 1 etc.
   passStage1: number | null; passStage2: number | null; playoffs: number; semis: number; final: number; title: number;
 }
@@ -126,7 +128,7 @@ export function monteCarlo(cfg: MajorConfig, dataset: TeamSeason[], sims = 1000,
   const teams: TeamOdds[] = field.all.map((t) => {
     const k = c.get(t.id)!; const e = entry.get(t.id)!;
     return {
-      id: t.id, team: t.name, tag: t.tag, entryStage: e.stage, provisional: e.provisional, strength: Math.round(t.strength * 10) / 10,
+      id: t.id, team: t.name, tag: t.tag, entryStage: e.stage, provisional: e.provisional, stageGuess: !!e.stageGuess, strength: Math.round(t.strength * 10) / 10,
       passStage1: e.stage === 1 ? k.s1 / sims : null,
       passStage2: e.stage <= 2 ? k.s2 / sims : null,
       playoffs: k.po / sims, semis: k.sf / sims, final: k.f / sims, title: k.w / sims,
