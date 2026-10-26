@@ -88,7 +88,7 @@ export function MajorSingaporeScreen({ onExit }: { onExit: () => void }) {
 
   return (
     <GameShell
-      mode="major"
+      mode="majorsg"
       identity={{ title: 'Major Singapore', subtitle: 'PGL · 24/11 – 13/12', badge: <Trophy size={18} aria-hidden /> }}
       nav={nav}
       active={view}

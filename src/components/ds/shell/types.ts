@@ -5,7 +5,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-export type ModeId = 'inicio' | 'carreira' | 'rtp' | 'ultimate' | 'diario' | 'major' | 'online';
+export type ModeId = 'inicio' | 'carreira' | 'rtp' | 'ultimate' | 'diario' | 'major' | 'majorsg' | 'online';
 
 /** valor de data-mode (tokens.css) de cada modo; Início usa o acento base (dourado) */
 export const MODE_DATA: Record<ModeId, string | undefined> = {
@@ -15,6 +15,7 @@ export const MODE_DATA: Record<ModeId, string | undefined> = {
   ultimate: 'ultimate',
   diario: 'diario',
   major: 'major',
+  majorsg: 'major', // Major Singapore 2026: mesmo acento do Major
   online: 'online',
 };
 
