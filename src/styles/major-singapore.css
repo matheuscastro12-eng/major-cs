@@ -206,3 +206,87 @@
   .msg-tcard__name { font-size: var(--fs-2); }
   .msg-tcard:hover { transform: none; }
 }
+
+/* ---------- pick'em ---------- */
+.msg-pk { display: flex; flex-direction: column; gap: var(--sp-6); }
+.msg-pk__hero {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-6) var(--sp-6); border: 1px solid var(--c-line); border-radius: var(--rad-4);
+  background: radial-gradient(110% 130% at 100% 0%, color-mix(in srgb, var(--msg-gold) 18%, transparent), transparent 60%), linear-gradient(180deg, var(--c-surface-2), var(--c-surface-1));
+}
+.msg-pk__lead { margin: 0; max-width: 60ch; color: var(--c-ink-dim); font-size: var(--fs-3); line-height: var(--lh-body); }
+.msg-pk__rules { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(72px, 1fr)); gap: var(--sp-2); }
+.msg-pk__rules li { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-3) var(--sp-2); border: 1px solid var(--c-line); border-radius: var(--rad-3); background: var(--c-surface-1); }
+.msg-pk__rules b { font-family: var(--font-num); font-size: var(--fs-6); color: var(--c-ink); line-height: 1; }
+.msg-pk__rules span { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--c-ink-faint); }
+.msg-pk__rules .is-gold { border-color: color-mix(in srgb, var(--msg-gold) 55%, var(--c-line)); background: var(--msg-gold-soft); }
+.msg-pk__rules .is-gold b { color: var(--msg-gold); }
+
+.msg-pk__grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--sp-6); align-items: start; }
+.msg-pk__main, .msg-pk__board { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-5); border: 1px solid var(--c-line); border-radius: var(--rad-4); background: var(--c-surface-1); }
+.msg-pk__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.msg-pk__lock { display: inline-flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-3); border-radius: 999px; font-size: var(--fs-2); color: var(--c-win); background: var(--c-win-soft); }
+.msg-pk__lock b { font-family: var(--font-num); }
+.msg-pk__lock.is-locked { color: var(--c-ink-dim); background: var(--c-surface-3); }
+
+.msg-pk__slots { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: var(--sp-3); }
+.msg-pk__slot {
+  display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); text-align: left; cursor: pointer; color: inherit; font: inherit;
+  border: 1px solid var(--c-line); border-radius: var(--rad-3); background: var(--c-surface-2);
+  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+}
+.msg-pk__slot.is-on { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
+.msg-pk__slot--threeZero.is-on, .msg-pk__slot--champion.is-on { border-color: var(--msg-gold); box-shadow: 0 0 0 3px var(--msg-gold-soft); }
+.msg-pk__slot--zeroThree.is-on { border-color: var(--c-loss); box-shadow: 0 0 0 3px var(--c-loss-soft); }
+.msg-pk__slothead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.msg-pk__slothead b { font-family: var(--font-display); font-size: var(--fs-4); text-transform: uppercase; letter-spacing: var(--tracking-display); }
+.msg-pk__slothead small { font-family: var(--font-num); font-size: var(--fs-1); color: var(--c-ink-faint); }
+.msg-pk__chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.msg-pk__chip { display: grid; place-items: center; width: 32px; height: 32px; border: 1px dashed var(--c-line-strong); border-radius: 50%; }
+.msg-pk__chip.is-full { border-style: solid; border-color: var(--c-line); background: var(--c-surface-3); }
+
+.msg-pk__teams { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); }
+.msg-pk__team {
+  position: relative; width: 100%; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); cursor: pointer; color: var(--c-ink); font: inherit; text-align: left;
+  border: 1px solid var(--c-line); border-radius: var(--rad-3); background: linear-gradient(180deg, var(--c-surface-2), var(--c-surface-1));
+  transition: transform var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
+}
+.msg-pk__team:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--c-accent-line); }
+.msg-pk__team:disabled { cursor: default; opacity: 0.75; }
+.msg-pk__tname { flex: 1; min-width: 0; font-weight: 700; font-size: var(--fs-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-pk__ttag { flex: none; padding: 0 var(--sp-2); border-radius: 999px; font-family: var(--font-num); font-size: var(--fs-1); font-weight: 700; color: var(--c-ink); background: var(--c-accent-soft); }
+.msg-pk__team.is-threeZero, .msg-pk__team.is-champion { border-color: var(--msg-gold); background: linear-gradient(180deg, var(--msg-gold-soft), var(--c-surface-1)); }
+.msg-pk__team.is-threeZero .msg-pk__ttag, .msg-pk__team.is-champion .msg-pk__ttag { background: var(--msg-gold); color: var(--c-on-achievement); }
+.msg-pk__team.is-zeroThree { border-color: var(--c-loss); background: linear-gradient(180deg, var(--c-loss-soft), var(--c-surface-1)); }
+.msg-pk__team.is-zeroThree .msg-pk__ttag { background: var(--c-loss); color: var(--c-on-strong); }
+.msg-pk__team.is-advance, .msg-pk__team.is-semis, .msg-pk__team.is-final { border-color: var(--c-accent-line); background: linear-gradient(180deg, var(--c-accent-soft), var(--c-surface-1)); }
+.msg-pk__empty, .msg-pk__note { grid-column: 1 / -1; margin: 0; padding: var(--sp-4); border: 1px dashed var(--c-line-strong); border-radius: var(--rad-3); color: var(--c-ink-dim); font-size: var(--fs-2); text-align: center; }
+.msg-pk__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--c-line); }
+.msg-pk__hint { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--c-ink-dim); font-size: var(--fs-2); }
+
+.msg-pk__bhead { display: flex; align-items: baseline; justify-content: space-between; }
+.msg-pk__bhead h3 { margin: 0; font-family: var(--font-display); font-size: var(--fs-5); text-transform: uppercase; letter-spacing: var(--tracking-display); }
+.msg-pk__bhead small { color: var(--c-ink-faint); font-size: var(--fs-1); }
+.msg-pk__rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.msg-pk__rank li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--rad-2); background: var(--c-surface-2); }
+.msg-pk__rank li.is-top { background: linear-gradient(90deg, var(--msg-gold-soft), var(--c-surface-2)); }
+.msg-pk__rank li.is-1 .msg-pk__pos { background: var(--msg-gold); color: var(--c-on-achievement); }
+.msg-pk__pos { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-family: var(--font-num); font-size: var(--fs-1); background: var(--c-surface-3); }
+.msg-pk__nick { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-pk__rank b { font-family: var(--font-num); }
+.msg-pk__fine { margin: 0; font-size: var(--fs-1); line-height: var(--lh-body); color: var(--c-ink-faint); }
+
+@media (max-width: 1279px) { .msg-pk__teams { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1023px) {
+  .msg-pk__grid { grid-template-columns: 1fr; }
+  .msg-pk__hero { grid-template-columns: 1fr; }
+}
+@media (max-width: 767px) {
+  .msg-pk__hero { padding: var(--sp-5); }
+  .msg-pk__main, .msg-pk__board { padding: var(--sp-4); }
+  .msg-pk__rules { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .msg-pk__slots { grid-template-columns: 1fr 1fr; }
+  .msg-pk__slot--advance, .msg-pk__slot--champion { grid-column: 1 / -1; }
+  .msg-pk__teams { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .msg-pk__foot .ds-btn { width: 100%; }
+}
