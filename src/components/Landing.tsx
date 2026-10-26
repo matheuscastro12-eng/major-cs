@@ -26,6 +26,7 @@ import { weekendEventView, weekendExclusiveCard, type WeekendEventView } from '.
 import { formatCountdown } from '../engine/ultimate/weekendEvent';
 import { useCommunityGoalPublic } from '../state/communityGoal'; // [URG-5]
 import '../styles/landing.css';
+import { priceLabel, usePrice, withPrice } from '../state/price';
 
 // capturas reais da interface do jogo (public/landing/, WebP)
 const SHOT = '/landing/';
@@ -66,6 +67,7 @@ function Wordmark() {
 // listener de scroll). "Criar conta · R$20" é o único CTA de cadastro com preço
 // no próprio texto (src landing-nav); some no celular pra caber o essencial.
 function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: () => void; onPlay: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const [solid, setSolid] = useState(false);
   const sentinel = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -90,7 +92,7 @@ function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: (
           </nav>
           <span className="lp-nav__actions">
             <Button variant="ghost" size="sm" onClick={onLogin}>{ct('Entrar')}</Button>
-            <Button variant="gold" size="sm" className="lp-nav__acct" onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
+            <Button variant="gold" size="sm" className="lp-nav__acct" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>
             <Button size="sm" onClick={onPlay}>{ct('Jogar agora')}</Button>
           </span>
         </div>
@@ -116,6 +118,7 @@ function CommunityGoalBar({ onPlay }: { onPlay: () => void }) {
 }
 
 function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   return (
     <section id="topo" className="lp-hero" aria-labelledby="lp-hero-title">
       <div className="lp-wrap lp-hero__grid">
@@ -134,7 +137,7 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
                 Preço + "pagamento único" no próprio texto (a reassurance que já
                 ajudou nas outras superfícies) e o contador REAL de Fundadores. */}
             <div className="lp-offer">
-              <button type="button" className="lp-textlink" onClick={onAccount}>{ct('Criar conta')} · R$20</button>
+              <button type="button" className="lp-textlink" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</button>
               <span>{ct('Pagamento único · sem mensalidade')}</span>
             </div>
             <FounderCounter />
@@ -257,6 +260,7 @@ function RtpSpotlight() {
 }
 
 function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const FREE = ['Carreira, Ultimate, Draft, Diário e Online completos', 'Ranqueada online do Ultimate', 'Road to Pro: demo com a peneira e 3 semanas', 'Save neste navegador'];
   const PAID = ['Road to Pro completo, com a Série do Dia', 'Save na nuvem: joga no PC e no celular', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil'];
   return (
@@ -275,18 +279,18 @@ function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => v
           </article>
           <article className="lp-plan lp-plan--paid" aria-labelledby="lp-plan-paid">
             <h3 className="lp-plan__name" id="lp-plan-paid">{ct('Conta vitalícia')}</h3>
-            <div className="lp-plan__price"><strong>R$20</strong><span>{ct('uma vez, sem assinatura')}</span></div>
+            <div className="lp-plan__price"><strong>{priceLabel()}</strong><span>{ct('uma vez, sem assinatura')}</span></div>
             <p className="lp-plan__note">{ct('Pix ou cartão · acesso imediato')}</p>
             {/* prova social REAL: contagem de Fundadores do servidor (falhou? não mostra nada) */}
             <FounderCounter />
             <ul className="lp-checks">
               {PAID.map((f) => <li key={f}><Check size={16} aria-hidden /><b>{ct(f)}</b></li>)}
             </ul>
-            <Button variant="gold" block onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
+            <Button variant="gold" block onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>
           </article>
         </div>
         <p className="lp-plans__foot lp-reveal">
-          {ct('Os R$20 cobrem conta, banco de dados e persistência em nuvem enquanto o serviço estiver em operação, sem mensalidade.')}
+          {withPrice(ct('Os {preço} cobrem conta, banco de dados e persistência em nuvem enquanto o serviço estiver em operação, sem mensalidade.'))}
         </p>
       </div>
     </section>
@@ -315,13 +319,14 @@ function How() {
 }
 
 function Faq() {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const Q: [string, string][] = [
-    ['Preciso pagar pra jogar?', 'Não. Carreira, Ultimate, Draft, Diário e Online são de graça, incluindo a ranqueada online, e o Road to Pro tem demo grátis. O save fica no seu navegador. A conta de R$20 guarda o progresso na nuvem e libera o Road to Pro completo.'],
+    ['Preciso pagar pra jogar?', 'Não. Carreira, Ultimate, Draft, Diário e Online são de graça, incluindo a ranqueada online, e o Road to Pro tem demo grátis. O save fica no seu navegador. A conta de {preço} guarda o progresso na nuvem e libera o Road to Pro completo.'],
     ['O que a conta vitalícia me dá?', 'O Road to Pro completo com a Série do Dia, save na nuvem pra jogar no PC e no celular, compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. É um pagamento único, sem mensalidade.'],
     ['Funciona no celular?', 'Sim. O jogo roda no navegador do celular com a mesma interface do PC, e dá pra instalar na tela inicial como um app.'],
     ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça: a conta só entra pra salvar na nuvem e comprar coins.'],
     ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
-    ['Como pago os R$20?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
+    ['Como pago os {preço}?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
     ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, do CS 1.6 ao CS2.'],
   ];
   const [open, setOpen] = useState(0);
@@ -339,11 +344,11 @@ function Faq() {
               <div key={q} className="lp-qa" data-open={on}>
                 <h3>
                   <button type="button" className="lp-qa__btn" id={`lp-q-${i}`} aria-expanded={on} aria-controls={`lp-a-${i}`} onClick={() => setOpen(on ? -1 : i)}>
-                    <span>{ct(q)}</span>
+                    <span>{withPrice(ct(q))}</span>
                     <ChevronDown size={20} aria-hidden />
                   </button>
                 </h3>
-                <div className="lp-qa__panel" id={`lp-a-${i}`} role="region" aria-labelledby={`lp-q-${i}`} hidden={!on}>{ct(a)}</div>
+                <div className="lp-qa__panel" id={`lp-a-${i}`} role="region" aria-labelledby={`lp-q-${i}`} hidden={!on}>{withPrice(ct(a))}</div>
               </div>
             );
           })}
@@ -354,6 +359,7 @@ function Faq() {
 }
 
 function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   return (
     <section className="lp-section lp-section--last" aria-labelledby="lp-final-title">
       <div className="lp-wrap">
@@ -366,7 +372,7 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
             <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
             {/* funil: CTA final da página, com o preço no texto do botão (a seção de
                 planos já ficou pra trás na rolagem). src landing-final. */}
-            <Button size="big" variant="gold" onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
+            <Button size="big" variant="gold" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>
           </div>
         </div>
         <footer className="lp-footer">
@@ -394,6 +400,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   /** Nick do jogador do RtP, citado no reforço do Pix. */
   playerNick?: string;
 }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   // 'pay': conta grátis existente — só o passo de pagamento. Lido 1x (useState):
   // o signup/login de dentro do modal também grava a conta, e o modal NÃO pode
   // trocar de passo no meio do fluxo por causa disso.
@@ -582,7 +589,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
       {(mode === 'signup' || mode === 'pay') && !pixFocus && (
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--em-gold)' }}>R$20</span>
+            <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--em-gold)' }}>{priceLabel()}</span>
             <span style={{ fontSize: '0.82rem', color: 'var(--em-muted)' }}>{ct('pagamento único pelo save em nuvem')}</span>
           </div>
           {/* reassurance: tira as 3 dúvidas mais comuns antes do pagamento */}
@@ -857,6 +864,7 @@ function NewsBand() {
 }
 
 export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar OU clique numa trava dentro do app: pula a landing e abre direto o cadastro
   const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
   const ref = useReveal();
@@ -912,7 +920,7 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
           {ghost && (
             <div className="lp-notice">
               <Target size={16} aria-hidden />
-              <span><b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')}, {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {ct('O desafio expira à meia-noite. A Série do Dia é da conta vitalícia (R$20, uma vez).')}</span>
+              <span><b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')}, {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {withPrice(ct('O desafio expira à meia-noite. A Série do Dia é da conta vitalícia ({preço}, uma vez).'))}</span>
               <button type="button" className="lp-notice__go" onClick={() => openAcct('signup', 'landing-ghost')}>{ct('Aceitar o desafio')} <ArrowRight size={14} aria-hidden /></button>
             </div>
           )}

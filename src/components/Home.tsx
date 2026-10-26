@@ -31,6 +31,7 @@ import { useFounders } from '../state/founders';
 import { TeamBadge } from './ui';
 import { GameShell, Panel, Button, Segmented, type ShellNavGroup, type ShellNext, type ShellPending } from './ds/index';
 import type { Account } from '../state/account';
+import { priceLabel, usePrice, withPrice } from '../state/price';
 
 interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => void;
@@ -82,6 +83,7 @@ function rtpBrief(): { nick?: string; ovr?: number; team?: string; week?: number
 }
 
 export function Home(props: Props) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const {
     onStart, onDonate, teamCount, onUltimate, onRoadToPro, onDaily, premiumLocked, ultimateLocked, onCareer,
     account, accountReady, onAccount, onCreateAccount, onUpgrade, onLogout, onAdmin, savedCampaign, onResume,
@@ -293,7 +295,7 @@ export function Home(props: Props) {
             <ModeRow
               mode="rtp" icon={<Crosshair size={20} />} title="Road to Pro" kicker={premiumLocked ? ct('Demo grátis') : ct('Novo')}
               desc={ct('Você não treina o time — você É o jogador. Viva a carreira de astro do CS: treine, gerencie sua vida e brilhe nos momentos decisivos.')}
-              meta={premiumLocked ? `R$ 20 · ${ct('pagamento único, acesso vitalício — sem mensalidade')}` : ct('1 jogador · você é o atleta')}
+              meta={premiumLocked ? `${priceLabel()} · ${ct('pagamento único, acesso vitalício — sem mensalidade')}` : ct('1 jogador · você é o atleta')}
               cta={premiumLocked ? ct('Jogar a demo grátis') : ct('Jogar')}
               onGo={onRoadToPro}
               extra={premiumLocked ? (
@@ -307,7 +309,7 @@ export function Home(props: Props) {
             />
           )}
           {onUltimate && (
-            <ModeRow mode="ultimate" icon={<Star size={20} />} title="Ultimate" kicker={ct('Competitivo · Online')} desc={ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')} meta={ultimateLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')} cta={ultimateLocked ? ct('Desbloquear · R$20') : ct('Jogar')} onGo={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())} />
+            <ModeRow mode="ultimate" icon={<Star size={20} />} title="Ultimate" kicker={ct('Competitivo · Online')} desc={ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')} meta={ultimateLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')} cta={ultimateLocked ? withPrice(ct('Desbloquear · {preço}')) : ct('Jogar')} onGo={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())} />
           )}
           <ModeRow mode="major" icon={<Layers size={20} />} title="Draft" kicker={ct('Partida rápida')} desc={ct('Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.')} meta={ct('1 jogador · ~15 min')} cta={ct('Montar')} onGo={() => setView('draft')} />
           {onDaily && (
@@ -329,7 +331,7 @@ export function Home(props: Props) {
             ) : !account ? (
               <div className="home-acct">
                 <p>{ct('Você está jogando sem conta. Crie a sua pra salvar na nuvem e jogar no PC e no celular.')}</p>
-                <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · R$20</Button>
+                <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · {priceLabel()}</Button>
                 <small className="ds-dim">{ct('pagamento único · sem mensalidade')}</small>
                 <FounderCounter style={{ fontSize: '11px' }} />
                 {onAccount && <button type="button" className="home-link" onClick={onAccount}>{ct('Já tenho conta · entrar')}</button>}
@@ -346,7 +348,7 @@ export function Home(props: Props) {
                 {!account.paid && (
                   <>
                     <Button variant="primary" block onClick={() => { setCheckoutSrc('home-pill'); onUpgrade?.(); }}>
-                      <Crown size={16} aria-hidden /> {founderSoldOut ? ct('Conta vitalícia') : ct('Vire Fundador')} · R$20
+                      <Crown size={16} aria-hidden /> {founderSoldOut ? ct('Conta vitalícia') : ct('Vire Fundador')} · {priceLabel()}
                     </Button>
                     <small className="ds-dim">{founderSoldOut ? ct('cloud sync, 5 carreiras e ranking real') : ct('selo #001–#500, cloud sync e 5 carreiras')}</small>
                     <FounderCounter style={{ fontSize: '11px' }} />

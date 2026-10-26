@@ -183,7 +183,7 @@ export async function claim(cs: string): Promise<boolean> {
 }
 export async function beginCheckout(): Promise<string | null> {
   const token = getToken(); if (!token) throw new Error(ct('Faça login antes de pagar.'));
-  const d = await post({ action: 'checkout', token });
+  const d = await post({ action: 'checkout', token, origin: window.location.origin });
   if (d.paid) return null;
   if (typeof d.url !== 'string' || !d.url) throw new Error(ct('Checkout indisponível. Tente de novo.'));
   return d.url;

@@ -13,6 +13,7 @@ import {
 import { ct } from '../../state/career-i18n';
 import { setCheckoutSrc, trackPaywallView } from '../../state/track';
 import { FounderCounter } from '../FounderCounter';
+import { priceLabel, usePrice } from '../../state/price';
 
 // countdown legível: "1d 4h", "6h 32min", "12min"
 function fmtLeft(ms: number): string {
@@ -32,6 +33,7 @@ const PLACEMENT_PRIZES = [70000, 40000, 25000, 15000, 10000, 7000, 5000, 4000, 3
 const prizeForPlace = (rank: number): number => (rank >= 1 && rank <= PLACEMENT_PRIZES.length ? PLACEMENT_PRIZES[rank - 1] : 0);
 
 export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { account: Account | null; onHub: () => void; onPlay?: () => void; onCreateAccount?: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const [status, setStatus] = useState<WlStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -210,7 +212,7 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
               onClick={() => { setCheckoutSrc('wl-free'); onCreateAccount(); }}
               style={{ flexShrink: 0, padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
             >
-              {ct('Criar conta vitalícia')} · R$20
+              {ct('Criar conta vitalícia')} · {priceLabel()}
             </button>
           )}
         </div>

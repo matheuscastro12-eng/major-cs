@@ -4,7 +4,7 @@
 // Ações (POST body.action): list | grant | revoke | stripe.
 import { neon } from '@neondatabase/serverless';
 import { randomBytes, scryptSync } from 'node:crypto';
-import { accountReference, assignFounderNumbers, cleanEnv, findPaidCheckoutForEmail, normalizeEmail, stripeClient } from '../server/payments.js';
+import { accountPriceCents, accountReference, assignFounderNumbers, cleanEnv, findPaidCheckoutForEmail, normalizeEmail, stripeClient } from '../server/payments.js';
 import { ATTENTION_STATUSES } from '../server/order-settle.js';
 import { requireAdmin } from '../server/admin-auth.js';
 import type { RateSql } from '../server/rate-limit.js';
@@ -231,7 +231,7 @@ export default async function handler(
         paid: paidTotal,
         founders: lifeCounts[0]?.founders ?? 0,
         total: lifeCounts[0]?.total ?? 0,
-        revenueCents: Number(paidTotal) * 2000, // conta vitalícia = R$20
+        revenueCents: Number(paidTotal) * accountPriceCents(), // estimativa: contagem × preço ATUAL (PIX_PRICE_CENTS)
         byMethod: lifeByMethod.map((r) => ({ method: String(r.method), n: Number(r.n) })),
       },
       coins: {
@@ -263,15 +263,16 @@ export default async function handler(
   //   ('stripe' via stripe-webhook, 'pix' via woovi-webhook, 'admin' via grant).
   //   Legado sem método: se existe sessão em rtm_payment_sessions → 'stripe';
   //   senão 'desconhecido' (vendas antes da coluna payment_method existir).
-  //   Caveat: não há VALOR por venda de vitalícia gravado — o preço é fixo
-  //   (R$ 20,00 = 2000 cents), então o cliente multiplica contagem × preço.
+  //   Caveat: não há VALOR por venda de vitalícia gravado — usa o preço ATUAL
+  //   (PIX_PRICE_CENTS, padrão 2000), então o cliente multiplica contagem × preço.
+  //   Vendas feitas a outro preço entram pelo preço vigente (estimativa).
   //   Contas 'admin' (concedidas) contam como conta, mas receita zero.
   // - Coins + Passe: rtm_coin_orders com status paid/claimed; dia = paid_at
   //   (fallback created_at); método 'pix'/'stripe'; tier 'pass-s<N>' = passe.
   // - Visitantes: events (type='visit', sid distinto/dia) — mesma fonte do
   //   api/metrics.ts, estendida de 14 pra 60 dias, fuso America/Sao_Paulo.
   if (action === 'revenue') {
-    const VIT_PRICE_CENTS = 2000; // conta vitalícia = R$ 20,00 (preço fixo, sem registro por venda)
+    const VIT_PRICE_CENTS = accountPriceCents(); // preço configurado (PIX_PRICE_CENTS; sem registro por venda)
     // série 60d: vitalícias por método × pedidos (coins/passe) por método/produto,
     // tudo num único round-trip com generate_series + 2 CTEs pré-agregadas.
     const days = await sql`

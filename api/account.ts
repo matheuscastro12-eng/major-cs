@@ -1,8 +1,8 @@
-// Contas (e-mail + senha) + entitlement da conta vitalícia R$20.
+// Contas (e-mail + senha) + entitlement da conta vitalícia (preço: PIX_PRICE_CENTS).
 // Ações (POST body.action): signup | login | me | checkout | claim | export | delete.
 // - senha: scrypt (node:crypto), guardada como "salt:hash".
 // - token: HMAC-SHA256 stateless ("body.sig", body = email|exp), env APP_SECRET.
-// - checkout: cria a URL do Payment Link ligada à conta autenticada.
+// - checkout: cria uma Checkout Session (preço PIX_PRICE_CENTS) ligada à conta; fallback Payment Link.
 // - claim: confirma a sessão do Stripe no retorno; o webhook é a fonte principal.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -14,13 +14,14 @@ import {
   checkoutBelongsToAccount,
   checkoutHasExpectedPrice,
   checkoutIsPaid,
+  accountCheckoutUrl,
+  accountPriceCents,
   checkoutUrl,
   cleanEnv,
   COIN_TIERS,
   findPaidCheckoutForEmail,
   passTier,
   PASS_PRICE_CENTS,
-  pixAccountPriceCents,
   retrieveCheckout,
   stripeClient,
 } from '../server/payments.js';
@@ -157,7 +158,7 @@ export default async function handler(
   // protegido por cache em memória (60s por instância) contra rajadas.
   if (req.method === 'GET') {
     const dbUrl = cleanEnv(process.env.DATABASE_URL);
-    if (!dbUrl) { res.status(500).json({ error: 'indisponível' }); return; }
+    if (!dbUrl) { res.status(500).json({ error: 'indisponível', priceCents: accountPriceCents() }); return; }
     try {
       if (!foundersCache || Date.now() - foundersCache.at > 60_000) {
         const sql = neon(dbUrl);
@@ -168,8 +169,8 @@ export default async function handler(
         foundersCache = { at: Date.now(), founders: Number(r[0]?.founders ?? 0) };
       }
       res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
-      res.status(200).json({ founders: foundersCache.founders, limit: FOUNDER_LIMIT });
-    } catch { res.status(500).json({ error: 'indisponível' }); }
+      res.status(200).json({ founders: foundersCache.founders, limit: FOUNDER_LIMIT, priceCents: accountPriceCents() });
+    } catch { res.status(500).json({ error: 'indisponível', priceCents: accountPriceCents() }); }
     return;
   }
 
@@ -468,7 +469,10 @@ export default async function handler(
       res.status(200).json({ paid: true });
       return;
     }
-    res.status(200).json({ paid: false, url: checkoutUrl(em) });
+    // [preço] sessão dinâmica com PIX_PRICE_CENTS; falha no Stripe → Payment Link legado.
+    let url = checkoutUrl(em);
+    try { url = await accountCheckoutUrl(em, body.origin); } catch { /* fallback */ }
+    res.status(200).json({ paid: false, url });
     return;
   }
 
@@ -481,8 +485,8 @@ export default async function handler(
     if (await resolvePaid(em, false, true)) { res.status(200).json({ paid: true }); return; }
     const appId = cleanEnv(process.env.OPENPIX_APP_ID);
     if (!appId) { res.status(500).json({ error: 'Pix indisponível: OPENPIX_APP_ID não configurada.' }); return; }
-    // valor em CENTAVOS (R$20 = 2000). Editável via PIX_PRICE_CENTS (mesma régua do Stripe).
-    const value = pixAccountPriceCents();
+    // valor em CENTAVOS (padrão 2000 = R$20). Fonte única: PIX_PRICE_CENTS (mesma do Stripe e do front).
+    const value = accountPriceCents();
     const nick = String(((await sql`SELECT nick FROM rtm_accounts WHERE email=${em}`)[0]?.nick) ?? '').slice(0, 80) || em;
     try {
       const r = await fetch('https://api.openpix.com.br/api/v1/charge', {
