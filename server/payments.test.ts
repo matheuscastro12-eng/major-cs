@@ -192,3 +192,15 @@ test('account price comes from PIX_PRICE_CENTS (default 2000)', async () => {
     if (prev === undefined) delete process.env.PIX_PRICE_CENTS; else process.env.PIX_PRICE_CENTS = prev;
   }
 });
+
+test('account checkout falls back to the legacy Payment Link without Stripe key', async () => {
+  const { accountCheckoutUrl } = await import('./payments.js');
+  const prev = [process.env.STRIPE_SECRET_KEY, process.env.STRIPE];
+  delete process.env.STRIPE_SECRET_KEY; delete process.env.STRIPE;
+  try {
+    assert.equal(await accountCheckoutUrl('player@example.com'), checkoutUrl('player@example.com'));
+  } finally {
+    if (prev[0] !== undefined) process.env.STRIPE_SECRET_KEY = prev[0];
+    if (prev[1] !== undefined) process.env.STRIPE = prev[1];
+  }
+});

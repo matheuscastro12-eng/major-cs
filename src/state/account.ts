@@ -159,7 +159,7 @@ export async function fetchAdminKey(): Promise<string | null> {
 }
 
 export async function signup(email: string, password: string, nick: string): Promise<Account> {
-  const d = await post({ action: 'signup', email, password, nick });
+  const d = await post({ action: 'signup', email, password, nick, origin: window.location.origin });
   setToken(String(d.token));
   const a = toAcct(d); setAccount(a); return a;
 }
@@ -173,7 +173,7 @@ export async function confirmPasswordReset(email: string, code: string, password
 }
 
 export async function login(email: string, password: string): Promise<Account> {
-  const d = await post({ action: 'login', email, password });
+  const d = await post({ action: 'login', email, password, origin: window.location.origin });
   setToken(String(d.token));
   const a = toAcct(d); setAccount(a); return a;
 }

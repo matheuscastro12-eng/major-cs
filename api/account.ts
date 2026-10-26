@@ -29,6 +29,12 @@ import { claimPaidOrders } from '../server/paid-credit.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
 import { mailConfigured, sendMail } from '../server/mail.js';
 import { findReusableCharge, rememberCharge } from '../server/order-settle.js';
+
+// [preço] cobrança de cartão da vitalícia (signup, login e checkout): Checkout
+// Session com PIX_PRICE_CENTS; Stripe ausente ou com erro → Payment Link legado.
+async function safeCheckoutUrl(email: string, origin: unknown): Promise<string> {
+  try { return await accountCheckoutUrl(email, origin); } catch { return checkoutUrl(email); }
+}
 import { nickProblem, nickTaken, normalizeNick } from '../server/nick.js';
 import { clientIp, rateLimitHit, respondLimited, type RateRule, type RateSql } from '../server/rate-limit.js';
 
@@ -325,7 +331,7 @@ export default async function handler(
     }
     await sql`INSERT INTO rtm_pending_signups (email, nick, pass_hash) VALUES (${email}, ${nick}, ${passHash})
               ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, created_at=now()`;
-    res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, url: checkoutUrl(email) });
+    res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, url: await safeCheckoutUrl(email, body.origin) });
     return;
   }
 
@@ -335,7 +341,7 @@ export default async function handler(
     if (!r.length || !verifyPw(password, String(r[0].pass_hash))) { res.status(401).json({ error: 'E-mail ou senha incorretos.' }); return; }
     await ensureReference(email);
     const paid = await resolvePaid(email, Boolean(r[0].paid), true);
-    if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento do save na nuvem.', url: checkoutUrl(email) }); return; }
+    if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento do save na nuvem.', url: await safeCheckoutUrl(email, body.origin) }); return; }
     res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: true, ...(await founderOf(email)) });
     return;
   }
@@ -470,9 +476,7 @@ export default async function handler(
       return;
     }
     // [preço] sessão dinâmica com PIX_PRICE_CENTS; falha no Stripe → Payment Link legado.
-    let url = checkoutUrl(em);
-    try { url = await accountCheckoutUrl(em, body.origin); } catch { /* fallback */ }
-    res.status(200).json({ paid: false, url });
+    res.status(200).json({ paid: false, url: await safeCheckoutUrl(em, body.origin) });
     return;
   }
 
