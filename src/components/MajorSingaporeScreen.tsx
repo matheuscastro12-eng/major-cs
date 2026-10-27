@@ -4,7 +4,7 @@
 // destaque + chave). Lista única: src/data/major-singapore-2026.json. Previsões:
 // scripts/major-singapore-predict.mts (1.000 simulações, pré-calculadas).
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Dices, LayoutGrid, ListOrdered, MapPin, Trophy, Users } from 'lucide-react';
+import { CalendarDays, ListChecks, Dices, LayoutGrid, ListOrdered, MapPin, Trophy, Users } from 'lucide-react';
 import { ct } from '../state/career-i18n';
 import { randomSeed, makeRng } from '../engine/rng';
 import { buildField, simulateMajor, type MajorRun } from '../engine/majorSingapore';
@@ -16,12 +16,13 @@ import { GameShell } from './ds/shell/GameShell';
 import type { ShellNavGroup } from './ds/shell/types';
 import { Flag, TeamBadge } from './ui';
 import type { TeamSeason, Tournament } from '../types';
+import { MajorPickem } from './MajorPickem';
 import { MajorErrorBoundary } from './MajorErrorBoundary';
 import { majorCardData, postMajorCardOnX, shareMajorCard } from '../state/majorShareCard';
 import { BO3_PHOTO_CREDIT, BO3_PHOTO_CREDIT_URL, BO3_PHOTOS_ON, bo3PhotoPath, initials, preloadPhotos } from '../data/bo3Photos';
 import '../styles/major-singapore.css';
 
-type View = 'geral' | 'previsoes' | 'simular';
+type View = 'geral' | 'previsoes' | 'pickem' | 'simular';
 type StageFilter = 'all' | '1' | '2' | '3';
 
 const pct = (x: number | null | undefined) => (x == null ? '—' : `${x.toFixed(1)}%`);
@@ -105,6 +106,7 @@ function MajorSingaporeInner({ onExit }: { onExit: () => void }) {
     { id: 'evento', label: ct('Evento'), items: [
       { id: 'geral', label: ct('Visão geral'), icon: LayoutGrid },
       { id: 'previsoes', label: ct('Previsões'), icon: ListOrdered },
+      { id: 'pickem', label: "Pick'em", icon: ListChecks },
       { id: 'simular', label: ct('Simular o Major'), icon: Dices },
     ] },
   ];
@@ -162,10 +164,10 @@ function MajorSingaporeInner({ onExit }: { onExit: () => void }) {
       nav={nav}
       active={view}
       onNav={(id) => setView(id as View)}
-      title={view === 'geral' ? ct('Visão geral') : view === 'previsoes' ? ct('Previsões') : ct('Simular o Major')}
+      title={view === 'geral' ? ct('Visão geral') : view === 'previsoes' ? ct('Previsões') : view === 'pickem' ? "Pick'em" : ct('Simular o Major')}
       meta={provisional ? <Tag tone="neutral">{ct('Lista provisória')}</Tag> : <Tag tone="win">{ct('Lista oficial')}</Tag>}
       next={{ label: ct('Simular'), detail: ct('Major inteiro · 32 times'), icon: Dices, onGo: simulate }}
-      mobileNav={['geral', 'previsoes', 'simular']}
+      mobileNav={['geral', 'previsoes', 'pickem', 'simular']}
       history={{ back: onExit, canBack: true }}
     >
       <div className="msg">
@@ -278,6 +280,8 @@ function MajorSingaporeInner({ onExit }: { onExit: () => void }) {
             </section>
           </>
         )}
+
+        {view === 'pickem' && <MajorPickem badge={badge} nameOf={nameOf} />}
 
         {view === 'simular' && !run && (
           <section className="msg-ev msg-ev--empty">
