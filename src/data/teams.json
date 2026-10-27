@@ -6509,16 +6509,16 @@
   },
   "players": [
    {
-    "id": "mouz2026__brollan",
-    "nick": "Brollan",
-    "name": "Ludvig Brolin",
-    "country": "se",
+    "id": "mouz2026__pr",
+    "nick": "PR",
+    "name": "Oldřich Nový",
+    "country": "cz",
     "role": "Rifler",
-    "aim": 89,
-    "clutch": 85,
-    "consistency": 87,
-    "awp": 50,
-    "igl": 55
+    "aim": 81,
+    "clutch": 80,
+    "consistency": 81,
+    "awp": 58,
+    "igl": 54
    },
    {
     "id": "mouz2026__xertion",
@@ -6533,16 +6533,16 @@
     "igl": 45
    },
    {
-    "id": "mouz2026__jimpphat",
-    "nick": "Jimpphat",
-    "name": "Jimi Salo",
-    "country": "fi",
-    "role": "Rifler",
-    "aim": 88,
-    "clutch": 86,
-    "consistency": 85,
-    "awp": 60,
-    "igl": 58
+    "id": "mouz2026__xelex",
+    "nick": "xelex",
+    "name": "Adrian Vincze",
+    "country": "hu",
+    "role": "Support",
+    "aim": 83,
+    "clutch": 81,
+    "consistency": 83,
+    "awp": 57,
+    "igl": 56
    },
    {
     "id": "mouz2026__torzsi",
@@ -6713,16 +6713,16 @@
     "igl": 55
    },
    {
-    "id": "navi2026__jl",
-    "nick": "jL",
-    "name": "Justinas Lekavicius",
-    "country": "lt",
-    "role": "Rifler",
-    "aim": 88,
-    "clutch": 85,
-    "consistency": 86,
-    "awp": 52,
-    "igl": 55
+    "id": "navi2026__makazze",
+    "nick": "makazze",
+    "name": "Drin Shaqiri",
+    "country": "xk",
+    "role": "Entry",
+    "aim": 83,
+    "clutch": 81,
+    "consistency": 83,
+    "awp": 57,
+    "igl": 53
    },
    {
     "id": "navi2026__w0nderful",

@@ -8,6 +8,8 @@ import { FutCard } from './FutCard';
 import { hashStr } from '../state/hash';
 import { makeRng } from '../engine/rng';
 import { CareerIcon } from './career/CareerIcon';
+import { DREAM_CARD_URL, downloadDreamTeamCard, dreamTeamData, dreamXText, shareDreamTeamCard } from '../state/dreamTeamCard';
+import { postOnX } from '../state/shareX';
 
 const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
 
@@ -88,6 +90,20 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
 
   // Progresso (5 picks + coach)
   const STEPS = 6;
+
+  // Card "meu time dos sonhos" (liberado quando os 5 picks estão feitos)
+  const [shareMsg, setShareMsg] = useState('');
+  const dream = () => dreamTeamData(draft, dataset);
+  const onShareDream = async () => {
+    const r = await shareDreamTeamCard(dream());
+    setShareMsg(r === 'shared' ? 'Compartilhado!' : 'Imagem baixada e texto copiado.');
+  };
+  const onPostDream = () => {
+    const d = dream();
+    downloadDreamTeamCard(d);
+    postOnX('dream-team', dreamXText(d), DREAM_CARD_URL);
+    setShareMsg('Imagem baixada: anexe no post do X.');
+  };
   const currentStep = Math.min(draft.current, STEPS - 1);
 
   return (
@@ -269,6 +285,16 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
             );
           })}
         </div>
+        {draft.current >= 5 && (
+          <div className="em-draft-share">
+            <div className="em-draft-share-title">Meu time dos sonhos</div>
+            <div className="em-draft-share-row">
+              <button type="button" className="em-btn em-btn-primary" onClick={onShareDream}>Compartilhar card</button>
+              <button type="button" className="em-btn em-btn-ghost" onClick={onPostDream}>Postar no X</button>
+            </div>
+            {shareMsg && <div className="em-draft-share-msg" role="status">{shareMsg}</div>}
+          </div>
+        )}
       </div>
     </div>
   );

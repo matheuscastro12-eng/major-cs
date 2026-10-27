@@ -5848,3 +5848,22 @@ body.career-dash .em-found-grid {
     justify-content: center;
   }
 }
+
+/* Draft: card "meu time dos sonhos" (compartilhar / postar no X) */
+.em-draft-share {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--em-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.em-draft-share-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--em-text);
+}
+.em-draft-share-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.em-draft-share-msg { font-size: 0.8rem; color: var(--em-text); opacity: 0.8; }
