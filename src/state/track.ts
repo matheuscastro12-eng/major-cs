@@ -24,7 +24,7 @@ export function sessionId(): string {
   }
 }
 
-// FUNIL DE CONVERSÃO (visitante → vitalícia R$20): eventos raros e de alto
+// FUNIL DE CONVERSÃO (visitante → vitalícia): eventos raros e de alto
 // valor — liberados no cliente junto com 'visit'/'ad_click'. Volume é ínfimo
 // (1x por sessão por superfície), então não mexe no controle de custo do Neon.
 // share_card {kind, channel} entra aqui: 1 evento por clique em compartilhar —
@@ -108,7 +108,7 @@ export function startPresenceHeartbeat(): () => void {
   return stopPresence;
 }
 
-// ─── Funil de conversão da vitalícia (R$20) ─────────────────────────────────
+// ─── Funil de conversão da vitalícia ─────────────────────────────────
 // paywall_view {src}      → usuário grátis/deslogado VIU uma superfície de venda
 //                           (1x por sessão de navegação por src, guarda em memória)
 // checkout_open {src,method} → a UI de pagamento realmente abriu (Stripe redirect

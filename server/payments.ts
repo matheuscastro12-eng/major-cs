@@ -83,9 +83,15 @@ export function checkoutIsPaid(session: Stripe.Checkout.Session): boolean {
     && (session.payment_status === 'paid' || session.payment_status === 'no_payment_required');
 }
 
+// Conta vitalícia: aceita (a) o Payment Link legado (price id fixo do dashboard)
+// ou (b) a Checkout Session dinâmica criada por accountCheckoutSession, marcada
+// com metadata.kind='account' e paga com pelo menos o preço configurado.
 export function checkoutHasExpectedPrice(session: Stripe.Checkout.Session): boolean {
   const expectedPrice = cleanEnv(process.env.STRIPE_ACCOUNT_PRICE_ID) || DEFAULT_PRICE_ID;
-  return session.line_items?.data.some((item) => item.price?.id === expectedPrice) ?? false;
+  if (session.line_items?.data.some((item) => item.price?.id === expectedPrice)) return true;
+  return session.metadata?.kind === ACCOUNT_CHECKOUT_KIND
+    && session.currency === 'brl'
+    && Number(session.amount_total ?? 0) >= accountPriceCents();
 }
 
 export async function retrieveCheckout(stripe: Stripe, sessionId: string): Promise<Stripe.Checkout.Session> {
@@ -124,9 +130,44 @@ export const COIN_TIERS: Record<string, { cents: number; coins: number; label: s
   p30: { cents: 3000, coins: 120000, label: 'Pacote Lendário' },
 };
 
-// preço da conta vitalícia no Pix, em CENTAVOS (R$20 = 2000). Editável por
-// PIX_PRICE_CENTS; a action 'pix' cobra isso e o webhook exige pelo menos isso.
-export const pixAccountPriceCents = (): number => Number(cleanEnv(process.env.PIX_PRICE_CENTS) || '2000') || 2000;
+// Preço da conta vitalícia em CENTAVOS — FONTE ÚNICA (Pix, Stripe, receita do
+// admin e o texto do front via GET /api/account → priceCents). Env
+// PIX_PRICE_CENTS (nome legado; vale pra todos os meios). Padrão R$ 20,00.
+export const DEFAULT_ACCOUNT_PRICE_CENTS = 2000;
+export const accountPriceCents = (): number => {
+  const n = Math.round(Number(cleanEnv(process.env.PIX_PRICE_CENTS)));
+  return Number.isFinite(n) && n >= 100 ? n : DEFAULT_ACCOUNT_PRICE_CENTS;
+};
+/** @deprecated alias de accountPriceCents (o preço não é mais só do Pix). */
+export const pixAccountPriceCents = accountPriceCents;
+
+export const ACCOUNT_CHECKOUT_KIND = 'account';
+
+// Checkout de cartão da vitalícia com o preço configurado (price_data em BRL,
+// igual coins/passe). Sem chave do Stripe, cai no Payment Link legado.
+export async function accountCheckoutUrl(email: string, origin?: unknown): Promise<string> {
+  let stripe: Stripe;
+  try { stripe = stripeClient(); } catch { return checkoutUrl(email); }
+  const em = normalizeEmail(email);
+  const base = checkoutBase(origin);
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    customer_email: em,
+    client_reference_id: accountReference(em),
+    line_items: [{
+      quantity: 1,
+      price_data: {
+        currency: 'brl',
+        unit_amount: accountPriceCents(),
+        product_data: { name: 'Road to Major · Conta vitalícia', description: 'Save na nuvem + ranking, pagamento único' },
+      },
+    }],
+    metadata: { kind: ACCOUNT_CHECKOUT_KIND, email: em },
+    success_url: `${base}/jogar?conta=ok&cs={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${base}/jogar`,
+  });
+  return session.url || checkoutUrl(email);
+}
 
 // Base do success_url/cancel_url do checkout (O0-40/ECON-11). Antes qualquer
 // origin https do body servia: um link de golpe criava um checkout legítimo da

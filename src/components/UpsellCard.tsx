@@ -4,6 +4,7 @@ import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallVi
 import { ct } from '../state/career-i18n';
 import { FounderCounter } from './FounderCounter';
 import { useFounders } from '../state/founders';
+import { priceLabel, usePrice } from '../state/price';
 
 // Card de ativação (upsell) pra contas GRÁTIS. Abre em momentos estratégicos do
 // jogo (fim de split, título conquistado, etc.) via evento global, o usuário pode
@@ -36,6 +37,7 @@ const HOOKS: Record<string, string> = {
 };
 
 export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade: () => void; onGuestUpgrade?: () => void; onPixPaid: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const { account } = useAccount();
   // funil: dado real (rtm_accounts) mostra os 500 Fundadores esgotados (500/500).
   // A lista de benefícios prometia o selo de Fundador com número baixo pra
@@ -176,7 +178,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
                   mostra Pix confirmando bem mais que o Stripe, e essa era a única
                   superfície de venda que nunca oferecia Pix (só o redirect pro Stripe). */}
               <button className="btn gold big" disabled={pixBusy} onClick={payPix}>
-                {pixBusy ? ct('Aguarde…') : `${ct('Pagar com Pix')} · R$20`}
+                {pixBusy ? ct('Aguarde…') : `${ct('Pagar com Pix')} · ${priceLabel()}`}
               </button>
               <button className="upsell-card-btn" disabled={pixBusy} onClick={() => { setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}>
                 {ct('Ativar com cartão (Stripe)')}
@@ -190,7 +192,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
                nem tinha conta). Manda pro fluxo de cadastro+pagamento da landing,
                que já lida com convidado do início ao fim. */
             <button className="btn gold big" onClick={() => { setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }}>
-              {ct('Criar conta e ativar')} · R$20
+              {ct('Criar conta e ativar')} · {priceLabel()}
             </button>
           )}
           <button className="upsell-later" onClick={close}>{ct('Agora não')}</button>

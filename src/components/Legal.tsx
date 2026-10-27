@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { BrandMark } from './brand';
 import { Button } from './ds';
 import { LEGAL_PATHS, type LegalKind } from '../legal';
+import { priceLabel, usePrice } from '../state/price';
 
 const UPDATED_AT = '22 de junho de 2026';
 const CONTACT_URL = 'https://x.com/castroomath';
@@ -76,13 +77,14 @@ function PrivacyContent() {
 }
 
 function TermsContent() {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   return (
     <>
       <p className="legal-lead">Estes termos regulam o uso gratuito do jogo e a contratação opcional dos recursos persistentes do Road to Major.</p>
       <Section title="1. O jogo é gratuito">
         <p>Todos os modos, partidas e funcionalidades de gameplay podem ser usados gratuitamente, com progresso salvo no navegador. Não existe compra obrigatória, conteúdo jogável exclusivo nem vantagem competitiva vendida pelo Road to Major.</p>
       </Section>
-      <Section title="2. O que é a conta de R$20">
+      <Section title={`2. O que é a conta de ${priceLabel()}`}>
         <p>O pagamento único remunera a criação e manutenção de uma conta autenticada, save em nuvem, sincronização entre aparelhos, ranking e MMR persistentes, histórico online e selo de apoiador. Esses recursos geram custos recorrentes de banco de dados e infraestrutura.</p>
         <p>A compra não transfere propriedade sobre o jogo, jogadores, marcas ou conteúdo de terceiros.</p>
       </Section>

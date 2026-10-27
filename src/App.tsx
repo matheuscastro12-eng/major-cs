@@ -378,7 +378,7 @@ export default function App() {
     // — a conversão acontece DENTRO do jogo (RtpDemoGate), não mais na porta.
     if (accountReady && screen === 'ultimate' && !account && !utGuest) setScreen('landing');
   }, [screen, accountReady, account, utGuest]);
-  // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
+  // funil: grátis/deslogado vendo a landing (pricing da vitalícia) conta como paywall_view
   useEffect(() => {
     if (screen === 'landing' && accountReady && !account?.paid) trackPaywallView('landing');
   }, [screen, accountReady, account?.paid]);
@@ -1464,7 +1464,7 @@ export default function App() {
           />
         </GameShell>
       )}
-      {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
+      {/* carreira aberta de graça pra todos (a vitalícia vale por save na nuvem + ranking) */}
       {/* key={careerEpoch}: o save trocou por fora (nuvem, lápide, outra aba) →
           remonta a carreira inteira [O0-28/O1-35]. Pagante (ou conta ainda
           carregando) espera o sync da nuvem antes de montar. */}

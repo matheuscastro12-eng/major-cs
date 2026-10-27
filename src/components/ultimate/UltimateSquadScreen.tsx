@@ -111,6 +111,7 @@ import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange,
 import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQUAD_DUEL_CAP, type StyleId } from '../../engine/ultimate/traits';
 import { useSectionHistory } from '../../state/app-history';
 import '../../styles/ultimate.css';
+import { priceLabel, usePrice, withPrice } from '../../state/price';
 
 // [URG-3] deep link do e-mail "rival te passou": /ultimate?tab=ranqueada abre a
 // aba Ranqueada. Lido UMA vez no carregamento do módulo (mesmo motivo do
@@ -418,6 +419,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId; ev?: string; ed?: EditionBadge }
 
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade, tabRequest }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void; tabRequest?: { tab: string; n: number } | null }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, claimCommunityGoal, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection, grantEventCard } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>((tabRequest?.tab as 'hub' | undefined) ?? TAB_FROM_URL ?? 'hub');
@@ -2217,7 +2219,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           Ultimate e a de maior exposição relativa (119 paywall_view), mas
           convertia pior que o resto do funil (1 signup_start). O botão era o
           único CTA do app que vendia a conta vitalícia sem citar o preço — dado
-          real (acct-chip-guest, upsell-card) já mostrou que repetir "R$20" no
+          real (acct-chip-guest, upsell-card) já mostrou que repetir o preço no
           próprio texto do botão, e não só num parágrafo ao lado, melhora clique
           em telas pequenas. Aplica o mesmo padrão aqui. */}
       {guest && (
@@ -2236,7 +2238,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 onClick={onCreateAccount}
                 style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
               >
-                {ct('Criar conta vitalícia · R$20 · salva na nuvem e joga no PC e no celular')}
+                {withPrice(ct('Criar conta vitalícia · {preço} · salva na nuvem e joga no PC e no celular'))}
               </button>
               {/* prova social real na única superfície de venda do modo convidado (iter42) */}
               <FounderCounter style={{ fontSize: '10px' }} />
@@ -2823,7 +2825,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                   ✓ {ct('Mercado entre managers · Major da Semana · ranqueada no ladder real · saves na nuvem em 5 slots')}
                 </p>
                 <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--ut-ink)', fontWeight: 800 }}>
-                  R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}
+                  {priceLabel()} · {ct('pagamento único, acesso vitalício — sem mensalidade')}
                 </p>
                 <FounderCounter style={{ fontSize: '11px' }} />
                 {/* funil: a trava tinha o preço mas nenhum botão — 0% de conversão em
@@ -2833,7 +2835,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     0% — 53 sessões, zero signup_start/checkout_open desde então. O
                     preço já aparece no parágrafo acima, mas nenhum outro CTA do
                     funil deixa o botão sem o preço (acct-chip-guest, upsell-card,
-                    RtP demo, home-pill todos repetem "R$20" no próprio texto do
+                    RtP demo, home-pill todos repetem o preço no próprio texto do
                     botão — dado real já validou que isso ajuda o clique, principalmente
                     no mobile onde o parágrafo fica longe do botão). Heurística de
                     baixo risco: aplica o mesmo padrão aqui — amostra pequena demais
@@ -2846,7 +2848,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     style={{ padding: '9px 20px', fontSize: '0.82rem', marginTop: 2 }}
                     onClick={() => { setCheckoutSrc('mkt-lock'); (guest ? onCreateAccount : onUpgrade)?.(); }}
                   >
-                    {ct('Virar Fundador · R$20 · destravar o Mercado')}
+                    {withPrice(ct('Virar Fundador · {preço} · destravar o Mercado'))}
                   </button>
                 ) : (
                   <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
