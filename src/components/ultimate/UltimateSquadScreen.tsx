@@ -25,6 +25,7 @@ import { completeStep, dismissJourney, emptyJourney, journeyProgress, JOURNEY_ST
 // [U06] partida INCREMENTAL (casual): sessão persistível, timeout real, recompensa 1x no fim
 import { createSession, normalizeSession, sessionSeries, type MatchSession } from '../../engine/ultimate/matchSession';
 import { UltimateLiveSession } from './UltimateLiveSession';
+import { UltimateDropPanel } from './UltimateDropPanel'; // [CSM-1]
 // [U07] jogador dos sonhos: alvo persistente, caminhos reais, preview de escalação
 import { bestSlotFor, missingCredits, targetPaths, type SwapPreview } from '../../engine/ultimate/dreamTarget';
 import { PROMO_PACK } from '../../engine/ultimate/packs';
@@ -2342,6 +2343,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           )}
           {/* [URG-1] fim de temporada com consequência: o que o jogador vai perder */}
           {seasonEndingBlock('hub')}
+          {/* [CSM-1] drop de escolha: estoque/opções/entrega do servidor */}
+          {account && <UltimateDropPanel renderCard={(c) => <UltCardView card={c} size={130} />} />}
           {/* [U05] PRIMEIRA SESSÃO — próximo passo explícito até a 2ª partida; dispensável */}
           {journeyNext && (() => {
             const step = journeyNext; const info = STEP_INFO[step]; const prog = journeyProgress(journey);

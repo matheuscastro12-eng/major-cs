@@ -367,6 +367,7 @@ interface UltimateStore {
   marketCardSold: (listingId: number, credits: number) => boolean;               // venda vista no mktMine: credita proceeds 1×
   marketCardReturned: (listingId: number, cardId: string, cardKey: string) => boolean; // cancelou/expirou: carta volta 1×
   marketBuyApply: (cardId: string, cardKey: string, price: number) => void; // comprou: debita + adiciona
+  serverCardGrant: (cardId: string, cardKey: string) => boolean; // [CSM-1] carta que o SERVIDOR já entregou (drop)
   // Passe de Temporada (fase A — engine/estado; a tela vem na fase B)
   // [O0-46] absorve no save os créditos PAGOS que o servidor já gravou no
   // ledger (coins:<corr> → coins; pass:<season> → premium). Cada voucher 1×
@@ -1097,6 +1098,16 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // SEM mirror: o 'trade' do servidor já debitou + moveu a carta no ledger.
       return { state: s };
     }),
+  serverCardGrant: (cardId, cardKey) => {
+    // [CSM-1] a cópia entra com o MESMO uuid do servidor; replay não duplica.
+    // SEM mirror: o 'grant' (op_id drop:<id>) já está no ledger.
+    const prev = get().state;
+    if (!cardId || !cardKey || prev.inventory.some((o) => o.id === cardId)) return false;
+    const s = _grantCard(prev, cardKey, 'reward', { id: cardId });
+    persist(s);
+    set({ state: s });
+    return true;
+  },
   absorbPaidVouchers: (vouchers, freshOrderIds = []) => {
     // [O0-46] O servidor JÁ creditou (coinsClaim/passClaim gravam coins:<corr>
     // e pass:<season> no ledger). Aqui só entra no save o que ele ainda não
