@@ -1145,7 +1145,7 @@ export default function App() {
     return withShell(
       <GameShell mode="inicio" identity={{ title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> }} title={ct('Modo Major')} crumbs={[{ label: ct('Início') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav}>
         <Suspense fallback={<Loader text="…" />}>
-          <MajorSingaporeScreen />
+          <MajorSingaporeScreen onLogin={() => { setAuthMode('login'); setAuthOpen(true); }} />
         </Suspense>
       </GameShell>,
     );

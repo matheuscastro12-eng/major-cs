@@ -2,7 +2,7 @@
 // nenhum palpite ainda → estado "em breve", nunca quebra a tela.
 import { useEffect, useState } from 'react';
 import { Medal } from 'lucide-react';
-import { fetchPickemBoard, type PickemBoardRow } from '../../state/pickemApi';
+import { PICKEM_SAVED_EVENT, fetchPickemBoard, type PickemBoardRow } from '../../state/pickemApi';
 import { useLang } from '../../state/i18n';
 import { Panel, Skeleton } from '../ds';
 
@@ -16,7 +16,14 @@ export function PickemBoard({ top = 10 }: { top?: number }) {
   const { lang } = useLang();
   const t = TXT[lang as keyof typeof TXT] ?? TXT.pt;
   const [data, setData] = useState<{ total: number; soon: boolean; board: PickemBoardRow[] } | null | undefined>(undefined);
-  useEffect(() => { let on = true; void fetchPickemBoard().then((d) => { if (on) setData(d); }); return () => { on = false; }; }, []);
+  useEffect(() => {
+    let on = true;
+    const load = (fresh: boolean) => { void fetchPickemBoard(fresh).then((d) => { if (on) setData(d); }); };
+    load(false);
+    const onSaved = () => load(true);
+    window.addEventListener(PICKEM_SAVED_EVENT, onSaved);
+    return () => { on = false; window.removeEventListener(PICKEM_SAVED_EVENT, onSaved); };
+  }, []);
   const rows = data?.board.slice(0, top) ?? [];
   return (
     <Panel title={t.title} actions={data && data.total > 0 ? <span className="msg-muted">{data.total} {t.players}</span> : undefined}>

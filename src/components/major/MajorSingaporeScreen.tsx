@@ -24,6 +24,7 @@ import bo3Teams from '../../data/bo3-2026.json';
 import { MajorResultView } from './MajorResultView';
 import { TeamLogo } from './TeamLogo';
 import { PickemBoard } from './PickemBoard';
+import { PickemSubmit } from './PickemSubmit';
 import { MajorLeague } from './MajorLeague';
 import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
@@ -56,7 +57,7 @@ function readSharedCode(): string | null {
   try { return new URLSearchParams(window.location.search).get('p'); } catch { return null; }
 }
 
-export function MajorSingaporeScreen() {
+export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {}) {
   const { lang } = useLang();
   const t = majorT(lang);
   const teams = useMemo(() => new Map(D.teams.map((x) => [x.id, x])), []);
@@ -190,6 +191,7 @@ export function MajorSingaporeScreen() {
             <StagePicker key={st} stage={st} picks={picks} readOnly={readOnly} t={t} onToggle={(id) => toggle(st, id)} onExtreme={(k, id) => toggleExtreme(k, st, id)} />
           ))}
           <BracketPicker picks={picks} readOnly={readOnly} t={t} onPick={pickWinner} />
+          {!readOnly && <PickemSubmit picks={mine} onLogin={onLogin} />}
           <Panel title={t('share')} accent="gold">
             {complete ? (
               <div className="msg-share">

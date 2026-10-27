@@ -17,13 +17,14 @@ export async function fetchPickemState(): Promise<PickemState | null> {
     const r = await fetch('/api/pickem?action=state', { signal: AbortSignal.timeout(T) });
     if (!r.ok) return null;
     const j = await r.json() as Partial<PickemState>;
+    if ((j as { soon?: boolean }).soon) return { serverNow: String(j.serverNow ?? new Date().toISOString()), stages: [] };
     return Array.isArray(j.stages) ? { serverNow: String(j.serverNow ?? new Date().toISOString()), stages: j.stages } : null;
   } catch { return null; }
 }
 
-export async function fetchPickemBoard(): Promise<{ total: number; soon: boolean; board: PickemBoardRow[] } | null> {
+export async function fetchPickemBoard(fresh = false): Promise<{ total: number; soon: boolean; board: PickemBoardRow[] } | null> {
   try {
-    const r = await fetch('/api/pickem?action=board', { signal: AbortSignal.timeout(T) });
+    const r = await fetch(`/api/pickem?action=board${fresh ? `&fresh=${Date.now()}` : ''}`, { signal: AbortSignal.timeout(T) });
     if (!r.ok) return null;
     const j = await r.json() as { total?: number; soon?: boolean; board?: PickemBoardRow[] };
     return Array.isArray(j.board) ? { total: Number(j.total) || 0, soon: !!j.soon, board: j.board.slice(0, 50) } : null;
@@ -52,3 +53,6 @@ export async function savePickemPick(stage: PickemStageId, pick: StagePick): Pro
   if (r.ok && j.savedAt) return { ok: true, savedAt: j.savedAt };
   return { ok: false, error: j.error ?? 'Não deu pra salvar.', locked: r.status === 423 };
 }
+
+/** avisa o placar que um palpite foi salvo (ele recarrega sem o cache do CDN) */
+export const PICKEM_SAVED_EVENT = 'rtm:pickem-saved';
