@@ -3111,10 +3111,10 @@
   "game": "CS2",
   "team": "Legacy",
   "coach": {
-   "name": "Caike Costa",
-   "nick": "caike",
+   "name": "Bruno Rivetti",
+   "nick": "RiVAS",
    "style": "tactical",
-   "rating": 80,
+   "rating": 90,
    "country": "br"
   },
   "colors": [
@@ -3149,16 +3149,16 @@
     "consistency": 85
    },
    {
-    "id": "legacy2026__saadzin",
-    "aim": 88,
-    "awp": 58,
-    "igl": 56,
-    "name": "Guilherme Pacheco",
-    "nick": "saadzin",
-    "role": "Rifler",
-    "clutch": 84,
-    "country": "br",
-    "consistency": 85
+    "id": "legacy2026__try",
+    "aim": 83,
+    "awp": 83,
+    "igl": 51,
+    "name": "Santino Rigal",
+    "nick": "try",
+    "role": "AWP",
+    "clutch": 80,
+    "country": "ar",
+    "consistency": 83
    },
    {
     "id": "legacy2026__art",
@@ -3175,11 +3175,11 @@
    {
     "id": "legacy2026__n1ssim",
     "aim": 83,
-    "awp": 86,
+    "awp": 55,
     "igl": 52,
     "name": "Vinicius Pereira",
     "nick": "n1ssim",
-    "role": "AWP",
+    "role": "Lurker",
     "clutch": 80,
     "country": "br",
     "consistency": 81

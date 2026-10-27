@@ -5,6 +5,7 @@
 import type { DraftState, TeamSeason } from '../types';
 import { playerOvr } from '../engine/ratings';
 import { shareUrl } from './shareLink';
+import { BO3_PHOTO_CREDIT, drawAvatar, loadedPhoto } from '../data/bo3Photos';
 
 export interface DreamPick { nick: string; role: string; ovr: number; from: string; era: string; colors: [string, string] }
 export interface DreamTeamData {
@@ -89,15 +90,19 @@ export function drawDreamTeamCard(d: DreamTeamData): string {
     ctx.globalAlpha = 1; ctx.fillStyle = p.colors[0]; ctx.fillRect(x, y, cw, 8);
     ctx.restore();
     pill(ctx, x, y, cw, ch, 18); ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = '#ecc75f';
-    ctx.font = '800 64px "Barlow Condensed", "Arial Narrow", sans-serif';
-    ctx.fillText(String(p.ovr), x + cw / 2, y + 86);
+    // foto local same-origin (flag bo3.gg) ou iniciais; OVR no canto
+    drawAvatar(ctx, p.nick, x + cw / 2, y + 80, 46, p.colors[0], '"Barlow Condensed", "Arial Narrow", sans-serif');
+    ctx.beginPath(); ctx.arc(x + cw / 2, y + 80, 46, 0, Math.PI * 2); ctx.strokeStyle = '#ecc75f'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.textAlign = 'left'; ctx.fillStyle = '#ecc75f';
+    ctx.font = '800 36px "Barlow Condensed", "Arial Narrow", sans-serif';
+    ctx.fillText(String(p.ovr), x + 14, y + 48);
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
     ctx.font = '800 34px "Barlow Condensed", "Arial Narrow", sans-serif';
-    ctx.fillText(p.nick.slice(0, 12), x + cw / 2, y + 150);
+    ctx.fillText(p.nick.slice(0, 12), x + cw / 2, y + 166);
     ctx.fillStyle = '#c9d1dc';
     ctx.font = '700 18px Barlow, Arial, sans-serif';
-    ctx.fillText(p.role.toUpperCase(), x + cw / 2, y + 182);
+    ctx.fillText(p.role.toUpperCase(), x + cw / 2, y + 194);
     pill(ctx, x + 16, y + ch - 78, cw - 32, 56, 12); ctx.fillStyle = 'rgba(0,0,0,0.42)'; ctx.fill();
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 17px Barlow, Arial, sans-serif';
@@ -116,6 +121,10 @@ export function drawDreamTeamCard(d: DreamTeamData): string {
   ctx.fillStyle = '#ecc75f';
   ctx.font = '600 20px Barlow, Arial, sans-serif';
   ctx.fillText('roadtomajor.com.br · monte o SEU', W / 2, 628);
+  if (d.picks.some((p) => loadedPhoto(p.nick))) {
+    ctx.textAlign = 'right'; ctx.fillStyle = '#9aa4b2'; ctx.font = '500 13px Barlow, Arial, sans-serif';
+    ctx.fillText(BO3_PHOTO_CREDIT, W - 28, H - 24);
+  }
   return canvas.toDataURL('image/png');
 }
 

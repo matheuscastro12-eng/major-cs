@@ -42,3 +42,10 @@ test('dados: NaVi 2026 e MOUZ 2026 batem com a base bo3.gg (set/2026)', () => {
     assert.equal(new Set(teams.find((t) => t.id === id)!.players.map((p) => p.id)).size, 5);
   }
 });
+
+test('teams.json legacy2026 = elenco 2026 do bo3.gg (try no lugar de saadzin, coach RiVAS)', async () => {
+  const teams = (await import('../src/data/teams.json', { with: { type: 'json' } })).default as { id: string; coach: { nick: string }; players: { nick: string }[] }[];
+  const l = teams.find((t) => t.id === 'legacy2026')!;
+  assert.deepEqual(l.players.map((p) => p.nick).sort(), ['arT', 'dumau', 'latto', 'n1ssim', 'try'].sort());
+  assert.equal(l.coach.nick, 'RiVAS');
+});

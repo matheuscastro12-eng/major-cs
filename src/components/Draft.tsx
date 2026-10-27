@@ -10,6 +10,7 @@ import { makeRng } from '../engine/rng';
 import { CareerIcon } from './career/CareerIcon';
 import { DREAM_CARD_URL, downloadDreamTeamCard, dreamTeamData, dreamXText, shareDreamTeamCard } from '../state/dreamTeamCard';
 import { postOnX } from '../state/shareX';
+import { preloadPhotos } from '../data/bo3Photos';
 
 const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
 
@@ -94,6 +95,10 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
   // Card "meu time dos sonhos" (liberado quando os 5 picks estão feitos)
   const [shareMsg, setShareMsg] = useState('');
   const dream = () => dreamTeamData(draft, dataset);
+  // fotos (flag bo3.gg) pré-carregadas same-origin pro card em canvas
+  useEffect(() => {
+    try { preloadPhotos(dreamTeamData(draft, dataset).picks.map((p) => p.nick)); } catch { /* draft incompleto */ }
+  }, [draft, dataset]);
   const onShareDream = async () => {
     const r = await shareDreamTeamCard(dream());
     setShareMsg(r === 'shared' ? 'Compartilhado!' : 'Imagem baixada e texto copiado.');

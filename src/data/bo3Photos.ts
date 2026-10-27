@@ -1,0 +1,60 @@
+// Fotos de jogadores do bo3.gg — ATRÁS DE FLAG (VITE_FF_BO3_PHOTOS=1, default OFF).
+// Os termos do bo3.gg (bo3.gg/wiki/use-of-services) dizem que o conteúdo do site
+// (inclusive fotos) é da DINAH HOLDINGS LIMITED ou licenciado a ela, e só pode ser
+// reproduzido com link ativo pro site. Por isso as imagens NÃO vão pro git: o
+// script scripts/fetch-bo3-photos.mts baixa no build (só com a flag ligada) pra
+// public/players/bo3/ (gitignored) e a UI serve same-origin, sem hotlink e sem
+// CORS no canvas. Sem flag ou sem arquivo → placeholder com as iniciais.
+import photos from './bo3-photos.json';
+
+export const BO3_PHOTOS_ON = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_FF_BO3_PHOTOS === '1';
+export const BO3_PHOTO_CREDIT = 'Fotos: bo3.gg';
+export const BO3_PHOTO_CREDIT_URL = 'https://bo3.gg';
+
+const MAP = photos as Record<string, string>;
+export const photoSlug = (nick: string) => nick.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+
+/** Caminho local (same-origin) da foto, ou null se não houver / flag OFF. */
+export function bo3PhotoPath(nick: string, on = BO3_PHOTOS_ON): string | null {
+  const k = photoSlug(nick);
+  return on && MAP[k] ? `/players/bo3/${k}.webp` : null;
+}
+
+export function initials(nick: string): string {
+  const s = nick.replace(/[^A-Za-z0-9]/g, '');
+  return (s.slice(0, 2) || '?').toUpperCase();
+}
+
+// cache de <img> pros cards em canvas (desenho síncrono: usa o que já carregou)
+const cache = new Map<string, HTMLImageElement>();
+export function preloadPhotos(nicks: string[]): void {
+  if (typeof Image === 'undefined') return;
+  for (const n of nicks) {
+    const p = bo3PhotoPath(n);
+    if (!p || cache.has(p)) continue;
+    const img = new Image(); img.decoding = 'async'; img.src = p; cache.set(p, img);
+  }
+}
+export function loadedPhoto(nick: string): HTMLImageElement | null {
+  const p = bo3PhotoPath(nick);
+  const img = p ? cache.get(p) : undefined;
+  return img && img.complete && img.naturalWidth > 0 ? img : null;
+}
+
+/** Avatar circular no canvas: foto (same-origin, não suja o canvas) ou iniciais. */
+export function drawAvatar(ctx: CanvasRenderingContext2D, nick: string, x: number, y: number, r: number, color: string, font: string): void {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.closePath();
+  ctx.fillStyle = color; ctx.fill();
+  const img = loadedPhoto(nick);
+  if (img) {
+    ctx.clip();
+    const s = Math.min(img.naturalWidth, img.naturalHeight);
+    ctx.drawImage(img, (img.naturalWidth - s) / 2, 0, s, s, x - r, y - r, r * 2, r * 2);
+  } else {
+    ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `700 ${Math.round(r * 0.8)}px ${font}`; ctx.fillText(initials(nick), x, y + 1);
+  }
+  ctx.restore();
+  ctx.textBaseline = 'alphabetic';
+}
