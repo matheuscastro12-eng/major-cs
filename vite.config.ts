@@ -27,7 +27,7 @@ export default defineConfig({
             { name: 'react', test: new RegExp(`${sep}node_modules${sep}(react|react-dom|scheduler)${sep}`), tags: ['$initial'], priority: 100 },
             { name: 'career-i18n', test: src('state[\\\\/]career-(strings|i18n)\\.ts'), tags: ['$initial'], priority: 90 },
             { name: 'hash', test: src('state[\\\\/]hash\\.ts'), tags: ['$initial'], priority: 90 },
-            { name: 'types', test: src('(types\\.ts|data[\\\\/](media\\.ts|team-logos\\.json|player-photos\\.json|bo3-photos\\.json))'), tags: ['$initial'], priority: 90 },
+            { name: 'types', test: src('(types\\.ts|data[\\\\/](media\\.ts|team-logos\\.json|bo3-photos\\.json))'), tags: ['$initial'], priority: 90 },
             { name: 'icons', test: new RegExp(`${sep}node_modules${sep}lucide-react${sep}`), tags: ['$initial'], priority: 60 },
             { name: 'i18n', test: src('state[\\\\/]i18n\\.tsx'), tags: ['$initial'], priority: 50 },
             { name: 'bo3', test: src('data[\\\\/]bo3(\\.ts|-2026\\.json)'), tags: ['$initial'], priority: 50 },
