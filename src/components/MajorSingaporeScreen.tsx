@@ -19,6 +19,7 @@ import type { TeamSeason, Tournament } from '../types';
 import { MajorPickem } from './MajorPickem';
 import { MajorErrorBoundary } from './MajorErrorBoundary';
 import { majorCardData, postMajorCardOnX, shareMajorCard } from '../state/majorShareCard';
+import { BO3_PHOTO_CREDIT, BO3_PHOTO_CREDIT_URL, BO3_PHOTOS_ON, bo3PhotoPath, initials, preloadPhotos } from '../data/bo3Photos';
 import '../styles/major-singapore.css';
 
 type View = 'geral' | 'previsoes' | 'pickem' | 'simular';
@@ -28,11 +29,20 @@ const pct = (x: number | null | undefined) => (x == null ? '—' : `${x.toFixed(
 // Início do Stage 1 (Singapura, UTC+8). Datas: HLTV / PGL.
 const START = Date.parse('2026-11-24T10:00:00+08:00');
 const STAGES = [
-  { n: '1', name: 'Stage 1', dates: '24 – 27 nov', sub: '16 times · 8 avançam' },
-  { n: '2', name: 'Stage 2', dates: '28 nov – 1 dez', sub: '8 convidados + 8 do Stage 1' },
-  { n: '3', name: 'Stage 3', dates: '2 – 6 dez', sub: '8 convidados + 8 do Stage 2' },
-  { n: '★', name: 'Champions Stage', dates: '10 – 13 dez', sub: 'Singapore Indoor Stadium · final Bo5' },
+  { n: '1', name: 'Stage 1', dates: 'a partir de 24 nov', sub: 'Swiss de 16 · 3V avança, 3D cai · MD1 (MD3 em decisão)' },
+  { n: '2', name: 'Stage 2', dates: 'data a confirmar (PGL)', sub: 'Swiss de 16 · 8 convidados + 8 do Stage 1' },
+  { n: '3', name: 'Stage 3', dates: 'data a confirmar (PGL)', sub: 'Swiss de 16 · 8 convidados + 8 do Stage 2' },
+  { n: '★', name: 'Champions Stage', dates: '10 – 13 dez', sub: 'Singapore Indoor Stadium · 8 times · MD3, final MD5' },
 ] as const;
+
+// avatar do jogador: foto local do bo3.gg (flag) ou placeholder com iniciais
+function PlayerAvatar({ nick, size = 28 }: { nick: string; size?: number }) {
+  const [err, setErr] = useState(false);
+  const p = bo3PhotoPath(nick);
+  return p && !err
+    ? <img className="msg-av" src={p} alt={nick} width={size} height={size} loading="lazy" onError={() => setErr(true)} />
+    : <span className="msg-av msg-av--ph" style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }} aria-hidden>{initials(nick)}</span>;
+}
 
 function useSmall() {
   const q = '(max-width: 767px)';
@@ -84,8 +94,13 @@ function MajorSingaporeInner({ onExit }: { onExit: () => void }) {
     ? <span className="msg-provdot" title={ct('Vaga provisória (ranking) até a lista oficial de 02/11')} aria-label={ct('vaga provisória')} />
     : isGuess(id) ? <span className="msg-guess" title={GUESS_TIP}>{ct('Stage palpite')}</span> : null);
 
-  const cardData = () => majorCardData(run!, (id) => { const t = src.get(id); return t && { name: t.team, tag: t.tag, colors: t.colors as [string, string] }; });
-  const simulate = () => { setShareMsg(null); setRun(simulateMajor(field, makeRng(randomSeed()))); setView('simular'); };
+  const cardData = () => majorCardData(run!, (id) => { const t = src.get(id); return t && { name: t.team, tag: t.tag, colors: t.colors as [string, string], players: rosterOf(id).map((p) => p.nick) }; });
+  const simulate = () => {
+    setShareMsg(null);
+    const r = simulateMajor(field, makeRng(randomSeed()));
+    preloadPhotos(rosterOf(r.championId).map((p) => p.nick)); // pro card em canvas
+    setRun(r); setView('simular');
+  };
 
   const nav: ShellNavGroup[] = [
     { id: 'evento', label: ct('Evento'), items: [
@@ -102,6 +117,10 @@ function MajorSingaporeInner({ onExit }: { onExit: () => void }) {
   const series = (label: string) => playoffs?.history.filter((h) => h.pairing.label.startsWith(label)) ?? [];
   const stageTable = (t: Tournament) => [...t.teams].sort((a, b) => (a.status === 'advanced' ? 0 : 1) - (b.status === 'advanced' ? 0 : 1) || b.wins - a.wins || a.losses - b.losses);
 
+  const rosterOf = (id: string) => {
+    const subs = (MAJOR_SG_CONFIG.standIns ?? []).filter((x) => x.bo3Id === id);
+    return (src.get(id)?.players ?? []).map((p) => subs.find((x) => x.out === p.nick)?.in ?? p).slice(0, 5);
+  };
   const teamCard = (id: string) => {
     const t = src.get(id);
     return (
@@ -109,6 +128,14 @@ function MajorSingaporeInner({ onExit }: { onExit: () => void }) {
         <span className="msg-tcard__logo">{badge(id, small ? 40 : 56)}</span>
         <span className="msg-tcard__name">{nameOf(id)}</span>
         <span className="msg-tcard__meta">{t?.country && <Flag cc={t.country} />}{t?.tag}{provDot(id)}</span>
+        <span className="msg-tcard__roster">
+          {rosterOf(id).map((p) => (
+            <span key={p.nick} className="msg-tcard__pl" title={p.name ? `${p.nick} · ${p.name}` : p.nick}>
+              <PlayerAvatar nick={p.nick} size={small ? 24 : 30} />
+              <span className="msg-tcard__nick">{p.nick}</span>
+            </span>
+          ))}
+        </span>
       </li>
     );
   };
@@ -197,6 +224,7 @@ function MajorSingaporeInner({ onExit }: { onExit: () => void }) {
                 </section>
               );
             })}
+            {BO3_PHOTOS_ON && <p className="msg-credit"><a href={BO3_PHOTO_CREDIT_URL} target="_blank" rel="noopener">{BO3_PHOTO_CREDIT}</a></p>}
           </>
         )}
 

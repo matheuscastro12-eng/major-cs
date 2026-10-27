@@ -302,3 +302,12 @@
 .msg-fallback__err { margin: 0; padding: var(--sp-3); border-radius: var(--rad-2); background: var(--c-surface-2); color: var(--c-ink-faint); font-size: var(--fs-1); white-space: pre-wrap; }
 .msg-fallback__act { display: flex; gap: var(--sp-2); }
 @media (max-width: 767px) { .msg-champ__act { margin-left: 0; width: 100%; } .msg-champ__act .ds-btn { flex: 1; } }
+
+/* elenco no card do time (fotos bo3.gg atrás de flag; placeholder com iniciais) */
+.msg-tcard__roster { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: var(--sp-2); }
+.msg-tcard__pl { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; width: 40px; }
+.msg-tcard__nick { max-width: 40px; font-size: 10px; line-height: 1.1; color: var(--c-ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-av { display: block; border-radius: 50%; object-fit: cover; object-position: top; background: var(--c-surface-3); border: 1px solid var(--c-line); }
+.msg-av--ph { display: grid; place-items: center; font-family: var(--font-num); font-weight: 700; color: var(--c-ink-dim, var(--c-ink-faint)); }
+.msg-credit { margin-top: var(--sp-3); font-size: var(--fs-1); color: var(--c-ink-faint); text-align: right; }
+.msg-credit a { color: inherit; }
