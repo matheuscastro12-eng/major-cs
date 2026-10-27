@@ -1,3 +1,4 @@
+import { isLiquipediaLogo } from '../data/media';
 import { ct } from '../state/career-i18n';
 import { useState } from 'react';
 import { coreIdentity, orgCore, MACRO_REGION_LABELS, REGION_LABELS, type CoreId, type MacroRegion, type RegionKey } from '../data/regions';
@@ -245,7 +246,8 @@ export function MatchBanner({
   );
 }
 
-function LogoChip({ tag, colors, logoUrl }: { tag: string; colors: [string, string]; logoUrl?: string }) {
+function LogoChip({ tag, colors, logoUrl: logoUrlProp }: { tag: string; colors: [string, string]; logoUrl?: string }) {
+  const logoUrl = isLiquipediaLogo(logoUrlProp) ? undefined : logoUrlProp;
   const [failedUrl, setFailedUrl] = useState('');
   if (logoUrl && failedUrl !== logoUrl) {
     return (
