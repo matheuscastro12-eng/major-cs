@@ -34,6 +34,7 @@ export interface ServerPvpSquad {
   auth: boolean; // true = montado e conferido pelo servidor
   formation?: string;
   chemTotal?: number;
+  cardIds?: string[]; // [CSM-3] cópias (uuid) na ordem dos slots — história da carta
 }
 
 export type SquadBuildError = 'bad_input' | 'bad_formation' | 'duplicate_card' | 'not_owner' | 'unknown_card';
@@ -122,6 +123,7 @@ export function deriveServerSquad(
       auth: true,
       formation: form.id,
       chemTotal: chem.total,
+      cardIds: [...parsed.cardIds],
     },
   };
 }

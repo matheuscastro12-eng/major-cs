@@ -1,6 +1,6 @@
 // Economia server-authoritative do Ultimate Squad.
 // Carteira + coleção + ledger idempotente no Neon.
-// Ações (POST body.action): state | tx | ultImport | packOpen | drop* | mkt*. packOpen rola o pack
+// Ações (POST body.action): state | tx | ultImport | packOpen | drop* | cardStats | mkt*. packOpen rola o pack
 // NO SERVIDOR com as mesmas odds do engine do cliente — seed auditável no
 // ledger, replay idempotente. [O0-02] `tx` do cliente só grava SAÍDAS
 // (spend/pack/sbc/quicksell valorado no servidor); todo crédito positivo nasce
@@ -33,6 +33,7 @@ import {
 // 2026-07-05). Ver server/ultimate-catalog-lazy.ts.
 import { loadDropCatalog, loadMktCardLookup, loadPackModule, loadQuicksellValuer } from '../server/ultimate-catalog-lazy.js';
 import { dropOpen, dropPick, dropStatus, sqlDropStore, ultDropSchemaQueries } from '../server/ultimate-drops.js'; // [CSM-1]
+import { readCardStats } from '../server/ultimate-card-stats.js'; // [CSM-3]
 import { importLocalCollection } from '../server/ultimate-import.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
@@ -180,6 +181,13 @@ export default async function handler(
         : await dropPick(store, sql, email, { dropId: typeof body.dropId === 'string' ? body.dropId.trim() : '', index: Number(body.index) }, cat);
     if (!r.ok) { res.status(r.status).json({ error: r.error }); return; }
     res.status(200).json({ ok: true, ...r.value });
+    return;
+  }
+
+  if (action === 'cardStats') {
+    // [CSM-3] história da carta (leitura): só as cópias da própria conta.
+    const stats = await readCardStats(sql, email, body.cardIds);
+    res.status(200).json({ ok: true, stats });
     return;
   }
 
