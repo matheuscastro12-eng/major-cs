@@ -23,6 +23,7 @@
     { "source": "/ultimate", "destination": "/" },
     { "source": "/road-to-pro", "destination": "/" },
     { "source": "/diario", "destination": "/" },
+    { "source": "/major-singapore", "destination": "/" },
     { "source": "/carreira", "destination": "/" },
     { "source": "/carreira/:path*", "destination": "/" },
     { "source": "/editor", "destination": "/" },

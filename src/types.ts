@@ -263,6 +263,10 @@ export interface Tournament {
   // Major em STAGES: um Swiss isolado que para ao definir os 8 classificados
   // (phase 'done', sem playoffs) — o stage seguinte carrega esses 8 + 8 seeds.
   stageOnly?: boolean;
+  // Swiss com as regras OFICIAIS da Valve (Major Supplemental Rulebook): seeds
+  // iniciais (ordem), Round 1 = 1v9..8v16, Buchholz e tabela de prioridade.
+  valveSwiss?: boolean;
+  initialSeed?: string[];
   // [fase 4 · circuito] evento LAN/Major: peso do oculto bigMatch no motor v2 (0 = online)
   pressure?: number;
 }

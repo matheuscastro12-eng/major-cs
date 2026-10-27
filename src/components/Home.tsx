@@ -46,6 +46,8 @@ interface Props {
   onRoadToPro?: () => void;
   /** Abre o DIÁRIO (minigames diários — grátis, sem conta) */
   onDaily?: () => void;
+  /** Abre o modo MAJOR SINGAPORE 2026 (previsões + simulação) */
+  onMajorSg?: () => void;
   /** Road to Pro sem vitalícia = demo (card continua visível, com atalho de compra) */
   premiumLocked?: boolean;
   /** Trava o card do Ultimate. Ultimate abriu pra todos → passado como false. */
@@ -83,7 +85,7 @@ function rtpBrief(): { nick?: string; ovr?: number; team?: string; week?: number
 
 export function Home(props: Props) {
   const {
-    onStart, onDonate, teamCount, onUltimate, onRoadToPro, onDaily, premiumLocked, ultimateLocked, onCareer,
+    onStart, onDonate, teamCount, onUltimate, onRoadToPro, onDaily, onMajorSg, premiumLocked, ultimateLocked, onCareer,
     account, accountReady, onAccount, onCreateAccount, onUpgrade, onLogout, onAdmin, savedCampaign, onResume,
     onDiscardCampaign, shellNav, onShellNav, viewReq, onAchievements, onOpenRanking, onEditor,
   } = props;
@@ -310,6 +312,9 @@ export function Home(props: Props) {
             <ModeRow mode="ultimate" icon={<Star size={20} />} title="Ultimate" kicker={ct('Competitivo · Online')} desc={ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')} meta={ultimateLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')} cta={ultimateLocked ? ct('Desbloquear · R$20') : ct('Jogar')} onGo={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())} />
           )}
           <ModeRow mode="major" icon={<Layers size={20} />} title="Draft" kicker={ct('Partida rápida')} desc={ct('Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.')} meta={ct('1 jogador · ~15 min')} cta={ct('Montar')} onGo={() => setView('draft')} />
+          {onMajorSg && (
+            <ModeRow mode="major" icon={<Trophy size={20} />} title="Major Singapore 2026" kicker={ct('Novo · Previsões')} desc={ct('Os 32 times do PGL Major Singapore com elencos atuais: chances de cada um em 1.000 simulações e o Major inteiro simulado.')} meta={ct('24/11 – 13/12')} cta={ct('Ver previsões')} onGo={onMajorSg} />
+          )}
           {onDaily && (
             <ModeRow mode="diario" icon={<CalendarDays size={20} />} title={ct('Diário')} kicker={ct('Todo dia')} desc={ct('Quatro desafios por dia — o mesmo pra todo mundo. Grátis, sem conta.')} meta={ct('1 jogador · 2 min')} cta={ct('Jogar o de hoje')} onGo={onDaily} />
           )}

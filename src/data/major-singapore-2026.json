@@ -1,0 +1,240 @@
+{
+ "_doc": "ÚNICA fonte da lista do modo Major Singapore. Trocar aqui quando sair a lista oficial (02/11/2026). Regras: 32 times, 8 stage 3, 8 stage 2, 16 stage 1; bo3Id = id em src/data/bo3-2026.json; ordem dentro do stage = seed. stand-ins: 'standIns' {sai: nick, entra: {...player}}. stageGuess=true: vaga ~garantida mas Stage de entrada é palpite.",
+ "event": "PGL Major Singapore 2026",
+ "dates": "2026-11-24/2026-12-13",
+ "listStatus": "provisoria",
+ "updatedAt": "2026-10-26",
+ "sources": [
+  "/workspace/major-cs/times-confirmados.json (modelo HLTV de vagas clinched)",
+  "ranking bo3.gg para placeholders"
+ ],
+ "teams": [
+  {
+   "team": "Vitality",
+   "bo3Id": "bo3_team_667",
+   "stage": 3,
+   "provisional": false
+  },
+  {
+   "team": "MOUZ",
+   "bo3Id": "bo3_team_765",
+   "stage": 3,
+   "provisional": false
+  },
+  {
+   "team": "Spirit",
+   "bo3Id": "bo3_team_654",
+   "stage": 3,
+   "provisional": false
+  },
+  {
+   "team": "Aurora",
+   "bo3Id": "bo3_team_3598",
+   "stage": 3,
+   "provisional": false
+  },
+  {
+   "team": "Falcons",
+   "bo3Id": "bo3_team_2713",
+   "stage": 3,
+   "provisional": false,
+   "note": "~8% de risco de cair p/ Stage 2"
+  },
+  {
+   "team": "FURIA",
+   "bo3Id": "bo3_team_648",
+   "stage": 3,
+   "provisional": false
+  },
+  {
+   "team": "Legacy",
+   "bo3Id": "bo3_team_8118",
+   "stage": 3,
+   "provisional": false
+  },
+  {
+   "team": "G2",
+   "bo3Id": "bo3_team_793",
+   "stage": 3,
+   "provisional": false,
+   "note": "projeção Stage 2/3"
+  },
+  {
+   "team": "9z",
+   "bo3Id": "bo3_team_324",
+   "stage": 2,
+   "provisional": false,
+   "note": "projeção Stage 2"
+  },
+  {
+   "team": "FUT",
+   "bo3Id": "bo3_team_20832",
+   "stage": 2,
+   "provisional": false,
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
+  },
+  {
+   "team": "BetBoom",
+   "bo3Id": "bo3_team_7498",
+   "stage": 2,
+   "provisional": false,
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
+  },
+  {
+   "team": "Astralis",
+   "bo3Id": "bo3_team_794",
+   "stage": 2,
+   "provisional": false,
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
+  },
+  {
+   "team": "HEROIC",
+   "bo3Id": "bo3_team_759",
+   "stage": 2,
+   "provisional": false,
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
+  },
+  {
+   "team": "MIBR",
+   "bo3Id": "bo3_team_755",
+   "stage": 2,
+   "provisional": false,
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
+  },
+  {
+   "team": "M80",
+   "bo3Id": "bo3_team_7430",
+   "stage": 2,
+   "provisional": false,
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
+  },
+  {
+   "team": "Liquid",
+   "bo3Id": "bo3_team_790",
+   "stage": 2,
+   "provisional": false,
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
+  },
+  {
+   "team": "BC.Game",
+   "bo3Id": "xls_team_bc",
+   "stage": 1,
+   "provisional": false,
+   "note": "stage indefinido na fonte; chute por ranking VRS",
+   "stageGuess": true
+  },
+  {
+   "team": "GamerLegion",
+   "bo3Id": "bo3_team_594",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "Natus Vincere",
+   "bo3Id": "bo3_team_787",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "PARIVISION",
+   "bo3Id": "bo3_team_8171",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "B8",
+   "bo3Id": "bo3_team_1539",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "magic",
+   "bo3Id": "bo3_team_22218",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "paiN",
+   "bo3Id": "bo3_team_637",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "FaZe",
+   "bo3Id": "bo3_team_791",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "TYLOO",
+   "bo3Id": "bo3_team_757",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "Ninjas in Pyjamas",
+   "bo3Id": "bo3_team_785",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "3DMAX",
+   "bo3Id": "bo3_team_696",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "BIG",
+   "bo3Id": "bo3_team_756",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "Wildcard",
+   "bo3Id": "bo3_team_6062",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "Lynn Vision",
+   "bo3Id": "bo3_team_476",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "SINNERS",
+   "bo3Id": "bo3_team_200",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  },
+  {
+   "team": "NRG",
+   "bo3Id": "bo3_team_751",
+   "stage": 1,
+   "provisional": true,
+   "note": "PROVISÓRIO: placeholder pelo ranking bo3.gg até a lista oficial"
+  }
+ ],
+ "standIns": []
+}

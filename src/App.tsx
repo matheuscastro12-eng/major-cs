@@ -73,6 +73,7 @@ if (typeof window !== 'undefined') {
 // telas pesadas e/ou pouco usadas: carregadas sob demanda (code-splitting) pra
 // deixar o carregamento inicial bem mais leve.
 const Admin = lazyWithReload(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
+const MajorSingaporeScreen = lazyWithReload(() => import('./components/MajorSingaporeScreen').then((m) => ({ default: m.MajorSingaporeScreen })));
 const CareerScreen = lazyWithReload(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
 const CareerSaves = lazyWithReload(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
 const CareerCRM = lazyWithReload(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
@@ -165,6 +166,7 @@ type Screen =
   | 'ultimate'
   | 'rtp'
   | 'daily'
+  | 'majorSg'
   | 'career'
   | 'careerSaves'
   | 'editor'
@@ -186,6 +188,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   ultimate: '/ultimate',
   rtp: '/road-to-pro',
   daily: '/diario',
+  majorSg: '/major-singapore',
   career: '/carreira',
   careerSaves: '/carreira/saves',
   editor: '/editor',
@@ -1009,6 +1012,7 @@ export default function App() {
     ...(RTP_ENABLED ? [{ id: 'rtp' as const, label: 'Road to Pro', short: 'Road to Pro', icon: Crosshair, hint: account?.paid ? undefined : ct('Demo grátis'), onSelect: () => setScreen('rtp') }] : []),
     ...(ULTIMATE_ENABLED ? [{ id: 'ultimate' as const, label: 'Ultimate', short: 'Ultimate', icon: Star, onSelect: () => openUltimateMode('hub') }] : []),
     { id: 'major', label: 'Draft', short: 'Draft', icon: Layers, hint: tournament || savedSession?.tournament ? ct('Campeonato em andamento') : undefined, onSelect: openDraftMode },
+    { id: 'majorsg', label: 'Singapore', short: 'Singapore', icon: Medal, hint: 'PGL · 24/11 – 13/12', onSelect: () => setScreen('majorSg') },
     { id: 'diario', label: ct('Diário'), short: ct('Diário'), icon: CalendarDays, onSelect: () => setScreen('daily') },
     ...(ULTIMATE_ENABLED ? [{ id: 'online' as const, label: 'Online', short: 'Online', icon: Swords, hint: ct('Ranqueada, duelo e Major da Semana'), onSelect: () => openUltimateMode('ranked') }] : []),
   ];
@@ -1315,6 +1319,7 @@ export default function App() {
           onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onDaily={() => setScreen('daily')}
+          onMajorSg={() => setScreen('majorSg')}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
@@ -1436,6 +1441,9 @@ export default function App() {
         : <Loader text="…" />)}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
       {screen === 'daily' && <ModeErrorBoundary mode="daily" onExit={() => setScreen('home')}><DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} /></ModeErrorBoundary>}
+
+      {/* MAJOR SINGAPORE 2026 — modo próprio: previsões Monte Carlo + simular o Major */}
+      {screen === 'majorSg' && <Suspense fallback={<Loader text="…" />}><MajorSingaporeScreen onExit={() => setScreen('home')} /></Suspense>}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (
