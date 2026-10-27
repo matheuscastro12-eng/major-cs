@@ -7,7 +7,7 @@
 import type { Player, TeamSeason, Tournament, TTeam } from '../../types';
 import { teamSeasonToTTeam } from '../ratings';
 import { makeRng, type Rng } from '../rng';
-import { createPlayoffStage, createSwissStage, resolveRound, stageAdvancers } from '../swiss';
+import { createPlayoffStage, createValveSwissStage, resolveRound, stageAdvancers } from '../swiss';
 
 // provisional = vaga é placeholder do ranking; stageGuess = time praticamente garantido,
 // mas o Stage de entrada é palpite (fonte não define) até a lista oficial.
@@ -81,11 +81,11 @@ function runToDone(t: Tournament, rng: Rng): Tournament {
 
 // Simula um Major inteiro (100% IA, determinístico pelo rng).
 export function simulateMajor(field: MajorField, rng: Rng): MajorRun {
-  const st1 = runToDone(createSwissStage(field.s1.map(fresh), rng, `${EVENT_NAME} · Stage 1`), rng);
+  const st1 = runToDone(createValveSwissStage(field.s1.map(fresh), `${EVENT_NAME} · Stage 1`), rng);
   const a1 = stageAdvancers(st1);
-  const st2 = runToDone(createSwissStage([...field.s2, ...a1].map(fresh), rng, `${EVENT_NAME} · Stage 2`), rng);
+  const st2 = runToDone(createValveSwissStage([...field.s2, ...a1].map(fresh), `${EVENT_NAME} · Stage 2`), rng);
   const a2 = stageAdvancers(st2);
-  const st3 = runToDone(createSwissStage([...field.s3, ...a2].map(fresh), rng, `${EVENT_NAME} · Stage 3`), rng);
+  const st3 = runToDone(createValveSwissStage([...field.s3, ...a2].map(fresh), `${EVENT_NAME} · Stage 3`), rng);
   const a3 = stageAdvancers(st3);
   const po = createPlayoffStage(a3.map(fresh), `${EVENT_NAME} · Champions Stage`);
   const semis: string[] = []; const finalists: string[] = [];

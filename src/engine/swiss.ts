@@ -61,8 +61,83 @@ export function createSwissStage(teams: TTeam[], rng: Rng, name: string): Tourna
   t.stageOnly = true;
   return t;
 }
-// os 8 classificados de um stage (seed por menos derrotas / saldo / força)
+// Stage com as regras OFICIAIS da Valve (usado pelo Major Singapore). A ORDEM de
+// `teams` é o seed inicial (1..16). Fonte: Major Supplemental Rulebook
+// github.com/ValveSoftware/counter-strike_rules_and_regs (Swiss Bracket, Seeding).
+export function createValveSwissStage(teams: TTeam[], name: string): Tournament {
+  const fresh = teams.map((x) => ({ ...x, wins: 0, losses: 0, roundDiff: 0, status: 'alive' as const }));
+  const t: Tournament = { name, teams: fresh, phase: 'swiss', swissRound: 1, pairings: [], history: [], stageOnly: true, valveSwiss: true, initialSeed: fresh.map((x) => x.id) };
+  t.pairings = valveSwissPairings(t);
+  return t;
+}
+
+/** Difficulty Score (Buchholz): soma de (vitórias − derrotas) ATUAIS de cada adversário já enfrentado. */
+export function buchholz(t: Tournament, id: string): number {
+  let s = 0;
+  for (const h of t.history) {
+    const opp = h.pairing.a === id ? h.pairing.b : h.pairing.b === id ? h.pairing.a : null;
+    if (!opp) continue;
+    const o = t.teams.find((x) => x.id === opp);
+    if (o) s += o.wins - o.losses;
+  }
+  return s;
+}
+
+/** Seed no meio do stage: W-L, depois Buchholz, depois seed inicial. */
+export function valveSeedOrder(t: Tournament, list: TTeam[]): TTeam[] {
+  const init = new Map((t.initialSeed ?? t.teams.map((x) => x.id)).map((id, i) => [id, i]));
+  const bz = new Map(list.map((x) => [x.id, buchholz(t, x.id)]));
+  return [...list].sort((a, b) => (b.wins - b.losses) - (a.wins - a.losses) || a.losses - b.losses || bz.get(b.id)! - bz.get(a.id)! || init.get(a.id)! - init.get(b.id)!);
+}
+
+// rodadas 4 e 5 (grupos de 6): primeira linha da tabela sem rematch
+const VALVE_PRIORITY: [number, number][][] = [
+  [[1, 6], [2, 5], [3, 4]], [[1, 6], [2, 4], [3, 5]], [[1, 5], [2, 6], [3, 4]], [[1, 5], [2, 4], [3, 6]],
+  [[1, 4], [2, 6], [3, 5]], [[1, 4], [2, 5], [3, 6]], [[1, 6], [2, 3], [4, 5]], [[1, 5], [2, 3], [4, 6]],
+  [[1, 3], [2, 6], [4, 5]], [[1, 3], [2, 5], [4, 6]], [[1, 4], [2, 3], [5, 6]], [[1, 3], [2, 4], [5, 6]],
+  [[1, 2], [3, 6], [4, 5]], [[1, 2], [3, 5], [4, 6]], [[1, 2], [3, 4], [5, 6]],
+];
+
+export function valveSwissPairings(t: Tournament): Pairing[] {
+  const alive = t.teams.filter((x) => x.status === 'alive');
+  if (t.swissRound === 1) {
+    const s = valveSeedOrder(t, alive);
+    const half = s.length / 2;
+    return s.slice(0, half).map((a, i) => ({ a: a.id, b: s[i + half].id, label: '0-0', bestOf: 1 as const }));
+  }
+  const groups = new Map<string, TTeam[]>();
+  for (const x of alive) { const k = `${x.wins}-${x.losses}`; groups.set(k, [...(groups.get(k) ?? []), x]); }
+  const keys = [...groups.keys()].sort((a, b) => Number(b.split('-')[0]) - Number(a.split('-')[0]) || Number(a.split('-')[1]) - Number(b.split('-')[1]));
+  const out: Pairing[] = [];
+  for (const key of keys) {
+    const g = valveSeedOrder(t, groups.get(key)!);
+    const [w, l] = key.split('-').map(Number);
+    const bo = bestOfForRecord(w, l);
+    const met = (a: TTeam, b: TTeam) => pastOpponents(t, a.id).has(b.id);
+    let pairs: [TTeam, TTeam][] | null = null;
+    if (g.length === 6 && t.swissRound >= 4) {
+      const row = VALVE_PRIORITY.find((r) => r.every(([x, y]) => !met(g[x - 1], g[y - 1])));
+      if (row) pairs = row.map(([x, y]) => [g[x - 1], g[y - 1]]);
+    }
+    if (!pairs) {
+      // rodadas 2 e 3 (e fallback): o seed mais alto pega o mais baixo disponível sem rematch
+      const pool = [...g]; pairs = [];
+      while (pool.length >= 2) {
+        const a = pool.shift()!;
+        let j = pool.length - 1;
+        while (j > 0 && met(a, pool[j])) j--;
+        pairs.push([a, pool.splice(j, 1)[0]]);
+      }
+    }
+    for (const [a, b] of pairs) out.push({ a: a.id, b: b.id, label: key, bestOf: bo });
+  }
+  return out;
+}
+
+// os 8 classificados de um stage (seed por menos derrotas / saldo / força;
+// no Swiss oficial: W-L, Buchholz e seed inicial)
 export function stageAdvancers(t: Tournament): TTeam[] {
+  if (t.valveSwiss) return valveSeedOrder(t, t.teams.filter((x) => x.status === 'advanced')).slice(0, 8);
   const adv = seedAdvanced(t);
   if (adv.length >= 8) return adv.slice(0, 8);
   // DEFENSIVO: se por algum motivo menos de 8 fecharam 3 vitórias (ex.: um time
@@ -322,7 +397,7 @@ export function resolveRound(t: Tournament, rng: Rng): Tournament {
     const stillAlive = t.teams.filter((x) => x.status === 'alive');
     if (t.swissRound < 5 && stillAlive.length > 0) {
       t.swissRound++;
-      t.pairings = makeSwissPairings(t, rng);
+      t.pairings = t.valveSwiss ? valveSwissPairings(t) : makeSwissPairings(t, rng);
     } else if (t.stageOnly) {
       // stage encerrado: os 8 classificados estão definidos. Não vai pros playoffs;
       // o orquestrador do Major leva os 8 (stageAdvancers) pro próximo stage.

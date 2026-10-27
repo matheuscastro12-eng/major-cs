@@ -27,10 +27,10 @@ const pct = (x: number | null | undefined) => (x == null ? '—' : `${x.toFixed(
 // Início do Stage 1 (Singapura, UTC+8). Datas: HLTV / PGL.
 const START = Date.parse('2026-11-24T10:00:00+08:00');
 const STAGES = [
-  { n: '1', name: 'Stage 1', dates: '24 – 27 nov', sub: '16 times · 8 avançam' },
-  { n: '2', name: 'Stage 2', dates: '28 nov – 1 dez', sub: '8 convidados + 8 do Stage 1' },
-  { n: '3', name: 'Stage 3', dates: '2 – 6 dez', sub: '8 convidados + 8 do Stage 2' },
-  { n: '★', name: 'Champions Stage', dates: '10 – 13 dez', sub: 'Singapore Indoor Stadium · final Bo5' },
+  { n: '1', name: 'Stage 1', dates: 'a partir de 24 nov', sub: 'Swiss de 16 · 3V avança, 3D cai · MD1 (MD3 em decisão)' },
+  { n: '2', name: 'Stage 2', dates: 'data a confirmar (PGL)', sub: 'Swiss de 16 · 8 convidados + 8 do Stage 1' },
+  { n: '3', name: 'Stage 3', dates: 'data a confirmar (PGL)', sub: 'Swiss de 16 · 8 convidados + 8 do Stage 2' },
+  { n: '★', name: 'Champions Stage', dates: '10 – 13 dez', sub: 'Singapore Indoor Stadium · 8 times · MD3, final MD5' },
 ] as const;
 
 function useSmall() {

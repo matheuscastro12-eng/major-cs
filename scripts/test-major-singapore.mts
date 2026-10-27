@@ -90,3 +90,40 @@ test('card da chave: QF/SF/Final completos e time sem dados não quebra', () => 
   const f = d.rounds[2].series[0];
   assert.equal((f.winner === 0 ? f.a : f.b).id, run.championId);
 });
+
+// Formato OFICIAL (Valve Major Supplemental Rulebook + PGL/Liquipedia, checado em 26/10/2026)
+import { buchholz, createValveSwissStage, resolveRound as rr, stageAdvancers as adv } from '../src/engine/swiss.ts';
+test('Swiss oficial: R1 1v9..8v16, MD1 na abertura, MD3 só em decisão, sem rematch, 8 avançam', () => {
+  const field = buildField(MAJOR_SG_CONFIG, MAJOR_SG_DATASET);
+  for (const seed of [1, 2, 3, 7, 42]) {
+    const t = createValveSwissStage(field.s1, 'S1');
+    assert.deepEqual(t.pairings.map((p) => [p.a, p.b]), field.s1.slice(0, 8).map((x, i) => [x.id, field.s1[i + 8].id]));
+    assert.ok(t.pairings.every((p) => p.bestOf === 1));
+    const rng = makeRng(seed); const seen = new Set<string>();
+    let g = 0;
+    while (t.phase !== 'done' && g++ < 10) {
+      for (const p of t.pairings) {
+        const a = t.teams.find((x) => x.id === p.a)!;
+        assert.equal(p.bestOf, a.wins === 2 || a.losses === 2 ? 3 : 1);
+        const k = [p.a, p.b].sort().join('|'); assert.ok(!seen.has(k), 'rematch'); seen.add(k);
+      }
+      rr(t, rng);
+    }
+    const a8 = adv(t);
+    assert.equal(a8.length, 8); assert.ok(a8.every((x) => x.wins === 3 && x.losses < 3));
+    assert.equal(t.teams.filter((x) => x.losses === 3).length, 8);
+    for (let i = 1; i < 8; i++) {
+      const p = a8[i - 1], q = a8[i];
+      assert.ok(p.losses < q.losses || (p.losses === q.losses && buchholz(t, p.id) >= buchholz(t, q.id)));
+    }
+  }
+});
+test('playoffs: 1v8, 4v5 | 2v7, 3v6, MD3 e final MD5', () => {
+  const field = buildField(MAJOR_SG_CONFIG, MAJOR_SG_DATASET);
+  const r = simulateMajor(field, makeRng(3));
+  const po = r.stages[3];
+  const qf = po.history.filter((h) => /QF/.test(h.pairing.label));
+  const s = r.playoffs;
+  assert.deepEqual(qf.map((h) => [h.pairing.a, h.pairing.b]), [[s[0], s[7]], [s[3], s[4]], [s[1], s[6]], [s[2], s[5]]]);
+  assert.ok(po.history.every((h) => h.pairing.bestOf === (h.pairing.label === 'FINAL' ? 5 : 3)));
+});
