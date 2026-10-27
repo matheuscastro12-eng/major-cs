@@ -128,6 +128,8 @@ export function majorSeriesSetup(d: MajorData, c: MajorCampaign, m: PendingSerie
     categoryPoints: { mechanical: 4, mental: 4, physical: 4 },
     seed: (c.seed ^ 0x51ac) >>> 0, startTier: 'challenger',
   });
+  // o scorebug da Sala mostra save.team: é o time do Major, não o do fixture
+  save.team = { ...save.team, tag: mine.tag };
   const base = prepareCircuitMatch(save);
   if (!base) throw new Error('fixture do Major sem partida');
   const prep: MatchPrep = {

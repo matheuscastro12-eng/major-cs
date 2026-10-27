@@ -45,15 +45,15 @@ export function MajorResultView({ t, result, picks, highlight }: { t: T; result:
     <Panel
       title={`${t('champion')}: ${name(po.champion)}`}
       accent="gold"
-      actions={(
-        <Segmented<View>
-          label="Visão"
-          value={view}
-          onChange={setView}
-          items={[{ value: 'bracket', label: 'Playoffs' }, { value: 'stages', label: 'Stages' }, { value: 'teams', label: t('teamStats') }]}
-        />
-      )}
     >
+      {/* no corpo, não no cabeçalho: no celular o título do campeão não é cortado */}
+      <Segmented<View>
+        className="msg-views"
+        label="Visão"
+        value={view}
+        onChange={setView}
+        items={[{ value: 'bracket', label: 'Playoffs' }, { value: 'stages', label: 'Stages' }, { value: 'teams', label: t('teamStats') }]}
+      />
       {view === 'bracket' && (
         <div className="msg-bracket">
           <div className="msg-bcol is-qf"><h3 className="msg-bcol__title">{t('qf')}</h3>{po.qf.map(game)}</div>

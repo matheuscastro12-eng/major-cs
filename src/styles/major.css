@@ -227,6 +227,7 @@
 }
 
 /* resultado: chave legível (placar por lado, seu time marcado) */
+.msg-views { margin-bottom: var(--sp-4); }
 .msg-slot.is-static { cursor: default; }
 .msg-slot.is-static:hover { background: var(--c-surface-2); color: var(--c-ink-dim); }
 .msg-slot.is-static.is-won:hover { color: var(--c-ink); }

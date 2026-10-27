@@ -36,7 +36,7 @@ function loadCampaign(): MajorCampaign | null {
 
 const phaseLabel = (p: PendingSeries['phase']) => (p === 4 ? 'Playoffs' : `Stage ${p}`);
 const roundLabel = (label: string, t: T) =>
-  label.startsWith('QF') ? t('qf') : label.startsWith('SF') ? t('sf') : label === 'F' ? t('final') : `${label.replace('R', 'Rodada ')}`;
+  label.startsWith('QF') ? t('qf') : label.startsWith('SF') ? t('sf') : label === 'F' ? t('final') : label;
 
 export function MajorPlay({ t }: { t: T }) {
   const teams = useMemo(() => new Map(D.teams.map((x) => [x.id, x])), []);
