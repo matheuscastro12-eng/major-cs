@@ -14,7 +14,7 @@
 // ult_match e não aplica nada por cima.
 import {
   createPvpMatch, defaultStyle, forfeitPvp, isPvpStyle, normalizePvpMatch, pvpBeatView, resolvePvpBeat,
-  type PvpBeatRecord, type PvpBeatView, type PvpMatchState, type PvpSide, type PvpSquadIn, type PvpStyle,
+  type MatchStatus, type MatchView, type PvpMatchState, type PvpSide, type PvpSquadIn, type PvpStyle,
 } from '../src/engine/ultimate/pvpMatch.js';
 import { creditRankedPvpReward } from './ultimate-pvp-reward.js';
 import { rankedDelta } from '../api/_reportPairing.js';
@@ -26,7 +26,7 @@ export const WO_MISSED_BEATS = 3;         // beats seguidos sem decidir = W.O.
 export const WO_SILENCE_MS = 60_000;      // sem poll por isso = W.O.
 const SEEN_WRITE_MS = 5_000;              // poll só grava presença a cada 5s
 
-export type MatchStatus = 'live' | 'done' | 'abandoned';
+export type { MatchStatus, MatchView };
 
 export interface UltMatchRow {
   code: string;
@@ -118,27 +118,6 @@ export function sideOf(row: UltMatchRow, who: { email: string | null; nick: stri
   const n = who.nick.toLowerCase();
   const i = row.nicks.findIndex((x) => x.toLowerCase() === n);
   return i === 0 || i === 1 ? i : null;
-}
-
-export interface MatchView {
-  code: string;
-  side: PvpSide;
-  status: MatchStatus;
-  ranked: boolean;
-  version: number;
-  names: [string, string];                 // [eu, rival]
-  score: [number, number];                 // [eu, rival] — placar vivo
-  finalScore: [number, number] | null;
-  map: string;
-  beat: PvpBeatView | null;
-  myDecision: PvpStyle | null;
-  oppDecided: boolean;
-  deadlineIn: number;                      // ms até o prazo do beat
-  last: (Omit<PvpBeatRecord, 'styles' | 'auto' | 'winner' | 'scoreAfter' | 'pA'> & { mine: PvpStyle; theirs: PvpStyle; myAuto: boolean; theirAuto: boolean; won: boolean; pWin: number; scoreAfter: [number, number] }) | null;
-  history: { won: boolean; mine: PvpStyle; theirs: PvpStyle }[];
-  won: boolean | null;
-  reason: 'played' | 'wo' | null;
-  serverNow: number;
 }
 
 export function matchView(row: UltMatchRow, side: PvpSide, now: number): MatchView {

@@ -1,6 +1,7 @@
 // Lógica compartilhada do modo online. O draft e a simulação são
 // determinísticos a partir do seed do lobby: todos os clientes computam
 // exatamente as mesmas opções e o mesmo resultado, sem servidor de jogo.
+import type { MatchView } from '../engine/ultimate/pvpMatch';
 import { BASE_TEAMS } from '../data/teams';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { buildUserTeam, playerOvr, teamSeasonToTTeam } from '../engine/ratings';
@@ -116,6 +117,9 @@ export interface UltimatePvpSquad {
   // servidor monta o snapshot a partir disso nas salas ranqueadas/de evento.
   cardIds?: string[];
   formationId?: string;
+  // [F2] cliente que joga o duelo resolvido NO SERVIDOR (beat a beat). Só quando
+  // os DOIS snapshots têm a marca a partida vai pro servidor; senão, replay local.
+  live?: boolean;
 }
 
 // O Ultimate Team mistura cartas históricas com o elenco atual de 2026. As duas
@@ -466,6 +470,19 @@ export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: bo
     signal: AbortSignal.timeout(9000),
   });
   return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; needAccount?: boolean; squadError?: boolean };
+}
+
+// [F2] partida PvP resolvida no servidor: matchStart | matchState | decide.
+export async function ultMatchApi(body: { action: 'matchStart' | 'matchState' | 'decide'; code: string; nick: string; style?: string; beat?: number }): Promise<{ ok?: boolean; match?: MatchView; error?: string; needAccount?: boolean; status: number }> {
+  const token = getToken();
+  const res = await fetch('/api/lobby', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(token ? { ...body, token } : body),
+    signal: AbortSignal.timeout(9000),
+  });
+  const j = (await res.json().catch(() => ({}))) as { ok?: boolean; match?: MatchView; error?: string; needAccount?: boolean };
+  return { ...j, status: res.status };
 }
 
 export interface OpenRoom { code: string; mode: 'duel' | 'party' | 'ultimate'; pool: TournamentPool; host: string; name?: string | null; players: number; max: number; ranked?: boolean; host_mmr?: number | null; }

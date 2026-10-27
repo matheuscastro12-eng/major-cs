@@ -234,6 +234,29 @@ export function pvpBeatView(s: PvpMatchState, side: PvpSide): PvpBeatView | null
   };
 }
 
+// Visão de uma partida para UM lado (o que /api/lobby matchState devolve).
+export type MatchStatus = 'live' | 'done' | 'abandoned';
+export interface MatchView {
+  code: string;
+  side: PvpSide;
+  status: MatchStatus;
+  ranked: boolean;
+  version: number;
+  names: [string, string];                 // [eu, rival]
+  score: [number, number];                 // [eu, rival] — placar vivo
+  finalScore: [number, number] | null;
+  map: string;
+  beat: PvpBeatView | null;
+  myDecision: PvpStyle | null;
+  oppDecided: boolean;
+  deadlineIn: number;                      // ms até o prazo do beat
+  last: (Omit<PvpBeatRecord, 'styles' | 'auto' | 'winner' | 'scoreAfter' | 'pA'> & { mine: PvpStyle; theirs: PvpStyle; myAuto: boolean; theirAuto: boolean; won: boolean; pWin: number; scoreAfter: [number, number] }) | null;
+  history: { won: boolean; mine: PvpStyle; theirs: PvpStyle }[];
+  won: boolean | null;
+  reason: 'played' | 'wo' | null;
+  serverNow: number;
+}
+
 /** Leitor tolerante do jsonb (versão desconhecida → null). */
 export function normalizePvpMatch(v: unknown): PvpMatchState | null {
   if (!v || typeof v !== 'object') return null;
