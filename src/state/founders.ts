@@ -4,7 +4,10 @@
 // (número falso jamais aparece na tela).
 import { useEffect, useState } from 'react';
 
-export interface FounderStats { founders: number; limit: number }
+// paidTotal é opcional de propósito: builds antigos em cache (localStorage)
+// ou uma resposta antiga da API não têm o campo, e sem dado real o chamador
+// deve tratar como ausente — nunca inventar um número.
+export interface FounderStats { founders: number; limit: number; paidTotal?: number }
 
 const KEY = 'rtm-founders-v1';
 const TTL_MS = 5 * 60_000;
@@ -17,9 +20,9 @@ function readCache(): { at: number; stats: FounderStats } | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    const p = JSON.parse(raw) as { at?: number; founders?: number; limit?: number };
+    const p = JSON.parse(raw) as { at?: number; founders?: number; limit?: number; paidTotal?: number };
     if (typeof p.at !== 'number' || typeof p.founders !== 'number' || typeof p.limit !== 'number') return null;
-    memory = { at: p.at, stats: { founders: p.founders, limit: p.limit } };
+    memory = { at: p.at, stats: { founders: p.founders, limit: p.limit, ...(typeof p.paidTotal === 'number' ? { paidTotal: p.paidTotal } : {}) } };
     return memory;
   } catch { return null; }
 }
@@ -35,11 +38,13 @@ async function fetchFounders(): Promise<FounderStats | null> {
     try {
       const r = await fetch('/api/account', { method: 'GET' });
       if (!r.ok) return null;
-      const d = (await r.json()) as { founders?: unknown; limit?: unknown };
+      const d = (await r.json()) as { founders?: unknown; limit?: unknown; paidTotal?: unknown };
       const founders = Number(d.founders);
       const limit = Number(d.limit);
+      const paidTotalRaw = Number(d.paidTotal);
       if (!Number.isFinite(founders) || !Number.isFinite(limit) || founders < 0 || limit <= 0) return null;
-      const stats = { founders: Math.floor(founders), limit: Math.floor(limit) };
+      const paidTotal = Number.isFinite(paidTotalRaw) && paidTotalRaw >= 0 ? Math.floor(paidTotalRaw) : undefined;
+      const stats = { founders: Math.floor(founders), limit: Math.floor(limit), ...(paidTotal !== undefined ? { paidTotal } : {}) };
       writeCache(stats);
       return stats;
     } catch { return null; } finally { inflight = null; }
