@@ -25,6 +25,8 @@ import { completeStep, dismissJourney, emptyJourney, journeyProgress, JOURNEY_ST
 // [U06] partida INCREMENTAL (casual): sessão persistível, timeout real, recompensa 1x no fim
 import { createSession, normalizeSession, sessionSeries, type MatchSession } from '../../engine/ultimate/matchSession';
 import { UltimateLiveSession } from './UltimateLiveSession';
+import { UltimateDropPanel } from './UltimateDropPanel'; // [CSM-1]
+import { CardHistoryBlock } from './CardHistoryBlock'; // [CSM-3]
 // [U07] jogador dos sonhos: alvo persistente, caminhos reais, preview de escalação
 import { bestSlotFor, missingCredits, targetPaths, type SwapPreview } from '../../engine/ultimate/dreamTarget';
 import { PROMO_PACK } from '../../engine/ultimate/packs';
@@ -1245,6 +1247,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const [mktBuyItem, setMktBuyItem] = useState<MktBrowseItem | null>(null);
   const [mktSellPick, setMktSellPick] = useState(false); // modal: escolher carta pra vender
   const [mktSellTarget, setMktSellTarget] = useState<{ o: OwnedCard; card: UltCard } | null>(null);
+  const [histCard, setHistCard] = useState<{ card: UltCard; ownedIds: string[] } | null>(null); // [CSM-3] história da carta
   const [mktPrice, setMktPrice] = useState('');
   const [mktBounds, setMktBounds] = useState<{ min: number; max: number } | null>(null);
   // trading: fita "vendidas agora" (global) + histórico de vendas da carta em foco
@@ -2344,6 +2347,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           )}
           {/* [URG-1] fim de temporada com consequência: o que o jogador vai perder */}
           {seasonEndingBlock('hub')}
+          {/* [CSM-1] drop de escolha: estoque/opções/entrega do servidor */}
+          {account && <UltimateDropPanel renderCard={(c) => <UltCardView card={c} size={130} />} />}
           {/* [U05] PRIMEIRA SESSÃO — próximo passo explícito até a 2ª partida; dispensável */}
           {journeyNext && (() => {
             const step = journeyNext; const info = STEP_INFO[step]; const prog = journeyProgress(journey);
@@ -3319,6 +3324,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                           <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(baseCard.rarity, baseCard.ovr, isDup)} evo={row.evo} ev={row.ev} ed={row.ed} />
                           <DuelChips card={row.card} styleId={row.style} light />
                           <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => setHistCard({ card: row.card, ownedIds: row.ownedIds })} style={sellBtn} title={ct('História da carta')}>
+                              {ct('história')}
+                            </button>
                             <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
                               {isDup ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
                             </button>
@@ -4491,6 +4499,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       })()}
 
       {/* ── mercado P2P: definir o preço da listagem ── */}
+      {histCard && (
+        <Modal open onClose={() => setHistCard(null)} title={`${histCard.card.nick} · ${ct('história')}`} size="sm">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <UltCardView card={histCard.card} size={150} />
+            {histCard.card.eventLabel && <span className="small" style={{ color: '#f97316', fontWeight: 800 }}>{histCard.card.eventLabel}</span>}
+            <div style={{ alignSelf: 'stretch' }}><CardHistoryBlock cardIds={histCard.ownedIds} /></div>
+          </div>
+        </Modal>
+      )}
       {mktSellTarget && (() => {
         const p = Math.trunc(Number(mktPrice) || 0);
         const inRange = mktBounds ? p >= mktBounds.min && p <= mktBounds.max : p > 0;

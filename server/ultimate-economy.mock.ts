@@ -36,6 +36,7 @@ interface LedgerRow {
   cards: Row[];
   meta: Row;
   createdAt: string;
+  creditsAfter?: number; // [CSM-4] credits_after
 }
 
 export class FakeDb {
@@ -110,15 +111,15 @@ export class FakeDb {
       const cardOps = JSON.parse(String(params[7])) as { op: string; cardId: string; cardKey?: string; meta?: Row }[];
       const meta = JSON.parse(String(params[8])) as Row;
       // requireOwned (params[11]): toda cópia exigida tem que estar na coleção agora
-      const required = JSON.parse(String(params[11] ?? '[]')) as { cardId: string; cardKey: string }[];
+      const required = JSON.parse(String(params[12] ?? '[]')) as { cardId: string; cardKey: string }[];
       const ownedOk = required.every((o) => this.cardsOf(email).some((x) => x.cardId === o.cardId && x.cardKey === o.cardKey));
       const prior = this.ledger.find((l) => l.email === email && l.opId === opId);
       const oldCredits = this.wallets.get(email) ?? 0;
-      if (prior) return [{ prior_id: prior.id, inserted_id: null, new_credits: null, old_credits: oldCredits, owned_ok: ownedOk }];
+      if (prior) return [{ prior_id: prior.id, prior_hash: (prior.meta as Row).reqHash ?? null, prior_after: prior.creditsAfter ?? null, inserted_id: null, new_credits: null, old_credits: oldCredits, owned_ok: ownedOk }];
       if (!ownedOk || oldCredits + delta < 0) return [{ prior_id: null, inserted_id: null, new_credits: null, old_credits: oldCredits, owned_ok: ownedOk }];
       const id = this.nextId++;
-      this.ledger.push({ id, email, opId, kind, delta, cards: cardOps as unknown as Row[], meta, createdAt: new Date(1_700_000_000_000 + id * 1000).toISOString() });
       const newCredits = oldCredits + delta;
+      this.ledger.push({ id, email, opId, kind, delta, cards: cardOps as unknown as Row[], meta, createdAt: new Date(1_700_000_000_000 + id * 1000).toISOString(), creditsAfter: newCredits });
       this.wallets.set(email, newCredits);
       const list = this.cardsOf(email);
       for (const c of cardOps) {

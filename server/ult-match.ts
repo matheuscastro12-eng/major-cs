@@ -17,6 +17,7 @@ import {
   type MatchStatus, type MatchView, type PvpMatchState, type PvpSide, type PvpSquadIn, type PvpStyle,
 } from '../src/engine/ultimate/pvpMatch.js';
 import { creditRankedPvpReward } from './ultimate-pvp-reward.js';
+import { recordCardStats } from './ultimate-card-stats.js';
 import { rankedDelta } from '../api/_reportPairing.js';
 import { RANKED_K, rankedSeasonNo } from './rankedSeason.js';
 import type { SqlQuery, SqlTag } from './ultimate-economy.js';
@@ -44,6 +45,9 @@ export interface UltMatchRow {
   winner: PvpSide | null;
   reason: 'played' | 'wo' | null;
   settled: boolean;
+  // [CSM-3] cópias autoritativas de cada lado (squad montado no servidor); []
+  // quando o squad não veio do servidor (amistoso legado) — aí não há história.
+  cardIds?: [string[], string[]];
 }
 
 export interface UltMatchStore {
@@ -57,6 +61,30 @@ export interface RankedSettler {
   applyMmr(email: string, won: boolean): Promise<void>;
   credit(email: string, code: string, won: boolean): Promise<void>;
   legacyApplied(code: string): Promise<boolean>;              // report pareado já aplicou?
+  recordCardStats?(email: string, code: string, cardIds: string[], delta: CardStatsDelta): Promise<void>; // [CSM-3]
+}
+
+// [CSM-3] O que o motor do duelo PRODUZ de fato, por lado. O PvP por beats não
+// tem kill feed nem MVP por jogador: tudo aqui é do TIME e vale para as 5
+// cartas escaladas. Clutch = o beat 'clutch' do roteiro (último vivo), jogado
+// e vencido. W.O. conta jogo e resultado, mas não rounds nem clutch.
+export interface CardStatsDelta {
+  games: number; wins: number; losses: number;
+  roundsWon: number; roundsLost: number;
+  clutchesWon: number; clutchesPlayed: number;
+}
+
+export function cardStatsDelta(row: UltMatchRow, side: PvpSide): CardStatsDelta | null {
+  if (row.status !== 'done' || row.winner == null) return null;
+  const won = row.winner === side;
+  const played = row.reason === 'played';
+  const fs = row.state.finalScore;
+  const clutch = played ? row.state.history.filter((b) => b.kind === 'clutch') : [];
+  return {
+    games: 1, wins: won ? 1 : 0, losses: won ? 0 : 1,
+    roundsWon: played && fs ? fs[side] : 0, roundsLost: played && fs ? fs[1 - side] : 0,
+    clutchesWon: clutch.filter((b) => b.winner === side).length, clutchesPlayed: clutch.length,
+  };
 }
 
 // ───────────────────────────────────────────────────────────── lógica pura
@@ -95,7 +123,7 @@ function woRow(r: UltMatchRow, gone0: boolean, gone1: boolean): UltMatchRow {
   return { ...r, state: forfeitPvp(r.state, winner), status: 'done', winner, reason: 'wo' };
 }
 
-export interface MatchPlayerIn { nick: string; email: string | null; squad: PvpSquadIn }
+export interface MatchPlayerIn { nick: string; email: string | null; squad: PvpSquadIn; cardIds?: string[] }
 
 export function newMatchRow(input: { code: string; seed: number; ranked: boolean; players: [MatchPlayerIn, MatchPlayerIn] }, now: number): UltMatchRow {
   const [p0, p1] = input.players;
@@ -105,6 +133,7 @@ export function newMatchRow(input: { code: string; seed: number; ranked: boolean
     state: createPvpMatch({ seed: input.seed, squads: [p0.squad, p1.squad] }),
     pending: [null, null], deadline: now + BEAT_DEADLINE_MS, seen: [now, now], missed: [0, 0],
     version: 1, status: 'live', winner: null, reason: null, settled: false,
+    cardIds: [p0.cardIds ?? [], p1.cardIds ?? []],
   };
 }
 
@@ -233,6 +262,11 @@ export async function settleIfNeeded(store: UltMatchStore, row: UltMatchRow, set
     const won = row.winner === side;
     try { await settler.applyMmr(email, won); } catch (e) { console.error('[ult-match] mmr', row.code, e); }
     try { await settler.credit(email, row.code, won); } catch (e) { console.error('[ult-match] prêmio', row.code, e); }
+    const ids = row.cardIds?.[side] ?? [];
+    const delta = cardStatsDelta(row, side);
+    if (settler.recordCardStats && ids.length && delta) {
+      try { await settler.recordCardStats(email, row.code, ids, delta); } catch (e) { console.error('[ult-match] história da carta', row.code, e); }
+    }
   }
   return true;
 }
@@ -250,10 +284,17 @@ export function ultMatchSchemaQueries(sql: SqlTag): SqlQuery[] {
       status TEXT NOT NULL DEFAULT 'live', winner INT, reason TEXT, settled_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE INDEX IF NOT EXISTS ult_match_status_idx ON ult_match (status, updated_at)`,
+    sql`ALTER TABLE ult_match ADD COLUMN IF NOT EXISTS card_ids JSONB`, // [CSM-3]
   ];
 }
 
 const pend = (v: unknown): PvpStyle | null => (isPvpStyle(v) ? v : null);
+
+function cardIdsFromDb(v: unknown): [string[], string[]] {
+  const o = typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return null; } })() : v;
+  const side = (x: unknown) => (Array.isArray(x) ? x.filter((y): y is string => typeof y === 'string').slice(0, 5) : []);
+  return Array.isArray(o) ? [side(o[0]), side(o[1])] : [[], []];
+}
 
 export function rowFromDb(r: Record<string, unknown>): UltMatchRow | null {
   const state = normalizePvpMatch(typeof r.state === 'string' ? JSON.parse(r.state) : r.state);
@@ -269,6 +310,7 @@ export function rowFromDb(r: Record<string, unknown>): UltMatchRow | null {
     winner: r.winner === 0 || r.winner === 1 ? r.winner : null,
     reason: r.reason === 'played' || r.reason === 'wo' ? r.reason : null,
     settled: r.settled_at != null,
+    cardIds: cardIdsFromDb(r.card_ids),
   };
 }
 
@@ -279,9 +321,9 @@ export function sqlMatchStore(sql: SqlTag): UltMatchStore {
       return rows.length ? rowFromDb(rows[0]) : null;
     },
     async insert(m) {
-      const ins = await sql`INSERT INTO ult_match (code, seed, ranked, email_a, email_b, nick_a, nick_b, state, beat, pend_a, pend_b, deadline_ms, seen_a, seen_b, miss_a, miss_b, version, status, winner, reason)
+      const ins = await sql`INSERT INTO ult_match (code, seed, ranked, email_a, email_b, nick_a, nick_b, state, beat, pend_a, pend_b, deadline_ms, seen_a, seen_b, miss_a, miss_b, version, status, winner, reason, card_ids)
         VALUES (${m.code}, ${m.seed}, ${m.ranked}, ${m.emails[0]}, ${m.emails[1]}, ${m.nicks[0]}, ${m.nicks[1]}, ${JSON.stringify(m.state)}::jsonb, ${m.state.idx}, ${m.pending[0]}, ${m.pending[1]},
-          ${m.deadline}, ${m.seen[0]}, ${m.seen[1]}, ${m.missed[0]}, ${m.missed[1]}, ${m.version}, ${m.status}, ${m.winner}, ${m.reason})
+          ${m.deadline}, ${m.seen[0]}, ${m.seen[1]}, ${m.missed[0]}, ${m.missed[1]}, ${m.version}, ${m.status}, ${m.winner}, ${m.reason}, ${JSON.stringify(m.cardIds ?? [[], []])}::jsonb)
         ON CONFLICT (code) DO NOTHING RETURNING code`;
       return ins.length > 0;
     },
@@ -289,7 +331,7 @@ export function sqlMatchStore(sql: SqlTag): UltMatchStore {
       const up = await sql`UPDATE ult_match SET seed = ${m.seed}, ranked = ${m.ranked}, email_a = ${m.emails[0]}, email_b = ${m.emails[1]}, nick_a = ${m.nicks[0]}, nick_b = ${m.nicks[1]},
           state = ${JSON.stringify(m.state)}::jsonb, beat = ${m.state.idx}, pend_a = ${m.pending[0]}, pend_b = ${m.pending[1]}, deadline_ms = ${m.deadline},
           seen_a = ${m.seen[0]}, seen_b = ${m.seen[1]}, miss_a = ${m.missed[0]}, miss_b = ${m.missed[1]}, version = ${m.version},
-          status = ${m.status}, winner = ${m.winner}, reason = ${m.reason}, updated_at = now()
+          status = ${m.status}, winner = ${m.winner}, reason = ${m.reason}, card_ids = ${JSON.stringify(m.cardIds ?? [[], []])}::jsonb, updated_at = now()
         WHERE code = ${m.code} AND version = ${expected} RETURNING code`;
       return up.length > 0;
     },
@@ -322,6 +364,9 @@ export function sqlRankedSettler(sql: SqlTag, now = new Date()): RankedSettler {
     },
     async credit(email, code, won) {
       await creditRankedPvpReward(sql, email, code, won);
+    },
+    async recordCardStats(email, code, cardIds, d) {
+      await recordCardStats(sql, email, code, cardIds, d);
     },
     async legacyApplied(code) {
       try {

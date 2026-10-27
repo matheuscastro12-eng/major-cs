@@ -9,6 +9,8 @@
 // promo, totw, major, ícone histórico) nunca são apelidadas.
 //
 // Leve de propósito (só tipos): o servidor usa o mesmo índice sobre o snapshot.
+import { makeEventVersion, parseEventVersionKey } from './eventVersions.js'; // [CSM-2] .js: o servidor usa este índice
+
 const BASE_RARITIES = new Set(['bronze', 'silver', 'gold', 'rareGold', 'elite', 'legendary', 'icon']);
 
 export class CardIndex<T extends { key: string; playerId: string; rarity: string }> extends Map<string, T> {
@@ -34,6 +36,16 @@ export class CardIndex<T extends { key: string; playerId: string; rarity: string
   override get(key: string): T | undefined {
     const hit = super.get(key);
     if (hit) return hit;
+    // [CSM-2] versão de evento: derivada da carta base atual do jogador + id do
+    // evento (resolve mesmo depois do evento acabar — a coleção não perde carta).
+    const ev = parseEventVersionKey(key);
+    if (ev) {
+      const base = this.baseByPlayer.get(ev.playerId);
+      if (!base || typeof (base as { ovr?: unknown }).ovr !== 'number') return undefined;
+      const v = makeEventVersion(base as unknown as Parameters<typeof makeEventVersion>[0], ev.eventId) as unknown as T;
+      super.set(key, v);
+      return v;
+    }
     const i = key.lastIndexOf(':');
     if (i <= 0 || !BASE_RARITIES.has(key.slice(i + 1))) return undefined;
     return this.baseByPlayer.get(key.slice(0, i));
