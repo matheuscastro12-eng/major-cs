@@ -37,13 +37,13 @@ function initialsFromNick(nick: string): string {
   return clean.slice(0, clean.length <= 2 ? 3 : 2);
 }
 
-// Avatar do jogador: foto real da Liquipedia (via proxy) com fallback procedural.
+// Avatar do jogador: foto do bo3.gg (quando existe) com fallback procedural (iniciais).
 // Quando não tem foto, gera um gradient único + iniciais (mesmo seed = mesmo
 // avatar sempre, então o reconhecimento visual fica estável entre re-renders).
 export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string; size?: number; coach?: boolean }) {
   const [failedUrl, setFailedUrl] = useState('');
   const safeNick = nick || '?'; // protege contra nick indefinido (não quebra o render)
-  const url = photoForNick(safeNick, Math.max(120, size * 2));
+  const url = photoForNick(safeNick);
   if (url && failedUrl !== url) {
     return (
       <span className="pavatar" style={{ width: size, height: size }}>

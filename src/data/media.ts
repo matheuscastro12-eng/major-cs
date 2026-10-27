@@ -94,21 +94,14 @@ export function liquipediaTeamUrl(team: Pick<TeamSeason, 'team'>): string {
   return `https://liquipedia.net/counterstrike/${team.team.replace(/ /g, '_')}`;
 }
 
-// ---- fotos de jogadores (resolvidas em build-time da Liquipedia) ----
-// Servidas via proxy Photon (i0.wp.com), que aceita hotlink e redimensiona;
-// a Liquipedia bloqueia hotlink direto. Conteúdo CC-BY-SA da Liquipedia.
-import playerPhotos from './player-photos.json';
+// ---- fotos de jogadores ----
+// Só bo3.gg (URLs diretas em bo3-photos.json). NÃO usamos fotos da Liquipedia:
+// os arquivos têm licença "permission" (uso restrito à Liquipedia), não livre.
+// Sem foto → PlayerAvatar mostra as iniciais.
 import bo3Photos from './bo3-photos.json';
 
-const PHOTOS = playerPhotos as Record<string, string>;
 const BO3_PHOTOS = bo3Photos as Record<string, string>;
 
-export function photoForNick(nick: string, size = 120): string | undefined {
-  const key = nick.toLowerCase();
-  // fotos reais do bo3.gg (URLs diretas) têm prioridade
-  const bo3 = BO3_PHOTOS[key];
-  if (bo3) return bo3;
-  const path = PHOTOS[key];
-  if (!path) return undefined;
-  return `https://i0.wp.com/liquipedia.net${path}?resize=${size},${size}&ssl=1`;
+export function photoForNick(nick: string): string | undefined {
+  return BO3_PHOTOS[nick.toLowerCase()];
 }
