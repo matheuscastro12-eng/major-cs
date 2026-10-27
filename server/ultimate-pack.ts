@@ -28,7 +28,7 @@ import { dropPool } from '../src/engine/ultimate/drops.js';
 import type { DropCatalog } from './ultimate-drops.js';
 import { CardIndex } from '../src/engine/ultimate/cardIndex.js';
 import { ULT_CATALOG_MONTHS, ULT_SNAPSHOT_FIRST_MONTH, ULT_SNAPSHOT_LAST_MONTH, type SnapCard } from './ultimate-catalog.snapshot.js';
-import { applyUltTransaction, type SqlTag, type UltCardOp, type UltTx } from './ultimate-economy.js';
+import { applyUltTransaction, ultPayloadHash, type SqlTag, type UltCardOp, type UltTx } from './ultimate-economy.js';
 
 // versão do motor de roll gravada no ledger — se as odds/engine mudarem um dia,
 // dá pra saber COM QUAL versão cada pack foi rolado.
@@ -178,8 +178,9 @@ export async function openPack(
     cards: cardOps,
     meta: { packId: pack.id, seed, engineVersion: ULT_PACK_ENGINE_VERSION, eventId: activeEventVersionDecl(now.getTime(), catalog)?.eventId ?? null },
   };
-  const r = await applyUltTransaction(sql, email, tx);
-  if (!r.ok) return { ok: false, error: 'insufficient_credits', credits: r.credits };
+  // [CSM-4] hash do pedido (packId): mesmo op_id com outro pack = op_conflict
+  const r = await applyUltTransaction(sql, email, tx, { reqHash: ultPayloadHash({ a: 'packOpen', packId: pack.id }) });
+  if (!r.ok) return r.error === 'op_conflict' ? { ok: false, error: 'op_conflict' } : { ok: false, error: 'insufficient_credits', credits: r.credits };
 
   if (!r.replayed) {
     return {
@@ -193,6 +194,8 @@ export async function openPack(
   const rows = await sql`SELECT kind, cards, meta FROM rtm_ult_ledger WHERE email=${email} AND op_id=${req.opId}`;
   const row = rows[0];
   if (!row || String(row.kind) !== 'pack') return { ok: false, error: 'op_conflict' };
+  // linha antiga (sem reqHash): o pack gravado tem de ser o mesmo pedido
+  if (row.meta && typeof row.meta === 'object' && (row.meta as Record<string, unknown>).packId !== pack.id) return { ok: false, error: 'op_conflict' };
   const priorOps = (Array.isArray(row.cards) ? row.cards : []) as { cardId?: string; cardKey?: string }[];
   const priorMeta = (row.meta && typeof row.meta === 'object' ? row.meta : {}) as Record<string, unknown>;
   return {

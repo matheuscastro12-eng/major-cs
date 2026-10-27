@@ -4,7 +4,7 @@ import { totwForWeek, weekIndex } from '../src/engine/ultimate/totw.js';
 import { BASE_RARITY_ORDER } from '../src/engine/ultimate/rarities.js';
 import { weeklyPackPool } from '../src/engine/ultimate/packPool.js';
 import { FakeDb } from './ultimate-economy.mock.js';
-import { applyUltTransaction } from './ultimate-economy.js';
+import { applyUltTransaction, ultPayloadHash } from './ultimate-economy.js';
 import {
   ULT_PACK_ENGINE_VERSION,
   buildServerCatalog,
@@ -162,7 +162,7 @@ test('packOpen debita o custo do ENGINE e grava seed/engineVersion no ledger', a
   assert.equal(row.kind, 'pack');
   assert.equal(row.delta, -pack.cost);
   // [CSM-2] NOW cai num fim de semana: o evento ativo vai no meta (auditoria)
-  assert.deepEqual(row.meta, { packId: 'bronze', seed: 42, engineVersion: ULT_PACK_ENGINE_VERSION, eventId: 'wknd-2026-27' });
+  assert.deepEqual(row.meta, { packId: 'bronze', seed: 42, engineVersion: ULT_PACK_ENGINE_VERSION, eventId: 'wknd-2026-27', reqHash: ultPayloadHash({ a: 'packOpen', packId: 'bronze' }) });
   // reprodutível: re-rolar com a seed + instante do ledger dá as MESMAS cartas
   const audit = rollPackServer({ packId: 'bronze', seed: 42, catalog: buildServerCatalog(NOW), now: NOW })!;
   assert.deepEqual(r.cards.map((c) => c.cardKey), audit.map((c) => c.key));
@@ -209,4 +209,17 @@ test('packOpen desconhecido não toca no banco', async () => {
   const r = await openPack(db.sql, EMAIL, { opId: 'p1', packId: 'lulz' }, { now: NOW });
   assert.deepEqual(r, { ok: false, error: 'unknown_pack' });
   assert.ok(!db.ledger.some((l) => l.kind === 'pack'));
+});
+
+test('[CSM-4] replay do op_id com OUTRO packId = op_conflict (hash do pedido), sem débito', async () => {
+  const db = new FakeDb();
+  await grant(db, 100_000);
+  const a = await openPack(db.sql, EMAIL, { opId: 'h1', packId: 'bronze' }, { now: NOW, seed: 1 });
+  assert.ok(a.ok);
+  const before = db.wallets.get(EMAIL);
+  const b = await openPack(db.sql, EMAIL, { opId: 'h1', packId: 'silver' }, { now: NOW, seed: 2 });
+  assert.deepEqual(b, { ok: false, error: 'op_conflict' });
+  assert.equal(db.wallets.get(EMAIL), before);
+  const c = await openPack(db.sql, EMAIL, { opId: 'h1', packId: 'bronze' }, { now: NOW, seed: 3 });
+  assert.ok(c.ok && c.replayed && a.ok && c.cards.map((x) => x.cardKey).join() === a.cards.map((x) => x.cardKey).join());
 });
