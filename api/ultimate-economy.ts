@@ -7,6 +7,7 @@
 // em fluxo do servidor. Carteira congelada (frozen_at) bloqueia mercado e packs.
 import { neon } from '@neondatabase/serverless';
 import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { checkMutationOrigin } from '../server/origin.js';
 import {
   applyClientUltTx,
   getUltState,
@@ -68,6 +69,9 @@ export default async function handler(
   res: Res,
 ) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
+  // [CSM-4] mutação só a partir das origens permitidas (server/origin.ts)
+  const og = checkMutationOrigin(req.headers);
+  if (!og.ok) { res.status(403).json({ error: 'origem não permitida', reason: og.reason }); return; }
   if (respondMissingSecret(res)) return; // falha fechada (SEGU-10)
   const ip = clientIp(req.headers);
   if (rateLimited(`ip:${ip}`, 180)) {

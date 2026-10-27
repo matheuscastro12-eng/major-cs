@@ -6,6 +6,7 @@
 // (Major em grupo 'party', duelo 'duel' com veto de mapas) saiu: `create` recusa
 // esses modos e as ações dele respondem 410. O código do cliente legado
 // (OnlineScreen) não está no bundle e sai no O1-12.
+import { checkMutationOrigin } from '../server/origin.js'; // [CSM-4]
 import { neon } from '@neondatabase/serverless';
 import { eventEligibility, type EventRule } from '../src/engine/ultimate/events.js'; // [U12]
 import { serverCatalogIndex, serverSquadLookup } from '../server/ultimate-pack.js';
@@ -316,6 +317,12 @@ export default async function handler(
   res: Res,
 ) {
   res.setHeader('Cache-Control', 'no-store');
+  // [CSM-4] mutação (POST) só a partir das origens permitidas (server/origin.ts),
+  // antes de tocar no banco
+  if (req.method === 'POST') {
+    const og = checkMutationOrigin(req.headers);
+    if (!og.ok) { res.status(403).json({ error: 'origem não permitida', reason: og.reason }); return; }
+  }
   const url = clean(process.env.DATABASE_URL);
   if (!url) {
     res.status(500).json({ error: 'no db' });
