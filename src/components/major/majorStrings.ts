@@ -122,6 +122,15 @@ const S = {
   shareRun: { pt: "Baixar card da campanha", en: "Download run card", es: "Descargar tarjeta de la campaña" },
   noRunYet: { pt: "Nenhuma série jogada ainda.", en: "No series played yet.", es: "Ninguna serie jugada aún." },
   refresh: { pt: "Atualizar", en: "Refresh", es: "Actualizar" },
+  prizeTitle: { pt: "Prêmio do Pick'em", en: "Pick'em prize", es: "Premio del Pick'em" },
+  prizeText: { pt: "Top 3 do pick'em ganha conta vitalícia + carta exclusiva do Ultimate", en: "Pick'em top 3 win a lifetime account + an exclusive Ultimate card", es: "El top 3 del pick'em gana cuenta vitalicia + carta exclusiva del Ultimate" },
+  prizeRules: { pt: "Vale para qualquer conta, inclusive grátis. São 3 ganhadores: os 3 primeiros do placar do pick'em com o resultado real do Major. É preciso estar logado para concorrer.", en: "Any account counts, including free ones. 3 winners: the top 3 of the pick'em leaderboard with the real Major results. You must be logged in to compete.", es: "Vale para cualquier cuenta, incluso gratis. Son 3 ganadores: los 3 primeros del ranking del pick'em con el resultado real del Major. Hay que iniciar sesión para competir." },
+  rostersTitle: { pt: 'Elencos', en: 'Rosters', es: 'Plantillas' },
+  coach: { pt: 'coach', en: 'coach', es: 'coach' },
+  predTitle: { pt: 'Previsões (Monte Carlo)', en: 'Predictions (Monte Carlo)', es: 'Predicciones (Monte Carlo)' },
+  predNote: { pt: 'simulações do Major inteiro com o suíço oficial da Valve (Buchholz). Lista provisória até 02/11: é projeção, não aposta.', en: 'simulations of the whole Major with Valve’s official Swiss (Buchholz). Provisional list until Nov 2: a projection, not a bet.', es: 'simulaciones del Major entero con el suizo oficial de Valve (Buchholz). Lista provisional hasta el 02/11: es proyección, no apuesta.' },
+  predTeam: { pt: 'Time', en: 'Team', es: 'Equipo' },
+  predTitleCol: { pt: 'Título', en: 'Title', es: 'Título' },
   back: { pt: 'Voltar', en: 'Back', es: 'Volver' },
 } satisfies Record<string, Entry>;
 

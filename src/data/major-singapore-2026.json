@@ -29,7 +29,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 1
+   "rankRef": 1,
+   "bo3Id": "bo3_team_667"
   },
   {
    "id": "team-spirit",
@@ -44,7 +45,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 2
+   "rankRef": 2,
+   "bo3Id": "bo3_team_654"
   },
   {
    "id": "team-falcons",
@@ -59,7 +61,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 3
+   "rankRef": 3,
+   "bo3Id": "bo3_team_2713"
   },
   {
    "id": "natus-vincere",
@@ -74,7 +77,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 4
+   "rankRef": 4,
+   "bo3Id": "bo3_team_787"
   },
   {
    "id": "mouz",
@@ -89,7 +93,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 5
+   "rankRef": 5,
+   "bo3Id": "bo3_team_765"
   },
   {
    "id": "legacy",
@@ -104,7 +109,8 @@
    ],
    "confirmed": false,
    "region": "am",
-   "rankRef": 6
+   "rankRef": 6,
+   "bo3Id": "bo3_team_8118"
   },
   {
    "id": "the-mongolz",
@@ -119,7 +125,8 @@
    ],
    "confirmed": false,
    "region": "as",
-   "rankRef": 7
+   "rankRef": 7,
+   "bo3Id": "bo3_team_736"
   },
   {
    "id": "aurora-gaming",
@@ -134,7 +141,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 8
+   "rankRef": 8,
+   "bo3Id": "bo3_team_3598"
   },
   {
    "id": "gamerlegion",
@@ -149,7 +157,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 9
+   "rankRef": 9,
+   "bo3Id": "bo3_team_594"
   },
   {
    "id": "astralis",
@@ -164,7 +173,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 10
+   "rankRef": 10,
+   "bo3Id": "bo3_team_794"
   },
   {
    "id": "furia",
@@ -179,7 +189,8 @@
    ],
    "confirmed": false,
    "region": "am",
-   "rankRef": 11
+   "rankRef": 11,
+   "bo3Id": "bo3_team_648"
   },
   {
    "id": "fut-esports",
@@ -194,7 +205,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 12
+   "rankRef": 12,
+   "bo3Id": "bo3_team_20832"
   },
   {
    "id": "g2-esports",
@@ -209,7 +221,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 13
+   "rankRef": 13,
+   "bo3Id": "bo3_team_793"
   },
   {
    "id": "parivision",
@@ -224,7 +237,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 14
+   "rankRef": 14,
+   "bo3Id": "bo3_team_8171"
   },
   {
    "id": "9z",
@@ -239,7 +253,8 @@
    ],
    "confirmed": false,
    "region": "am",
-   "rankRef": 15
+   "rankRef": 15,
+   "bo3Id": "bo3_team_324"
   },
   {
    "id": "b8",
@@ -254,7 +269,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 16
+   "rankRef": 16,
+   "bo3Id": "bo3_team_1539"
   },
   {
    "id": "betboom",
@@ -269,7 +285,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 17
+   "rankRef": 17,
+   "bo3Id": "bo3_team_7498"
   },
   {
    "id": "magic",
@@ -284,7 +301,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 18
+   "rankRef": 18,
+   "bo3Id": "bo3_team_22218"
   },
   {
    "id": "pain-gaming",
@@ -299,7 +317,8 @@
    ],
    "confirmed": false,
    "region": "am",
-   "rankRef": 19
+   "rankRef": 19,
+   "bo3Id": "bo3_team_637"
   },
   {
    "id": "mibr",
@@ -314,7 +333,8 @@
    ],
    "confirmed": false,
    "region": "am",
-   "rankRef": 20
+   "rankRef": 20,
+   "bo3Id": "bo3_team_755"
   },
   {
    "id": "faze-clan",
@@ -329,7 +349,8 @@
    ],
    "confirmed": false,
    "region": "am",
-   "rankRef": 22
+   "rankRef": 22,
+   "bo3Id": "bo3_team_791"
   },
   {
    "id": "ninjas-in-pyjamas",
@@ -344,7 +365,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 23
+   "rankRef": 23,
+   "bo3Id": "bo3_team_785"
   },
   {
    "id": "lynn-vision",
@@ -359,7 +381,8 @@
    ],
    "confirmed": false,
    "region": "as",
-   "rankRef": 24
+   "rankRef": 24,
+   "bo3Id": "bo3_team_476"
   },
   {
    "id": "wildcard",
@@ -374,7 +397,8 @@
    ],
    "confirmed": false,
    "region": "am",
-   "rankRef": 25
+   "rankRef": 25,
+   "bo3Id": "bo3_team_6062"
   },
   {
    "id": "envy",
@@ -404,7 +428,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 27
+   "rankRef": 27,
+   "bo3Id": "bo3_team_759"
   },
   {
    "id": "big",
@@ -419,7 +444,8 @@
    ],
    "confirmed": false,
    "region": "eu",
-   "rankRef": 28
+   "rankRef": 28,
+   "bo3Id": "bo3_team_756"
   },
   {
    "id": "tyloo",
@@ -434,7 +460,8 @@
    ],
    "confirmed": false,
    "region": "as",
-   "rankRef": 32
+   "rankRef": 32,
+   "bo3Id": "bo3_team_757"
   },
   {
    "id": "m80",
@@ -449,7 +476,8 @@
    ],
    "confirmed": false,
    "region": "am",
-   "rankRef": 33
+   "rankRef": 33,
+   "bo3Id": "bo3_team_7430"
   },
   {
    "id": "jijiehao",
@@ -464,7 +492,8 @@
    ],
    "confirmed": false,
    "region": "as",
-   "rankRef": 44
+   "rankRef": 44,
+   "bo3Id": "bo3_team_3869"
   },
   {
    "id": "team-liquid",
@@ -479,7 +508,8 @@
    ],
    "confirmed": false,
    "region": "am",
-   "rankRef": 45
+   "rankRef": 45,
+   "bo3Id": "bo3_team_790"
   },
   {
    "id": "thunder-downunder",
@@ -494,7 +524,8 @@
    ],
    "confirmed": false,
    "region": "as",
-   "rankRef": 64
+   "rankRef": 64,
+   "bo3Id": "bo3_team_22032"
   }
  ]
 }
