@@ -72,7 +72,8 @@ test('validateUltTx limita cartas e exige cardKey no add', () => {
 test('schema cria wallet, cards e ledger com UNIQUE(email, op_id)', () => {
   const db = new FakeDb();
   const queries = ultEconomySchemaQueries(db.sql);
-  assert.equal(queries.length, 5);
+  assert.equal(queries.length, 6);
+  assert.ok((queries[5] as unknown as { text: string }).text.includes('ADD COLUMN IF NOT EXISTS imported_at'));
   const texts = queries.map((q) => (q as unknown as { text: string }).text);
   // [O0-02] congelamento como coluna aditiva e idempotente
   assert.ok(texts[4].includes('ADD COLUMN IF NOT EXISTS frozen_at'));

@@ -68,6 +68,25 @@ export function serverCatalogIndex(now: Date = new Date()): Map<string, SnapCard
   return _index!;
 }
 
+// [F1] carta por key em QUALQUER mês do snapshot (o mais recente vence). Cópias
+// antigas (promo/totw de meses passados) seguem válidas no squad e no import.
+let _anyMonth: Map<string, SnapCard> | null = null;
+export function serverCardByKeyAnyMonth(key: string): SnapCard | undefined {
+  if (!_anyMonth) {
+    const m = new Map<string, SnapCard>();
+    const months = Object.keys(ULT_CATALOG_MONTHS).map(Number).sort((a, b) => a - b);
+    for (const mi of months) for (const c of ULT_CATALOG_MONTHS[mi] ?? []) m.set(c.key, c);
+    _anyMonth = m;
+  }
+  return _anyMonth.get(key);
+}
+
+// lookup pro squad autoritativo: mês corrente primeiro, depois qualquer mês.
+export function serverSquadLookup(now: Date = new Date()): (key: string) => SnapCard | undefined {
+  const idx = serverCatalogIndex(now);
+  return (key: string) => idx.get(key) ?? serverCardByKeyAnyMonth(key);
+}
+
 // ---------------------------------------------------------------------- roll
 
 // PackDef validada pelo ENGINE (id/custo/odds nunca vêm do request do cliente).

@@ -44,6 +44,7 @@ export class FakeDb {
   ledger: LedgerRow[] = [];
   listings: FakeListing[] = []; // rtm_ult_listings (mercado P2P)
   frozen = new Set<string>(); // rtm_ult_wallet.frozen_at preenchido [O0-02]
+  imported = new Set<string>(); // rtm_ult_wallet.imported_at preenchido [F1]
   nextId = 1;
   nextListingId = 1;
   executed: string[] = [];
@@ -82,6 +83,22 @@ export class FakeDb {
     if (text.startsWith('SELECT frozen_at FROM rtm_ult_wallet WHERE')) {
       const email = String(params[0]);
       return this.frozen.has(email) ? [{ frozen_at: '2026-09-23T00:00:00.000Z' }] : (this.wallets.has(email) ? [{ frozen_at: null }] : []);
+    }
+
+    // [F1] marca da migração única (ultImport)
+    if (text.startsWith('SELECT imported_at, credits FROM rtm_ult_wallet WHERE')) {
+      const email = String(params[0]);
+      if (!this.wallets.has(email) && !this.imported.has(email)) return [];
+      return [{ imported_at: this.imported.has(email) ? '2026-10-27T00:00:00.000Z' : null, credits: this.wallets.get(email) ?? 0 }];
+    }
+    if (text.startsWith('INSERT INTO rtm_ult_wallet (email, imported_at)')) {
+      const email = String(params[0]);
+      this.imported.add(email);
+      if (!this.wallets.has(email)) this.wallets.set(email, 0);
+      return [];
+    }
+    if (text.startsWith('SELECT card_id FROM rtm_ult_cards WHERE')) {
+      return this.cardsOf(String(params[0])).map((c) => ({ card_id: c.cardId }));
     }
 
     // O statement transacional grande (WITH prior AS ...).
