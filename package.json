@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "tsx scripts/fetch-bo3-photos.mts",
+    "photos:bo3": "tsx scripts/fetch-bo3-photos.mts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "tsx --test server/*.test.ts",

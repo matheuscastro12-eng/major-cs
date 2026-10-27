@@ -5,7 +5,7 @@
 import type { DraftState, TeamSeason } from '../types';
 import { playerOvr } from '../engine/ratings';
 import { shareUrl } from './shareLink';
-import { BO3_PHOTO_CREDIT, drawAvatar, loadedPhoto } from '../data/bo3Photos';
+import { BO3_PHOTO_CREDIT_CARD, BO3_PHOTOS_ON, drawAvatar, loadedPhoto } from '../data/bo3Photos';
 
 export interface DreamPick { nick: string; role: string; ovr: number; from: string; era: string; colors: [string, string] }
 export interface DreamTeamData {
@@ -121,9 +121,9 @@ export function drawDreamTeamCard(d: DreamTeamData): string {
   ctx.fillStyle = '#ecc75f';
   ctx.font = '600 20px Barlow, Arial, sans-serif';
   ctx.fillText('roadtomajor.com.br · monte o SEU', W / 2, 628);
-  if (d.picks.some((p) => loadedPhoto(p.nick))) {
-    ctx.textAlign = 'right'; ctx.fillStyle = '#9aa4b2'; ctx.font = '500 13px Barlow, Arial, sans-serif';
-    ctx.fillText(BO3_PHOTO_CREDIT, W - 28, H - 24);
+  if (BO3_PHOTOS_ON || d.picks.some((p) => loadedPhoto(p.nick))) {
+    ctx.textAlign = 'right'; ctx.fillStyle = '#9aa4b2'; ctx.font = '600 14px Barlow, Arial, sans-serif';
+    ctx.fillText(BO3_PHOTO_CREDIT_CARD, W - 28, H - 24);
   }
   return canvas.toDataURL('image/png');
 }

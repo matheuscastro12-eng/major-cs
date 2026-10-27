@@ -45,5 +45,3 @@ sim/*.mjs
 /*.png
 *.pdf
 
-# fotos bo3.gg baixadas no build (flag VITE_FF_BO3_PHOTOS) — NÃO commitar (termos do bo3.gg)
-public/players/bo3/

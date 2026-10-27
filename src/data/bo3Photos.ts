@@ -1,15 +1,19 @@
-// Fotos de jogadores do bo3.gg — ATRÁS DE FLAG (VITE_FF_BO3_PHOTOS=1, default OFF).
-// Os termos do bo3.gg (bo3.gg/wiki/use-of-services) dizem que o conteúdo do site
-// (inclusive fotos) é da DINAH HOLDINGS LIMITED ou licenciado a ela, e só pode ser
-// reproduzido com link ativo pro site. Por isso as imagens NÃO vão pro git: o
-// script scripts/fetch-bo3-photos.mts baixa no build (só com a flag ligada) pra
-// public/players/bo3/ (gitignored) e a UI serve same-origin, sem hotlink e sem
-// CORS no canvas. Sem flag ou sem arquivo → placeholder com as iniciais.
+// Fotos de jogadores do bo3.gg — LIGADAS por padrão (aprovado pelo Matheus em 26/10/2026).
+// Desligar: VITE_FF_BO3_PHOTOS=0. Os termos do bo3.gg (bo3.gg/wiki/use-of-services)
+// permitem reproduzir o conteúdo com LINK ATIVO pro site: toda tela com fotos mostra
+// "Fotos: bo3.gg" como <a href="https://bo3.gg">, e os cards em imagem (sem link
+// clicável) escrevem o crédito + a URL bo3.gg visível.
+// As fotos VÁLIDAS ficam commitadas em public/players/bo3/ (servidas pelo nosso domínio,
+// same-origin, sem hotlink): o build na Vercel não depende de rede nem do CDN do bo3.gg.
+// bo3-photos.json só lista as que existem em disco; as quebradas (404 no CDN) ficam em
+// bo3-photos-missing.json → placeholder com iniciais. Atualizar: npm run photos:bo3.
 import photos from './bo3-photos.json';
 
-export const BO3_PHOTOS_ON = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_FF_BO3_PHOTOS === '1';
+export const BO3_PHOTOS_ON = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_FF_BO3_PHOTOS !== '0';
 export const BO3_PHOTO_CREDIT = 'Fotos: bo3.gg';
 export const BO3_PHOTO_CREDIT_URL = 'https://bo3.gg';
+/** Crédito pros cards em imagem: texto + URL visível (imagem não tem link clicável). */
+export const BO3_PHOTO_CREDIT_CARD = 'Fotos: bo3.gg · https://bo3.gg';
 
 const MAP = photos as Record<string, string>;
 export const photoSlug = (nick: string) => nick.toLowerCase().replace(/[^a-z0-9_-]/g, '');

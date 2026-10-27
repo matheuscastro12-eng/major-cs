@@ -10,7 +10,7 @@ import { makeRng } from '../engine/rng';
 import { CareerIcon } from './career/CareerIcon';
 import { DREAM_CARD_URL, downloadDreamTeamCard, dreamTeamData, dreamXText, shareDreamTeamCard } from '../state/dreamTeamCard';
 import { postOnX } from '../state/shareX';
-import { preloadPhotos } from '../data/bo3Photos';
+import { BO3_PHOTO_CREDIT, BO3_PHOTO_CREDIT_URL, BO3_PHOTOS_ON, preloadPhotos } from '../data/bo3Photos';
 
 const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
 
@@ -299,6 +299,11 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
             </div>
             {shareMsg && <div className="em-draft-share-msg" role="status">{shareMsg}</div>}
           </div>
+        )}
+        {BO3_PHOTOS_ON && (
+          <p className="em-draft-credit" style={{ margin: '12px 0 0', fontSize: 12, textAlign: 'right', opacity: 0.7 }}>
+            <a href={BO3_PHOTO_CREDIT_URL} target="_blank" rel="noopener" style={{ color: 'inherit' }}>{BO3_PHOTO_CREDIT}</a>
+          </p>
         )}
       </div>
     </div>
