@@ -1,6 +1,6 @@
 // Economia server-authoritative do Ultimate Squad.
 // Carteira + coleção + ledger idempotente no Neon.
-// Ações (POST body.action): state | tx | packOpen | mkt*. packOpen rola o pack
+// Ações (POST body.action): state | tx | ultImport | packOpen | mkt*. packOpen rola o pack
 // NO SERVIDOR com as mesmas odds do engine do cliente — seed auditável no
 // ledger, replay idempotente. [O0-02] `tx` do cliente só grava SAÍDAS
 // (spend/pack/sbc/quicksell valorado no servidor); todo crédito positivo nasce
@@ -32,6 +32,7 @@ import {
 // extensão) e derrubava a rota INTEIRA no load (mercado "não conecta",
 // 2026-07-05). Ver server/ultimate-catalog-lazy.ts.
 import { loadMktCardLookup, loadPackModule, loadQuicksellValuer } from '../server/ultimate-catalog-lazy.js';
+import { importLocalCollection } from '../server/ultimate-import.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -106,7 +107,7 @@ export default async function handler(
   // [O0-02] carteira congelada pelo admin (varredura do ledger): mercado e
   // packs pausados até a contestação. 423 + mensagem padrão pro jogador.
   const frozenReply = () => res.status(423).json({ error: 'wallet_frozen', message: ultFrozenMessage(clean(process.env.SUPPORT_EMAIL)) });
-  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen';
+  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen' || action === 'ultImport';
   const frozen = action === 'state' || guardedAction ? await isUltWalletFrozen(sql, email) : false;
   if (frozen && guardedAction) { frozenReply(); return; }
 
@@ -122,6 +123,17 @@ export default async function handler(
     // applyClientUltTx. 'grant'/'reward'/'admin'/'escrow'/'trade' → 400.
     const r = await applyClientUltTx(sql, email, body.tx, () => loadQuicksellValuer(new Date()));
     res.status(r.status).json(r.body);
+    return;
+  }
+
+  if (action === 'ultImport') {
+    // [F1] migração ÚNICA do save local (1× por conta; ver server/ultimate-import.ts).
+    // Catálogo vem lazy (mesma regra do packOpen): sem catálogo → 503 e o
+    // cliente tenta de novo no próximo boot, nada é marcado como importado.
+    const packMod = await loadPackModule();
+    if (!packMod) { res.status(503).json({ error: 'catalog_unavailable' }); return; }
+    const r = await importLocalCollection(sql, email, body.local, (key) => packMod.serverCardByKeyAnyMonth(key) ?? null);
+    res.status(200).json(r);
     return;
   }
 

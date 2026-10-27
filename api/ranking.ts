@@ -14,6 +14,7 @@ import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
 import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
 import { eventRewardFor } from '../src/engine/ultimate/events.js'; // [U12]
 import { applyUltTransaction, type SqlTag } from '../server/ultimate-economy.js'; // [U12]
+import { creditRankedPvpReward } from '../server/ultimate-pvp-reward.js'; // [F1]
 import { weekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 import { detectOvertakes, OVERTAKE_TOP } from '../server/rivalNotify.js'; // [URG-3]
 import { dayKey as spDayKey, mergeStreak, recordDailyPlay, type StreakState } from '../src/engine/daily/streak.js'; // [URG-4]
@@ -699,6 +700,9 @@ async function handle(req: Req, res: Res) {
     const risen: { email: string; r: NonNullable<Awaited<ReturnType<typeof applyRanked>>> }[] = [];
     for (const row of claimed) {
       const applied = await applyRanked(String(row.email), !!row.won);
+      // [F1] prêmio da ranqueada sai do SERVIDOR (resultado pareado e consistente),
+      // idempotente por partida. Best-effort: nunca derruba o report.
+      try { await creditRankedPvpReward(sql as unknown as SqlTag, String(row.email), code, !!row.won); } catch { /* segue */ }
       if (String(row.email) === email) mine = applied;
       if (applied && applied.after > applied.before) risen.push({ email: String(row.email), r: applied });
     }

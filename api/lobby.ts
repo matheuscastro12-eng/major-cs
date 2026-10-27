@@ -8,7 +8,10 @@
 // (OnlineScreen) não está no bundle e sai no O1-12.
 import { neon } from '@neondatabase/serverless';
 import { eventEligibility, type EventRule } from '../src/engine/ultimate/events.js'; // [U12]
-import { serverCatalogIndex } from '../server/ultimate-pack.js';
+import { serverCatalogIndex, serverSquadLookup } from '../server/ultimate-pack.js';
+import { verifyAccountToken } from '../server/auth.js'; // [F1] ranqueada/evento por conta
+import { buildServerSquad } from '../server/ultimate-squad.js'; // [F1] elenco autoritativo
+import type { SqlTag } from '../server/ultimate-economy.js';
 import { activeWeekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 import { rarityInfo } from '../src/engine/ultimate/rarities.js';
 import { createHash } from 'node:crypto';
@@ -30,14 +33,17 @@ const PLAYBACK_SPEEDS = new Set([0.5, 1, 2, 4, 8]);
 export const LEGACY_GONE_ACTIONS = new Set(['vetoAction', 'majorVetoAction', 'reportResult', 'startStage', 'advanceStage', 'readyStage']);
 export const LEGACY_GONE_MSG = 'Este modo online foi desativado. Jogue o duelo do Ultimate.';
 
-// [O0-45] fila ranqueada (e fila de evento) DESLIGADA por padrão: o squad ainda
-// vem do cliente (OVR e química declarados), então o RP e o prêmio de evento
-// são forjáveis. Religa com RANKED_QUEUE_ENABLED=true depois do O0-05.
+// [O0-45] fila ranqueada (e fila de evento) DESLIGADA por padrão. [F1] o squad
+// da ranqueada/evento agora é montado NO SERVIDOR (posse em rtm_ult_cards,
+// OVR/química do catálogo do servidor) e a fila exige conta — dá pra religar
+// com RANKED_QUEUE_ENABLED=true depois do deploy da Fase 1.
 export function rankedQueueEnabled(env: Record<string, string | undefined> = process.env): boolean {
   const v = clean(env.RANKED_QUEUE_ENABLED)?.toLowerCase();
   return v === 'true' || v === '1';
 }
 export const RANKED_QUEUE_OFF_MSG = 'A fila ranqueada está em manutenção. Jogue um amistoso por código enquanto isso.';
+// [F1] fila e sala ranqueada/de evento exigem conta (token) — identidade = e-mail.
+export const ACCOUNT_REQUIRED_MSG = 'Entre na sua conta para jogar a ranqueada e os eventos.';
 
 function genCode(): string {
   let c = '';
@@ -83,6 +89,9 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     sql`CREATE TABLE IF NOT EXISTS mm_queue (nick text PRIMARY KEY, elo int DEFAULT 1000, enqueued_at timestamptz DEFAULT now(), last_seen timestamptz DEFAULT now(), matched_code text)`,
     sql`CREATE INDEX IF NOT EXISTS mm_queue_open_idx ON mm_queue (matched_code, last_seen)`,
     sql`ALTER TABLE mm_queue ADD COLUMN IF NOT EXISTS bucket text DEFAULT 'open'`, // [U12] fila por evento ('open' = ranqueada normal)
+    // [F1] identidade por CONTA na fila e na sala (ranqueada/evento). NULL = amistoso sem conta.
+    sql`ALTER TABLE mm_queue ADD COLUMN IF NOT EXISTS email text`,
+    sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS email text`,
     sql`CREATE INDEX IF NOT EXISTS lobby_players_code_idx ON lobby_players (code)`,
     // CUSTO NEON: os sweeps filtram por COALESCE(last_ping/last_seen, ...) — sem
     // índice de expressão viravam SEQ SCAN em todo poll (milhões/mês, CPU que
@@ -235,26 +244,28 @@ function serverCatalogByPid(): Map<string, { region?: string; country?: string; 
   _byPid = m; _byPidMonth = mi; return m;
 }
 // [U12] `bucket` segmenta a fila: 'open' (ranqueada) ou 'ev:<eventId>' (evento) — só pareia no mesmo bucket.
-async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, myElo: number, enqueuedAtMs: number, bucket = 'open'): Promise<string | null> {
+async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, myElo: number, enqueuedAtMs: number, bucket = 'open', meEmail = ''): Promise<string | null> {
   const windowRp = mmWindow(Date.now() - enqueuedAtMs);
   const myEnqueuedIso = new Date(enqueuedAtMs).toISOString();
   const cands = await sql`
-    SELECT nick FROM mm_queue
+    SELECT nick, email FROM mm_queue
     WHERE matched_code IS NULL AND lower(nick) <> ${meNick.toLowerCase()}
       AND COALESCE(bucket, 'open') = ${bucket}
       AND last_seen > now() - interval '8 seconds'
       AND abs(elo - ${myElo}) <= ${windowRp}
       AND (enqueued_at < ${myEnqueuedIso}::timestamptz OR (enqueued_at = ${myEnqueuedIso}::timestamptz AND nick < ${meNick}))
+      AND COALESCE(email, '') <> ${meEmail}
     ORDER BY enqueued_at ASC LIMIT 5`;
   for (const cand of cands) {
     const candNick = String(cand.nick);
+    const candEmail = cand.email ? String(cand.email) : null; // [F1] conta do rival (a mesma conta nunca se pareia)
     for (let attempt = 0; attempt < 3; attempt++) {
       const newCode = genCode();
       const exists = await sql`SELECT 1 FROM lobbies WHERE code = ${newCode}`;
       if (exists.length > 0) continue;
       const seed = Math.floor(Math.random() * 2147483647);
       await sql`INSERT INTO lobbies (code, mode, host, status, seed, run_seed, pool, is_public, ranked, ruleset, event_id) VALUES (${newCode}, 'ultimate', ${candNick}, 'drafting', ${seed}, ${seed}, 'world', false, true, ${bucket === 'open' ? 'open' : 'event'}, ${bucket.startsWith('ev:') ? bucket.slice(3) : null})`;
-      await sql`INSERT INTO lobby_players (code, nick) VALUES (${newCode}, ${candNick}), (${newCode}, ${meNick})`;
+      await sql`INSERT INTO lobby_players (code, nick, email) VALUES (${newCode}, ${candNick}, ${candEmail}), (${newCode}, ${meNick}, ${meEmail || null})`;
       const claimed = await sql`UPDATE mm_queue SET matched_code = ${newCode} WHERE nick = ${candNick} AND matched_code IS NULL RETURNING nick`;
       if (claimed.length === 0) {
         // rival já foi levado por outro — desfaz a sala e tenta o próximo
@@ -451,9 +462,15 @@ export default async function handler(
     participants?: unknown;
     requiredVetoKeys?: unknown;
     force?: boolean;
+    token?: string;
+    cardIds?: unknown;
+    formationId?: unknown;
+    squad?: unknown;
   };
   const action = String(body.action ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 20);
+  // [F1] conta (opcional no amistoso; obrigatória na fila e em sala ranqueada/de evento)
+  const accountEmail = typeof body.token === 'string' && body.token ? verifyAccountToken(body.token) : null;
   const code = String(body.code ?? '').toUpperCase().slice(0, 5);
 
   // [O0-45] Online legado: 410 Gone (antes do rate-limit — não custa nada).
@@ -521,8 +538,15 @@ export default async function handler(
       return;
     }
 
+    // [F1] fila só com conta: o ticket e a sala pareada carregam o e-mail.
+    if ((action === 'queueJoin' || action === 'queuePoll') && !accountEmail) {
+      res.status(401).json({ ok: false, needAccount: true, error: ACCOUNT_REQUIRED_MSG });
+      return;
+    }
+
     if (action === 'queueJoin') {
       if (!nick) { res.status(400).json({ error: 'nick obrigatório' }); return; }
+      const meEmail = accountEmail!;
       const elo = Math.max(0, Math.min(5000, Math.round(Number(body.elo) || 1000)));
       // limpa tickets mortos (sem heartbeat) e casados que nunca foram coletados.
       // 90s de folga: no mobile trocar de app (ex.: WhatsApp pra combinar) PAUSA o
@@ -531,14 +555,17 @@ export default async function handler(
         await sql`DELETE FROM mm_queue WHERE (matched_code IS NULL AND last_seen < now() - interval '90 seconds') OR last_seen < now() - interval '5 minutes'`;
       }
       await dropQueueTicket(sql, nick); // reset (com compensação se tinha par não-coletado)
+      // [F1] 1 ticket por CONTA: outro nick da mesma conta (outra aba/aparelho) sai da fila
+      const sameAcc = await sql`SELECT nick FROM mm_queue WHERE email = ${meEmail} AND lower(nick) <> ${nick.toLowerCase()}`;
+      for (const t of sameAcc) await dropQueueTicket(sql, String(t.nick));
       // ticket entra ANTES do pareamento: fecha a janela check-then-insert em
       // que dois queueJoin simultâneos não se enxergavam.
       // [U12] fila de evento: só entra se o evento estiver ATIVO agora (kind 'event', janela)
       const evId = typeof body.eventId === 'string' ? body.eventId.slice(0, 64) : '';
       if (evId) { const ev = await activeEventById(sql, evId); if (!ev) { res.status(400).json({ error: 'evento indisponível' }); return; } }
       const bucket = evId ? `ev:${evId}` : 'open';
-      await sql`INSERT INTO mm_queue (nick, elo, bucket) VALUES (${nick}, ${elo}, ${bucket}) ON CONFLICT (nick) DO UPDATE SET elo = ${elo}, bucket = ${bucket}, last_seen = now(), matched_code = NULL, enqueued_at = now()`;
-      const matchedCode = await tryMatchUltimate(sql, nick, elo, Date.now(), bucket);
+      await sql`INSERT INTO mm_queue (nick, elo, bucket, email) VALUES (${nick}, ${elo}, ${bucket}, ${meEmail}) ON CONFLICT (nick) DO UPDATE SET elo = ${elo}, bucket = ${bucket}, email = ${meEmail}, last_seen = now(), matched_code = NULL, enqueued_at = now()`;
+      const matchedCode = await tryMatchUltimate(sql, nick, elo, Date.now(), bucket, meEmail);
       if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
       // posso ter sido claimado por outro DURANTE o tryMatch — colhe na hora
       const mineNow = await sql`SELECT matched_code FROM mm_queue WHERE nick = ${nick}`;
@@ -549,7 +576,8 @@ export default async function handler(
 
     if (action === 'queuePoll') {
       if (!nick) { res.status(400).json({ error: 'nick obrigatório' }); return; }
-      const mine = await sql`UPDATE mm_queue SET last_seen = now() WHERE nick = ${nick} RETURNING elo, enqueued_at, matched_code, bucket`;
+      // [F1] o ticket só responde à conta que o criou
+      const mine = await sql`UPDATE mm_queue SET last_seen = now() WHERE nick = ${nick} AND email = ${accountEmail} RETURNING elo, enqueued_at, matched_code, bucket`;
       if (mine.length === 0) { res.status(200).json({ ok: true, queued: false }); return; }
       const ticket = mine[0];
       if (ticket.matched_code) {
@@ -566,7 +594,7 @@ export default async function handler(
       // [O0-21] o bucket vem no RETURNING do heartbeat (sem SELECT extra por
       // poll). Antes ele ia como 2º argumento de Number() e era descartado: a
       // fila de evento pareava no bucket 'open' da ranqueada.
-      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs, ticketBucket(ticket.bucket));
+      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs, ticketBucket(ticket.bucket), accountEmail!);
       if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
       const open = await sql`SELECT COUNT(*)::int AS n FROM mm_queue WHERE matched_code IS NULL AND last_seen > now() - interval '30 seconds'`;
       res.status(200).json({ ok: true, queued: true, waiting: Number(open[0]?.n ?? 1), waitedMs, window: mmWindow(waitedMs) });
@@ -762,7 +790,7 @@ export default async function handler(
     }
 
     if (action === 'pick') {
-      const lobby = await sql`SELECT status, mode FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT status, mode, COALESCE(ranked, false) AS ranked, event_id FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -770,6 +798,31 @@ export default async function handler(
       if (lobby[0].status !== 'drafting') {
         res.status(409).json({ error: 'o draft não está em andamento' });
         return;
+      }
+      // [F1] sala RANQUEADA ou de EVENTO: conta obrigatória e squad montado NO
+      // SERVIDOR a partir de cardIds + formationId (ovr/chem do cliente ignorados).
+      const authoritative = lobby[0].mode === 'ultimate' && (lobby[0].ranked === true || !!lobby[0].event_id);
+      let serverSquad: string | null = null;
+      if (authoritative) {
+        if (!accountEmail) { res.status(401).json({ needAccount: true, squadError: true, error: ACCOUNT_REQUIRED_MSG }); return; }
+        // o assento é da conta: ranqueada nasce com e-mail (fila); sala de evento
+        // por código vincula o e-mail no 1º pick. A mesma conta não ocupa os dois lados.
+        const seats = await sql`SELECT nick, email FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false`;
+        const mySeat = seats.find((r) => String(r.nick).toLowerCase() === nick.toLowerCase());
+        if (!mySeat) { res.status(404).json({ error: 'jogador não está neste lobby' }); return; }
+        if (mySeat.email != null && String(mySeat.email) !== accountEmail) { res.status(403).json({ squadError: true, error: 'Esta vaga é de outra conta.' }); return; }
+        if (seats.some((r) => r !== mySeat && r.email != null && String(r.email) === accountEmail)) { res.status(403).json({ squadError: true, error: 'A mesma conta não pode jogar dos dois lados.' }); return; }
+        if (mySeat.email == null) await sql`UPDATE lobby_players SET email = ${accountEmail} WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()} AND email IS NULL`;
+        if (body.cardIds != null || body.done === true) {
+          const rawSq = body.squad && typeof body.squad === 'object' ? body.squad as Record<string, unknown> : {};
+          const built = await buildServerSquad(sql as unknown as SqlTag, accountEmail, {
+            cardIds: body.cardIds, formationId: body.formationId, name: rawSq.name, elo: rawSq.elo, approach: rawSq.approach,
+          }, serverSquadLookup());
+          if (!built.ok) { res.status(400).json({ squadError: true, code: built.error, error: built.message }); return; }
+          serverSquad = JSON.stringify(built.squad);
+          // a regra do evento é checada com o squad DO SERVIDOR (abaixo)
+          body.squad = built.squad;
+        }
       }
       // ultimate: done exige squad VÁLIDO de 5 cartas — senão a sala vira 'done'
       // com escalação vazia e o rival não consegue montar a partida.
@@ -781,8 +834,7 @@ export default async function handler(
         // [U12] sala de EVENTO: a regra é validada AQUI, no servidor, com o dataset do catálogo
         // (role/region/country/tier por pid) e o OVR declarado no snapshot (clamp 1..99). Elenco
         // travado: o pick só é aceito em 'drafting' e o snapshot não muda depois.
-        const evRow = await sql`SELECT event_id FROM lobbies WHERE code = ${code}`;
-        const evId = evRow[0]?.event_id ? String(evRow[0].event_id) : '';
+        const evId = lobby[0].event_id ? String(lobby[0].event_id) : '';
         if (evId) {
           const ev = await activeEventById(sql, evId);
           if (!ev) { res.status(409).json({ error: 'evento encerrado' }); return; }
@@ -820,7 +872,9 @@ export default async function handler(
       // squad do Ultimate PvP: snapshot compacto {name, elo, chem, cards[{pid,ovr}]}.
       // COALESCE no UPDATE: pick sem squad (modos antigos) NÃO apaga o existente.
       const rawSquad = body.squad && typeof body.squad === 'object' ? body.squad as Record<string, unknown> : null;
-      const squad = rawSquad
+      // [F1] sala autoritativa: só o snapshot do servidor. Amistoso: o do cliente,
+      // marcado como NÃO autoritativo (auth:false).
+      const squad = authoritative ? serverSquad : rawSquad
         ? JSON.stringify({
             name: String(rawSquad.name ?? '').slice(0, 24),
             elo: Math.max(0, Math.min(5000, Math.round(Number(rawSquad.elo) || 0))),
@@ -834,6 +888,7 @@ export default async function handler(
                   return { pid: String(c.pid ?? '').slice(0, 80), ovr: Math.max(1, Math.min(99, Math.round(Number(c.ovr) || 60))) };
                 })
               : [],
+            auth: false,
           })
         : null;
       const updated = await sql`
