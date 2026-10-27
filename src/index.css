@@ -4464,7 +4464,7 @@ table.crm-players input.num {
 
 .mc-hint { font-size: 11px; color: var(--faint); margin-top: 2px; }
 
-/* ---------- avatar de jogador (foto Liquipedia + fallback) ---------- */
+/* ---------- avatar de jogador (foto bo3.gg + fallback de iniciais) ---------- */
 .pavatar {
   display: inline-flex;
   align-items: center;
