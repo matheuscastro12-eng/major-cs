@@ -2,7 +2,7 @@
 
 - **Tarefa:** (1) elenco autoritativo no servidor e religar a ranqueada; (2) PvP com decisões simultâneas por beat resolvidas no servidor; (3) Modo Major: jogar partidas, pick'em, Major com amigos, polimento.
 - **Restrições:** não mexer em preço/pagamentos/Stripe/Woovi. Engine puro (sem Math.random/Date.now). PR sem merge até o Matheus aprovar.
-- **Estágio:** 0 concluído (diagnóstico + decisões). Próximo: Fase 1.
+- **Estágio:** Fase 1 implementada na branch `feat/ultimate-online-f1` (sem push/PR). Próximo: deploy + ligar a fila; depois Fase 2.
 
 ## Diagnóstico (27/10/2026)
 - Duelo PvP: os dois clientes simulam com o mesmo `run_seed`; servidor não guarda round nem placar (`api/lobby.ts`).
@@ -27,5 +27,23 @@
 - PvP: decisões simultâneas por beat, resolvidas no servidor (polling, sem WebSocket).
 - Modo Major: jogar partidas, pick'em, Major com amigos, polimento — depois do Ultimate.
 
+## Fase 1 — feito (27/10/2026, branch `feat/ultimate-online-f1`)
+- `server/ultimate-squad.ts`: `buildServerSquad(sql, email, {cardIds, formationId}, lookup)` confere posse em `rtm_ult_cards`, cartas distintas e formação; OVR = catálogo do servidor + `meta.boost` (clamp 0..3); química = `computeChemistry` + adjacência da formação × bônus de duelo (`squadDuelBonus` com `meta.style`), clamp 0.8–1.2. Snapshot no formato de sempre, `v: 3`, `auth: true`.
+- `server/ultimate-pack.ts`: `serverSquadLookup()` (mês corrente, cai pra qualquer mês do snapshot).
+- `api/lobby.ts`: `queueJoin`/`queuePoll` exigem token (401 com `needAccount`); colunas `email` em `mm_queue` e `lobby_players` (ALTER idempotente); 1 ticket por conta; a mesma conta não se pareia; sala pareada nasce com o e-mail dos dois. `pick` em sala ranqueada ou de evento: exige token, vaga presa à conta (sala de evento por código vincula no 1º pick), squad montado no servidor com `cardIds`+`formationId`; `ovr`/`chem` do cliente ignorados; a regra do evento é checada com o squad do servidor. Amistoso por código segue sem conta, snapshot com `auth: false`.
+- `server/ultimate-import.ts` + ação `ultImport` em `/api/ultimate-economy`: migração 1× por conta (`rtm_ult_wallet.imported_at` + ledger `import:<email>`, kind `grant`). Só card_key do catálogo do servidor, cardId livre, boost 0..3, `ed` 1..99, `style` da allowlist; tetos: 400 cartas, por raridade (histIcon 3, icon 6, major 8, tots 10, promo/totw 12, legendary 20, elite 40); excedente recusado e logado (console + meta do ledger). Créditos: sobe até min(local, 50.000), nunca desce. Carteira congelada bloqueia.
+- Cliente: `lobbyApi` manda o token quando existe; pick manda `cardIds`+`formationId`; erro de squad aparece em PT-BR e não re-tenta em loop (trocar o squad re-envia); `importLocalOnce()` roda no boot do espelho (antes do reconcile), marca por e-mail no aparelho.
+- Prêmio pelo servidor (forma mínima): `server/ultimate-pvp-reward.ts` credita 500 créditos por vitória ranqueada quando o report pareado é consistente (`api/ranking.ts`, laço do `claimed`), op_id `pvp-ranked:<code>`, kind `reward`. O MMR segue no report pareado (Fase 2 troca pelo resultado do servidor).
+
+## Como ligar a ranqueada
+Depois do deploy desta branch: definir `RANKED_QUEUE_ENABLED=true` na Vercel (produção) e redeployar. NÃO foi alterado por este trabalho.
+
+## Pendências reais (Fase 1)
+- Fontes de prêmio ainda só locais (não chegam ao servidor depois do import, então essas cartas/créditos não valem na ranqueada): Draft, objetivos/missões, carta inicial, eventos locais, daily/streak, meta, passe, recompensas de temporada, SBC (entrada de carta), evolução (`boost`) e estilo aplicados depois do import, Pacote da Temporada (`ed` é só local).
+- Bônus de edição (`ed`, +2 OVR "em forma") não entra no OVR do servidor: o servidor não conhece `season.n` (é do save). O OVR do servidor fica até 2 abaixo do que o cliente mostra para essas cartas.
+- O crédito do prêmio da ranqueada no servidor e o `recordMatch` local somam em saldos separados (local vs servidor) até a economia migrar de vez.
+- `elo` e `name` do snapshot ainda vêm do cliente (clamp). O MMR real é do `rtm_ranking`.
+- Cliente só chama `ultImport` no boot (login no meio da sessão importa no próximo boot).
+
 ## Próximo passo
-- Branch `feat/ultimate-online` a partir de origin/master; Fase 1 passo 2 (espelho para conta grátis) e passo 1 (token na fila).
+- Revisar e mergear `feat/ultimate-online-f1`, deploy, ligar `RANKED_QUEUE_ENABLED=true`, observar logs de `[ultImport]`. Depois: Fase 2 (partida no servidor).
