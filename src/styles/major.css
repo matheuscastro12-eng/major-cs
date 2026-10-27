@@ -152,3 +152,100 @@
 }
 .msg, .msg > * { min-width: 0; }
 .msg-hero__meta { overflow-wrap: anywhere; }
+
+/* ── v2: jogar, 3-0/0-3, liga, resultado ─────────────────────────────── */
+
+/* formulários (time/função, nick/código) */
+.msg-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3); margin-top: var(--sp-3); }
+.msg-field { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; flex: 1 1 180px; }
+.msg-field > span {
+  font-family: var(--font-title); font-weight: 600; font-size: var(--fs-2);
+  letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-ink-faint);
+}
+.msg-field select, .msg-field input {
+  min-height: 44px; width: 100%; padding: 0 var(--sp-3);
+  background: var(--c-surface-2); color: var(--c-ink); border: 1px solid var(--c-line); border-radius: 6px;
+  font: inherit; font-size: var(--fs-3);
+}
+.msg-field select:focus-visible, .msg-field input:focus-visible { outline: 2px solid var(--c-brand); outline-offset: 1px; }
+.msg-code { font-family: var(--font-num); letter-spacing: 0.2em; text-transform: uppercase; }
+.msg-league-forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+
+/* campanha */
+.msg-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.msg-kpis > div { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-3); background: var(--c-surface-2); border-radius: 6px; min-width: 0; }
+.msg-kpi__label {
+  font-family: var(--font-title); font-weight: 600; font-size: var(--fs-2);
+  letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-ink-faint);
+}
+.msg-kpi__val { font-family: var(--font-display); font-size: var(--fs-6); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.msg-runlog { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.msg-runlog li {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto 5ch; gap: var(--sp-3); align-items: center;
+  padding: var(--sp-2) var(--sp-3); background: var(--c-surface-2); border-radius: 4px; font-size: var(--fs-3);
+  box-shadow: inset 3px 0 0 var(--c-loss);
+}
+.msg-runlog li.is-w { box-shadow: inset 3px 0 0 var(--c-win); }
+.msg-runlog__when { color: var(--c-ink-faint); font-size: var(--fs-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-runlog__opp { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-runlog__score, .msg-runlog__rt { font-variant-numeric: tabular-nums; text-align: right; }
+.msg-runlog__rt { color: var(--c-ink-faint); font-size: var(--fs-2); }
+.msg-next { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin: 0 0 var(--sp-3); font-size: var(--fs-4); }
+.msg-mvp { display: flex; gap: var(--sp-3); align-items: flex-start; margin-bottom: var(--sp-3); }
+.msg-mvp > svg { color: var(--c-ink-faint); flex: none; }
+.msg-mvp > svg.is-on { color: var(--c-brand); }
+.msg-mvp__line { margin: 0; font-family: var(--font-display); font-size: var(--fs-5); text-transform: uppercase; }
+
+/* a Sala dentro do Modo Major */
+.msg-room { display: flex; flex-direction: column; gap: var(--sp-3); }
+.msg-room__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); font-size: var(--fs-3); }
+.msg-room__vs { overflow-wrap: anywhere; }
+
+/* pick'em: 3-0 / 0-3 */
+.msg-extremes { margin-top: var(--sp-4); border-top: 1px solid var(--c-line-soft); padding-top: var(--sp-3); display: grid; gap: var(--sp-3); }
+.msg-extreme { display: grid; grid-template-columns: 11ch minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
+.msg-extreme__label {
+  font-family: var(--font-title); font-weight: 600; font-size: var(--fs-2); padding-top: 12px;
+  letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-ink-faint);
+}
+.msg-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.msg-chip {
+  min-height: 44px; min-width: 52px; padding: 0 var(--sp-3); cursor: pointer;
+  background: var(--c-surface-2); color: var(--c-ink-dim); border: 1px solid var(--c-line); border-radius: 4px;
+  font-family: var(--font-num); font-size: var(--fs-3);
+}
+.msg-chip:hover:not(:disabled) { color: var(--c-ink); border-color: var(--c-line-strong); }
+.msg-chip.is-on { color: var(--c-ink); border-color: var(--c-brand); box-shadow: inset 0 -2px 0 var(--c-brand); }
+.msg-chip:disabled { opacity: 0.45; cursor: default; }
+.msg-chip:focus-visible { outline: 2px solid var(--c-brand); outline-offset: 2px; }
+
+/* resumo do palpite */
+.msg-summary { display: grid; gap: 2px; width: 100%; }
+.msg-summary p {
+  display: grid; grid-template-columns: 9ch repeat(3, minmax(0, 1fr)); gap: var(--sp-3); margin: 0;
+  padding: var(--sp-2) 0; border-bottom: 1px solid var(--c-line-soft); font-size: var(--fs-3); font-variant-numeric: tabular-nums;
+}
+
+/* resultado: chave legível (placar por lado, seu time marcado) */
+.msg-views { margin-bottom: var(--sp-4); }
+.msg-slot.is-static { cursor: default; }
+.msg-slot.is-static:hover { background: var(--c-surface-2); color: var(--c-ink-dim); }
+.msg-slot.is-static.is-won:hover { color: var(--c-ink); }
+.msg-slot__score { margin-left: auto; font-variant-numeric: tabular-nums; font-family: var(--font-num); color: var(--c-ink-faint); }
+.msg-slot.is-won .msg-slot__score { color: var(--c-brand); }
+.msg-slot.is-me .msg-slot__name, .msg-standing.is-me .msg-standing__name { text-decoration: underline; text-decoration-color: var(--c-brand); text-underline-offset: 3px; }
+.msg-standing__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .msg-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .msg-league-forms { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .msg { padding-left: var(--sp-3); padding-right: var(--sp-3); }
+  .msg-runlog li { grid-template-columns: minmax(0, 1fr) auto 5ch; }
+  .msg-runlog__when { grid-column: 1 / -1; }
+  .msg-extreme { grid-template-columns: 1fr; }
+  .msg-extreme__label { padding-top: 0; }
+  .msg-summary p { grid-template-columns: 8ch repeat(3, minmax(0, 1fr)); gap: var(--sp-2); font-size: var(--fs-2); }
+  .msg-picks { grid-template-columns: 1fr; }
+}
