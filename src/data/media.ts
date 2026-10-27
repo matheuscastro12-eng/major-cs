@@ -109,3 +109,19 @@ export function photoForNick(nick: string): string | undefined {
   const k = photoSlug(nick);
   return k && BO3_LOCAL.has(k) ? `/players/bo3/${k}.webp` : undefined;
 }
+
+// ---- logos do Modo Major (ids de data/major-singapore-2026.json) ----
+// Só os logos LOCAIS que o app já tem em public/logos (os mesmos do logoForTeam,
+// #125). Sem logo local → sigla do time. Nada da Liquipedia nem hotlink.
+const MAJOR_LOGOS: Record<string, string> = {
+  'team-vitality': 'vitality.png', 'team-spirit': 'spirit.png', 'team-falcons': 'falcons.png',
+  'natus-vincere': 'navi.png', mouz: 'mouz.png', legacy: 'legacy.png', 'the-mongolz': 'mongolz.png',
+  astralis: 'astralis.png', furia: 'furia.png', 'g2-esports': 'g2.png', '9z': '9z.png',
+  'pain-gaming': 'pain.png', mibr: 'mibr.png', 'faze-clan': 'faze.png', 'ninjas-in-pyjamas': 'nip.jpg',
+  heroic: 'heroic.png', big: 'big.jpg', tyloo: 'tyloo.png', 'team-liquid': 'liquid.png',
+};
+
+export function logoForMajorTeam(id: string): string | undefined {
+  const f = MAJOR_LOGOS[id];
+  return f ? `/logos/${f}` : undefined;
+}

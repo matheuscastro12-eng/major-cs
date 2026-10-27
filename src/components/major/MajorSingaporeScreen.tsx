@@ -22,6 +22,8 @@ import { Alert, Button, EmptyState, Panel, Skeleton, Tag } from '../ds';
 import { PlayerAvatar } from '../ui';
 import bo3Teams from '../../data/bo3-2026.json';
 import { MajorResultView } from './MajorResultView';
+import { TeamLogo } from './TeamLogo';
+import { PickemBoard } from './PickemBoard';
 import { MajorLeague } from './MajorLeague';
 import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
@@ -165,6 +167,7 @@ export function MajorSingaporeScreen() {
       {tab === 'pickem' && (
         <div className="msg-stack">
           <PrizePanel t={t} />
+          <PickemBoard />
           {sharedCode && !shared && <Alert tone="danger">{t('badLink')}</Alert>}
           {shared && (
             <Alert
@@ -214,7 +217,7 @@ type T = (k: MajorKey) => string;
 function TeamChip({ team, sub }: { team: MajorTeam; sub?: string }) {
   return (
     <span className="msg-team">
-      <span className="msg-team__swatch" style={{ background: team.colors?.[1] ?? 'var(--c-ink-faint)' }} aria-hidden />
+      <TeamLogo team={team} />
       <span className="msg-team__name">{team.name}</span>
       {sub && <span className="msg-team__sub">{sub}</span>}
     </span>
@@ -380,7 +383,7 @@ function StagePicker({ stage, picks, readOnly, t, onToggle, onExtreme }: { stage
                     return (
                       <button key={id} type="button" className={`msg-chip${sel ? ' is-on' : ''}`} aria-pressed={sel}
                         disabled={readOnly || (!sel && on.length >= EXTREME_PICKS)} onClick={() => onExtreme(kind, id)}>
-                        {teams.get(id)?.tag ?? id}
+                        <TeamLogo team={teams.get(id)} size={16} /> {teams.get(id)?.tag ?? id}
                       </button>
                     );
                   })}
@@ -407,7 +410,7 @@ function BracketPicker({ picks, readOnly, t, onPick }: { picks: MajorPicks; read
             const won = !!id && picks.bracket[g] === id;
             return (
               <button key={s} className={`msg-slot${won ? ' is-won' : ''}`} disabled={readOnly || !id || !sides[g][0] || !sides[g][1]} aria-pressed={won} onClick={() => onPick(g, id)}>
-                {tm ? <><span className="msg-seed">{tm.seed}</span><span className="msg-slot__name">{tm.name}</span></> : <span className="msg-slot__tbd">—</span>}
+                {tm ? <><span className="msg-seed">{tm.seed}</span><TeamLogo team={tm} size={18} /><span className="msg-slot__name">{tm.name}</span></> : <span className="msg-slot__tbd">—</span>}
               </button>
             );
           })}
@@ -426,7 +429,7 @@ function BracketPicker({ picks, readOnly, t, onPick }: { picks: MajorPicks; read
           <div className="msg-bcol is-champ">
             <h3 className="msg-bcol__title">{t('champion')}</h3>
             <div className={`msg-champ${champ ? ' is-set' : ''}`}>
-              <Trophy size={22} aria-hidden />
+              {champ ? <TeamLogo team={champ} size={26} /> : <Trophy size={22} aria-hidden />}
               <span>{champ?.name ?? '—'}</span>
             </div>
           </div>

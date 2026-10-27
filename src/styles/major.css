@@ -263,3 +263,14 @@
 .msg-pred th, .msg-pred td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--c-line); white-space: nowrap; }
 .msg-pred th:first-child, .msg-pred td:first-child { text-align: left; }
 @media (max-width: 640px) { .msg-roster { grid-template-columns: 1fr; } }
+/* logos locais dos times (sigla quando não há) */
+.msg-logo { flex: none; object-fit: contain; display: inline-block; vertical-align: middle; }
+.msg-logo.is-tag { display: inline-grid; place-items: center; border-radius: 4px; background: var(--c-line); color: var(--c-ink); font-weight: 700; letter-spacing: .02em; line-height: 1; overflow: hidden; }
+.msg-chip .msg-logo { margin-right: 4px; }
+.msg-slot .msg-logo, .msg-standing .msg-logo { margin-right: 6px; }
+/* placar do pick'em */
+.msg-board { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.msg-board__row { display: grid; grid-template-columns: 32px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--c-line); font-variant-numeric: tabular-nums; }
+.msg-board__row.is-prize { color: var(--c-achievement); }
+.msg-board__rank { text-align: center; }
+.msg-board__exact { opacity: .7; font-size: 12px; }
