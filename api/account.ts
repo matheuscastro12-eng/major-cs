@@ -49,7 +49,13 @@ let founderAuditAt = 0;
 // Cache em memória da contagem pública de Fundadores (prova social). Serve de
 // rate-limit natural: por instância, no máximo 1 query/min mesmo sob rajada;
 // o Cache-Control público (5 min) segura o resto na CDN/navegador.
-let foundersCache: { at: number; founders: number } | null = null;
+// paidTotal entra na mesma query/cache: dado real mostra os 500 Fundadores
+// esgotados desde 24/08 (founder_no chegou no teto) — desde então o
+// FounderCounter, usado em 14 superfícies free-only, só mostra "esgotada" sem
+// nenhum número, ou seja, zero prova social em TODAS essas telas há 2 meses.
+// paidTotal (contas vitalícias, Fundador ou não) dá ao front um número real
+// pra substituir a mensagem murcha por algo que ainda convence.
+let foundersCache: { at: number; founders: number; paidTotal: number } | null = null;
 type AccountSql = NeonQueryFunction<false, false>;
 
 async function ensureAccountSchema(sql: AccountSql): Promise<void> {
@@ -164,11 +170,11 @@ export default async function handler(
         await ensureAccountSchema(sql);
         // números EMITIDOS (o maior founder_no): número de conta revogada fica
         // aposentado e não volta pra fila (O0-42), então "vagas" = teto − isso.
-        const r = await sql`SELECT COALESCE(MAX(founder_no), 0)::int AS founders FROM rtm_accounts`;
-        foundersCache = { at: Date.now(), founders: Number(r[0]?.founders ?? 0) };
+        const r = await sql`SELECT COALESCE(MAX(founder_no), 0)::int AS founders, COUNT(*) FILTER (WHERE paid)::int AS paid_total FROM rtm_accounts`;
+        foundersCache = { at: Date.now(), founders: Number(r[0]?.founders ?? 0), paidTotal: Number(r[0]?.paid_total ?? 0) };
       }
       res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
-      res.status(200).json({ founders: foundersCache.founders, limit: FOUNDER_LIMIT });
+      res.status(200).json({ founders: foundersCache.founders, limit: FOUNDER_LIMIT, paidTotal: foundersCache.paidTotal });
     } catch { res.status(500).json({ error: 'indisponível' }); }
     return;
   }
