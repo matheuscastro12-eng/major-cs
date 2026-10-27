@@ -7,6 +7,7 @@ import { Button, Modal } from '../ds';
 import { GameShell, type GameShellProps } from '../ds/shell/GameShell';
 import type { ShellNavGroup } from '../ds/shell/types';
 import { Flag, PlayerAvatar } from '../ui';
+import { csmArtFor } from '../../data/csmArt'; // arte das cartas: CS Manager (cedida)
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
 import { loadStreakState } from '../../state/dailyStreak'; // [URG-4]
 import { streakStatus } from '../../engine/daily/streak'; // [URG-4]
@@ -88,6 +89,7 @@ import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../..
 import { WeekendLeague } from '../online/WeekendLeague';
 import { WlResultBanner } from './WlResultBanner'; // [O0-22]
 import { UtPanel, UtEmpty } from './UtPanel';
+import { CardArtCredit } from './CardArtCredit';
 import { FounderCounter } from '../FounderCounter';
 import {
   LayoutGrid, Layers, Shirt, FlaskConical, ArrowLeftRight, Package, Crosshair,
@@ -223,6 +225,19 @@ function cardSkin(rarity: UltCard['rarity']) {
   };
 }
 
+// pele de TEXTO para a carta com arte do CS Manager: moldura é imagem, então
+// texto claro sobre placa/faixa escura (contraste garantido em moldura clara).
+function CSM_SKIN(c: string) {
+  return { ...cardSkin('elite'), ink: '#ffffff', sub: 'rgba(255,255,255,0.72)', line: 'rgba(255,255,255,0.22)', plate: 'rgba(8,10,16,0.62)', label: c, mark: 'transparent' };
+}
+
+// foto do CS Manager com fallback pro avatar procedural se o arquivo falhar
+function CsmPhoto({ src, nick, w, h }: { src: string; nick: string; w: number; h: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <PlayerAvatar nick={nick} size={Math.round(Math.min(w, h) * 0.85)} />;
+  return <img src={src} alt={nick} width={w} height={h} loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} style={{ width: w, height: h, objectFit: 'contain', objectPosition: 'center bottom', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.45))' }} />;
+}
+
 // aplica o nível de evolução (boost) no OVR e nos 6 atributos (clamp 99).
 // Mantém key/rarity/playerId — só sobe os números. Base intacta se boost=0.
 function boostCard(base: UltCard, boost: number | undefined): UltCard {
@@ -247,10 +262,13 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
   const compact = size < 116;
   const h = Math.round(size * 1.4);
   const foil = FOIL_RARITIES.has(card.rarity);
-  const s = cardSkin(card.rarity);
-  const px = Math.round(size * 0.06);
   // [W2] LEGADO: moldura própria (borda dupla âmbar + faixa "LEGADO") sobre a pele de lenda
   const legacy = isLegacyCard(card);
+  // arte do CS Manager (moldura por raridade + foto + logo) quando há foto mapeada;
+  // sem foto (ou LEGADO) → visual próprio. Texto vira claro sobre faixa escura.
+  const csm = legacy ? null : csmArtFor(card);
+  const s = csm ? CSM_SKIN(rarityInfo(card.rarity).color) : cardSkin(card.rarity);
+  const px = Math.round(size * (csm ? 0.1 : 0.06));
   // [U10] moldura EQUIPADA do clube: só cosmética, por cima da pele de raridade (não no LEGADO)
   const equippedFrameId = useUltimate((st) => st.state.profile.equippedFrame ?? null);
   const frame = legacy ? null : frameById(equippedFrameId);
@@ -258,18 +276,24 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
   const evTag = ev ? ev.replace(/^wknd-/, '').toUpperCase() : null;
   return (
     <div style={{ width: size, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: qs != null ? 6 : 0 }}>
-      <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: legacy ? 'linear-gradient(165deg, #2a1d05 0%, #141821 55%, #3a2a08 100%)' : s.bg, border: `1.5px solid ${evo > 0 ? 'var(--c-win)' : ev ? '#f472b6' : legacy ? '#f3cf6b' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px var(--c-win), 0 0 20px color-mix(in srgb, var(--c-win) 40%, transparent)` : ev ? `${s.glow}, 0 0 0 2px rgba(244,114,182,0.45), 0 0 18px rgba(244,114,182,0.4)` : legacy ? `${s.glow}, 0 0 0 2px rgba(243,207,107,0.35)` : s.glow }}>
-        {ev && <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: '1px dashed rgba(244,114,182,0.7)', pointerEvents: 'none', zIndex: 2 }} />}
+      <div style={csm ? { position: 'relative', width: size, height: h, filter: evo > 0 ? 'drop-shadow(0 0 6px var(--c-win))' : ev ? 'drop-shadow(0 0 6px #f472b6)' : 'drop-shadow(0 5px 10px rgba(0,0,0,0.35))' } : { position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: legacy ? 'linear-gradient(165deg, #2a1d05 0%, #141821 55%, #3a2a08 100%)' : s.bg, border: `1.5px solid ${evo > 0 ? 'var(--c-win)' : ev ? '#f472b6' : legacy ? '#f3cf6b' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px var(--c-win), 0 0 20px color-mix(in srgb, var(--c-win) 40%, transparent)` : ev ? `${s.glow}, 0 0 0 2px rgba(244,114,182,0.45), 0 0 18px rgba(244,114,182,0.4)` : legacy ? `${s.glow}, 0 0 0 2px rgba(243,207,107,0.35)` : s.glow }}>
+        {csm && (
+          <>
+            <img src={csm.frame} alt="" aria-hidden="true" loading="lazy" decoding="async" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', filter: csm.frameFilter, pointerEvents: 'none' }} />
+            <div aria-hidden="true" style={{ position: 'absolute', left: '9%', right: '9%', top: '50%', bottom: '8%', borderRadius: 6, background: 'linear-gradient(180deg, rgba(8,10,16,0) 0%, rgba(8,10,16,0.78) 22%, rgba(8,10,16,0.86) 100%)', pointerEvents: 'none' }} />
+          </>
+        )}
+        {ev && !csm && <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: '1px dashed rgba(244,114,182,0.7)', pointerEvents: 'none', zIndex: 2 }} />}
         {evTag && (
           <span title={`Carta exclusiva do evento ${ev}`} style={{ position: 'absolute', bottom: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.46}rem`, fontWeight: 900, letterSpacing: '0.6px', padding: '1px 5px', borderRadius: 6, background: '#f472b6', color: '#1a0a12', whiteSpace: 'nowrap' }}>EVENTO {evTag}</span>
         )}
-        <div style={{ position: 'absolute', inset: 0, background: s.sheen, pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${legacy ? 'rgba(243,207,107,0.55)' : frame ? frame.inner : s.inner}`, pointerEvents: 'none' }} />
-        {frame && <div style={{ position: 'absolute', inset: 0, borderRadius: 14, border: `2px solid ${frame.border}`, pointerEvents: 'none' }} />}
+        {!csm && <div style={{ position: 'absolute', inset: 0, background: s.sheen, pointerEvents: 'none' }} />}
+        {!csm && <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${legacy ? 'rgba(243,207,107,0.55)' : frame ? frame.inner : s.inner}`, pointerEvents: 'none' }} />}
+        {frame && !csm && <div style={{ position: 'absolute', inset: 0, borderRadius: 14, border: `2px solid ${frame.border}`, pointerEvents: 'none' }} />}
         {frame?.badge && !legacy && (
           <span style={{ position: 'absolute', top: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.48}rem`, fontWeight: 900, letterSpacing: '1px', padding: '1px 5px', borderRadius: 6, background: frame.badgeBg ?? frame.border, color: 'var(--c-ink)' }}>{frame.badge}</span>
         )}
-        {foil && <div className="ult-foil" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
+        {foil && !csm && <div className="ult-foil" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
         {legacy && (
           <span style={{ position: 'absolute', top: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, letterSpacing: '1px', padding: '1px 6px', borderRadius: 6, background: '#f3cf6b', color: 'var(--c-ink)' }}>LEGADO</span>
         )}
@@ -294,10 +318,12 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
               <span style={{ marginTop: 3 }}><Flag cc={card.country} /></span>
             </div>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <PlayerAvatar nick={card.nick} size={Math.round(size * (compact ? 0.42 : 0.5))} />
+              {csm
+                ? <CsmPhoto src={csm.photo} nick={card.nick} w={Math.round(size * 0.58)} h={Math.round(size * (compact ? 0.5 : 0.56))} />
+                : <PlayerAvatar nick={card.nick} size={Math.round(size * (compact ? 0.42 : 0.5))} />}
             </div>
           </div>
-          <div style={{ fontSize: `${(size / 140) * 0.88}rem`, fontWeight: 900, color: s.ink, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>{card.nick}</div>
+          <div style={{ fontSize: `${(size / 140) * 0.88}rem`, fontWeight: 900, color: s.ink, textShadow: csm ? '0 1px 2px rgba(0,0,0,0.7)' : undefined, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>{card.nick}</div>
           {!compact && (
             <>
               <div style={{ height: 1, background: s.line, margin: '4px 6px' }} />
@@ -315,11 +341,12 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
             </>
           )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 }}>
+            {csm?.logo && <img src={csm.logo} alt={card.teamOriginName} title={card.teamOriginName} loading="lazy" decoding="async" width={Math.round(size * 0.1)} height={Math.round(size * 0.1)} style={{ objectFit: 'contain' }} />}
             <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 800, color: s.ink, opacity: 0.72 }}>{REGION_CODE[card.region] ?? 'GLB'}</span>
             <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 900, color: s.label, letterSpacing: '0.2px' }}>· {legacy ? 'Legado do RtP' : info.label}</span>
           </div>
         </div>
-        {!compact && (
+        {!compact && !csm && (
           <span style={{ position: 'absolute', bottom: 3, right: 6, zIndex: 1, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, color: s.mark, fontFamily: 'var(--ut-font-cond)', letterSpacing: '0.3px', pointerEvents: 'none' }}>R<span style={{ color: s.markSlash }}>t</span>M</span>
         )}
       </div>
@@ -2011,6 +2038,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             </div>
           </UtPanel>
           <div style={{ textAlign: 'center' }}><button onClick={onBack} className="ut-btn ut-btn--ghost">← {ct('Voltar')}</button></div>
+          <CardArtCredit />
         </div>
       </div>
       </GameShell>
@@ -4543,6 +4571,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           {toast}
         </div>
       )}
+      <CardArtCredit />
       </div>{/* /.ut-page */}
     </div>
     </GameShell>

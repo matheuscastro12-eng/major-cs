@@ -1143,3 +1143,6 @@ body:has(.ut-live) {
   .ut-sqlayout { grid-template-columns: minmax(0, 1fr); }
   .ut-sqlayout__main .ut-sqpitch { max-height: none; min-height: 0; }
 }
+
+/* crédito da arte das cartas (CS Manager, cedida ao projeto) */
+.ut-art-credit { margin: var(--sp-6, 24px) 0 var(--sp-2, 8px); font-size: 12px; text-align: right; color: var(--c-ink-dim); }
