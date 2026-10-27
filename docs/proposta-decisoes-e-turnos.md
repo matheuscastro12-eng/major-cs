@@ -36,13 +36,13 @@ Força do elenco (top 80, strength 93,1→72,9; times diferentes, veto da IA, 6.
 
 ## 1. Decisões que passam a mudar o resultado
 
-Meta: **entre times parecidos (gap ≤ 5), decisões boas vs ruins = 65–70% de vitória no Bo3; entre gap 10+, o azarão bem jogado chega a 25–30% no Bo3 (hoje 3,6%)**. Elenco continua mandando (≈60% do resultado), decisões ≈30%, sorte ≈10–15%.
+Meta (**aprovada pelo Matheus em 27/10**): **entre times parecidos (gap ≤ 5), decisões boas vs ruins = 65–70% de vitória no Bo3; entre gap 10+, o azarão bem jogado chega a 25–30% no Bo3 (hoje 3,6%)**. Elenco continua mandando (≈60% do resultado), decisões ≈30%, sorte ≈10–15%.
 
 | Decisão | Quando | Peso alvo (espelho, mapa) | Regra anti-sorte |
 |---|---|---|---|
 | Veto de mapa (ban/pick) | antes da série | até ±15 pp por mapa | já existe; abrir pro jogador com o histórico do rival visível |
 | Lado inicial | quem não escolheu o mapa | ±2–3 pp | depende do mapa (CT-sided/T-sided) |
-| Tática por meio (setup CT / execução T) | início de cada half (4×/mapa com OT) | ±6–8 pp | pedra-papel-tesoura com *counter*: só vale se ler o rival; o histórico do half anterior é revelado |
+| Tática por bloco de 3 rounds (setup CT / execução T) | início de cada turno (~7×/mapa) | ±6–8 pp | pedra-papel-tesoura com *counter*: só vale se ler o rival; o histórico do half anterior é revelado |
 | Economia (full / force / save) | rounds de decisão econômica (pós-pistol, ~5/mapa) | ±2–3 pp no mapa | sem estratégia dominante: "force sempre" e "save sempre" devem dar ≤ +0,5 pp |
 | Timeout | 2 por mapa | +3–4 pp no round seguinte (hoje +0,4 no mapa) | só reseta momentum do rival; não ganha sozinho |
 | Troca de papel / sub | entre mapas | ±3–5 pp | erro de papel continua punido (hoje −17) |
@@ -51,37 +51,72 @@ Como medir (CI): `scripts/measure-decisoes.mts` (novo, fase 1) roda espelho com 
 
 ## 2. Modo Major online por turnos (2 jogadores)
 
-**Unidade de turno = meio do mapa (half), não round.** 24 rounds por clique é chato e caro; 4–6 turnos por mapa cabem em 10–15 min por Bo3.
+Decisão do Matheus (27/10): turno curto, a cada poucos rounds. **Proposta: turno = bloco de 3 rounds.**
 
-Fluxo de uma série:
-1. **Veto** alternado (Bo1: A ban, B ban, …; Bo3/Bo5 no formato Valve). 30 s por ação.
-2. **Lado:** quem não pickou escolhe. 20 s.
-3. **Turno de half (simultâneo, às cegas):** cada um envia `{setupCT|execT, postura eco (full/force/save padrão), timeouts reservados (rounds)}`. 45 s. Quando os dois enviaram (ou acabou o tempo), revela e o motor roda os 12 rounds com seed fixa → os dois veem o replay do half (resumo rápido, pulável).
-4. Intervalo do mapa: troca de papel/sub. 30 s. Repete 3 no 2º half e no OT (turno de OT = 1 bloco MR3).
+Por que 3:
+- 12 rounds por half = 4 turnos exatos; a OT do CS2 já é MR3, então 1 bloco de OT = 1 turno. Nenhum turno atravessa troca de lado ou reset de dinheiro.
+- 3 rounds = um ciclo econômico (compra → resultado → force/save). A decisão de eco tem efeito visível no próprio turno.
+- 1 round por turno dá 21–24 cliques por mapa (Bo3 > 30 min); 6 rounds volta a ser "meio half". Com 3: ~7–8 turnos por mapa, ~20 por Bo3.
 
-Se um sumir: tempo esgotado ⇒ **plano padrão da IA** (aiTactics) naquele turno; 2 turnos seguidos ausente ⇒ W.O. do mapa; 5 min sem heartbeat ⇒ W.O. da série. Desempate de quem envia primeiro não existe (escolhas simultâneas, commit-reveal: guarda hash até os dois enviarem).
+Fluxo:
+1. **Veto** no formato Valve (Bo1/Bo3/Bo5). 25 s por ação.
+2. **Lado:** quem não pickou escolhe. 15 s.
+3. **Turno (3 rounds, simultâneo e às cegas):** cada um envia `{tática do bloco (setup CT ou execução T), economia (full/force/save), timeout neste bloco? (2/mapa)}`. **20 s.** Commit-reveal: o servidor guarda até os dois enviarem (ou acabar o tempo), revela, roda os 3 rounds com seed fixa e mostra o replay curto (~10–15 s, pulável).
+4. Entre mapas: troca de papel/sub. 30 s.
 
-Anti-trapaça: servidor guarda as escolhas e a seed; resultado é recalculado no servidor (motor determinístico, já é assim no Ultimate) — cliente não declara vencedor.
+Duração estimada do Bo3: ~20 turnos × (20 s + ~12 s de replay) + veto/intervalos ≈ **13–15 min**.
 
-**Sincronização — opção barata (recomendada): polling com ETag/304 na mesma `/api/lobby`** (já existe). Poll 3 s só enquanto o rival ainda não enviou; parado durante o replay; 15–60 s fora de turno. Realtime (Pusher/Ably/WebSocket) só se o MVP pegar; Neon não tem push.
+Ausência:
+- Tempo do turno esgotado ⇒ a IA (`aiTactics`) decide aquele turno.
+- **3 turnos seguidos** sem enviar ⇒ W.O. do mapa.
+- **3 min** sem heartbeat ⇒ W.O. da série.
+- Volta antes disso ⇒ retoma no próximo turno, sem penalidade.
 
-Custo Neon (estimativa): por série Bo3 ≈ 3 mapas × ~6 turnos + veto ≈ 25 turnos; ~20 polls/turno/jogador com 304 → ~1.000 requests, mas **só ~60 writes** e reads curtos. Para tirar o Neon do caminho do poll: o `GET` compara a versão do lobby num cache (Vercel Runtime Cache / ETag por `updated_at`) e só toca o banco quando mudou. Ordem de grandeza: 1.000 séries/dia ≈ 60 mil writes + poucas leituras reais ⇒ cabe com folga no compute pausável (autosuspend), bem abaixo do que o `game_start` gerava (1 insert por partida de cada usuário, todos os modos). Sem tabela nova no MVP: estado do turno em `lobbies.state` (JSONB) que já existe — **migration só se a gente quiser histórico (fase 3, precisa do ok)**.
+Anti-trapaça: as escolhas e a seed ficam no servidor, que recalcula o resultado (o motor é determinístico, como no Ultimate). O cliente não declara o vencedor.
 
-## 3. Fases e riscos
+**Sincronização (opção barata): polling com ETag/304 na `/api/lobby` que já existe.** Poll de 2 s só enquanto se espera o rival no turno; parado durante o replay; 15–60 s fora de partida. Realtime (Pusher/Ably) só se o volume pedir.
 
-| Fase | Entrega | Prazo |
-|---|---|---|
-| 0 | Esta proposta + ok do Matheus nos pesos | 28/10 |
-| 1 — balanceamento (offline) | Corrigir dominantes (rush/stack), tática por half com counter, timeout +3 pp; `measure-decisoes.mts` no CI | até 07/11 |
-| 2 — **MVP solo** | Modo Major (Singapore) com veto + tática por half + eco + timeout contra a IA; resultado ainda determinístico | até 16/11 |
-| 3 — **MVP online** | Duelo 1v1 por turnos de half via `/api/lobby` (polling+ETag, IA no lugar de quem some), só amistoso por código | até 23/11 (antes de 24/11) |
-| 4 | Ranqueado, histórico (migration Neon, com ok), realtime se o volume pedir | depois do Major |
+Gravações e custo no Neon, por Bo3:
+
+| Item | Writes |
+|---|---|
+| Veto + lado (~9 ações) | ~9 |
+| ~20 turnos × (2 envios + 1 resolução) | ~60 |
+| Heartbeat (só a cada 30 s, junto do poll) | ~0 extra (vai no mesmo request) |
+| **Total** | **~70 writes** |
+
+- Reads: ~10 polls por turno por jogador × 20 turnos × 2 ≈ 400 requests; com ETag e cache por versão (`updated_at`) antes do banco, a maioria nem chega no Neon.
+- Ordem de grandeza: 1.000 Bo3/dia ≈ 70 mil writes pequenos + algumas centenas de milhares de requests HTTP (Vercel). O compute do Neon fica acordado nas horas com partida; o risco é o mesmo do `game_start` se o poll tocar o banco toda vez. Por isso o cache antes do banco é obrigatório já no MVP.
+- **Sem migration:** o estado do turno vai em `lobbies.state` (JSONB), que já existe.
+
+## 3. Cronograma até 23/11 (solo e online, os dois antes de 24/11)
+
+Decisão do Matheus (27/10): os dois saem antes de 24/11.
+
+Plano de PRs (todos draft; merge só com o ok do Matheus):
+
+| PR | Escopo | Depende de | Pronto pra revisão |
+|---|---|---|---|
+| A — chave por modo + medidor | `decisoes` por modo (todas desligadas) no motor; `scripts/measure-decisoes.mts` (bot aleatório / repetidor / leitor) com números antes e depois | — | 31/10 |
+| B — rebalanceamento | Tira as escolhas dominantes (rush/stack sempre), timeout +3–4 pp, eco sem escolha dominante, tática por bloco de 3 com counter. Só com a chave ligada; neutralidade ±2 pp com ela desligada | A | 05/11 |
+| C — motor por turnos | `playTurn(estado, escolhasA, escolhasB)` determinístico e serializável (3 rounds por chamada), usado pelo solo e pelo online | B | 08/11 |
+| D — **solo** no Modo Major | UI de veto, lado e turno (tática/eco/timeout) contra a IA na Singapore; liga a chave só no Major | C | 13/11 |
+| E — online: servidor | Ações novas na `/api/lobby` (veto, envio do turno com commit-reveal, resolução no servidor, ausência/W.O.), ETag + cache antes do Neon, sem migration | C | 16/11 |
+| F — online: cliente | Sala 1v1 por código, timers, replay curto, reconexão, poll adaptativo | E, D | 20/11 |
+| G — QA e carga | Teste com 2 contas, medição de writes/requests por Bo3, ajustes | F | 22/11 |
+| — | Merge final (com ok) | G | 23/11 |
+
+Não cabe até 23/11 (vai pra depois do Major): ranqueado/MMR, histórico de partidas (precisa de migration), realtime, espectador, Bo5 online, troca de papel no meio do mapa.
+
+Corte se atrasar (nesta ordem):
+1. Online só Bo1 (Bo3 fica pro solo).
+2. Sem replay animado: placar dos 3 rounds + resumo em texto.
+3. Sem troca de papel/sub entre mapas.
+4. Último recurso: o online fica atrás de flag pra beta fechado e o solo sai pra todos.
 
 Riscos:
-- **Rebalancear o motor muda todos os modos** (Carreira, Ultimate, Swiss). Mitigação: pesos novos só com flag por modo; neutralidade ±2 pp medida no CI.
-- **Virar sorte:** se as táticas forem pedra-papel-tesoura puro, o leitor não ganha. Mitigação: revelar o half anterior + histórico do rival; meta leitor ≥ +15 pp.
-- **Duração/abandono online:** Bo3 por turnos ≈ 15 min. Mitigação: turno = half, timers curtos, IA substitui.
-- **Custo Neon:** polling mal feito volta o problema do `game_start`. Mitigação: ETag + cache antes do banco, poll adaptativo, sem write em poll.
-- **Prazo:** 4 semanas pra 3 fases com o Major rodando. Se apertar, o online (fase 3) vira pós-Major e sai só o solo.
-
-Decisões pro Matheus: (a) meta 60/30/10 elenco/decisões/sorte; (b) turno = half; (c) polling barato no MVP; (d) online antes de 24/11 ou só o solo.
+- **Rebalancear o motor muda todos os modos** (Carreira, Ultimate, Swiss). Mitigação: chave por modo desligada por padrão; neutralidade ±2 pp medida no CI.
+- **Virar sorte:** se as táticas forem pedra-papel-tesoura puro, quem lê o rival não ganha mais. Mitigação: revelar o bloco anterior e o histórico do rival; meta do bot leitor ≥ +15 pp.
+- **Duração e abandono no online:** 20 decisões por Bo3. Mitigação: 20 s por turno, IA no lugar de quem some, W.O. após 3 turnos.
+- **Custo no Neon:** se o poll tocar o banco toda vez, o problema do `game_start` volta. Mitigação: ETag + cache antes do banco, poll adaptativo, nenhuma gravação no poll, medição no PR G.
+- **Prazo apertado** (4 semanas, com o Major no meio): os cortes acima estão definidos com antecedência; o PR C é o caminho crítico.
