@@ -136,6 +136,15 @@ function binom(n: number, k: number): number {
   return r;
 }
 
+/**
+ * Quem decide uma série. O padrão sorteia pelo rating (playSeries). O modo
+ * jogado (engine/majorCampaign.ts) troca por um que devolve o resultado da Sala
+ * nas séries do time do usuário. Fase: 1..3 = stages, 4 = playoffs.
+ */
+export type SeriesPlayer = (a: MajorTeam, b: MajorTeam, bestOf: 1 | 3 | 5, label: string, rng: Rng, phase: 1 | 2 | 3 | 4) => MajorMatch;
+
+export const simSeries: SeriesPlayer = (a, b, bestOf, label, rng) => playSeries(a, b, bestOf, label, rng);
+
 function playSeries(a: MajorTeam, b: MajorTeam, bestOf: 1 | 3 | 5, label: string, rng: Rng): MajorMatch {
   const p = mapWinP(a.rating, b.rating);
   const need = (bestOf + 1) / 2;
@@ -182,7 +191,7 @@ const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
  * Roda um stage suíço de 16. `ordered` em ordem de seed (o primeiro é o
  * melhor). Rodada 1: 1×9, 2×10… (metade de cima contra a de baixo).
  */
-export function runSwissStage(stage: StageNo, ordered: MajorTeam[], rng: Rng): StageResult {
+export function runSwissStage(stage: StageNo, ordered: MajorTeam[], rng: Rng, play: SeriesPlayer = simSeries): StageResult {
   if (ordered.length !== 16) throw new Error(`stage ${stage} precisa de 16 times`);
   const team = new Map(ordered.map((t) => [t.id, t]));
   const rank = new Map(ordered.map((t, i) => [t.id, i]));
@@ -208,7 +217,7 @@ export function runSwissStage(stage: StageNo, ordered: MajorTeam[], rng: Rng): S
     }
     const matches = pairs.map(([a, b]) => {
       const ra = rec.get(a)!;
-      const m = playSeries(team.get(a)!, team.get(b)!, swissBestOf(stage, ra.w, ra.l), `R${r}`, rng);
+      const m = play(team.get(a)!, team.get(b)!, swissBestOf(stage, ra.w, ra.l), `R${r}`, rng, stage);
       played.add(key(a, b));
       const loser = m.winner === a ? b : a;
       rec.get(m.winner)!.w++;
@@ -230,7 +239,8 @@ export function runSwissStage(stage: StageNo, ordered: MajorTeam[], rng: Rng): S
 /** pares das quartas a partir dos 8 seeds (índices) */
 export const QF_PAIRS: [number, number][] = [[0, 7], [3, 4], [1, 6], [2, 5]];
 
-export function runPlayoffs(seeds: MajorTeam[], rng: Rng): PlayoffResult {
+export function runPlayoffs(seeds: MajorTeam[], rng: Rng, play: SeriesPlayer = simSeries): PlayoffResult {
+  const playSeries = (a: MajorTeam, b: MajorTeam, bo: 1 | 3 | 5, label: string, r: Rng) => play(a, b, bo, label, r, 4);
   const qf = QF_PAIRS.map(([i, j], k) => playSeries(seeds[i], seeds[j], 3, `QF${k + 1}`, rng));
   const get = (id: string) => seeds.find((t) => t.id === id)!;
   const sf = [0, 1].map((k) => playSeries(get(qf[k * 2].winner), get(qf[k * 2 + 1].winner), 3, `SF${k + 1}`, rng));
@@ -247,13 +257,13 @@ function stageField(d: MajorData, stage: StageNo, fromPrev: string[]): MajorTeam
   return field.sort((a, b) => a.seed - b.seed);
 }
 
-export function simulateMajor(d: MajorData, seed: number): MajorResult {
+export function simulateMajor(d: MajorData, seed: number, play: SeriesPlayer = simSeries): MajorResult {
   const rng = makeRng(seed);
-  const s1 = runSwissStage(1, stageField(d, 1, []), rng);
-  const s2 = runSwissStage(2, stageField(d, 2, s1.advanced), rng);
-  const s3 = runSwissStage(3, stageField(d, 3, s2.advanced), rng);
+  const s1 = runSwissStage(1, stageField(d, 1, []), rng, play);
+  const s2 = runSwissStage(2, stageField(d, 2, s1.advanced), rng, play);
+  const s3 = runSwissStage(3, stageField(d, 3, s2.advanced), rng, play);
   const all = new Map(d.teams.map((t) => [t.id, t]));
-  const playoffs = runPlayoffs(s3.advanced.map((id) => all.get(id)!), rng);
+  const playoffs = runPlayoffs(s3.advanced.map((id) => all.get(id)!), rng, play);
   return { stages: [s1, s2, s3], playoffs };
 }
 
@@ -279,9 +289,15 @@ export interface MajorPicks {
   s3: string[];
   /** 7 vencedores: QF1..QF4, SF1, SF2, F (campeão) — '' = sem palpite */
   bracket: string[];
+  /** por stage, até 2 times que você acha que fecham 3-0 (saem dos 8 classificados) */
+  x30: [string[], string[], string[]];
+  /** por stage, até 2 times que você acha que caem 0-3 (fora dos 8 classificados) */
+  x03: [string[], string[], string[]];
 }
 
-export const emptyPicks = (): MajorPicks => ({ s1: [], s2: [], s3: [], bracket: ['', '', '', '', '', '', ''] });
+export const EXTREME_PICKS = 2;
+
+export const emptyPicks = (): MajorPicks => ({ s1: [], s2: [], s3: [], bracket: ['', '', '', '', '', '', ''], x30: [[], [], []], x03: [[], [], []] });
 
 /** quem pode ser escolhido no stage, dado o palpite dos stages anteriores */
 export function pickPool(d: MajorData, p: MajorPicks, stage: StageNo): MajorTeam[] {
@@ -309,12 +325,25 @@ export function bracketSides(d: MajorData, p: MajorPicks): [string, string][] {
  * está mais no pool, e limpa vencedores de chave que deixaram de estar na chave.
  */
 export function normalizePicks(d: MajorData, p: MajorPicks): MajorPicks {
-  const out: MajorPicks = { s1: [...p.s1], s2: [...p.s2], s3: [...p.s3], bracket: [...p.bracket] };
+  const three = (x: unknown): [string[], string[], string[]] => {
+    const a = Array.isArray(x) ? x : [];
+    return [0, 1, 2].map((i) => (Array.isArray(a[i]) ? (a[i] as unknown[]).map(String) : [])) as [string[], string[], string[]];
+  };
+  const out: MajorPicks = { s1: [...p.s1], s2: [...p.s2], s3: [...p.s3], bracket: [...p.bracket], x30: three(p.x30), x03: three(p.x03) };
   for (const st of [1, 2, 3] as StageNo[]) {
     const k = `s${st}` as 's1' | 's2' | 's3';
     const pool = new Set(pickPool(d, out, st).map((t) => t.id));
     const prevFull = st === 1 || out[`s${st - 1}` as 's1' | 's2'].length === 8;
     out[k] = prevFull ? out[k].filter((id) => pool.has(id)).slice(0, 8) : [];
+  }
+  // 3-0 só entre os seus classificados; 0-3 só entre os que você deixou de fora
+  for (let i = 0; i < 3; i++) {
+    const st = (i + 1) as StageNo;
+    const adv = out[`s${st}` as 's1' | 's2' | 's3'];
+    const prevFull = st === 1 || out[`s${st - 1}` as 's1' | 's2'].length === 8;
+    const pool = new Set(prevFull ? pickPool(d, out, st).map((t) => t.id) : []);
+    out.x30[i] = [...new Set(out.x30[i])].filter((id) => adv.includes(id)).slice(0, EXTREME_PICKS);
+    out.x03[i] = [...new Set(out.x03[i])].filter((id) => pool.has(id) && !adv.includes(id)).slice(0, EXTREME_PICKS);
   }
   while (out.bracket.length < 7) out.bracket.push('');
   if (out.s3.length < 8) out.bracket = ['', '', '', '', '', '', ''];
@@ -340,13 +369,15 @@ export const champion = (p: MajorPicks): string => p.bracket[6] ?? '';
 
 export interface PicksScore {
   stage: [number, number, number]; // acertos de classificados (0..8)
+  x30: [number, number, number];   // acertos de 3-0 (0..2)
+  x03: [number, number, number];   // acertos de 0-3 (0..2)
   playoff: number;                 // acertos de vencedores na chave (0..7)
   champion: boolean;
   points: number;
   max: number;
 }
 
-/** 1 ponto por classificado certo, 2 por vencedor de QF/SF, 5 pelo campeão */
+/** 1 ponto por classificado certo, 2 por 3-0 ou 0-3 certo, 2 por vencedor de QF/SF, 5 pelo campeão */
 export function scorePicks(p: MajorPicks, r: MajorResult): PicksScore {
   const hit = (mine: string[], real: string[]) => mine.filter((id) => real.includes(id)).length;
   const stage: [number, number, number] = [hit(p.s1, r.stages[0].advanced), hit(p.s2, r.stages[1].advanced), hit(p.s3, r.stages[2].advanced)];
@@ -359,8 +390,12 @@ export function scorePicks(p: MajorPicks, r: MajorResult): PicksScore {
   p.bracket.slice(4, 6).forEach((id) => { if (id && sfWin.has(id)) playoff++; });
   const champ = !!p.bracket[6] && p.bracket[6] === r.playoffs.champion;
   if (champ) playoff++;
-  const points = stage[0] + stage[1] + stage[2] + (playoff - (champ ? 1 : 0)) * 2 + (champ ? 5 : 0);
-  return { stage, playoff, champion: champ, points, max: 24 + 12 + 5 };
+  const rec = (i: number, w: number, l: number) => new Set(r.stages[i].records.filter((x) => x.w === w && x.l === l).map((x) => x.id));
+  const x30 = [0, 1, 2].map((i) => (p.x30?.[i] ?? []).filter((id) => rec(i, 3, 0).has(id)).length) as [number, number, number];
+  const x03 = [0, 1, 2].map((i) => (p.x03?.[i] ?? []).filter((id) => rec(i, 0, 3).has(id)).length) as [number, number, number];
+  const extremes = [...x30, ...x03].reduce((a, b) => a + b, 0) * 2;
+  const points = stage[0] + stage[1] + stage[2] + extremes + (playoff - (champ ? 1 : 0)) * 2 + (champ ? 5 : 0);
+  return { stage, x30, x03, playoff, champion: champ, points, max: 24 + 24 + 12 + 5 };
 }
 
 // ---------------------------------------------------------------- link
@@ -381,11 +416,14 @@ export function encodePicks(d: MajorData, p: MajorPicks): string {
   const ch = (id: string) => (id ? ALPHA[order.indexOf(id)] ?? '_' : '_');
   const part = (ids: string[]) => Array.from({ length: 8 }, (_, i) => ch(ids[i] ?? '')).join('');
   const br = Array.from({ length: 7 }, (_, i) => ch(p.bracket[i] ?? '')).join('');
-  return `${listVersion(d)}.${part(p.s1)}${part(p.s2)}${part(p.s3)}${br}`;
+  const ext = [0, 1, 2].map((i) => [0, 1].map((j) => ch(p.x30?.[i]?.[j] ?? '')).join('') + [0, 1].map((j) => ch(p.x03?.[i]?.[j] ?? '')).join('')).join('');
+  const base = `${listVersion(d)}.${part(p.s1)}${part(p.s2)}${part(p.s3)}${br}`;
+  // links antigos (sem 3-0/0-3) continuam válidos: o trecho extra é opcional
+  return /[^_]/.test(ext) ? `${base}.${ext}` : base;
 }
 
 export function decodePicks(d: MajorData, code: string): MajorPicks | null {
-  const m = /^([0-9a-z]{4})\.([0-9a-v_]{31})$/.exec(code.trim().toLowerCase());
+  const m = /^([0-9a-z]{4})\.([0-9a-v_]{31})(?:\.([0-9a-v_]{12}))?$/.exec(code.trim().toLowerCase());
   if (!m || m[1] !== listVersion(d)) return null;
   const order = bySeed(d).map((t) => t.id);
   const id = (c: string) => (c === '_' ? '' : order[ALPHA.indexOf(c)] ?? '');
@@ -396,6 +434,15 @@ export function decodePicks(d: MajorData, code: string): MajorPicks | null {
     s2: ids(8, 8).filter(Boolean),
     s3: ids(16, 8).filter(Boolean),
     bracket: ids(24, 7),
+    x30: [[], [], []],
+    x03: [[], [], []],
   };
+  if (m[3]) {
+    for (let i = 0; i < 3; i++) {
+      const seg = Array.from(m[3].slice(i * 4, i * 4 + 4)).map(id);
+      raw.x30[i] = seg.slice(0, 2).filter(Boolean);
+      raw.x03[i] = seg.slice(2, 4).filter(Boolean);
+    }
+  }
   return normalizePicks(d, raw);
 }

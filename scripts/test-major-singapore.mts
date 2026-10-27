@@ -93,8 +93,13 @@ test('pontuação: palpite igual ao resultado faz o máximo', () => {
   const sides = (i: number) => r.playoffs.seeds;
   void sides;
   const all = [...r.playoffs.qf, ...r.playoffs.sf, r.playoffs.final].map((m) => m.winner);
-  const p: MajorPicks = { s1: r.stages[0].advanced, s2: r.stages[1].advanced, s3: r.stages[2].advanced, bracket: all };
+  const rec = (i: number, w: number, l: number) => r.stages[i].records.filter((x) => x.w === w && x.l === l).map((x) => x.id).slice(0, 2);
+  const p: MajorPicks = {
+    s1: r.stages[0].advanced, s2: r.stages[1].advanced, s3: r.stages[2].advanced, bracket: all,
+    x30: [rec(0, 3, 0), rec(1, 3, 0), rec(2, 3, 0)], x03: [rec(0, 0, 3), rec(1, 0, 3), rec(2, 0, 3)],
+  };
   const sc = scorePicks(p, r);
+  // o máximo assume 2 times em 3-0 e 2 em 0-3 por stage; o suíço sempre tem exatamente 2 de cada
   assert.equal(sc.points, sc.max);
   assert.ok(sc.champion);
   assert.equal(scorePicks(emptyPicks(), r).points, 0);
