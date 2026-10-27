@@ -27,6 +27,7 @@ export const CSM_FRAME_BY_RARITY: Record<UltRarity, { frame: CsmFrame; filter?: 
   promo:     { frame: 'versus2', filter: 'hue-rotate(250deg) saturate(1.3)' },
   major:     { frame: 'tactical', filter: 'hue-rotate(330deg) saturate(1.4)' },
   histIcon:  { frame: 'ouro', filter: 'saturate(1.5) brightness(1.1) contrast(1.05)' },
+  evento:    { frame: 'versus1', filter: 'hue-rotate(160deg) saturate(1.3)' }, // versão de evento do fim de semana
 };
 
 const BASE = '/cards/csm';
