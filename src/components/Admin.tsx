@@ -349,7 +349,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                           {ct('Remover logo')}
                         </button>
                       )}
-                      <span className="muted small">{ct('PNG/JPG, redimensionada para 160px. Sem upload, usamos a logo da Liquipedia.')}</span>
+                      <span className="muted small">{ct('PNG/JPG, redimensionada para 160px. Sem upload, usamos a sigla do time.')}</span>
                     </div>
                   </div>
                   <div className="field">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MAP_IMAGES, photoForNick } from '../data/media';
+import { MAP_IMAGES, isLiquipediaLogo, photoForNick } from '../data/media';
 import { loadMapImages } from '../state/crm';
 import { hashStr } from '../state/hash';
 import { MAP_LABELS, type MapId, type TTeam } from '../types';
@@ -173,13 +173,15 @@ export function TeamBadge({
   tag,
   colors,
   size = 26,
-  logoUrl,
+  logoUrl: logoUrlProp,
 }: {
   tag: string;
   colors: [string, string];
   size?: number;
   logoUrl?: string;
 }) {
+  // logo vinda da Liquipedia (save antigo) é ignorada → sigla do time
+  const logoUrl = isLiquipediaLogo(logoUrlProp) ? undefined : logoUrlProp;
   const [err, setErr] = useState(false);
   const [tone, setTone] = useState<LogoTone | undefined>(logoUrl ? toneCache.get(logoUrl) : undefined);
   if (logoUrl && !err) {

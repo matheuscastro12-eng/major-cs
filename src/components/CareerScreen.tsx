@@ -696,13 +696,12 @@ function teamTier(t: TeamSeason): number {
 }
 
 // orgs reais SEM line de CS2 (saíram do jogo): o jogador assume a marca e monta
-// o elenco do zero, com verba alta. Logos via Liquipedia (proxy Photon).
-const PHOTON = (p: string) => `https://i0.wp.com/liquipedia.net${p}?w=240&ssl=1`;
-interface EmptyOrg { id: string; name: string; tag: string; colors: [string, string]; logoUrl: string; blurb: string; budget: number }
+// o elenco do zero, com verba alta. Logo: só a local (public/logos); sem ela → sigla.
+interface EmptyOrg { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; blurb: string; budget: number }
 const EMPTY_ORGS: EmptyOrg[] = [
-  { id: 'org_cloud9', name: 'Cloud9', tag: 'C9', colors: ['#0a1a2f', '#00aeef'], logoUrl: PHOTON('/commons/images/b/bb/Cloud9_2023_allmode.png'), blurb: ct('Gigante norte-americana fora do CS2. Marca enorme e caixa cheio pra reconstruir do zero.'), budget: 4_200_000 },
-  { id: 'org_eg', name: 'Evil Geniuses', tag: 'EG', colors: ['#101014', '#5b2be0'], logoUrl: PHOTON('/commons/images/1/14/Evil_Geniuses_2023_lightmode.png'), blurb: ct('Org lendária sem elenco ativo. Verba boa pra recolocar o nome no topo.'), budget: 3_600_000 },
-  { id: 'org_dignitas', name: 'Dignitas', tag: 'DIG', colors: ['#0b0b0b', '#e7b53b'], logoUrl: PHOTON('/commons/images/5/56/Dignitas_2021_allmode.png'), blurb: ct('Tradicional, sem line desde 2022. Orçamento mediano: monte com inteligência.'), budget: 2_900_000 },
+  { id: 'org_cloud9', name: 'Cloud9', tag: 'C9', colors: ['#0a1a2f', '#00aeef'], logoUrl: '/logos/cloud9.png', blurb: ct('Gigante norte-americana fora do CS2. Marca enorme e caixa cheio pra reconstruir do zero.'), budget: 4_200_000 },
+  { id: 'org_eg', name: 'Evil Geniuses', tag: 'EG', colors: ['#101014', '#5b2be0'], logoUrl: '/logos/eg.png', blurb: ct('Org lendária sem elenco ativo. Verba boa pra recolocar o nome no topo.'), budget: 3_600_000 },
+  { id: 'org_dignitas', name: 'Dignitas', tag: 'DIG', colors: ['#0b0b0b', '#e7b53b'], blurb: ct('Tradicional, sem line desde 2022. Orçamento mediano: monte com inteligência.'), budget: 2_900_000 },
 ];
 
 
