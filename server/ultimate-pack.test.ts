@@ -161,9 +161,10 @@ test('packOpen debita o custo do ENGINE e grava seed/engineVersion no ledger', a
   const row = db.ledger.find((l) => l.opId === 'p1')!;
   assert.equal(row.kind, 'pack');
   assert.equal(row.delta, -pack.cost);
-  assert.deepEqual(row.meta, { packId: 'bronze', seed: 42, engineVersion: ULT_PACK_ENGINE_VERSION });
-  // reprodutível: re-rolar com a seed do ledger dá as MESMAS cartas
-  const audit = rollPackServer({ packId: 'bronze', seed: 42, catalog: buildServerCatalog(NOW) })!;
+  // [CSM-2] NOW cai num fim de semana: o evento ativo vai no meta (auditoria)
+  assert.deepEqual(row.meta, { packId: 'bronze', seed: 42, engineVersion: ULT_PACK_ENGINE_VERSION, eventId: 'wknd-2026-27' });
+  // reprodutível: re-rolar com a seed + instante do ledger dá as MESMAS cartas
+  const audit = rollPackServer({ packId: 'bronze', seed: 42, catalog: buildServerCatalog(NOW), now: NOW })!;
   assert.deepEqual(r.cards.map((c) => c.cardKey), audit.map((c) => c.key));
 });
 

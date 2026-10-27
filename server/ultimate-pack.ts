@@ -22,14 +22,16 @@ import { makeRng } from '../src/engine/rng.js';
 import type { UltCard } from '../src/engine/ultimate/cards.js';
 import { packById, rollPack, type PackDef } from '../src/engine/ultimate/packs.js';
 import { monthIndex } from '../src/engine/ultimate/promos.js';
-import { weeklyPackPool } from '../src/engine/ultimate/packPool.js';
+import { openingPool } from '../src/engine/ultimate/packPool.js';
+import { activeEventVersionDecl, parseEventVersionKey } from '../src/engine/ultimate/eventVersions.js';
 import { CardIndex } from '../src/engine/ultimate/cardIndex.js';
 import { ULT_CATALOG_MONTHS, ULT_SNAPSHOT_FIRST_MONTH, ULT_SNAPSHOT_LAST_MONTH, type SnapCard } from './ultimate-catalog.snapshot.js';
 import { applyUltTransaction, type SqlTag, type UltCardOp, type UltTx } from './ultimate-economy.js';
 
 // versão do motor de roll gravada no ledger — se as odds/engine mudarem um dia,
 // dá pra saber COM QUAL versão cada pack foi rolado.
-export const ULT_PACK_ENGINE_VERSION = 'ult-pack-v2-weekly';
+// v3: versões de evento [CSM-2] substituem a base no pool durante o evento.
+export const ULT_PACK_ENGINE_VERSION = 'ult-pack-v3-evento';
 
 // ------------------------------------------------------------------ catálogo
 
@@ -78,7 +80,8 @@ export function serverCardByKeyAnyMonth(key: string): SnapCard | undefined {
     for (const mi of months) for (const c of ULT_CATALOG_MONTHS[mi] ?? []) m.set(c.key, c);
     _anyMonth = m;
   }
-  return _anyMonth.get(key);
+  // [CSM-2] versão de evento não está no snapshot: deriva da base do mês corrente
+  return _anyMonth.get(key) ?? (parseEventVersionKey(key) ? serverCatalogIndex().get(key) : undefined);
 }
 
 // lookup pro squad autoritativo: mês corrente primeiro, depois qualquer mês.
@@ -104,7 +107,8 @@ export function randomSeed32(): number {
 export function rollPackServer(args: { packId: string; seed: number; catalog: UltCard[]; now?: Date }): UltCard[] | null {
   const pack = serverPackDef(args.packId);
   if (!pack) return null;
-  const pool = pack.id === 'totw' ? (args.now ? weeklyPackPool(args.catalog, args.now) : null) : args.catalog;
+  // sem `now` não há como saber o evento/semana: só packs fixos, sem evento.
+  const pool = args.now ? openingPool(args.catalog, pack.id, args.now) : pack.id === 'totw' ? null : args.catalog;
   return pool ? rollPack(pool, pack, makeRng(args.seed >>> 0)) : null;
 }
 
@@ -170,7 +174,7 @@ export async function openPack(
     kind: 'pack',
     creditsDelta: -pack.cost,
     cards: cardOps,
-    meta: { packId: pack.id, seed, engineVersion: ULT_PACK_ENGINE_VERSION },
+    meta: { packId: pack.id, seed, engineVersion: ULT_PACK_ENGINE_VERSION, eventId: activeEventVersionDecl(now.getTime(), catalog)?.eventId ?? null },
   };
   const r = await applyUltTransaction(sql, email, tx);
   if (!r.ok) return { ok: false, error: 'insufficient_credits', credits: r.credits };

@@ -31,7 +31,7 @@ import type { LogoConfig } from '../lib/logoBuilder';
 import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
 import { monthIndex, promoForMonth, promoThemeById, PROMO_SIZE, type MonthlyPromo } from '../engine/ultimate/promos';
 import { totwForWeek, weekIndex, type WeeklyTotw } from '../engine/ultimate/totw';
-import { weeklyPackPool } from '../engine/ultimate/packPool';
+import { openingPool } from '../engine/ultimate/packPool';
 import { isSeasonPack, SEASON_PACK, stampPackEditions } from '../engine/ultimate/seasonEdition'; // [URG-1]
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
@@ -445,9 +445,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     const rng = makeRng(((seed * 2654435761) >>> 0) || 1);
     // Pacote Promo puxa SÓ as promos do mês corrente (o catálogo guarda as de
     // meses passados pra resolver inventário antigo — não podem sair do pack).
-    const cat = pack.id === PROMO_PACK.id
+    // [CSM-2] openingPool: TOTW semanal + versões de evento (mesma função do servidor)
+    const cat = openingPool(pack.id === PROMO_PACK.id
       ? ultimateCatalog().filter((c) => c.rarity !== 'promo' || ultimatePromo().playerIds.includes(c.playerId))
-      : pack.id === 'totw' ? weeklyPackPool(ultimateCatalog(), new Date()) : ultimateCatalog();
+      : ultimateCatalog(), pack.id, new Date());
     if (!cat) return { ok: false, cards: [], reason: 'unavailable' };
     const cards = rollPack(cat, pack, rng);
     // [URG-1] carimbo de edição: mesmo rng do pack (depois do roll) → reproduzível pelo seed
