@@ -157,6 +157,8 @@ export function ultEconomySchemaQueries(sql: SqlTag): SqlQuery[] {
     // bloqueia mktList/mktBuy/packOpen; o jogador vê a mensagem padrão e tem 7
     // dias pra contestar. Setado/limpo SÓ à mão pelo admin (nunca pelo código).
     sql`ALTER TABLE rtm_ult_wallet ADD COLUMN IF NOT EXISTS frozen_at TIMESTAMPTZ`,
+    // [F1] migração única do save local (ultImport): preenchida 1× por conta.
+    sql`ALTER TABLE rtm_ult_wallet ADD COLUMN IF NOT EXISTS imported_at TIMESTAMPTZ`,
   ];
 }
 

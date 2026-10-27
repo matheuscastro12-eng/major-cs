@@ -101,6 +101,7 @@ import { applyEditionBoost, editionLabel, editionStatus, SEASON_EDITION_BOOST, S
 import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, weekKey } from '../../engine/ultimate/weeklyMissions';
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
+import type { MatchView } from '../../engine/ultimate/pvpMatch'; // [F2]
 import { UltimateCast } from './UltimateCast';
 import { buildDramaScript, pickHighlights, starsFromPlayers, type DramaStar } from '../../engine/ultimate/liveDrama';
 import { buildTaleOfTape, finalCallOf, pickMatchStar, streakLine, type MatchStar } from '../../engine/ultimate/showtime';
@@ -1626,6 +1627,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // [U03] contrato v2: a abordagem viaja como campo próprio (não escondida no chem)
     v: PVP_SNAPSHOT_VERSION,
     approach,
+    // [F1] o servidor monta o squad da ranqueada a partir das cópias + formação
+    cardIds: form.slots.map((fs) => slotCard(fs.slot)?.owned.id).filter((id): id is string => !!id),
+    formationId: form.id,
+    // [F2] este cliente joga o duelo resolvido no servidor (beat a beat)
+    live: true,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [displayName, state.profile.elo, chem.multiplier, duel.multiplier, state.squads, state.inventory, approach]);
 
@@ -1705,6 +1711,38 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     return true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [poolById, state.profile.elo, state.squads, state.inventory]);
+
+  // [F2] fim da partida resolvida NO SERVIDOR: vencedor e placar são os do
+  // servidor; o MMR e o prêmio da ranqueada já foram aplicados lá (sem report
+  // pareado). Aqui só o espelho local (recordMatch) e o modal, 1x por partida.
+  const finishServerPvp = useCallback((args: DuelPlayArgs, v: MatchView) => {
+    const ledgerKey = 'rtm-ult-pvp-rec';
+    const recKey = `${args.code}:${args.runSeed}`;
+    let already = false;
+    try {
+      const led: string[] = JSON.parse(localStorage.getItem(ledgerKey) ?? '[]');
+      already = led.includes(recKey);
+      if (!already) localStorage.setItem(ledgerKey, JSON.stringify([recKey, ...led].slice(0, 40)));
+    } catch { /* storage indisponível — registra mesmo assim */ }
+    if (v.status === 'abandoned' || v.won == null) { flash(ct('Partida abandonada pelos dois lados — não vale resultado.')); return; }
+    const won = v.won;
+    const fs = v.finalScore ?? v.score;
+    const score = `${fs[0]}-${fs[1]}`;
+    const eloBefore = state.profile.elo;
+    if (!already) noteMatchStart(args.ranked ? 'ranked' : 'private'); // [U02]
+    const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, args.oppSquad.elo, args.ranked, score);
+    if (!already) noteMatchDone(args.ranked ? 'ranked' : 'private', won); // [U02]
+    if (!already && args.ranked) wlMirrorReport(won, args.code, args.oppNick, fs[0], fs[1]);
+    if (!already && !args.ranked && account?.paid) void reportDuel(won, args.code, pvpNick); // [U11]
+    const eloAfter = eloBefore + outcome.eloDelta;
+    setLive(null);
+    setResult({
+      won, score, outcome, mode: 'pvp', divChange: already ? 'same' : divisionChange(eloBefore, eloAfter), divName: divisionFor(eloAfter).def.name,
+      roundLog: v.history.map((h) => (h.won ? 0 : 1)) as (0 | 1)[], mapName: MAP_LABELS[v.map as keyof typeof MAP_LABELS] ?? v.map, oppName: args.oppNick, repeat: already,
+      casterFinal: v.reason === 'wo' ? (won ? ct('Vitória por W.O.: o rival abandonou.') : ct('Derrota por W.O.: você ficou sem decidir.')) : null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.profile.elo, account?.paid, pvpNick]);
 
   // heartbeat da sala PvP DURANTE o replay: o UltimateDuel desmonta quando o
   // palco assume — sem este ping a sala era limpa pelo GC (>4min sem last_ping)
@@ -3530,7 +3568,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             {rankedMode === 'rivals' ? (
               // Rivals = PvP online de verdade: a fila pareia com outro manager por RP.
               <div style={{ marginTop: 12 }}>
-                {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} eventId={rankedEvent} onQueueEmpty={() => flash(`${ct('Fila vazia por enquanto.')} ${ct('Alternativa: jogue um Amistoso vs IA neste formato (não vale o evento).')}`, 3600)} />
+                {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} onServerResult={finishServerPvp} eventId={rankedEvent} onQueueEmpty={() => flash(`${ct('Fila vazia por enquanto.')} ${ct('Alternativa: jogue um Amistoso vs IA neste formato (não vale o evento).')}`, 3600)} />
                 <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
                   {ct('Você enfrenta o squad de outro manager de verdade. Vitória sobe RP, pode promover de divisão e conta no ranking global. Derrota tira RP.')}
                 </div>
@@ -3694,7 +3732,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         <UtPanel label={<>{ct('Duelo Privado')} <em>· {ct('com amigo')}</em></>} icon={<Globe size={15} className="ut-panel__lead" />}
           right={<span style={{ fontFamily: 'var(--ut-font-mono)' }}>{pvpNick}</span>}
           info={ct('Crie uma sala ou entre com código pra enfrentar um amigo. Amistoso: não vale RP nem ranking global.')}>
-          {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="private" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} initialJoinCode={duelInvite} />
+          {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="private" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} onServerResult={finishServerPvp} initialJoinCode={duelInvite} />
           {/* [U11] RIVAIS por conta: head-to-head, revanche (nova sala + link) e share do confronto */}
           <div style={{ marginTop: 14 }}>
             <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color: 'var(--ut-muted)', marginBottom: 6 }}>⚔️ {ct('RIVAIS')} <span style={{ fontWeight: 400, letterSpacing: 0 }}>· {ct('por conta, ranqueada e duelo privado')}</span></div>
