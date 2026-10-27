@@ -1,6 +1,6 @@
 // Economia server-authoritative do Ultimate Squad.
 // Carteira + coleção + ledger idempotente no Neon.
-// Ações (POST body.action): state | tx | ultImport | packOpen | mkt*. packOpen rola o pack
+// Ações (POST body.action): state | tx | ultImport | packOpen | drop* | mkt*. packOpen rola o pack
 // NO SERVIDOR com as mesmas odds do engine do cliente — seed auditável no
 // ledger, replay idempotente. [O0-02] `tx` do cliente só grava SAÍDAS
 // (spend/pack/sbc/quicksell valorado no servidor); todo crédito positivo nasce
@@ -31,7 +31,8 @@ import {
 // importada em top-level — na Vercel ela quebra no runtime ESM (imports sem
 // extensão) e derrubava a rota INTEIRA no load (mercado "não conecta",
 // 2026-07-05). Ver server/ultimate-catalog-lazy.ts.
-import { loadMktCardLookup, loadPackModule, loadQuicksellValuer } from '../server/ultimate-catalog-lazy.js';
+import { loadDropCatalog, loadMktCardLookup, loadPackModule, loadQuicksellValuer } from '../server/ultimate-catalog-lazy.js';
+import { dropOpen, dropPick, dropStatus, sqlDropStore, ultDropSchemaQueries } from '../server/ultimate-drops.js'; // [CSM-1]
 import { importLocalCollection } from '../server/ultimate-import.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
@@ -97,6 +98,7 @@ export default async function handler(
   if (!schemaReady) {
     for (const q of ultEconomySchemaQueries(sql)) await q;
     for (const q of ultMarketSchemaQueries(sql)) await q;
+    for (const q of ultDropSchemaQueries(sql)) await q;
     schemaReady = true;
   }
 
@@ -107,7 +109,7 @@ export default async function handler(
   // [O0-02] carteira congelada pelo admin (varredura do ledger): mercado e
   // packs pausados até a contestação. 423 + mensagem padrão pro jogador.
   const frozenReply = () => res.status(423).json({ error: 'wallet_frozen', message: ultFrozenMessage(clean(process.env.SUPPORT_EMAIL)) });
-  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen' || action === 'ultImport';
+  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen' || action === 'ultImport' || action === 'dropOpen' || action === 'dropPick';
   const frozen = action === 'state' || guardedAction ? await isUltWalletFrozen(sql, email) : false;
   if (frozen && guardedAction) { frozenReply(); return; }
 
@@ -163,6 +165,21 @@ export default async function handler(
       ok: true, replayed: r.replayed, credits: r.credits,
       packId: r.packId, cost: r.cost, seed: r.seed, cards: r.cards,
     });
+    return;
+  }
+
+  // ----------------------------------------------- [CSM-1] drop de escolha
+  // Estoque/seed/opções/entrega são do SERVIDOR (server/ultimate-drops.ts). O
+  // cliente só diz QUAL opção (índice) — vencido, vale a de menor valor.
+  if (action === 'dropStatus' || action === 'dropOpen' || action === 'dropPick') {
+    const cat = await loadDropCatalog();
+    if (!cat) { res.status(503).json({ error: 'catalog_unavailable' }); return; }
+    const store = sqlDropStore(sql);
+    const r = action === 'dropStatus' ? await dropStatus(store, sql, email, cat)
+      : action === 'dropOpen' ? await dropOpen(store, sql, email, cat)
+        : await dropPick(store, sql, email, { dropId: typeof body.dropId === 'string' ? body.dropId.trim() : '', index: Number(body.index) }, cat);
+    if (!r.ok) { res.status(r.status).json({ error: r.error }); return; }
+    res.status(200).json({ ok: true, ...r.value });
     return;
   }
 

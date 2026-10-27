@@ -12,7 +12,7 @@
 // faixas de OVR do original (1-60, 61-70…) não batem com os nossos tiers.
 //
 // Calibração (docs/ultimate-online/drops-calibracao.md, números reproduzíveis
-// com scripts/test-ultimate-drops.mts): o valor esperado (quick-sell) da
+// com o teste de calibração em server/ultimate-drops.test.ts): o valor esperado (quick-sell) da
 // MELHOR das 3 opções fica bem abaixo do valor esperado de UMA carta do Pacote
 // Bronze (o pack mais barato), e o teto diário de drops passivos não passa de
 // uma fração pequena do diário — drop é tempero, não torneira.
@@ -30,7 +30,7 @@ export const DROP_INTERVAL_MS = 20 * 60 * 1000;
 export const DROP_MAX_STOCK = 3;
 export const DROP_CHOICE_MS = 30 * 60 * 1000;
 export const DROP_OPTIONS = 3;
-export const DROP_PITY_N = 8;
+export const DROP_PITY_N = 15;
 export const DROP_ENGINE_VERSION = 'ult-drop-v1';
 
 // Pesos por milhão. Ícone (92+) fica fora de propósito: drop passivo não pode
@@ -38,12 +38,12 @@ export const DROP_ENGINE_VERSION = 'ult-drop-v1';
 // não saem — exceto versões de EVENTO, que ocupam a vaga da carta base (ver
 // eventVersions.ts: elas entram no grupo da raridade base que substituem).
 export const DROP_WEIGHTS_PPM: readonly (readonly [UltRarity, number])[] = [
-  ['bronze', 450_000],
-  ['silver', 400_000],
-  ['gold', 130_000],
-  ['rareGold', 18_000],
-  ['elite', 1_900],
-  ['legendary', 100],
+  ['bronze', 650_000],
+  ['silver', 330_000],
+  ['gold', 18_000],
+  ['rareGold', 1_800],
+  ['elite', 190],
+  ['legendary', 10],
 ];
 export const DROP_GOLD_TIER = rarityInfo('gold').tier;
 

@@ -23,7 +23,9 @@ import type { UltCard } from '../src/engine/ultimate/cards.js';
 import { packById, rollPack, type PackDef } from '../src/engine/ultimate/packs.js';
 import { monthIndex } from '../src/engine/ultimate/promos.js';
 import { openingPool } from '../src/engine/ultimate/packPool.js';
-import { activeEventVersionDecl, parseEventVersionKey } from '../src/engine/ultimate/eventVersions.js';
+import { activeEventVersionDecl, applyEventVersions, parseEventVersionKey } from '../src/engine/ultimate/eventVersions.js';
+import { dropPool } from '../src/engine/ultimate/drops.js';
+import type { DropCatalog } from './ultimate-drops.js';
 import { CardIndex } from '../src/engine/ultimate/cardIndex.js';
 import { ULT_CATALOG_MONTHS, ULT_SNAPSHOT_FIRST_MONTH, ULT_SNAPSHOT_LAST_MONTH, type SnapCard } from './ultimate-catalog.snapshot.js';
 import { applyUltTransaction, type SqlTag, type UltCardOp, type UltTx } from './ultimate-economy.js';
@@ -200,5 +202,25 @@ export async function openPack(
       const key = String(op.cardKey ?? '');
       return { cardId: String(op.cardId ?? ''), cardKey: key, card: index.get(key) ?? null };
     }),
+  };
+}
+
+// ------------------------------------------------------------------- drops
+
+// [CSM-1] catálogo do drop de escolha: pool elegível do mês (tiers base com
+// peso) com as versões de evento aplicadas [CSM-2] — a MESMA função que o
+// cliente usaria (teste de drift em ultimate-event-versions.test.ts).
+export function serverDropCatalog(): DropCatalog {
+  return {
+    pool(now) {
+      const cat = buildServerCatalog(now);
+      return dropPool(applyEventVersions(cat, activeEventVersionDecl(now.getTime(), cat)));
+    },
+    lookup(key) {
+      return serverSquadLookup()(key);
+    },
+    eventId(now) {
+      return activeEventVersionDecl(now.getTime(), buildServerCatalog(now))?.eventId ?? null;
+    },
   };
 }
