@@ -4,7 +4,7 @@
 // pastilha com as cores e a tag do time.
 import type { MajorRun } from '../engine/majorSingapore';
 import { shareUrl, xIntentUrl } from './shareLink';
-import { BO3_PHOTO_CREDIT, drawAvatar, loadedPhoto } from '../data/bo3Photos';
+import { BO3_PHOTO_CREDIT_CARD, BO3_PHOTOS_ON, drawAvatar, loadedPhoto } from '../data/bo3Photos';
 
 export interface CardTeam { id: string; name: string; tag: string; colors: [string, string]; players?: string[] }
 export interface CardSeries { a: CardTeam; b: CardTeam; score: [number, number]; winner: 0 | 1 }
@@ -120,7 +120,7 @@ export function drawMajorCard(d: MajorCardData): string {
       ctx.beginPath(); ctx.arc(x, 540, r, 0, Math.PI * 2); ctx.strokeStyle = GOLD; ctx.lineWidth = 2; ctx.stroke();
       ctx.textAlign = 'center'; ctx.font = `600 13px ${FONT_B}`; ctx.fillStyle = DIM; ctx.fillText(fit(ctx, nick, gap - 4), x, 580);
     });
-    if (roster.some((n) => loadedPhoto(n))) { ctx.textAlign = 'right'; ctx.font = `500 13px ${FONT_B}`; ctx.fillStyle = DIM; ctx.fillText(BO3_PHOTO_CREDIT, W - 32, H - 36); }
+    if (BO3_PHOTOS_ON || roster.some((n) => loadedPhoto(n))) { ctx.textAlign = 'right'; ctx.font = `600 14px ${FONT_B}`; ctx.fillStyle = DIM; ctx.fillText(BO3_PHOTO_CREDIT_CARD, W - 32, H - 36); }
   } else {
     ctx.font = '64px serif'; ctx.fillText('🏆', cx, 570);
   }

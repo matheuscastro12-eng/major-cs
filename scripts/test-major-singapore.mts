@@ -130,9 +130,10 @@ test('playoffs: 1v8, 4v5 | 2v7, 3v6, MD3 e final MD5', () => {
 
 import { bo3PhotoPath, initials, BO3_PHOTOS_ON } from '../src/data/bo3Photos.ts';
 test('fotos bo3.gg: flag OFF por padrão, caminho local same-origin, placeholder', () => {
-  assert.equal(BO3_PHOTOS_ON, false);
-  assert.equal(bo3PhotoPath('arT'), null);
-  assert.equal(bo3PhotoPath('arT', true), '/players/bo3/art.webp');
+  assert.equal(BO3_PHOTOS_ON, true);
+  assert.equal(bo3PhotoPath('arT', false), null);
+  assert.equal(bo3PhotoPath('ZywOo', true), '/players/bo3/zywoo.webp');
+  assert.equal(bo3PhotoPath('arT', true), null); // 404 no CDN → iniciais
   assert.equal(bo3PhotoPath('ninguem_xyz', true), null);
   assert.equal(initials('n1ssim'), 'N1');
   const field = buildField(MAJOR_SG_CONFIG, MAJOR_SG_DATASET);
