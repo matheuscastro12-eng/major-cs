@@ -127,3 +127,21 @@ test('playoffs: 1v8, 4v5 | 2v7, 3v6, MD3 e final MD5', () => {
   assert.deepEqual(qf.map((h) => [h.pairing.a, h.pairing.b]), [[s[0], s[7]], [s[3], s[4]], [s[1], s[6]], [s[2], s[5]]]);
   assert.ok(po.history.every((h) => h.pairing.bestOf === (h.pairing.label === 'FINAL' ? 5 : 3)));
 });
+
+import { bo3PhotoPath, initials, BO3_PHOTOS_ON } from '../src/data/bo3Photos.ts';
+test('fotos bo3.gg: flag OFF por padrão, caminho local same-origin, placeholder', () => {
+  assert.equal(BO3_PHOTOS_ON, false);
+  assert.equal(bo3PhotoPath('arT'), null);
+  assert.equal(bo3PhotoPath('arT', true), '/players/bo3/art.webp');
+  assert.equal(bo3PhotoPath('ninguem_xyz', true), null);
+  assert.equal(initials('n1ssim'), 'N1');
+  const field = buildField(MAJOR_SG_CONFIG, MAJOR_SG_DATASET);
+  const run = simulateMajor(field, makeRng(7));
+  const d = majorCardData(run, () => ({ name: 'X', tag: 'X', players: ['a', 'b', 'c', 'd', 'e', 'f'] }));
+  assert.equal(d.champion.players?.length, 5);
+});
+test('Legacy 2026: dumau, latto, try, n1ssim, arT (coach RiVAS)', () => {
+  const l = MAJOR_SG_DATASET.find((t) => t.id === 'bo3_team_8118')!;
+  assert.deepEqual(l.players.map((p) => p.nick).sort(), ['arT', 'dumau', 'latto', 'n1ssim', 'try'].sort());
+  assert.equal(l.coach?.nick, 'RiVAS');
+});

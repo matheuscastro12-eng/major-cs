@@ -4,19 +4,20 @@
 // pastilha com as cores e a tag do time.
 import type { MajorRun } from '../engine/majorSingapore';
 import { shareUrl, xIntentUrl } from './shareLink';
+import { BO3_PHOTO_CREDIT, drawAvatar, loadedPhoto } from '../data/bo3Photos';
 
-export interface CardTeam { id: string; name: string; tag: string; colors: [string, string] }
+export interface CardTeam { id: string; name: string; tag: string; colors: [string, string]; players?: string[] }
 export interface CardSeries { a: CardTeam; b: CardTeam; score: [number, number]; winner: 0 | 1 }
 export interface MajorCardData { rounds: { key: 'QF' | 'SF' | 'FINAL'; series: CardSeries[] }[]; champion: CardTeam }
 
 const NEUTRAL: [string, string] = ['#2a3240', '#e8edf3'];
 
 /** Monta os dados do card a partir de um Major simulado. Puro (testável). */
-export function majorCardData(run: MajorRun, info: (id: string) => { name: string; tag: string; colors?: [string, string] } | undefined): MajorCardData {
+export function majorCardData(run: MajorRun, info: (id: string) => { name: string; tag: string; colors?: [string, string]; players?: string[] } | undefined): MajorCardData {
   const team = (id: string): CardTeam => {
     const t = info(id);
     // time sem dados (ex.: fora da base bo3.gg) não derruba o card
-    return { id, name: t?.name ?? id, tag: (t?.tag ?? id.slice(-3)).toUpperCase().slice(0, 5), colors: t?.colors ?? NEUTRAL };
+    return { id, name: t?.name ?? id, tag: (t?.tag ?? id.slice(-3)).toUpperCase().slice(0, 5), colors: t?.colors ?? NEUTRAL, ...(t?.players ? { players: t.players.slice(0, 5) } : {}) };
   };
   const hist = run.stages[3]?.history ?? [];
   const rounds = (['QF', 'SF', 'FINAL'] as const).map((key) => ({
@@ -109,7 +110,20 @@ export function drawMajorCard(d: MajorCardData): string {
   pill(ctx, cx, 360, d.champion, 70);
   ctx.beginPath(); ctx.arc(cx, 360, 80, 0, Math.PI * 2); ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.stroke();
   ctx.font = `700 40px ${FONT_D}`; ctx.fillStyle = INK; ctx.fillText(fit(ctx, d.champion.name.toUpperCase(), 280), cx, 488);
-  ctx.font = '64px serif'; ctx.fillText('🏆', cx, 570);
+  const roster = d.champion.players ?? [];
+  if (roster.length) {
+    // elenco campeão: foto local (same-origin, flag bo3) ou iniciais — nunca hotlink
+    const r = 21, gap = 50, x0 = cx - ((roster.length - 1) * gap) / 2;
+    roster.forEach((nick, i) => {
+      const x = x0 + i * gap;
+      drawAvatar(ctx, nick, x, 540, r, d.champion.colors[0], FONT_D);
+      ctx.beginPath(); ctx.arc(x, 540, r, 0, Math.PI * 2); ctx.strokeStyle = GOLD; ctx.lineWidth = 2; ctx.stroke();
+      ctx.textAlign = 'center'; ctx.font = `600 13px ${FONT_B}`; ctx.fillStyle = DIM; ctx.fillText(fit(ctx, nick, gap - 4), x, 580);
+    });
+    if (roster.some((n) => loadedPhoto(n))) { ctx.textAlign = 'right'; ctx.font = `500 13px ${FONT_B}`; ctx.fillStyle = DIM; ctx.fillText(BO3_PHOTO_CREDIT, W - 32, H - 36); }
+  } else {
+    ctx.font = '64px serif'; ctx.fillText('🏆', cx, 570);
+  }
 
   ctx.textAlign = 'left'; ctx.font = `600 18px ${FONT_B}`; ctx.fillStyle = GOLD;
   ctx.fillText('roadtomajor.com.br/major-singapore · simule a sua chave', 48, H - 36);
