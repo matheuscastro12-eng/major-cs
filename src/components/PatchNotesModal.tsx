@@ -95,6 +95,8 @@ export function PatchNotesHost() {
   // Atrasamos 600ms pra não competir com Landing/login na 1ª impressão.
   useEffect(() => {
     if (!hasUnseenPatch()) return;
+    // link do pick'em do Modo Major: quem chega por ele vê o palpite, não o changelog
+    if (window.location.pathname.toLowerCase().startsWith('/major-singapore')) return;
     const timer = setTimeout(() => setOpen(true), 600);
     return () => clearTimeout(timer);
   }, []);

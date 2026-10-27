@@ -26,6 +26,7 @@ import { useAppHistory } from '../../../state/app-history';
 import { useAppTheme } from '../../../state/career-theme';
 import { LangSwitcher } from '../../social';
 import { cx } from '../cx';
+import { Bo3Credit } from './Bo3Credit';
 import { CommandPalette } from './CommandPalette';
 import { useDensity, useShellGlobal, openPalette, usePaletteOpen } from './ShellContext';
 import {
@@ -301,6 +302,7 @@ export function GameShell(props: GameShellProps) {
 
         <main className="gs-content" id="gs-content" tabIndex={-1}>
           {children}
+          <Bo3Credit />
         </main>
       </div>
 
