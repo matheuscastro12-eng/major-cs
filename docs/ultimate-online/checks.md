@@ -23,3 +23,18 @@
   - `npm run build`: ok (exit 0)
   - `npm test`: 296/296
   - `npm run test:sim`: 800/801; única falha `scripts/test-design-tokens.mts` (espaço no caminho, conhecida)
+
+## Features do CS Manager (branch `feat/ultimate-csm-features`, 27/10/2026)
+- [x] Drop: estoque 1/20 min, teto 3, excedente perdido, fração preservada — `server/ultimate-drops.test.ts`
+- [x] Drop: sorteio determinístico pela seed, 3 opções distintas, ordem do pool irrelevante; pity garante Ouro+ (300 seeds) — `server/ultimate-drops.test.ts`
+- [x] Drop: abrir de novo devolve o mesmo pendente; escolha entra pelo ledger (`drop:<id>`); replay com outro índice devolve o gravado; vencido entrega o menor valor uma vez só; índice inválido 400; pool insuficiente não consome — `server/ultimate-drops.test.ts`
+- [x] Drop: calibração (melhor opção 86,7 ≤ 1,25 × carta do Pacote Bronze 69,9; 24 drops < diário médio) — `server/ultimate-drops.test.ts`
+- [x] Versões de evento: chave, substituição na mesma vaga, +OVR, rótulo; DRIFT cliente (engine) × servidor (snapshot) em declaração, pool, roll de 4 packs × 4 seeds e drop; resolve depois do evento — `server/ultimate-event-versions.test.ts`
+- [x] História da carta: delta só com o que o motor produz; gravada para os dois lados uma vez; idempotente por partida; só cópias possuídas; DDL sem colunas mortas — `server/ultimate-card-stats.test.ts`
+- [x] Origin: oficial/www/preview/APP_ORIGINS/mesma origem passam; terceiro, sufixo e http recusam; localhost só fora de produção; sem Origin passa (ou exige com ORIGIN_REQUIRE=1); rotas respondem 403 antes do banco — `server/origin.test.ts`
+- [x] Hash do pedido: quicksell e packOpen com o mesmo op_id e outro payload = 409 sem efeito; replay igual devolve `recorded.creditsAfter` — `server/ultimate-economy.test.ts`, `server/ultimate-pack.test.ts`
+- [ ] Neon real e navegador — não feito (sem ambiente)
+- [x] build + npm test + npm run test:sim (node_modules por link):
+  - `npm run build`: ok
+  - `npm test`: 321/321
+  - `npm run test:sim`: 800/801; única falha `scripts/test-design-tokens.mts` (espaço no caminho, conhecida)
