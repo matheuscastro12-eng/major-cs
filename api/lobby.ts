@@ -16,6 +16,7 @@ import { activeWeekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 import { rarityInfo } from '../src/engine/ultimate/rarities.js';
 import { createHash } from 'node:crypto';
 import { internalError } from '../server/internalError.js'; // [O0-43]
+import { decideMatch, pollMatch, sqlMatchStore, sqlRankedSettler, startMatch, ultMatchSchemaQueries, type MatchPlayerIn } from '../server/ult-match.js'; // [F2]
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
@@ -53,6 +54,7 @@ function genCode(): string {
 
 // garante as colunas novas UMA vez por instância da função (não a cada request)
 let schemaReady = false;
+let ultMatchSchemaReady = false; // [F2] ult_match (DDL idempotente, 1× por instância)
 async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
   if (schemaReady) return;
   // rtm_ranking é de api/ranking.ts; garante a base aqui (mesma definição) pra o
@@ -466,6 +468,8 @@ export default async function handler(
     cardIds?: unknown;
     formationId?: unknown;
     squad?: unknown;
+    style?: unknown;
+    beat?: unknown;
   };
   const action = String(body.action ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 20);
@@ -789,6 +793,43 @@ export default async function handler(
       return;
     }
 
+    // [F2] DUELO RESOLVIDO NO SERVIDOR: matchStart (idempotente) cria a partida a
+    // partir da sala com os dois squads gravados no servidor; matchState é o poll
+    // (resolve preguiçosamente prazo/W.O.); decide grava a decisão do lado de quem
+    // chama. Ranqueada: lado pela conta (token). Amistoso: lado pelo nick.
+    if (action === 'matchStart' || action === 'matchState' || action === 'decide') {
+      if (!ultMatchSchemaReady) { for (const q of ultMatchSchemaQueries(sql as unknown as SqlTag)) await q; ultMatchSchemaReady = true; }
+      const lobby = await sql`SELECT status, mode, COALESCE(ranked, false) AS ranked, event_id, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed FROM lobbies WHERE code = ${code}`;
+      const store = sqlMatchStore(sql as unknown as SqlTag);
+      const now = Date.now();
+      const ranked = lobby.length > 0 && (lobby[0].ranked === true || !!lobby[0].event_id);
+      if (ranked && !accountEmail) { res.status(401).json({ needAccount: true, error: ACCOUNT_REQUIRED_MSG }); return; }
+      const who = { email: accountEmail, nick };
+      let out;
+      if (action === 'matchStart') {
+        if (lobby.length === 0) { res.status(404).json({ error: 'lobby não encontrado' }); return; }
+        if (lobby[0].mode !== 'ultimate' || lobby[0].status !== 'done') { res.status(409).json({ error: 'a sala ainda não está pronta' }); return; }
+        const seats = await sql`SELECT nick, email, squad FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false AND squad IS NOT NULL ORDER BY joined_at ASC LIMIT 2`;
+        if (seats.length < 2) { res.status(409).json({ error: 'faltam os squads dos dois lados' }); return; }
+        const sq = (r: Record<string, unknown>) => (typeof r.squad === 'string' ? JSON.parse(r.squad) : r.squad) as { name?: string; chem?: number; cards?: { ovr?: number }[]; auth?: boolean };
+        const sqs = seats.map(sq);
+        // ranqueada só joga com o squad montado no servidor (F1)
+        if (ranked && !sqs.every((x) => x.auth === true)) { res.status(409).json({ error: 'squad da ranqueada sem validação do servidor' }); return; }
+        const players = seats.map((r, i) => ({
+          nick: String(r.nick), email: r.email == null ? null : String(r.email),
+          squad: { name: String(sqs[i].name || r.nick).slice(0, 24), chem: Number(sqs[i].chem) || 1, cards: (sqs[i].cards ?? []).map((c) => ({ ovr: Number(c?.ovr) || 60 })) },
+        })) as [MatchPlayerIn, MatchPlayerIn];
+        out = await startMatch(store, { code, seed: Number(lobby[0].run_seed) || 1, ranked, players }, who, now);
+      } else if (action === 'matchState') {
+        out = await pollMatch(store, code, who, now, sqlRankedSettler(sql as unknown as SqlTag));
+      } else {
+        out = await decideMatch(store, code, who, body.style, Math.floor(Number(body.beat)), now, sqlRankedSettler(sql as unknown as SqlTag));
+      }
+      if (!out.ok) { res.status(out.status).json({ error: out.error }); return; }
+      res.status(200).json({ ok: true, match: out.view });
+      return;
+    }
+
     if (action === 'pick') {
       const lobby = await sql`SELECT status, mode, COALESCE(ranked, false) AS ranked, event_id FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
@@ -819,7 +860,8 @@ export default async function handler(
             cardIds: body.cardIds, formationId: body.formationId, name: rawSq.name, elo: rawSq.elo, approach: rawSq.approach,
           }, serverSquadLookup());
           if (!built.ok) { res.status(400).json({ squadError: true, code: built.error, error: built.message }); return; }
-          serverSquad = JSON.stringify(built.squad);
+          // [F2] cliente novo joga a partida no servidor (pvpLive); o antigo segue no replay local
+          serverSquad = JSON.stringify({ ...built.squad, ...(rawSq.live === true ? { live: true } : {}) });
           // a regra do evento é checada com o squad DO SERVIDOR (abaixo)
           body.squad = built.squad;
         }
@@ -889,6 +931,7 @@ export default async function handler(
                 })
               : [],
             auth: false,
+            ...(rawSquad.live === true ? { live: true } : {}), // [F2]
           })
         : null;
       const updated = await sql`

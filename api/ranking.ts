@@ -15,6 +15,7 @@ import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
 import { eventRewardFor } from '../src/engine/ultimate/events.js'; // [U12]
 import { applyUltTransaction, type SqlTag } from '../server/ultimate-economy.js'; // [U12]
 import { creditRankedPvpReward } from '../server/ultimate-pvp-reward.js'; // [F1]
+import { K_LOSS, K_PLACE, K_WIN, PLACEMENT_GAMES, seasonNow } from '../server/rankedSeason.js'; // [F2]
 import { weekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 import { detectOvertakes, OVERTAKE_TOP } from '../server/rivalNotify.js'; // [URG-3]
 import { dayKey as spDayKey, mergeStreak, recordDailyPlay, type StreakState } from '../src/engine/daily/streak.js'; // [URG-4]
@@ -29,23 +30,12 @@ const verifyToken = verifyAccountToken;
 
 // divisões estilo CS (do menor ao maior). Antes de calibrar, "Calibrando".
 const DIVISIONS: [number, string][] = [[0, 'Prata'], [1200, 'Ouro Nova'], [1600, 'Mestre Guardião'], [1900, 'Águia'], [2200, 'Global Elite']];
-const PLACEMENT_GAMES = 5;
 const divFor = (mmr: number, games = PLACEMENT_GAMES) => (games < PLACEMENT_GAMES ? 'Calibrando' : ([...DIVISIONS].reverse().find(([m]) => mmr >= m)?.[1] ?? 'Prata'));
-const K_WIN = 25, K_LOSS = 20, K_PLACE = 40;
 // [W1] pódio semanal da Série do Dia só premia com campo mínimo (espelha
 // WEEK_PRIZE_MIN_FIELD em src/engine/rtp/weeklyTitles.ts).
 const WEEK_PRIZE_MIN_FIELD = 5;
 // [O0-45] modos cujo report ranqueado é aceito (1v1, pareamento zero-soma).
 export const RANKED_REPORT_MODES = ['ultimate', 'duel'];
-
-// temporada = mês. Número 1-indexado a partir de jan/2026 (Temporada 6 = jun/2026).
-function seasonNow() {
-  const d = new Date();
-  const no = (d.getUTCFullYear() - 2026) * 12 + (d.getUTCMonth() + 1);
-  const endsAt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString();
-  const startsAt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
-  return { no, endsAt, startsAt };
-}
 
 // schema garantido 1x por instância (não em toda invocação): os 4 DDL rodavam em
 // CADA request — inclusive nos polls públicos de ladder — gastando round-trips ao
@@ -663,6 +653,12 @@ async function handle(req: Req, res: Res) {
     if (!RANKED_REPORT_MODES.includes(String(lb[0].mode))) { res.status(400).json({ error: 'modo não ranqueado' }); return; }
     const inLobby = await sql`SELECT 1 FROM lobby_players WHERE code=${code} AND lower(nick)=lower(${lobbyNick}) AND COALESCE(spectator, false) = false`;
     if (!inLobby.length) { res.status(403).json({ error: 'você não jogou essa partida' }); return; }
+    // [F2] partida resolvida NO SERVIDOR (ult_match): o resultado e o MMR são do
+    // servidor (server/ult-match.ts). O report pareado vira só compatibilidade —
+    // não aplica nada por cima (mesmo op_id do prêmio, sem MMR em dobro).
+    let serverMatch = false;
+    try { serverMatch = (await sql`SELECT 1 FROM ult_match WHERE code=${code}`).length > 0; } catch { /* tabela ainda não existe */ }
+    if (serverMatch) { res.status(200).json({ applied: false, serverMatch: true, delta: 0, me: await myRow(), ...seasonInfo }); return; }
     // 1 report por jogador por partida (PK code+email) — refresh não duplica.
     const ins = await sql`INSERT INTO rtm_match_reports (code, email, nick, won) VALUES (${code}, ${email}, ${nick}, ${won}) ON CONFLICT (code, email) DO NOTHING RETURNING code`;
     if (!ins.length) { res.status(200).json({ applied: false, duplicate: true, delta: 0, me: await myRow(), ...seasonInfo }); return; }
