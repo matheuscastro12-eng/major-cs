@@ -57,7 +57,7 @@ export default async function handler(
   }
 
   // conta logada é opcional: token inválido simplesmente não identifica
-  let email: string | null = null;
+  let email: string | null;
   try { email = body.token ? verifyAccountToken(String(body.token)) : null; } catch { email = null; }
   const memberKey = memberKeyOf(email, body.memberId);
 

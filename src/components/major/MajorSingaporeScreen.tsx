@@ -1,13 +1,15 @@
 // MODO MAJOR — PGL Major Singapore 2026: visão geral (datas, formato, os 32
-// times e os favoritos), Pick'em (8 classificados por stage + chave dos
-// playoffs até o campeão, salvo no navegador e compartilhável por link/PNG) e
+// times e os favoritos), Jogar (as séries de um time na Sala, MajorPlay),
+// Pick'em (8 classificados + 3-0/0-3 por stage + chave dos playoffs, salvo no
+// navegador e compartilhável por link/PNG), Liga com amigos (MajorLeague) e
 // simulação do Major inteiro pontuando o palpite. A lógica é toda de
 // engine/majorSingapore.ts; os times vêm de data/major-singapore-2026.json.
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Download, Dices, Eraser, Sparkles, Trophy } from 'lucide-react';
+import { lazy, Suspense } from 'react';
 import data from '../../data/major-singapore-2026.json';
 import {
-  bracketSides, decodePicks, emptyPicks, encodePicks, normalizePicks, pickPool, picksComplete,
+  EXTREME_PICKS, bracketSides, decodePicks, emptyPicks, encodePicks, normalizePicks, pickPool, picksComplete,
   scorePicks, simulateMajor, stageEntrants, titleOdds,
   type MajorData, type MajorPicks, type MajorResult, type MajorTeam, type StageNo,
 } from '../../engine/majorSingapore';
@@ -16,16 +18,21 @@ import { useLang } from '../../state/i18n';
 import { shareUrl } from '../../state/shareLink';
 import { postOnX } from '../../state/shareX';
 import { track, trackShare } from '../../state/track';
-import { Alert, Button, EmptyState, Panel, Tag } from '../ds';
+import { Alert, Button, EmptyState, Panel, Skeleton, Tag } from '../ds';
+import { MajorResultView } from './MajorResultView';
+import { MajorLeague } from './MajorLeague';
 import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
 import '../../styles/major.css';
 
 const D = data as unknown as MajorData;
+// a Sala (RtpRoundRoom + engine do RtP) só carrega quando a aba Jogar abre
+const MajorPlay = lazy(() => import('./MajorPlay').then((m) => ({ default: m.MajorPlay })));
 const STORE = 'rtm-major-sg-picks-v1';
 const MAJOR_PATH = '/major-singapore';
 
-type Tab = 'overview' | 'pickem' | 'sim';
+type Tab = 'overview' | 'play' | 'pickem' | 'league' | 'sim';
+const TABS: [Tab, MajorKey][] = [['overview', 'tabOverview'], ['play', 'tabPlay'], ['pickem', 'tabPickem'], ['league', 'tabLeague'], ['sim', 'tabSim']];
 
 function loadMine(): MajorPicks {
   try {
@@ -33,6 +40,10 @@ function loadMine(): MajorPicks {
     if (raw) return normalizePicks(D, { ...emptyPicks(), ...JSON.parse(raw) });
   } catch { /* storage indisponível ou lixo */ }
   return emptyPicks();
+}
+
+function hasLeagueParam(): boolean {
+  try { return new URLSearchParams(window.location.search).has('liga'); } catch { return false; }
 }
 
 function readSharedCode(): string | null {
@@ -45,7 +56,7 @@ export function MajorSingaporeScreen() {
   const teams = useMemo(() => new Map(D.teams.map((x) => [x.id, x])), []);
   const sharedCode = useMemo(() => readSharedCode(), []);
   const shared = useMemo(() => (sharedCode ? decodePicks(D, sharedCode) : null), [sharedCode]);
-  const [tab, setTab] = useState<Tab>(shared ? 'pickem' : 'overview');
+  const [tab, setTab] = useState<Tab>(shared ? 'pickem' : hasLeagueParam() ? 'league' : 'overview');
   const [mine, setMine] = useState<MajorPicks>(loadMine);
   const [viewShared, setViewShared] = useState(!!shared);
   const [sim, setSim] = useState<MajorResult | null>(null);
@@ -61,6 +72,15 @@ export function MajorSingaporeScreen() {
   const readOnly = viewShared && !!shared;
   const update = (p: MajorPicks) => setMine(normalizePicks(D, p));
 
+  const toggleExtreme = (kind: 'x30' | 'x03', stage: StageNo, id: string) => {
+    if (readOnly) return;
+    const i = stage - 1;
+    const cur = mine[kind][i];
+    const nextList = cur.includes(id) ? cur.filter((x) => x !== id) : cur.length < EXTREME_PICKS ? [...cur, id] : cur;
+    const arr = [...mine[kind]] as MajorPicks['x30'];
+    arr[i] = nextList;
+    update({ ...mine, [kind]: arr });
+  };
   const toggle = (stage: StageNo, id: string) => {
     if (readOnly) return;
     const k = `s${stage}` as 's1' | 's2' | 's3';
@@ -116,9 +136,9 @@ export function MajorSingaporeScreen() {
         <h1 className="msg-hero__title">{D.event.name}</h1>
         <p className="msg-hero__meta">{t('dates')} · {t('playoffsDates')}</p>
         <nav className="msg-tabs" role="tablist" aria-label={t('title')}>
-          {(['overview', 'pickem', 'sim'] as Tab[]).map((id) => (
+          {TABS.map(([id, key]) => (
             <button key={id} role="tab" aria-selected={tab === id} className="msg-tab" onClick={() => setTab(id)}>
-              {t(id === 'overview' ? 'tabOverview' : id === 'pickem' ? 'tabPickem' : 'tabSim')}
+              {t(key)}
             </button>
           ))}
         </nav>
@@ -129,6 +149,14 @@ export function MajorSingaporeScreen() {
         : <Alert tone="info">{t('official')}</Alert>}
 
       {tab === 'overview' && <Overview t={t} odds={odds} onStart={() => setTab('pickem')} />}
+
+      {tab === 'play' && (
+        <Suspense fallback={<Skeleton height={240} />}>
+          <MajorPlay t={t} />
+        </Suspense>
+      )}
+
+      {tab === 'league' && <MajorLeague t={t} picks={mine} onEditPicks={() => setTab('pickem')} />}
 
       {tab === 'pickem' && (
         <div className="msg-stack">
@@ -151,7 +179,7 @@ export function MajorSingaporeScreen() {
             </div>
           )}
           {([1, 2, 3] as StageNo[]).map((st) => (
-            <StagePicker key={st} stage={st} picks={picks} readOnly={readOnly} t={t} onToggle={(id) => toggle(st, id)} />
+            <StagePicker key={st} stage={st} picks={picks} readOnly={readOnly} t={t} onToggle={(id) => toggle(st, id)} onExtreme={(k, id) => toggleExtreme(k, st, id)} />
           ))}
           <BracketPicker picks={picks} readOnly={readOnly} t={t} onPick={pickWinner} />
           <Panel title={t('share')} accent="gold">
@@ -243,7 +271,8 @@ function Overview({ t, odds, onStart }: { t: T; odds: Map<string, number>; onSta
   );
 }
 
-function StagePicker({ stage, picks, readOnly, t, onToggle }: { stage: StageNo; picks: MajorPicks; readOnly: boolean; t: T; onToggle: (id: string) => void }) {
+function StagePicker({ stage, picks, readOnly, t, onToggle, onExtreme }: { stage: StageNo; picks: MajorPicks; readOnly: boolean; t: T; onToggle: (id: string) => void; onExtreme: (kind: 'x30' | 'x03', id: string) => void }) {
+  const teams = new Map(D.teams.map((x) => [x.id, x]));
   const prev = stage === 1 ? 8 : (stage === 2 ? picks.s1 : picks.s2).length;
   const chosen = picks[`s${stage}` as 's1' | 's2' | 's3'];
   const pool = pickPool(D, picks, stage);
@@ -265,6 +294,31 @@ function StagePicker({ stage, picks, readOnly, t, onToggle }: { stage: StageNo; 
                 <TeamChip team={x} />
                 {on && <Check size={16} className="msg-pick__check" aria-hidden />}
               </button>
+            );
+          })}
+        </div>
+      )}
+      {prev >= 8 && chosen.length === 8 && (
+        <div className="msg-extremes">
+          <p className="msg-muted">{t('pickExtremeHint')}</p>
+          {(['x30', 'x03'] as const).map((kind) => {
+            const list = kind === 'x30' ? chosen : pool.map((x) => x.id).filter((id) => !chosen.includes(id));
+            const on = picks[kind][stage - 1];
+            return (
+              <div key={kind} className="msg-extreme">
+                <span className="msg-extreme__label">{t(kind === 'x30' ? 'pick30' : 'pick03')}</span>
+                <div className="msg-chips">
+                  {list.map((id) => {
+                    const sel = on.includes(id);
+                    return (
+                      <button key={id} type="button" className={`msg-chip${sel ? ' is-on' : ''}`} aria-pressed={sel}
+                        disabled={readOnly || (!sel && on.length >= EXTREME_PICKS)} onClick={() => onExtreme(kind, id)}>
+                        {teams.get(id)?.tag ?? id}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>
@@ -316,57 +370,36 @@ function BracketPicker({ picks, readOnly, t, onPick }: { picks: MajorPicks; read
 }
 
 function SimView({ t, picks, result, onRun }: { t: T; picks: MajorPicks; result: MajorResult | null; onRun: () => void }) {
-  const teams = new Map(D.teams.map((x) => [x.id, x]));
-  const name = (id: string) => teams.get(id)?.name ?? id;
   if (!result) {
     return <EmptyState icon={<Dices size={28} />} title={t('simRun')} action={<Button variant="primary" onClick={onRun}>{t('simRun')}</Button>}>{t('simEmpty')}</EmptyState>;
   }
   const sc = picksComplete(picks) ? scorePicks(picks, result) : null;
-  const po = result.playoffs;
   return (
     <div className="msg-stack">
       <div className="msg-toolbar">
         <Button variant="primary" icon={<Dices size={16} aria-hidden />} onClick={onRun}>{t('simAgain')}</Button>
       </div>
-      <Panel title={t('score')}>
+      <Panel title={t('summaryTitle')}>
         {sc ? (
           <div className="msg-score">
             <span className="msg-score__big">{sc.points}<small>/{sc.max} {t('points')}</small></span>
-            <span className="msg-muted">Stage 1: {sc.stage[0]}/8 · Stage 2: {sc.stage[1]}/8 · Stage 3: {sc.stage[2]}/8 · Playoffs: {sc.playoff}/7</span>
+            <div className="msg-summary">
+              {[0, 1, 2].map((i) => (
+                <p key={i}>
+                  <strong>Stage {i + 1}</strong>
+                  <span>{sc.stage[i]}/8</span>
+                  <span>3-0 {sc.x30[i]}/{picks.x30[i].length || 0}</span>
+                  <span>0-3 {sc.x03[i]}/{picks.x03[i].length || 0}</span>
+                </p>
+              ))}
+              <p><strong>Playoffs</strong><span>{sc.playoff}/7</span></p>
+            </div>
             {sc.champion && <Tag tone="achievement">{t('hitChampion')}</Tag>}
             <span className="msg-muted">{t('scoreRule')}</span>
           </div>
         ) : <p className="msg-muted">{t('noPicks')}</p>}
       </Panel>
-      <Panel title={`${t('champion')}: ${name(po.champion)}`} accent="gold">
-        <div className="msg-results">
-          {[[t('qf'), po.qf], [t('sf'), po.sf], [t('final'), [po.final]]].map(([label, ms]) => (
-            <div key={label as string}>
-              <h3 className="msg-bcol__title">{label as string}</h3>
-              {(ms as MajorResult['playoffs']['qf']).map((m) => (
-                <p key={m.label} className="msg-result">
-                  <span className={m.winner === m.a ? 'is-w' : ''}>{name(m.a)}</span>
-                  <span className="msg-result__score">{m.score[0]}–{m.score[1]}</span>
-                  <span className={m.winner === m.b ? 'is-w' : ''}>{name(m.b)}</span>
-                </p>
-              ))}
-            </div>
-          ))}
-        </div>
-      </Panel>
-      {result.stages.map((st) => (
-        <Panel key={st.stage} title={`Stage ${st.stage}`}>
-          <div className="msg-standings">
-            {[...st.records].sort((a, b) => b.w - a.w || a.l - b.l).map((r) => (
-              <p key={r.id} className={`msg-standing${r.w === 3 ? ' is-adv' : ''}`}>
-                <span className="msg-standing__rec">{r.w}–{r.l}</span>
-                <span>{name(r.id)}</span>
-                {picks[`s${st.stage}` as 's1'].includes(r.id) && <Check size={14} aria-label="palpite" />}
-              </p>
-            ))}
-          </div>
-        </Panel>
-      ))}
+      <MajorResultView t={t} result={result} picks={picks} />
     </div>
   );
 }
