@@ -22,7 +22,7 @@ const one = (h: Headers, k: string): string => {
   const v = h?.[k] ?? h?.[k.toLowerCase()];
   return (Array.isArray(v) ? v[0] : v ?? '').trim();
 };
-const cleanEnv = (v?: string) => (v ?? '').replace(/^﻿/, '').trim();
+const cleanEnv = (v?: string) => (v ?? '').replace(new RegExp('^\uFEFF'), '').trim();
 
 export function allowedOrigins(env: Env = process.env): Set<string> {
   return new Set<string>([
