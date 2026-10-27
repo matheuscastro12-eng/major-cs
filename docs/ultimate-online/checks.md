@@ -8,8 +8,18 @@
 - [x] Prêmio da ranqueada creditado no servidor, idempotente — `ultimate-squad.test.ts` ("prêmio da ranqueada")
 - [x] Cliente não consegue criar carta via reconcile — já coberto desde o O0-02 (`ultimate-economy.test.ts`, "handler tx: rejeita grant/reward/admin positivo e carta forjada")
 - [ ] Ranqueada religada atrás de flag — código pronto; falta `RANKED_QUEUE_ENABLED=true` na Vercel depois do deploy (não alterado aqui)
-- [ ] Partida resolvida no servidor beat a beat; prazo e W.O. — Fase 2
+- [x] Motor do PvP: determinismo, estado sobrevive a JSON, placar só sobe, nenhum beat antes do último fecha o mapa, placar final válido no CS2 (300 seeds), odds espelhadas, nenhum estilo domina (600 partidas por estilo contra rival uniforme: 42–58%), contra-jogo pesa (>75%) — `scripts/test-ult-pvp-match.mts` (8/8)
+- [x] Decisões simultâneas (beat só resolve com as duas; escolha do rival não vaza), decisão travada, beat passado ignorado — `server/ult-match.test.ts`
+- [x] Prazo vencido = escolha automática para quem não decidiu — `server/ult-match.test.ts`
+- [x] Sem dupla resolução com requests concorrentes (CAS por versão, conflito real exercitado) — `server/ult-match.test.ts`
+- [x] W.O. por 3 beats sem decidir, por 60s sem poll; os dois ausentes = abandonada — `server/ult-match.test.ts`
+- [x] MMR e prêmio pelo resultado do servidor, uma vez só; amistoso não fecha; report legado já aplicado bloqueia; prêmio idempotente no ledger (FakeDb) — `server/ult-match.test.ts`
+- [ ] Duelo com dois aparelhos reais contra o Neon — não feito (sem ambiente)
 - [x] build + npm test + npm run test:sim (27/10/2026, branch `feat/ultimate-online-f1`):
   - `npm run build`: ok (exit 0)
   - `npm test`: 286/286 com node_modules acessível; na worktree sem node_modules local, 285/286 (só `esm-imports` falha por "Cannot find package" em todos os handlers, inclusive os não tocados — ambiente)
   - `npm run test:sim`: 792/793; única falha `scripts/test-design-tokens.mts` (espaço no caminho, conhecida)
+- [x] build + npm test + npm run test:sim (27/10/2026, branch `feat/ultimate-online-f2`, com node_modules por link):
+  - `npm run build`: ok (exit 0)
+  - `npm test`: 296/296
+  - `npm run test:sim`: 800/801; única falha `scripts/test-design-tokens.mts` (espaço no caminho, conhecida)

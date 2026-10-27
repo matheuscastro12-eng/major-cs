@@ -2,7 +2,7 @@
 
 - **Tarefa:** (1) elenco autoritativo no servidor e religar a ranqueada; (2) PvP com decisões simultâneas por beat resolvidas no servidor; (3) Modo Major: jogar partidas, pick'em, Major com amigos, polimento.
 - **Restrições:** não mexer em preço/pagamentos/Stripe/Woovi. Engine puro (sem Math.random/Date.now). PR sem merge até o Matheus aprovar.
-- **Estágio:** Fase 1 implementada na branch `feat/ultimate-online-f1` (sem push/PR). Próximo: deploy + ligar a fila; depois Fase 2.
+- **Estágio:** Fase 1 em `feat/ultimate-online-f1`; Fase 2 implementada em `feat/ultimate-online-f2` (a partir da F1, sem push/PR). Próximo: revisar, deploy, teste com dois aparelhos reais.
 
 ## Diagnóstico (27/10/2026)
 - Duelo PvP: os dois clientes simulam com o mesmo `run_seed`; servidor não guarda round nem placar (`api/lobby.ts`).
@@ -46,4 +46,19 @@ Depois do deploy desta branch: definir `RANKED_QUEUE_ENABLED=true` na Vercel (pr
 - Cliente só chama `ultImport` no boot (login no meio da sessão importa no próximo boot).
 
 ## Próximo passo
-- Revisar e mergear `feat/ultimate-online-f1`, deploy, ligar `RANKED_QUEUE_ENABLED=true`, observar logs de `[ultImport]`. Depois: Fase 2 (partida no servidor).
+- Revisar e mergear `feat/ultimate-online-f1` e `feat/ultimate-online-f2`, deploy, ligar `RANKED_QUEUE_ENABLED=true`, jogar um duelo com dois aparelhos, observar logs de `[ultImport]` e `[ult-match]`. Depois: pendências da Fase 2 (evento/rivalidade no fechamento) e Fase 3.
+
+## Fase 2 — feito (27/10/2026, branch `feat/ultimate-online-f2`)
+- Motor puro `src/engine/ultimate/pvpMatch.ts`: estado da partida a partir de (seed, squads do servidor); plano de beats = `buildBeatPlan` (MD1, 7 beats); Ponte = `bridgeToBeat`; fechamento = mesma regra do `lockIn` (último beat decide; 12-x vencido fecha 13-x) + `closeMapFromLive`. `resolvePvpBeat(state, a, b, rng)` aplica as duas decisões. Contra-jogo PvP: pedra-papel-tesoura (Agressivo > Passivo > Setup > Agressivo) com peso `COUNTER_DELTA × 1,5` = 18 pontos; força (OVR médio + química) até ±12; embalo até ±5; chance limitada a 10–90%. A tabela da Postura (`STYLE_VS_POSTURE`) não serve para dois humanos (não é antissimétrica: a diferença líquida dá zero em todos os pares), por isso o ciclo próprio. `beatsLeftInMap` extraído de `room.ts` para `roundModel.ts`; imports `.js` em `roundModel`/`moments`/`attributes` (cadeia do servidor).
+- Servidor `server/ult-match.ts` + ações `matchStart`/`matchState`/`decide` em `api/lobby.ts` (sem rota nova): tabela `ult_match` (DDL idempotente, 1× por instância) com seed, estado jsonb, beat, decisão pendente por lado, prazo, presença, beats perdidos, versão, status (live/done/abandoned), vencedor, motivo (played/wo), `settled_at`. Toda escrita é `UPDATE ... WHERE version = $v`; quem perde a corrida relê (nenhum beat resolve 2×). Prazo 20s por beat; sem decisão, escolha automática por sorteio uniforme semeado (imprevisível = neutra em média). W.O.: 3 beats seguidos sem decidir, ou 60s sem poll; os dois ausentes = `abandoned` sem vencedor. Ranqueada: lado pela conta (token) e só com squads `auth: true`; amistoso: lado pelo nick. Revanche do amistoso (novo `run_seed`) recria a partida no mesmo código.
+- Fechamento: ao virar `done` com vencedor, quem ganha o claim `settled_at IS NULL → now()` aplica MMR (`rankedDelta`, mesma régua; constantes e temporada extraídas para `server/rankedSeason.ts`) e o prêmio (`creditRankedPvpReward`, op_id `pvp-ranked:<code>`). Se o report legado já aplicou a partida, não aplica de novo. `api/ranking.ts` `report`: código com linha em `ult_match` responde `serverMatch: true` sem aplicar nada.
+- Cliente: `UltimatePvpLive.tsx` (beat, situação, 3 opções com odds contra cada escolha do rival, contagem do prazo, "o rival já decidiu", resultado do último beat, placar, W.O.); poll 1,5s com backoff até 12s; reconexão = `matchStart` idempotente + `matchState`. Squad marcado `live: true`; só quando os DOIS snapshots têm a marca a partida vai para o servidor (cliente antigo segue no replay local + report pareado). Fim: `finishServerPvp` registra o espelho local 1× (ledger `rtm-ult-pvp-rec`) e abre o modal, sem `reportResult`.
+
+## Pendências reais (Fase 2)
+- Não testado com dois aparelhos nem contra o Neon real (só lógica com store em memória e FakeDb). O SQL de `sqlMatchStore`/`sqlRankedSettler` não tem teste com banco.
+- Fechamento pelo servidor ainda não faz o que o report fazia além de MMR e prêmio: rivalidade (`rtm_rivalries`), contagem da sala de evento (`rtm_event_entries`), meta comunitária (`bumpCommunityContrib`) e aviso de ultrapassagem. Partidas de evento jogadas no servidor não contam no evento até isso migrar.
+- MMR de conta com linha de temporada antiga não é aplicado no servidor (o reset lazy com arquivo é do `me` do ranking); fica log `[ult-match] temporada antiga`.
+- A abordagem pré-jogo (`approach`) e as traits não entram no duelo do servidor (só OVR + química).
+- Sala mista (um cliente novo e um antigo) segue no fluxo antigo inteiro; o servidor só resolve quando os dois são novos.
+- Sem limpeza de linhas antigas de `ult_match`.
+- `noteMatchStart` do PvP no servidor é marcado no fim da partida (não no início).
