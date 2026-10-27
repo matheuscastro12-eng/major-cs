@@ -1624,6 +1624,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // [U03] contrato v2: a abordagem viaja como campo próprio (não escondida no chem)
     v: PVP_SNAPSHOT_VERSION,
     approach,
+    // [F1] o servidor monta o squad da ranqueada a partir das cópias + formação
+    cardIds: form.slots.map((fs) => slotCard(fs.slot)?.owned.id).filter((id): id is string => !!id),
+    formationId: form.id,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [displayName, state.profile.elo, chem.multiplier, duel.multiplier, state.squads, state.inventory, approach]);
 

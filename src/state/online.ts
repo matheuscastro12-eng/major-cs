@@ -8,6 +8,7 @@ import { simulateSeries } from '../engine/match';
 import { makeRng, type Rng } from '../engine/rng';
 import { autoVeto } from '../engine/veto';
 import { hashStr } from './hash';
+import { getToken } from './account';
 import { createTournamentFromTeams, pairingBestOf, placementCode, resolveRound, standings, type PlacementCode } from '../engine/swiss';
 import type { MapId, Pairing, Player, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
 
@@ -108,6 +109,13 @@ export interface UltimatePvpSquad {
   // DOIS snapshots são v≥2 (cliente antigo ignora o campo — o novo também tem que ignorar).
   v?: number;
   approach?: 'aggressive' | 'control' | 'adaptive' | null;
+  // [F1] true = snapshot montado pelo servidor (ranqueada/evento); false = amistoso
+  // declarado pelo cliente. Só o servidor preenche.
+  auth?: boolean;
+  // [F1] só no ENVIO do pick: cópias escaladas (ordem dos slots) + formação. O
+  // servidor monta o snapshot a partir disso nas salas ranqueadas/de evento.
+  cardIds?: string[];
+  formationId?: string;
 }
 
 // O Ultimate Team mistura cartas históricas com o elenco atual de 2026. As duas
@@ -447,14 +455,17 @@ export function majorStandings(major: OnlineMajor) {
 
 // ---- chamadas de API ----
 
-export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; matched?: boolean; queued?: boolean; waiting?: number; waitedMs?: number; window?: number }> {
+export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; matched?: boolean; queued?: boolean; waiting?: number; waitedMs?: number; window?: number; needAccount?: boolean; squadError?: boolean }> {
+  // [F1] a conta viaja em toda chamada quando existe: fila e sala ranqueada/de
+  // evento exigem; o amistoso por código ignora.
+  const token = getToken();
   const res = await fetch('/api/lobby', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(token ? { ...body, token } : body),
     signal: AbortSignal.timeout(9000),
   });
-  return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState };
+  return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; needAccount?: boolean; squadError?: boolean };
 }
 
 export interface OpenRoom { code: string; mode: 'duel' | 'party' | 'ultimate'; pool: TournamentPool; host: string; name?: string | null; players: number; max: number; ranked?: boolean; host_mmr?: number | null; }

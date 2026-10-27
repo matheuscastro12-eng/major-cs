@@ -175,14 +175,22 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
     if (!state || state.lobby.status !== 'drafting') return;
     const me = state.players.find((p) => p.nick.toLowerCase() === nick.toLowerCase());
     if (!me || me.done) return;
-    const key = `${code}:${state.lobby.run_seed ?? state.lobby.seed}`;
+    // [F1] o squad entra na chave: trocar a carta recusada re-envia o pick
+    const key = `${code}:${state.lobby.run_seed ?? state.lobby.seed}:${(squad.cardIds ?? []).join(',')}`;
     if (sentRef.current === key) return;
     sentRef.current = key;
     // lobbyApi NÃO lança em 4xx/5xx (só resolve com {error}) — checa r.ok e
     // re-arma com timer (429/500 transiente não pode matar o envio pra sempre).
     const rearm = () => { sentRef.current = ''; window.setTimeout(() => setRetryTick((t) => t + 1), 3000); };
-    lobbyApi({ action: 'pick', code, nick, picks: squad.cards.map((c) => c.pid), squad, done: true })
-      .then((r) => { if (!r.ok) rearm(); })
+    // [F1] cardIds + formationId: na ranqueada/evento o servidor monta o squad
+    // (posse conferida na conta). Erro de squad (carta só do aparelho, sem
+    // conta…) não é transiente: mostra a mensagem e não re-tenta sozinho.
+    lobbyApi({ action: 'pick', code, nick, picks: squad.cards.map((c) => c.pid), squad, cardIds: squad.cardIds, formationId: squad.formationId, done: true })
+      .then((r) => {
+        if (r.ok) return;
+        if (r.squadError || r.needAccount) { setError(r.error ?? ct('Não foi possível confirmar seu squad.')); return; }
+        rearm();
+      })
       .catch(rearm);
   }, [state, code, nick, squad, retryTick]);
 
