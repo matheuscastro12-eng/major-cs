@@ -261,7 +261,7 @@ function boostCard(base: UltCard, boost: number | undefined): UltCard {
 // não re-renderiza a grade inteira de cartas (custo real em coleção grande).
 // [URG-1] `ed` = selo de edição da temporada: em forma (S3, laranja, +OVR) ou Legado S3 (cinza, OVR base)
 type EditionBadge = { n: number; current: boolean } | null;
-const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo = 0, ev, ed = null }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number; ev?: string; ed?: EditionBadge }) {
+export const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo = 0, ev, ed = null }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number; ev?: string; ed?: EditionBadge }) {
   const info = rarityInfo(card.rarity);
   const compact = size < 116;
   const h = Math.round(size * 1.4);
@@ -314,11 +314,15 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
             {ed.current ? editionLabel(ed.n) : `${ct('LEGADO')} ${editionLabel(ed.n)}`}
           </span>
         )}
-        <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: `${px}px ${px}px ${Math.round(size * 0.05)}px` }}>
+        {/* OVR dentro da moldura: a arte do CS Manager tem o topo recortado (o canto
+            esquerdo desce), então o bloco do OVR começa abaixo da borda e o tamanho
+            sai em px da largura da carta (rem crescia com a fonte do sistema e o
+            número vazava pra fora da carta no squad, no duelo e no celular). */}
+        <div style={{ position: 'relative', zIndex: 1, height: '100%', boxSizing: 'border-box', overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: `${csm ? Math.round(size * 0.14) : px}px ${px}px ${Math.round(size * 0.05)}px` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, minWidth: Math.round(size * 0.26), padding: `${Math.round(size * 0.028)}px 2px`, borderRadius: 8, background: s.plate }}>
-              <span style={{ fontSize: `${(size / 140) * 1.78}rem`, fontWeight: 900, color: s.ink, fontFamily: 'var(--font-num)', letterSpacing: '-0.5px' }}>{card.ovr}</span>
-              <span style={{ fontSize: `${(size / 140) * 0.56}rem`, fontWeight: 800, color: s.ink, opacity: 0.9, marginTop: 1 }}>{ROLE_CODE[card.role] ?? card.role}</span>
+              <span className="ut-card__ovr" style={{ fontSize: Math.round(size * 0.2), lineHeight: 0.95, fontWeight: 900, color: s.ink, fontFamily: 'var(--font-num)', letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}>{card.ovr}</span>
+              <span style={{ fontSize: Math.max(7, Math.round(size * 0.064)), fontWeight: 800, color: s.ink, opacity: 0.9, marginTop: 1, whiteSpace: 'nowrap' }}>{ROLE_CODE[card.role] ?? card.role}</span>
               <span style={{ marginTop: 3 }}><Flag cc={card.country} /></span>
             </div>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -344,10 +348,10 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
               </div>
             </>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden' }}>
             {csm?.logo && <img src={csm.logo} alt={card.teamOriginName} title={card.teamOriginName} loading="lazy" decoding="async" width={Math.round(size * 0.1)} height={Math.round(size * 0.1)} style={{ objectFit: 'contain' }} />}
             <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 800, color: s.ink, opacity: 0.72 }}>{REGION_CODE[card.region] ?? 'GLB'}</span>
-            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 900, color: s.label, letterSpacing: '0.2px' }}>· {legacy ? 'Legado do RtP' : info.label}</span>
+            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 900, color: s.label, letterSpacing: '0.2px', overflow: 'hidden', textOverflow: 'ellipsis' }}>· {legacy ? 'Legado do RtP' : info.label}</span>
           </div>
         </div>
         {!compact && !csm && (

@@ -300,7 +300,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, varia
     if (liveArgs?.live && onServerResult) {
       return (
         <div className="ut-duel">
-          <UltimatePvpLive key={`${code}:${liveArgs.runSeed}`} code={code} nick={nick}
+          <UltimatePvpLive key={`${code}:${liveArgs.runSeed}`} code={code} nick={nick} squads={[liveArgs.mySquad, liveArgs.oppSquad]}
             onDone={(v) => { duelSession.finishedCode = code; setServerEnded(`${code}:${liveArgs.runSeed}`); onServerResult(liveArgs, v); }}
             onLeave={() => void leave()} />
           {isHost && !liveArgs.ranked && serverEnded === `${code}:${liveArgs.runSeed}` && (

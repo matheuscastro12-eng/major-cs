@@ -17,6 +17,7 @@ import { activeWeekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 import { rarityInfo } from '../src/engine/ultimate/rarities.js';
 import { createHash } from 'node:crypto';
 import { internalError } from '../server/internalError.js'; // [O0-43]
+import { BUSY_MSG, isTransientDbError, withTransientRetry } from '../server/transientDb.js'; // [ULT-ON]
 import { decideMatch, pollMatch, sqlMatchStore, sqlRankedSettler, startMatch, ultMatchSchemaQueries, type MatchPlayerIn } from '../server/ult-match.js'; // [F2]
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -805,7 +806,16 @@ export default async function handler(
     // (resolve preguiçosamente prazo/W.O.); decide grava a decisão do lado de quem
     // chama. Ranqueada: lado pela conta (token). Amistoso: lado pelo nick.
     if (action === 'matchStart' || action === 'matchState' || action === 'decide') {
-      if (!ultMatchSchemaReady) { for (const q of ultMatchSchemaQueries(sql as unknown as SqlTag)) await q; ultMatchSchemaReady = true; }
+      // [ULT-ON] os dois jogadores chegam juntos no 1º matchStart, quase sempre em
+      // instância fria: o DDL só roda se a tabela/coluna ainda não existe (sem
+      // ALTER TABLE com lock exclusivo a cada cold start) e a ação inteira é
+      // repetida 1× em falha transitória do banco.
+      if (!ultMatchSchemaReady) {
+        const has = await sql`SELECT 1 FROM information_schema.columns WHERE table_name = 'ult_match' AND column_name = 'card_ids' LIMIT 1`;
+        if (has.length === 0) { for (const q of ultMatchSchemaQueries(sql as unknown as SqlTag)) await q; }
+        ultMatchSchemaReady = true;
+      }
+      await withTransientRetry(async () => {
       const lobby = await sql`SELECT status, mode, COALESCE(ranked, false) AS ranked, event_id, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed FROM lobbies WHERE code = ${code}`;
       const store = sqlMatchStore(sql as unknown as SqlTag);
       const now = Date.now();
@@ -836,6 +846,7 @@ export default async function handler(
       }
       if (!out.ok) { res.status(out.status).json({ error: out.error }); return; }
       res.status(200).json({ ok: true, match: out.view });
+      });
       return;
     }
 
@@ -958,6 +969,14 @@ export default async function handler(
 
     res.status(400).json({ error: 'ação inválida' });
   } catch (e) {
+    // [ULT-ON] falha transitória (lock, deadlock, compute do Neon acordando): 503
+    // com retry, não o "Erro interno" — o cliente repete no próximo poll.
+    if (isTransientDbError(e)) {
+      console.warn('[lobby:post] transitório:', e);
+      res.setHeader('Retry-After', '1');
+      res.status(503).json({ error: BUSY_MSG, retry: true });
+      return;
+    }
     internalError(res, 'lobby:post', e);
   }
 }
