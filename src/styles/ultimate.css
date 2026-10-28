@@ -411,23 +411,62 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 .ut-btn:active:not(:disabled) { transform: translateY(1px); }
 
 /* ---------------- PACK TILES (Loja) ---------------- */
+/* Card escuro com o pack físico à esquerda; na grade dos packs comuns, empilhado. */
 .ut-pack {
-  position: relative; overflow: hidden; border-radius: 16px; padding: 16px 14px 14px;
-  display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.35); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  --pack: var(--ut-amber);
+  position: relative; overflow: hidden; border-radius: 16px; padding: 18px 20px;
+  display: grid; grid-template-columns: 132px 1fr; column-gap: 22px; row-gap: 6px; align-content: center; text-align: left;
+  background: radial-gradient(420px 220px at 0% 50%, color-mix(in srgb, var(--pack) 22%, transparent), transparent 70%), var(--c-surface-1, #121a2b);
+  border: 1px solid color-mix(in srgb, var(--pack) 38%, var(--ut-line, rgba(255,255,255,.08)));
 }
-.ut-pack::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 10, 16, 0.34) 0%, rgba(8, 10, 16, 0.20) 42%, rgba(8, 10, 16, 0.48) 100%); pointer-events: none; }
-.ut-pack__shine { position: absolute; inset: 0; background: radial-gradient(140px 90px at 50% -10px, rgba(255, 255, 255, 0.28), transparent 70%); pointer-events: none; }
-.ut-pack__art { position: relative; z-index: 1; color: #fff; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3)); }
-.ut-pack__name { position: relative; z-index: 1; font-size: 1.05rem; font-weight: 900; color: #fff; letter-spacing: 0.3px; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
-.ut-pack__desc { position: relative; z-index: 1; font-size: 0.72rem; line-height: 1.35; color: rgba(255, 255, 255, 0.92); min-height: 32px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
+.ut-pack > :not(.ut-packart) { grid-column: 2; }
+.ut-pack__name { font-size: 1.1rem; font-weight: 900; color: var(--c-ink, #fff); letter-spacing: 0.2px; }
+.ut-pack__desc { font-size: 0.76rem; line-height: 1.4; color: var(--c-ink-2, rgba(255,255,255,.78)); }
+.ut-pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.ut-pack-grid .ut-pack { grid-template-columns: 1fr; text-align: center; justify-items: center; padding: 18px 14px 14px; }
+.ut-pack-grid .ut-pack > :not(.ut-packart) { grid-column: 1; }
+.ut-pack-grid .ut-pack__desc { min-height: 32px; }
+@media (max-width: 560px) {
+  .ut-pack { grid-template-columns: 1fr; text-align: center; justify-items: center; }
+  .ut-pack > :not(.ut-packart) { grid-column: 1; }
+}
+
+.ut-packart { grid-column: 1; grid-row: 1 / span 8; align-self: center; perspective: 600px; filter: drop-shadow(0 12px 18px rgba(0,0,0,.45)); }
+.ut-pack-grid .ut-packart { grid-row: auto; margin-bottom: 6px; }
+.ut-packart__foil {
+  position: relative; width: 120px; aspect-ratio: 5 / 7.4; overflow: hidden; color: #fff;
+  display: flex; flex-direction: column; align-items: center; padding: 14px 8px 12px; gap: 4px;
+  background:
+    repeating-linear-gradient(115deg, rgba(255,255,255,0) 0 6px, rgba(255,255,255,.05) 6px 7px),
+    linear-gradient(160deg, color-mix(in srgb, var(--pack) 60%, #fff) 0%, var(--pack) 30%, color-mix(in srgb, var(--pack) 55%, #000) 100%);
+  /* serrilha de selagem em cima e embaixo */
+  --t: 5px;
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% calc(100% - 0px) / calc(2 * var(--t)) 51% repeat-x,
+                conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% 0 / calc(2 * var(--t)) 51% repeat-x;
+          mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% 100% / calc(2 * var(--t)) 51% repeat-x,
+                conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% 0 / calc(2 * var(--t)) 51% repeat-x;
+  transform: rotateY(-10deg) rotateX(3deg); transition: transform .25s ease;
+}
+.ut-pack:hover .ut-packart__foil { transform: rotateY(0) rotateX(0) translateY(-3px); }
+.ut-packart__brand { font-family: var(--ut-font-display, inherit); font-size: .5rem; font-weight: 900; letter-spacing: 1.6px; opacity: .9; }
+.ut-packart__tear { width: 100%; border-top: 1px dashed rgba(255,255,255,.45); margin: 2px 0 auto; }
+.ut-packart__emblem {
+  display: grid; place-items: center; width: 62px; height: 62px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.35), rgba(0,0,0,.25));
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.55), 0 4px 10px rgba(0,0,0,.3);
+}
+.ut-packart__label { margin-top: auto; font-family: var(--ut-font-display, inherit); font-weight: 900; font-size: .78rem; text-transform: uppercase; letter-spacing: .6px; text-align: center; line-height: 1.1; text-shadow: 0 1px 3px rgba(0,0,0,.5); max-width: 100%; overflow-wrap: anywhere; }
+.ut-packart__count { font-size: .58rem; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,.35); }
+.ut-packart__sheen { position: absolute; inset: -40% -60%; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.38) 50%, transparent 60%); transform: translateX(-60%); transition: transform .7s ease; pointer-events: none; }
+.ut-pack:hover .ut-packart__sheen { transform: translateX(60%); }
+@media (prefers-reduced-motion: reduce) { .ut-packart__foil, .ut-packart__sheen { transition: none; } }
 .ut-pack__buy {
   position: relative; z-index: 1; margin-top: 4px; width: 100%; padding: 10px 12px; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border: none; background: var(--c-surface-2); color: var(--c-ink); font-family: var(--ut-font-mono); font-weight: 800; font-size: 0.92rem;
+  border: none; background: var(--ut-amber); color: var(--c-on-accent); font-family: var(--ut-font-mono); font-weight: 800; font-size: 0.92rem;
   cursor: pointer; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18); transition: transform .06s, filter .12s;
 }
-.ut-pack__buy svg { color: var(--ut-amber); }
+.ut-pack__buy svg { color: currentColor; }
 .ut-pack__buy:hover:not(:disabled) { filter: brightness(1.02); transform: translateY(-1px); }
 .ut-pack__buy:disabled { opacity: 0.55; cursor: default; }
 
