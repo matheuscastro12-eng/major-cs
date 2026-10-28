@@ -34,16 +34,15 @@ const BASE = '/cards/csm';
 const players = (art as { players: Record<string, string> }).players;
 const teams = (art as { teams: Record<string, string> }).teams;
 
-export interface CsmCardArt { frame: string; frameFilter?: string; photo: string; logo: string | null }
+export interface CsmCardArt { frame: string; frameFilter?: string; photo: string | null; logo: string | null }
 
-// Só devolve arte quando há FOTO: moldura sem foto (avatar procedural por cima)
-// destoa mais que o visual próprio, então o fallback é a carta atual inteira.
-export function csmArtFor(card: { playerId: string; rarity: UltRarity; teamOrigin: string }): CsmCardArt | null {
-  const photo = players[card.playerId];
-  if (!photo) return null;
+// Toda carta usa a moldura; sem foto mapeada, photo = null e a carta mostra o
+// avatar com as iniciais dentro da moldura (a coleção fica com um visual só).
+export function csmArtFor(card: { playerId: string; rarity: UltRarity; teamOrigin: string }): CsmCardArt {
+  const photo = players[card.playerId] ?? null;
   const f = CSM_FRAME_BY_RARITY[card.rarity] ?? CSM_FRAME_BY_RARITY.bronze;
   const logo = teams[card.teamOrigin];
-  return { frame: `${BASE}/frames/${f.frame}.webp`, frameFilter: f.filter, photo: `${BASE}/players/${photo}.webp`, logo: logo ? `${BASE}/teams/${logo}.webp` : null };
+  return { frame: `${BASE}/frames/${f.frame}.webp`, frameFilter: f.filter, photo: photo ? `${BASE}/players/${photo}.webp` : null, logo: logo ? `${BASE}/teams/${logo}.webp` : null };
 }
 
 export const CSM_PHOTO_COUNT = Object.keys(players).length;

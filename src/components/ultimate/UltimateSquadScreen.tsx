@@ -18,6 +18,7 @@ import { countCompletedEras, legendPlayers } from '../../engine/ultimate/icons';
 import { isLegacyCard } from '../../engine/bridge/legacyBridge';
 import { legacyPoolPlayers } from '../../state/rtpHall';
 import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../engine/ultimate/packs';
+import { PackArt } from './PackArt';
 import { packOddsLine } from '../../engine/ultimate/packOdds'; // [U01] garantia + odds efetivas derivadas da definição
 // [U03] adaptador único de preparação de time + perfil de elenco + abordagem + IA com composição válida
 import { APPROACH_DEFS, APPROACH_IDS, AXIS_LABEL, buildAiOpponent, effectiveMultiplier, isApproach, prepareUltimateTeam, PVP_SNAPSHOT_VERSION, pvpApproachesApply, squadProfile, type Approach } from '../../engine/ultimate/squadAnalysis';
@@ -267,8 +268,8 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
   const foil = FOIL_RARITIES.has(card.rarity);
   // [W2] LEGADO: moldura própria (borda dupla âmbar + faixa "LEGADO") sobre a pele de lenda
   const legacy = isLegacyCard(card);
-  // arte do CS Manager (moldura por raridade + foto + logo) quando há foto mapeada;
-  // sem foto (ou LEGADO) → visual próprio. Texto vira claro sobre faixa escura.
+  // arte do CS Manager (moldura por raridade + foto ou iniciais + logo) em toda carta;
+  // só o LEGADO mantém o visual próprio. Texto vira claro sobre faixa escura.
   const csm = legacy ? null : csmArtFor(card);
   const s = csm ? CSM_SKIN(rarityInfo(card.rarity).color) : cardSkin(card.rarity);
   const px = Math.round(size * (csm ? 0.1 : 0.06));
@@ -321,7 +322,7 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
               <span style={{ marginTop: 3 }}><Flag cc={card.country} /></span>
             </div>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              {csm
+              {csm?.photo
                 ? <CsmPhoto src={csm.photo} nick={card.nick} w={Math.round(size * 0.58)} h={Math.round(size * (compact ? 0.5 : 0.56))} />
                 : <PlayerAvatar nick={card.nick} size={Math.round(size * (compact ? 0.42 : 0.5))} />}
             </div>
@@ -3179,9 +3180,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           {ending.active && ending.seasonN != null && (() => {
             const afford = credits >= SEASON_PACK.cost;
             return (
-              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${SEASON_PACK.color} 0%, color-mix(in srgb, ${SEASON_PACK.color} 87%, transparent) 55%, color-mix(in srgb, ${SEASON_PACK.color} 67%, transparent) 100%)`, marginBottom: 12 }}>
-                <div className="ut-pack__shine" />
-                <div className="ut-pack__art"><Flame size={44} strokeWidth={1.4} /></div>
+              <div className="ut-pack" style={{ '--pack': SEASON_PACK.color, marginBottom: 12 } as CSSProperties}>
+                <PackArt icon={Flame} label={ct('Temporada')} cards={SEASON_PACK.cards} />
                 <div className="ut-pack__name">{ct('Pacote da Temporada')} · {ct('Edição')} {editionLabel(ending.seasonN)}</div>
                 <div className="ut-pack__desc">{ct('7 cartas, 2 Ouro ou melhor garantidas — TODAS em forma: +2 OVR até o fim da temporada. Depois viram Legado')} {editionLabel(ending.seasonN)}.</div>
                 <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(SEASON_PACK)} · {ct('pacotes comuns: 10% por carta de sair em forma')}</div>
@@ -3205,9 +3205,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             const promoPack = ultimatePromoPack();
             const afford = credits >= promoPack.cost;
             return (
-              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${promo.theme.color} 0%, color-mix(in srgb, ${promo.theme.color} 87%, transparent) 55%, color-mix(in srgb, ${promo.theme.color} 67%, transparent) 100%)`, marginBottom: 12 }}>
-                <div className="ut-pack__shine" />
-                <div className="ut-pack__art"><Sparkles size={44} strokeWidth={1.4} /></div>
+              <div className="ut-pack" style={{ '--pack': promo.theme.color, marginBottom: 12 } as CSSProperties}>
+                <PackArt icon={Sparkles} label={ct('Promo')} cards={promoPack.cards} />
                 <div className="ut-pack__name">{ct('Pacote Promo')} · {promo.theme.name}</div>
                 <div className="ut-pack__desc">{ct(promo.theme.desc)} — {ct('11 cartas promo (+2 OVR) este mês, 1 garantida no pack.')}</div>
                 <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(ultimatePromoPack())}</div>
@@ -3221,9 +3220,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           {/* Pacote TOTW — os 7 in-forms da semana (rotaciona toda segunda). O card
               lista os nicks da semana e a contagem até a rotação. */}
           {totwView && (
-            <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${TOTW_PACK.color} 0%, color-mix(in srgb, ${TOTW_PACK.color} 87%, transparent) 55%, color-mix(in srgb, ${TOTW_PACK.color} 67%, transparent) 100%)`, marginBottom: 12 }}>
-              <div className="ut-pack__shine" />
-              <div className="ut-pack__art"><Zap size={44} strokeWidth={1.4} /></div>
+            <div className="ut-pack" style={{ '--pack': TOTW_PACK.color, marginBottom: 12 } as CSSProperties}>
+              <PackArt icon={Zap} label={'TOTW'} cards={TOTW_PACK.cards} />
               <div className="ut-pack__name">{ct('Pacote TOTW')} · {ct('Time da Semana')}</div>
               <div className="ut-pack__desc">{ct('Os 7 in-forms da semana (+2 OVR), 1 garantido no pack:')} {totwView.nicks}</div>
               <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Rotaciona em')} {totwView.dd}d {totwView.hh}h · {ct('segunda-feira, 00:00 UTC')}</div>
@@ -3238,9 +3236,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           {(() => {
             const afford = credits >= ICON_PACK.cost;
             return (
-              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${ICON_PACK.color} 0%, color-mix(in srgb, ${ICON_PACK.color} 87%, transparent) 55%, color-mix(in srgb, ${ICON_PACK.color} 67%, transparent) 100%)`, marginBottom: 12 }}>
-                <div className="ut-pack__shine" />
-                <div className="ut-pack__art"><Trophy size={44} strokeWidth={1.4} /></div>
+              <div className="ut-pack" style={{ '--pack': ICON_PACK.color, marginBottom: 12 } as CSSProperties}>
+                <PackArt icon={Trophy} label={ct('Ícone')} cards={ICON_PACK.cards} />
                 <div className="ut-pack__name">{ct('Pacote Ícone')} · {ct('Lendas do CS')}</div>
                 <div className="ut-pack__desc">{ct('GeT_RiGhT, cogu, kennyS, NEO… as lendas aposentadas do CS como Ícones Históricos — e elas SÓ caem aqui. 1 Ícone garantido.')}</div>
                 <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(ICON_PACK)}</div>
@@ -3250,13 +3247,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               </div>
             );
           })()}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
+          <div className="ut-pack-grid">
             {PACK_DEFS.map((pack) => {
               const afford = credits >= pack.cost;
               return (
-                <div key={pack.id} className="ut-pack" style={{ background: `linear-gradient(155deg, ${pack.color} 0%, color-mix(in srgb, ${pack.color} 87%, transparent) 55%, color-mix(in srgb, ${pack.color} 67%, transparent) 100%)` }}>
-                  <div className="ut-pack__shine" />
-                  <div className="ut-pack__art"><Package size={44} strokeWidth={1.4} /></div>
+                <div key={pack.id} className="ut-pack" style={{ '--pack': pack.color } as CSSProperties}>
+                  <PackArt icon={Package} label={pack.name} cards={pack.cards} />
                   <div className="ut-pack__name">{pack.name}</div>
                   <div className="ut-pack__desc">{pack.desc}</div>
                   <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }} title={ct('Chance de sair pelo menos 1 carta dessa raridade no pack, contando as garantias. Calculado da definição do pack.')}>{packOddsLine(pack)}</div>
@@ -3351,7 +3347,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                         <div key={`${row.card.key}#${row.evo}#${row.style ?? ''}#${row.ev ?? ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                           <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(baseCard.rarity, baseCard.ovr, isDup)} evo={row.evo} ev={row.ev} ed={row.ed} />
                           <DuelChips card={row.card} styleId={row.style} light />
-                          <div style={{ display: 'flex', gap: 6 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 170 }}>
                             <button onClick={() => setHistCard({ card: row.card, ownedIds: row.ownedIds })} style={sellBtn} title={ct('História da carta')}>
                               {ct('história')}
                             </button>
