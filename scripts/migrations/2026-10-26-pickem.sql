@@ -1,10 +1,14 @@
 -- PICK'EM do Major Singapore — 2026-10-26
--- Idempotente. NÃO foi rodado em produção pelo agente que criou a frente.
--- Rodar manualmente no Neon antes do deploy (ou ligar PICKEM_AUTO_SCHEMA=1).
+-- Idempotente: pode rodar quantas vezes quiser (só IF NOT EXISTS, nada é apagado).
+-- Como rodar: cole o arquivo INTEIRO no Neon SQL Editor e execute (uma transação).
+-- Pré-requisito: rtm_accounts já existe (a API lê o nick de lá).
+-- PICKEM_AUTO_SCHEMA não tem efeito em produção: esta migração é o caminho.
+
+BEGIN;
 
 CREATE TABLE IF NOT EXISTS rtm_pickem_stages (
   stage           TEXT PRIMARY KEY,                 -- 's1' | 's2' | 's3' | 'playoffs'
-  teams           JSONB NOT NULL DEFAULT '[]'::jsonb, -- ids dos times do Stage (bo3_team_<id>)
+  teams           JSONB NOT NULL DEFAULT '[]'::jsonb, -- ids do JSON do Major (ex.: 'legacy'), os mesmos que o conversor envia
   locks_at        TIMESTAMPTZ,                      -- trava: relógio do SERVIDOR (now() < locks_at)
   result          JSONB,                            -- resultado oficial (vale para o placar)
   result_source   TEXT,                             -- 'manual' | 'bo3'
@@ -32,6 +36,11 @@ CREATE TABLE IF NOT EXISTS rtm_pickem_prizes (
   decided_at TIMESTAMPTZ,
   decided_by TEXT
 );
+
+-- placar e "meus palpites" filtram por stage / email
+CREATE INDEX IF NOT EXISTS rtm_pickem_picks_stage_idx ON rtm_pickem_picks (stage);
+
+COMMIT;
 
 -- Abertura dos Stages: ver scripts/migrations/2026-10-26-pickem-seed.sql
 -- (gerado por scripts/pickem-seed.mts a partir da lista; refazer após 02/11).
