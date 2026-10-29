@@ -10,7 +10,8 @@
     "test": "tsx --test server/*.test.ts",
     "test:sim": "tsx --test scripts/test-*.mts",
     "preview": "vite preview",
-    "gen:ult-catalog": "tsx scripts/gen-ult-catalog.mts"
+    "gen:ult-catalog": "tsx scripts/gen-ult-catalog.mts",
+    "check:og": "tsx scripts/check-og.mts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
