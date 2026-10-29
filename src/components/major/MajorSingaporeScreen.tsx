@@ -21,6 +21,7 @@ import { track, trackShare } from '../../state/track';
 import { Alert, Button, EmptyState, Panel, Skeleton, Tag } from '../ds';
 import { MajorResultView } from './MajorResultView';
 import { MajorLeague } from './MajorLeague';
+import { MajorCrest } from './MajorCrest';
 import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
 import '../../styles/major.css';
@@ -209,7 +210,7 @@ type T = (k: MajorKey) => string;
 function TeamChip({ team, sub }: { team: MajorTeam; sub?: string }) {
   return (
     <span className="msg-team">
-      <span className="msg-team__swatch" style={{ background: team.colors?.[1] ?? 'var(--c-ink-faint)' }} aria-hidden />
+      <MajorCrest team={team} size={22} />
       <span className="msg-team__name">{team.name}</span>
       {sub && <span className="msg-team__sub">{sub}</span>}
     </span>

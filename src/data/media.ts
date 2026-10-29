@@ -90,6 +90,49 @@ export function logoForTeam(team: Pick<TeamSeason, 'id' | 'team'>): string | und
   return local ? `/logos/${local}` : undefined;
 }
 
+// Logo local pelo NOME/sigla do time (times fora do banco de temporadas, ex.: os
+// convidados do Modo Major e os seeds do Major da carreira). Só arquivos de
+// public/logos — nunca Liquipedia. Sem arquivo → undefined (TeamBadge usa a sigla).
+const LOGO_BY_NAME: Record<string, string> = {
+  vitality: 'vitality.png',
+  spirit: 'spirit.png',
+  falcons: 'falcons.png',
+  natusvincere: 'navi.png', navi: 'navi.png',
+  mouz: 'mouz.png', mousesports: 'mouz.png',
+  legacy: 'legacy.png',
+  mongolz: 'mongolz.png',
+  astralis: 'astralis.png',
+  furia: 'furia.png',
+  g2: 'g2.png',
+  '9z': '9z.png',
+  pain: 'pain.png',
+  mibr: 'mibr.png',
+  faze: 'faze.png',
+  ninjasinpyjamas: 'nip.jpg', nip: 'nip.jpg',
+  heroic: 'heroic.png',
+  big: 'big.jpg',
+  tyloo: 'tyloo.png',
+  liquid: 'liquid.png',
+  fnatic: 'fnatic.png', cloud9: 'cloud9.png', ence: 'ence.png',
+  complexity: 'complexity.png', imperial: 'imperial.png',
+  apeks: 'apeks.png', sharks: 'sharks.png', redcanids: 'redcanids.png', oddik: 'oddik.png',
+  w7m: 'w7m.png', virtuspro: 'virtuspro.png',
+};
+const normTeam = (s: string) => s.toLowerCase()
+  .replace(/\b(team|esports|e-sports|gaming|clan|club)\b/g, '')
+  .replace(/^the\s+/, '')
+  .replace(/[^a-z0-9]/g, '');
+
+/** logo local para um time pelo nome, sigla ou id (o primeiro que bater) */
+export function logoForName(...keys: (string | undefined)[]): string | undefined {
+  for (const k of keys) {
+    if (!k) continue;
+    const f = LOGO_BY_NAME[normTeam(k)];
+    if (f) return `/logos/${f}`;
+  }
+  return undefined;
+}
+
 export function liquipediaTeamUrl(team: Pick<TeamSeason, 'team'>): string {
   return `https://liquipedia.net/counterstrike/${team.team.replace(/ /g, '_')}`;
 }
