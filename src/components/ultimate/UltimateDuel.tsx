@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchLobby, lobbyApi, listOpenLobbies, type LobbyState, type OpenRoom, type UltimatePvpSquad } from '../../state/online';
 import { ct } from '../../state/career-i18n';
 import { Copy, Globe, LogOut, Plus, RefreshCw, Swords, Users, Zap } from 'lucide-react';
+import { UltimatePvpLive } from './UltimatePvpLive';
+import type { MatchView } from '../../engine/ultimate/pvpMatch';
 
 export interface DuelPlayArgs {
   code: string;
@@ -18,6 +20,7 @@ export interface DuelPlayArgs {
   oppNick: string;
   myFirst: boolean; // ordem canônica (nick menor primeiro) — igual nos 2 clientes
   ranked: boolean;  // sala da fila (vale RP + ladder) vs sala privada (amistoso)
+  live: boolean;    // [F2] os dois clientes jogam a partida resolvida no servidor
 }
 
 // sessão do duelo FORA do React: o palco da partida substitui a tela inteira e
@@ -35,7 +38,7 @@ function watchedMatch(key: string): boolean {
   try { return (JSON.parse(localStorage.getItem(LEDGER_KEY) ?? '[]') as string[]).includes(key); } catch { return false; }
 }
 
-export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', initialJoinCode, eventId = null, onQueueEmpty }: {
+export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, variant = 'private', initialJoinCode, eventId = null, onQueueEmpty }: {
   nick: string;
   // [U11] convite por link (?duelo=CODE): entra na sala uma vez ao montar
   initialJoinCode?: string | null;
@@ -45,6 +48,8 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
   squad: UltimatePvpSquad;
   ready: boolean;               // squad completo (5 cartas)?
   onPlay: (args: DuelPlayArgs) => boolean; // false = não conseguiu montar a partida
+  // [F2] partida resolvida no servidor terminou: o pai registra o resultado DO SERVIDOR (1x)
+  onServerResult?: (args: DuelPlayArgs, view: MatchView) => void;
   // 'ranked' = só a fila de matchmaking (Rivals, vale ladder); 'private' = só
   // criar/entrar por código + salas abertas (amistoso com amigo, sem ladder).
   variant?: 'ranked' | 'private';
@@ -61,6 +66,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
   const [error, setError] = useState('');
   // fila ranqueada: null = fora; senão desde quando + telemetria do servidor
   const [queue, setQueue] = useState<{ since: number; waiting?: number; window?: number } | null>(null);
+  const [serverEnded, setServerEnded] = useState(''); // [F2] code:run_seed da partida no servidor já encerrada
   const [retryTick, setRetryTick] = useState(0); // re-dispara o envio do squad após falha
   const sentRef = useRef('');    // já enviei meu squad neste ciclo (code:run_seed)
   const failedRef = useRef(new Set<string>()); // partidas que o pai não conseguiu montar
@@ -175,14 +181,22 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
     if (!state || state.lobby.status !== 'drafting') return;
     const me = state.players.find((p) => p.nick.toLowerCase() === nick.toLowerCase());
     if (!me || me.done) return;
-    const key = `${code}:${state.lobby.run_seed ?? state.lobby.seed}`;
+    // [F1] o squad entra na chave: trocar a carta recusada re-envia o pick
+    const key = `${code}:${state.lobby.run_seed ?? state.lobby.seed}:${(squad.cardIds ?? []).join(',')}`;
     if (sentRef.current === key) return;
     sentRef.current = key;
     // lobbyApi NÃO lança em 4xx/5xx (só resolve com {error}) — checa r.ok e
     // re-arma com timer (429/500 transiente não pode matar o envio pra sempre).
     const rearm = () => { sentRef.current = ''; window.setTimeout(() => setRetryTick((t) => t + 1), 3000); };
-    lobbyApi({ action: 'pick', code, nick, picks: squad.cards.map((c) => c.pid), squad, done: true })
-      .then((r) => { if (!r.ok) rearm(); })
+    // [F1] cardIds + formationId: na ranqueada/evento o servidor monta o squad
+    // (posse conferida na conta). Erro de squad (carta só do aparelho, sem
+    // conta…) não é transiente: mostra a mensagem e não re-tenta sozinho.
+    lobbyApi({ action: 'pick', code, nick, picks: squad.cards.map((c) => c.pid), squad, cardIds: squad.cardIds, formationId: squad.formationId, done: true })
+      .then((r) => {
+        if (r.ok) return;
+        if (r.squadError || r.needAccount) { setError(r.error ?? ct('Não foi possível confirmar seu squad.')); return; }
+        rearm();
+      })
       .catch(rearm);
   }, [state, code, nick, squad, retryTick]);
 
@@ -196,7 +210,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
     const opp = actives.find((p) => p.nick.toLowerCase() !== nick.toLowerCase());
     if (!me?.squad || !opp?.squad) return null;
     const runSeed = Number(state.lobby.run_seed ?? state.lobby.seed) || 1;
-    return { code, runSeed, mySquad: me.squad, oppSquad: opp.squad, oppNick: opp.squad.name || opp.nick, myFirst: me.nick.toLowerCase() < opp.nick.toLowerCase(), ranked: !!state.lobby.ranked };
+    return { code, runSeed, mySquad: me.squad, oppSquad: opp.squad, oppNick: opp.squad.name || opp.nick, myFirst: me.nick.toLowerCase() < opp.nick.toLowerCase(), ranked: !!state.lobby.ranked, live: me.squad.live === true && opp.squad.live === true };
   }, [state, code, nick]);
 
   // ── partida pronta → entrega pro pai UMA vez por code:run_seed. A guarda é o
@@ -205,6 +219,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
   useEffect(() => {
     const args = buildPlayArgs();
     if (!args) return;
+    if (args.live && onServerResult) return; // [F2] partida no servidor: sem replay local
     const key = `${args.code}:${args.runSeed}`;
     if (watchedMatch(key) || failedRef.current.has(key)) return;
     if (!onPlay(args)) {
@@ -215,7 +230,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
       // handler de 'gone' não alarma) — e a ranqueada volta pra fila no remount.
       duelSession.finishedCode = args.code;
     }
-  }, [buildPlayArgs, onPlay]);
+  }, [buildPlayArgs, onPlay, onServerResult]);
 
   const create = async () => {
     setBusy(true); setError('');
@@ -280,6 +295,21 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
     const players = (state?.players ?? []).filter((p) => !p.spectator);
     const isHost = lobby ? lobby.host.toLowerCase() === nick.toLowerCase() : false;
     const status = lobby?.status ?? 'waiting';
+    // [F2] partida resolvida no servidor: tela ao vivo (beat, prazo, odds) no lugar do replay
+    const liveArgs = status === 'done' ? buildPlayArgs() : null;
+    if (liveArgs?.live && onServerResult) {
+      return (
+        <div className="ut-duel">
+          <UltimatePvpLive key={`${code}:${liveArgs.runSeed}`} code={code} nick={nick} squads={[liveArgs.mySquad, liveArgs.oppSquad]}
+            onDone={(v) => { duelSession.finishedCode = code; setServerEnded(`${code}:${liveArgs.runSeed}`); onServerResult(liveArgs, v); }}
+            onLeave={() => void leave()} />
+          {isHost && !liveArgs.ranked && serverEnded === `${code}:${liveArgs.runSeed}` && (
+            <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', padding: '11px' }} disabled={busy} onClick={() => void rematch()}><Swords size={15} /> {ct('REVANCHE')}</button>
+          )}
+          {error && <div className="ut-duel__err">{error}</div>}
+        </div>
+      );
+    }
     return (
       <div className="ut-duel">
         <div className="ut-duel__head">

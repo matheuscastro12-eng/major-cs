@@ -4,11 +4,14 @@
 // fila de evento no queuePoll e 500 sem vazar a mensagem do Postgres.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import handler, { LEGACY_GONE_ACTIONS, rankedQueueEnabled, ticketBucket } from '../api/lobby.js';
+import handler, { ACCOUNT_REQUIRED_MSG, LEGACY_GONE_ACTIONS, rankedQueueEnabled, ticketBucket } from '../api/lobby.js';
+import { signAccountToken } from './auth.js';
 import { captureRes, FAKE_DATABASE_URL, installFakeNeon, type FakeRoute } from './neon-http.mock.js';
 import { INTERNAL_ERROR_MSG } from './internalError.js';
 
 process.env.DATABASE_URL = FAKE_DATABASE_URL;
+process.env.APP_SECRET = process.env.APP_SECRET || 'test-secret-lobby';
+const tok = (email: string) => signAccountToken(email);
 
 let ipSeq = 0;
 // cada request com IP próprio: o rate-limit por instância não interfere
@@ -93,7 +96,7 @@ function queueDb(tickets: { nick: string; elo: number; enqueuedAt: number; bucke
       return t ? [{ elo: t.elo, enqueued_at: new Date(t.enqueuedAt).toISOString(), matched_code: t.matched, bucket: t.bucket }] : [];
     }
     if (sql.startsWith('SELECT bucket FROM mm_queue')) throw new Error('SELECT extra de bucket por poll');
-    if (sql.startsWith('SELECT nick FROM mm_queue')) {
+    if (sql.startsWith('SELECT nick, email FROM mm_queue')) {
       const [me, bucket, elo, win, myIso] = p as [string, string, number, number, string];
       const mine = Date.parse(myIso);
       return q.filter((x) => x.matched == null && x.nick.toLowerCase() !== me && x.bucket === bucket && Math.abs(x.elo - elo) <= win && x.enqueuedAt < mine)
@@ -125,13 +128,13 @@ test('queuePoll: pareia só no MESMO bucket e sem SELECT extra de bucket', async
   ]);
   const db = installFakeNeon(route);
   try {
-    const r = await post({ action: 'queuePoll', nick: 'Ana', elo: 1000 });
+    const r = await post({ action: 'queuePoll', nick: 'Ana', elo: 1000, token: tok('ana@x') });
     assert.equal(r.statusCode, 200);
     const body = r.body as { matched?: boolean; code?: string };
     assert.equal(body.matched, true);
     assert.equal(q.find((x) => x.nick === 'Caio')!.matched, body.code, 'pareou com o rival do mesmo evento');
     assert.equal(q.find((x) => x.nick === 'Beto')!.matched, null, 'o ticket da ranqueada normal fica na fila');
-    const cand = db.queries.find((x) => x.sql.startsWith('SELECT nick FROM mm_queue'))!;
+    const cand = db.queries.find((x) => x.sql.startsWith('SELECT nick, email FROM mm_queue'))!;
     assert.equal(cand.params[1], 'ev:wknd-2026-38');
   } finally { db.restore(); delete process.env.RANKED_QUEUE_ENABLED; }
 });
@@ -145,7 +148,7 @@ test('queuePoll: sozinho no bucket do evento continua na fila', async () => {
   ]);
   const db = installFakeNeon(route);
   try {
-    const r = await post({ action: 'queuePoll', nick: 'Ana', elo: 1000 });
+    const r = await post({ action: 'queuePoll', nick: 'Ana', elo: 1000, token: tok('ana@x') });
     assert.equal((r.body as { queued?: boolean }).queued, true);
   } finally { db.restore(); delete process.env.RANKED_QUEUE_ENABLED; }
 });
@@ -189,4 +192,114 @@ test('erro do banco: 500 genérico com id, sem a mensagem do Postgres', async ()
     assert.ok(!JSON.stringify(body).includes('relation'), 'a mensagem interna não vaza');
     assert.ok(JSON.stringify(logged).includes(body.id), 'o id vai pro log');
   } finally { console.error = origErr; db.restore(); }
+});
+
+// ------------------------------------------------ [F1] elenco autoritativo
+
+test('[F1] fila ranqueada exige token de conta (401 sem tocar na fila)', async () => {
+  process.env.RANKED_QUEUE_ENABLED = 'true';
+  const db = installFakeNeon(ddlOnly);
+  try {
+    for (const action of ['queueJoin', 'queuePoll']) {
+      for (const token of [undefined, 'forjado.abc']) {
+        const r = await post({ action, nick: 'Foo', elo: 1200, ...(token ? { token } : {}) });
+        assert.equal(r.statusCode, 401, `${action} token=${token}`);
+        assert.equal((r.body as { error?: string }).error, ACCOUNT_REQUIRED_MSG);
+      }
+    }
+    assert.ok(!db.queries.some((q) => q.sql.includes('mm_queue') && !/^(CREATE|ALTER)/.test(q.sql)), 'sem conta não mexe na fila');
+  } finally { db.restore(); delete process.env.RANKED_QUEUE_ENABLED; }
+});
+
+test('[F1] queueJoin grava o e-mail no ticket e não pareia a mesma conta', async () => {
+  process.env.RANKED_QUEUE_ENABLED = 'true';
+  const db = installFakeNeon((sql) => (/^(CREATE|ALTER|DELETE|INSERT|SELECT)/.test(sql) ? [] : undefined));
+  try {
+    const r = await post({ action: 'queueJoin', nick: 'Ana', elo: 1000, token: tok('ana@x') });
+    assert.equal(r.statusCode, 200);
+    const ins = db.queries.find((q) => q.sql.startsWith('INSERT INTO mm_queue'))!;
+    assert.ok(ins.params.includes('ana@x'), 'ticket carrega o e-mail');
+    const cand = db.queries.find((q) => q.sql.startsWith('SELECT nick, email FROM mm_queue'))!;
+    assert.ok(cand.sql.includes("COALESCE(email, '') <>"), 'exclui a própria conta');
+    assert.equal(cand.params[cand.params.length - 1], 'ana@x');
+  } finally { db.restore(); delete process.env.RANKED_QUEUE_ENABLED; }
+});
+
+// cartas REAIS do snapshot do servidor (a rota usa serverSquadLookup)
+const REAL = ['bo3_35205:rareGold', 'bo3_23037:rareGold', 'bo3_29221:rareGold', 'bo3_17674:rareGold', 'bo3_34951:rareGold'];
+function pickDb(opts: { ranked: boolean; eventId?: string | null; seats: { nick: string; email: string | null }[]; cards: Record<string, string[]> }) {
+  const saved: { squad: string | null }[] = [];
+  const route: FakeRoute = (sql, p) => {
+    if (/^(CREATE|ALTER)/.test(sql)) return [];
+    if (sql.startsWith('SELECT status, mode, COALESCE(ranked, false) AS ranked, event_id FROM lobbies')) {
+      return [{ status: 'drafting', mode: 'ultimate', ranked: opts.ranked, event_id: opts.eventId ?? null }];
+    }
+    if (sql.startsWith('SELECT nick, email FROM lobby_players')) return opts.seats;
+    if (sql.startsWith('UPDATE lobby_players SET email')) return [];
+    if (sql.startsWith('SELECT card_id, card_key, meta FROM rtm_ult_cards')) {
+      return (opts.cards[String(p[0])] ?? []).map((k, i) => ({ card_id: `c${i + 1}`, card_key: k, meta: {} }));
+    }
+    if (sql.startsWith('UPDATE lobby_players SET picks')) {
+      const sq = p.find((x) => typeof x === 'string' && x.includes('"cards"'));
+      saved.push({ squad: (sq as string) ?? null });
+      return [{ id: 1 }];
+    }
+    if (sql.startsWith('SELECT nick, done FROM lobby_players')) return [];
+    return undefined;
+  };
+  return { saved, route };
+}
+const forgedSquad = { name: 'Ana', elo: 1100, chem: 1.2, v: 2, approach: 'aggressive', cards: REAL.map((k) => ({ pid: k.split(':')[0], ovr: 99 })) };
+
+test('[F1] pick ranqueado: squad montado no servidor, ovr/chem do cliente ignorados', async () => {
+  const { saved, route } = pickDb({ ranked: true, seats: [{ nick: 'Ana', email: 'ana@x' }, { nick: 'Beto', email: 'beto@x' }], cards: { 'ana@x': REAL } });
+  const db = installFakeNeon(route);
+  try {
+    const r = await post({ action: 'pick', code: 'RANKD', nick: 'Ana', done: true, token: tok('ana@x'), cardIds: ['c1', 'c2', 'c3', 'c4', 'c5'], formationId: 'standard', squad: forgedSquad });
+    assert.equal(r.statusCode, 200, JSON.stringify(r.body));
+    const snap = JSON.parse(saved[0].squad!) as { cards: { pid: string; ovr: number }[]; chem: number; v: number; auth: boolean; approach: string };
+    assert.equal(snap.auth, true);
+    assert.equal(snap.v, 3);
+    assert.equal(snap.approach, 'aggressive');
+    assert.deepEqual(snap.cards.map((c) => c.pid), REAL.map((k) => k.split(':')[0]));
+    assert.ok(snap.cards.every((c) => c.ovr < 99), 'OVR do catálogo, não o 99 declarado');
+    assert.ok(snap.chem < 1.2, 'química calculada no servidor');
+  } finally { db.restore(); }
+});
+
+test('[F1] pick ranqueado: sem token 401; carta que não é da conta 400; vaga de outra conta 403; duplicada 400', async () => {
+  const seats = [{ nick: 'Ana', email: 'ana@x' }, { nick: 'Beto', email: 'beto@x' }];
+  const body = { action: 'pick', code: 'RANKD', nick: 'Ana', done: true, cardIds: ['c1', 'c2', 'c3', 'c4', 'c5'], formationId: 'standard', squad: forgedSquad };
+  let { route } = pickDb({ ranked: true, seats, cards: { 'ana@x': REAL.slice(0, 4) } });
+  let db = installFakeNeon(route);
+  try {
+    const noTok = await post(body);
+    assert.equal(noTok.statusCode, 401);
+    const notOwner = await post({ ...body, token: tok('ana@x') });
+    assert.equal(notOwner.statusCode, 400);
+    assert.equal((notOwner.body as { code?: string }).code, 'not_owner');
+    assert.equal((notOwner.body as { squadError?: boolean }).squadError, true);
+    const stolen = await post({ ...body, token: tok('mallory@x') });
+    assert.equal(stolen.statusCode, 403);
+    assert.ok(!db.queries.some((q) => q.sql.startsWith('UPDATE lobby_players SET picks')), 'nada gravado');
+  } finally { db.restore(); }
+  ({ route } = pickDb({ ranked: true, seats, cards: { 'ana@x': REAL } }));
+  db = installFakeNeon(route);
+  try {
+    const dup = await post({ ...body, token: tok('ana@x'), cardIds: ['c1', 'c1', 'c3', 'c4', 'c5'] });
+    assert.equal(dup.statusCode, 400);
+    assert.equal((dup.body as { code?: string }).code, 'duplicate_card');
+  } finally { db.restore(); }
+});
+
+test('[F1] amistoso por código segue sem conta, com snapshot marcado auth:false', async () => {
+  const { saved, route } = pickDb({ ranked: false, seats: [], cards: {} });
+  const db = installFakeNeon(route);
+  try {
+    const r = await post({ action: 'pick', code: 'AMIGO', nick: 'Ana', done: true, squad: forgedSquad, picks: [] });
+    assert.equal(r.statusCode, 200);
+    const snap = JSON.parse(saved[0].squad!) as { auth: boolean; chem: number };
+    assert.equal(snap.auth, false);
+    assert.equal(snap.chem, 1.2);
+  } finally { db.restore(); }
 });

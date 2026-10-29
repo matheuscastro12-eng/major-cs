@@ -1,12 +1,13 @@
 // Economia server-authoritative do Ultimate Squad.
 // Carteira + coleção + ledger idempotente no Neon.
-// Ações (POST body.action): state | tx | packOpen | mkt*. packOpen rola o pack
+// Ações (POST body.action): state | tx | ultImport | packOpen | drop* | cardStats | mkt*. packOpen rola o pack
 // NO SERVIDOR com as mesmas odds do engine do cliente — seed auditável no
 // ledger, replay idempotente. [O0-02] `tx` do cliente só grava SAÍDAS
 // (spend/pack/sbc/quicksell valorado no servidor); todo crédito positivo nasce
 // em fluxo do servidor. Carteira congelada (frozen_at) bloqueia mercado e packs.
 import { neon } from '@neondatabase/serverless';
 import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { checkMutationOrigin } from '../server/origin.js';
 import {
   applyClientUltTx,
   getUltState,
@@ -31,7 +32,10 @@ import {
 // importada em top-level — na Vercel ela quebra no runtime ESM (imports sem
 // extensão) e derrubava a rota INTEIRA no load (mercado "não conecta",
 // 2026-07-05). Ver server/ultimate-catalog-lazy.ts.
-import { loadMktCardLookup, loadPackModule, loadQuicksellValuer } from '../server/ultimate-catalog-lazy.js';
+import { loadDropCatalog, loadMktCardLookup, loadPackModule, loadQuicksellValuer } from '../server/ultimate-catalog-lazy.js';
+import { dropOpen, dropPick, dropStatus, sqlDropStore, ultDropSchemaQueries } from '../server/ultimate-drops.js'; // [CSM-1]
+import { readCardStats } from '../server/ultimate-card-stats.js'; // [CSM-3]
+import { importLocalCollection } from '../server/ultimate-import.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -65,6 +69,9 @@ export default async function handler(
   res: Res,
 ) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
+  // [CSM-4] mutação só a partir das origens permitidas (server/origin.ts)
+  const og = checkMutationOrigin(req.headers);
+  if (!og.ok) { res.status(403).json({ error: 'origem não permitida', reason: og.reason }); return; }
   if (respondMissingSecret(res)) return; // falha fechada (SEGU-10)
   const ip = clientIp(req.headers);
   if (rateLimited(`ip:${ip}`, 180)) {
@@ -96,6 +103,7 @@ export default async function handler(
   if (!schemaReady) {
     for (const q of ultEconomySchemaQueries(sql)) await q;
     for (const q of ultMarketSchemaQueries(sql)) await q;
+    for (const q of ultDropSchemaQueries(sql)) await q;
     schemaReady = true;
   }
 
@@ -106,7 +114,7 @@ export default async function handler(
   // [O0-02] carteira congelada pelo admin (varredura do ledger): mercado e
   // packs pausados até a contestação. 423 + mensagem padrão pro jogador.
   const frozenReply = () => res.status(423).json({ error: 'wallet_frozen', message: ultFrozenMessage(clean(process.env.SUPPORT_EMAIL)) });
-  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen';
+  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen' || action === 'ultImport' || action === 'dropOpen' || action === 'dropPick';
   const frozen = action === 'state' || guardedAction ? await isUltWalletFrozen(sql, email) : false;
   if (frozen && guardedAction) { frozenReply(); return; }
 
@@ -122,6 +130,17 @@ export default async function handler(
     // applyClientUltTx. 'grant'/'reward'/'admin'/'escrow'/'trade' → 400.
     const r = await applyClientUltTx(sql, email, body.tx, () => loadQuicksellValuer(new Date()));
     res.status(r.status).json(r.body);
+    return;
+  }
+
+  if (action === 'ultImport') {
+    // [F1] migração ÚNICA do save local (1× por conta; ver server/ultimate-import.ts).
+    // Catálogo vem lazy (mesma regra do packOpen): sem catálogo → 503 e o
+    // cliente tenta de novo no próximo boot, nada é marcado como importado.
+    const packMod = await loadPackModule();
+    if (!packMod) { res.status(503).json({ error: 'catalog_unavailable' }); return; }
+    const r = await importLocalCollection(sql, email, body.local, (key) => packMod.serverCardByKeyAnyMonth(key) ?? null);
+    res.status(200).json(r);
     return;
   }
 
@@ -151,6 +170,28 @@ export default async function handler(
       ok: true, replayed: r.replayed, credits: r.credits,
       packId: r.packId, cost: r.cost, seed: r.seed, cards: r.cards,
     });
+    return;
+  }
+
+  // ----------------------------------------------- [CSM-1] drop de escolha
+  // Estoque/seed/opções/entrega são do SERVIDOR (server/ultimate-drops.ts). O
+  // cliente só diz QUAL opção (índice) — vencido, vale a de menor valor.
+  if (action === 'dropStatus' || action === 'dropOpen' || action === 'dropPick') {
+    const cat = await loadDropCatalog();
+    if (!cat) { res.status(503).json({ error: 'catalog_unavailable' }); return; }
+    const store = sqlDropStore(sql);
+    const r = action === 'dropStatus' ? await dropStatus(store, sql, email, cat)
+      : action === 'dropOpen' ? await dropOpen(store, sql, email, cat)
+        : await dropPick(store, sql, email, { dropId: typeof body.dropId === 'string' ? body.dropId.trim() : '', index: Number(body.index) }, cat);
+    if (!r.ok) { res.status(r.status).json({ error: r.error }); return; }
+    res.status(200).json({ ok: true, ...r.value });
+    return;
+  }
+
+  if (action === 'cardStats') {
+    // [CSM-3] história da carta (leitura): só as cópias da própria conta.
+    const stats = await readCardStats(sql, email, body.cardIds);
+    res.status(200).json({ ok: true, stats });
     return;
   }
 

@@ -7,6 +7,7 @@ import { Button, Modal } from '../ds';
 import { GameShell, type GameShellProps } from '../ds/shell/GameShell';
 import type { ShellNavGroup } from '../ds/shell/types';
 import { Flag, PlayerAvatar } from '../ui';
+import { csmArtFor } from '../../data/csmArt'; // arte das cartas: CS Manager (cedida)
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
 import { loadStreakState } from '../../state/dailyStreak'; // [URG-4]
 import { streakStatus } from '../../engine/daily/streak'; // [URG-4]
@@ -17,6 +18,7 @@ import { countCompletedEras, legendPlayers } from '../../engine/ultimate/icons';
 import { isLegacyCard } from '../../engine/bridge/legacyBridge';
 import { legacyPoolPlayers } from '../../state/rtpHall';
 import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../engine/ultimate/packs';
+import { PackArt } from './PackArt';
 import { packOddsLine } from '../../engine/ultimate/packOdds'; // [U01] garantia + odds efetivas derivadas da definição
 // [U03] adaptador único de preparação de time + perfil de elenco + abordagem + IA com composição válida
 import { APPROACH_DEFS, APPROACH_IDS, AXIS_LABEL, buildAiOpponent, effectiveMultiplier, isApproach, prepareUltimateTeam, PVP_SNAPSHOT_VERSION, pvpApproachesApply, squadProfile, type Approach } from '../../engine/ultimate/squadAnalysis';
@@ -25,6 +27,8 @@ import { completeStep, dismissJourney, emptyJourney, journeyProgress, JOURNEY_ST
 // [U06] partida INCREMENTAL (casual): sessão persistível, timeout real, recompensa 1x no fim
 import { createSession, normalizeSession, sessionSeries, type MatchSession } from '../../engine/ultimate/matchSession';
 import { UltimateLiveSession } from './UltimateLiveSession';
+import { UltimateDropPanel } from './UltimateDropPanel'; // [CSM-1]
+import { CardHistoryBlock } from './CardHistoryBlock'; // [CSM-3]
 // [U07] jogador dos sonhos: alvo persistente, caminhos reais, preview de escalação
 import { bestSlotFor, missingCredits, targetPaths, type SwapPreview } from '../../engine/ultimate/dreamTarget';
 import { PROMO_PACK } from '../../engine/ultimate/packs';
@@ -88,6 +92,7 @@ import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../..
 import { WeekendLeague } from '../online/WeekendLeague';
 import { WlResultBanner } from './WlResultBanner'; // [O0-22]
 import { UtPanel, UtEmpty } from './UtPanel';
+import { CardArtCredit } from './CardArtCredit';
 import { FounderCounter } from '../FounderCounter';
 import {
   LayoutGrid, Layers, Shirt, FlaskConical, ArrowLeftRight, Package, Crosshair,
@@ -101,6 +106,7 @@ import { applyEditionBoost, editionLabel, editionStatus, SEASON_EDITION_BOOST, S
 import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, weekKey } from '../../engine/ultimate/weeklyMissions';
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
+import type { MatchView } from '../../engine/ultimate/pvpMatch'; // [F2]
 import { UltimateCast } from './UltimateCast';
 import { buildDramaScript, pickHighlights, starsFromPlayers, type DramaStar } from '../../engine/ultimate/liveDrama';
 import { buildTaleOfTape, finalCallOf, pickMatchStar, streakLine, type MatchStar } from '../../engine/ultimate/showtime';
@@ -223,6 +229,19 @@ function cardSkin(rarity: UltCard['rarity']) {
   };
 }
 
+// pele de TEXTO para a carta com arte do CS Manager: moldura é imagem, então
+// texto claro sobre placa/faixa escura (contraste garantido em moldura clara).
+function CSM_SKIN(c: string) {
+  return { ...cardSkin('elite'), ink: '#ffffff', sub: 'rgba(255,255,255,0.72)', line: 'rgba(255,255,255,0.22)', plate: 'rgba(8,10,16,0.62)', label: c, mark: 'transparent' };
+}
+
+// foto do CS Manager com fallback pro avatar procedural se o arquivo falhar
+function CsmPhoto({ src, nick, w, h }: { src: string; nick: string; w: number; h: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <PlayerAvatar nick={nick} size={Math.round(Math.min(w, h) * 0.85)} />;
+  return <img src={src} alt={nick} width={w} height={h} loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} style={{ width: w, height: h, objectFit: 'contain', objectPosition: 'center bottom', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.45))' }} />;
+}
+
 // aplica o nível de evolução (boost) no OVR e nos 6 atributos (clamp 99).
 // Mantém key/rarity/playerId — só sobe os números. Base intacta se boost=0.
 function boostCard(base: UltCard, boost: number | undefined): UltCard {
@@ -242,15 +261,18 @@ function boostCard(base: UltCard, boost: number | undefined): UltCard {
 // não re-renderiza a grade inteira de cartas (custo real em coleção grande).
 // [URG-1] `ed` = selo de edição da temporada: em forma (S3, laranja, +OVR) ou Legado S3 (cinza, OVR base)
 type EditionBadge = { n: number; current: boolean } | null;
-const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo = 0, ev, ed = null }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number; ev?: string; ed?: EditionBadge }) {
+export const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo = 0, ev, ed = null }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number; ev?: string; ed?: EditionBadge }) {
   const info = rarityInfo(card.rarity);
   const compact = size < 116;
   const h = Math.round(size * 1.4);
   const foil = FOIL_RARITIES.has(card.rarity);
-  const s = cardSkin(card.rarity);
-  const px = Math.round(size * 0.06);
   // [W2] LEGADO: moldura própria (borda dupla âmbar + faixa "LEGADO") sobre a pele de lenda
   const legacy = isLegacyCard(card);
+  // arte do CS Manager (moldura por raridade + foto ou iniciais + logo) em toda carta;
+  // só o LEGADO mantém o visual próprio. Texto vira claro sobre faixa escura.
+  const csm = legacy ? null : csmArtFor(card);
+  const s = csm ? CSM_SKIN(rarityInfo(card.rarity).color) : cardSkin(card.rarity);
+  const px = Math.round(size * (csm ? 0.1 : 0.06));
   // [U10] moldura EQUIPADA do clube: só cosmética, por cima da pele de raridade (não no LEGADO)
   const equippedFrameId = useUltimate((st) => st.state.profile.equippedFrame ?? null);
   const frame = legacy ? null : frameById(equippedFrameId);
@@ -258,18 +280,24 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
   const evTag = ev ? ev.replace(/^wknd-/, '').toUpperCase() : null;
   return (
     <div style={{ width: size, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: qs != null ? 6 : 0 }}>
-      <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: legacy ? 'linear-gradient(165deg, #2a1d05 0%, #141821 55%, #3a2a08 100%)' : s.bg, border: `1.5px solid ${evo > 0 ? 'var(--c-win)' : ev ? '#f472b6' : legacy ? '#f3cf6b' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px var(--c-win), 0 0 20px color-mix(in srgb, var(--c-win) 40%, transparent)` : ev ? `${s.glow}, 0 0 0 2px rgba(244,114,182,0.45), 0 0 18px rgba(244,114,182,0.4)` : legacy ? `${s.glow}, 0 0 0 2px rgba(243,207,107,0.35)` : s.glow }}>
-        {ev && <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: '1px dashed rgba(244,114,182,0.7)', pointerEvents: 'none', zIndex: 2 }} />}
+      <div style={csm ? { position: 'relative', width: size, height: h, filter: evo > 0 ? 'drop-shadow(0 0 6px var(--c-win))' : ev ? 'drop-shadow(0 0 6px #f472b6)' : 'drop-shadow(0 5px 10px rgba(0,0,0,0.35))' } : { position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: legacy ? 'linear-gradient(165deg, #2a1d05 0%, #141821 55%, #3a2a08 100%)' : s.bg, border: `1.5px solid ${evo > 0 ? 'var(--c-win)' : ev ? '#f472b6' : legacy ? '#f3cf6b' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px var(--c-win), 0 0 20px color-mix(in srgb, var(--c-win) 40%, transparent)` : ev ? `${s.glow}, 0 0 0 2px rgba(244,114,182,0.45), 0 0 18px rgba(244,114,182,0.4)` : legacy ? `${s.glow}, 0 0 0 2px rgba(243,207,107,0.35)` : s.glow }}>
+        {csm && (
+          <>
+            <img src={csm.frame} alt="" aria-hidden="true" loading="lazy" decoding="async" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', filter: csm.frameFilter, pointerEvents: 'none' }} />
+            <div aria-hidden="true" style={{ position: 'absolute', left: '9%', right: '9%', top: '50%', bottom: '8%', borderRadius: 6, background: 'linear-gradient(180deg, rgba(8,10,16,0) 0%, rgba(8,10,16,0.78) 22%, rgba(8,10,16,0.86) 100%)', pointerEvents: 'none' }} />
+          </>
+        )}
+        {ev && !csm && <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: '1px dashed rgba(244,114,182,0.7)', pointerEvents: 'none', zIndex: 2 }} />}
         {evTag && (
           <span title={`Carta exclusiva do evento ${ev}`} style={{ position: 'absolute', bottom: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.46}rem`, fontWeight: 900, letterSpacing: '0.6px', padding: '1px 5px', borderRadius: 6, background: '#f472b6', color: '#1a0a12', whiteSpace: 'nowrap' }}>EVENTO {evTag}</span>
         )}
-        <div style={{ position: 'absolute', inset: 0, background: s.sheen, pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${legacy ? 'rgba(243,207,107,0.55)' : frame ? frame.inner : s.inner}`, pointerEvents: 'none' }} />
-        {frame && <div style={{ position: 'absolute', inset: 0, borderRadius: 14, border: `2px solid ${frame.border}`, pointerEvents: 'none' }} />}
+        {!csm && <div style={{ position: 'absolute', inset: 0, background: s.sheen, pointerEvents: 'none' }} />}
+        {!csm && <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${legacy ? 'rgba(243,207,107,0.55)' : frame ? frame.inner : s.inner}`, pointerEvents: 'none' }} />}
+        {frame && !csm && <div style={{ position: 'absolute', inset: 0, borderRadius: 14, border: `2px solid ${frame.border}`, pointerEvents: 'none' }} />}
         {frame?.badge && !legacy && (
           <span style={{ position: 'absolute', top: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.48}rem`, fontWeight: 900, letterSpacing: '1px', padding: '1px 5px', borderRadius: 6, background: frame.badgeBg ?? frame.border, color: 'var(--c-ink)' }}>{frame.badge}</span>
         )}
-        {foil && <div className="ult-foil" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
+        {foil && !csm && <div className="ult-foil" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
         {legacy && (
           <span style={{ position: 'absolute', top: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, letterSpacing: '1px', padding: '1px 6px', borderRadius: 6, background: '#f3cf6b', color: 'var(--c-ink)' }}>LEGADO</span>
         )}
@@ -286,18 +314,24 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
             {ed.current ? editionLabel(ed.n) : `${ct('LEGADO')} ${editionLabel(ed.n)}`}
           </span>
         )}
-        <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: `${px}px ${px}px ${Math.round(size * 0.05)}px` }}>
+        {/* OVR dentro da moldura: a arte do CS Manager tem o topo recortado (o canto
+            esquerdo desce), então o bloco do OVR começa abaixo da borda e o tamanho
+            sai em px da largura da carta (rem crescia com a fonte do sistema e o
+            número vazava pra fora da carta no squad, no duelo e no celular). */}
+        <div style={{ position: 'relative', zIndex: 1, height: '100%', boxSizing: 'border-box', overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: `${csm ? Math.round(size * 0.14) : px}px ${px}px ${Math.round(size * 0.05)}px` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, minWidth: Math.round(size * 0.26), padding: `${Math.round(size * 0.028)}px 2px`, borderRadius: 8, background: s.plate }}>
-              <span style={{ fontSize: `${(size / 140) * 1.78}rem`, fontWeight: 900, color: s.ink, fontFamily: 'var(--font-num)', letterSpacing: '-0.5px' }}>{card.ovr}</span>
-              <span style={{ fontSize: `${(size / 140) * 0.56}rem`, fontWeight: 800, color: s.ink, opacity: 0.9, marginTop: 1 }}>{ROLE_CODE[card.role] ?? card.role}</span>
+              <span className="ut-card__ovr" style={{ fontSize: Math.round(size * 0.2), lineHeight: 0.95, fontWeight: 900, color: s.ink, fontFamily: 'var(--font-num)', letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}>{card.ovr}</span>
+              <span style={{ fontSize: Math.max(7, Math.round(size * 0.064)), fontWeight: 800, color: s.ink, opacity: 0.9, marginTop: 1, whiteSpace: 'nowrap' }}>{ROLE_CODE[card.role] ?? card.role}</span>
               <span style={{ marginTop: 3 }}><Flag cc={card.country} /></span>
             </div>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <PlayerAvatar nick={card.nick} size={Math.round(size * (compact ? 0.42 : 0.5))} />
+              {csm?.photo
+                ? <CsmPhoto src={csm.photo} nick={card.nick} w={Math.round(size * 0.58)} h={Math.round(size * (compact ? 0.5 : 0.56))} />
+                : <PlayerAvatar nick={card.nick} size={Math.round(size * (compact ? 0.42 : 0.5))} />}
             </div>
           </div>
-          <div style={{ fontSize: `${(size / 140) * 0.88}rem`, fontWeight: 900, color: s.ink, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>{card.nick}</div>
+          <div style={{ fontSize: `${(size / 140) * 0.88}rem`, fontWeight: 900, color: s.ink, textShadow: csm ? '0 1px 2px rgba(0,0,0,0.7)' : undefined, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>{card.nick}</div>
           {!compact && (
             <>
               <div style={{ height: 1, background: s.line, margin: '4px 6px' }} />
@@ -314,12 +348,13 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
               </div>
             </>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+            {csm?.logo && <img src={csm.logo} alt={card.teamOriginName} title={card.teamOriginName} loading="lazy" decoding="async" width={Math.round(size * 0.1)} height={Math.round(size * 0.1)} style={{ objectFit: 'contain' }} />}
             <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 800, color: s.ink, opacity: 0.72 }}>{REGION_CODE[card.region] ?? 'GLB'}</span>
-            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 900, color: s.label, letterSpacing: '0.2px' }}>· {legacy ? 'Legado do RtP' : info.label}</span>
+            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 900, color: s.label, letterSpacing: '0.2px', overflow: 'hidden', textOverflow: 'ellipsis' }}>· {legacy ? 'Legado do RtP' : info.label}</span>
           </div>
         </div>
-        {!compact && (
+        {!compact && !csm && (
           <span style={{ position: 'absolute', bottom: 3, right: 6, zIndex: 1, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, color: s.mark, fontFamily: 'var(--ut-font-cond)', letterSpacing: '0.3px', pointerEvents: 'none' }}>R<span style={{ color: s.markSlash }}>t</span>M</span>
         )}
       </div>
@@ -1244,6 +1279,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const [mktBuyItem, setMktBuyItem] = useState<MktBrowseItem | null>(null);
   const [mktSellPick, setMktSellPick] = useState(false); // modal: escolher carta pra vender
   const [mktSellTarget, setMktSellTarget] = useState<{ o: OwnedCard; card: UltCard } | null>(null);
+  const [histCard, setHistCard] = useState<{ card: UltCard; ownedIds: string[] } | null>(null); // [CSM-3] história da carta
   const [mktPrice, setMktPrice] = useState('');
   const [mktBounds, setMktBounds] = useState<{ min: number; max: number } | null>(null);
   // trading: fita "vendidas agora" (global) + histórico de vendas da carta em foco
@@ -1626,6 +1662,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // [U03] contrato v2: a abordagem viaja como campo próprio (não escondida no chem)
     v: PVP_SNAPSHOT_VERSION,
     approach,
+    // [F1] o servidor monta o squad da ranqueada a partir das cópias + formação
+    cardIds: form.slots.map((fs) => slotCard(fs.slot)?.owned.id).filter((id): id is string => !!id),
+    formationId: form.id,
+    // [F2] este cliente joga o duelo resolvido no servidor (beat a beat)
+    live: true,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [displayName, state.profile.elo, chem.multiplier, duel.multiplier, state.squads, state.inventory, approach]);
 
@@ -1705,6 +1746,38 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     return true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [poolById, state.profile.elo, state.squads, state.inventory]);
+
+  // [F2] fim da partida resolvida NO SERVIDOR: vencedor e placar são os do
+  // servidor; o MMR e o prêmio da ranqueada já foram aplicados lá (sem report
+  // pareado). Aqui só o espelho local (recordMatch) e o modal, 1x por partida.
+  const finishServerPvp = useCallback((args: DuelPlayArgs, v: MatchView) => {
+    const ledgerKey = 'rtm-ult-pvp-rec';
+    const recKey = `${args.code}:${args.runSeed}`;
+    let already = false;
+    try {
+      const led: string[] = JSON.parse(localStorage.getItem(ledgerKey) ?? '[]');
+      already = led.includes(recKey);
+      if (!already) localStorage.setItem(ledgerKey, JSON.stringify([recKey, ...led].slice(0, 40)));
+    } catch { /* storage indisponível — registra mesmo assim */ }
+    if (v.status === 'abandoned' || v.won == null) { flash(ct('Partida abandonada pelos dois lados — não vale resultado.')); return; }
+    const won = v.won;
+    const fs = v.finalScore ?? v.score;
+    const score = `${fs[0]}-${fs[1]}`;
+    const eloBefore = state.profile.elo;
+    if (!already) noteMatchStart(args.ranked ? 'ranked' : 'private'); // [U02]
+    const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, args.oppSquad.elo, args.ranked, score);
+    if (!already) noteMatchDone(args.ranked ? 'ranked' : 'private', won); // [U02]
+    if (!already && args.ranked) wlMirrorReport(won, args.code, args.oppNick, fs[0], fs[1]);
+    if (!already && !args.ranked && account?.paid) void reportDuel(won, args.code, pvpNick); // [U11]
+    const eloAfter = eloBefore + outcome.eloDelta;
+    setLive(null);
+    setResult({
+      won, score, outcome, mode: 'pvp', divChange: already ? 'same' : divisionChange(eloBefore, eloAfter), divName: divisionFor(eloAfter).def.name,
+      roundLog: v.history.map((h) => (h.won ? 0 : 1)) as (0 | 1)[], mapName: MAP_LABELS[v.map as keyof typeof MAP_LABELS] ?? v.map, oppName: args.oppNick, repeat: already,
+      casterFinal: v.reason === 'wo' ? (won ? ct('Vitória por W.O.: o rival abandonou.') : ct('Derrota por W.O.: você ficou sem decidir.')) : null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.profile.elo, account?.paid, pvpNick]);
 
   // heartbeat da sala PvP DURANTE o replay: o UltimateDuel desmonta quando o
   // palco assume — sem este ping a sala era limpa pelo GC (>4min sem last_ping)
@@ -1975,6 +2048,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             </div>
           </UtPanel>
           <div style={{ textAlign: 'center' }}><button onClick={onBack} className="ut-btn ut-btn--ghost">← {ct('Voltar')}</button></div>
+          <CardArtCredit />
         </div>
       </div>
       </GameShell>
@@ -2306,6 +2380,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           )}
           {/* [URG-1] fim de temporada com consequência: o que o jogador vai perder */}
           {seasonEndingBlock('hub')}
+          {/* [CSM-1] drop de escolha: estoque/opções/entrega do servidor */}
+          {account && <UltimateDropPanel renderCard={(c) => <UltCardView card={c} size={130} />} />}
           {/* [U05] PRIMEIRA SESSÃO — próximo passo explícito até a 2ª partida; dispensável */}
           {journeyNext && (() => {
             const step = journeyNext; const info = STEP_INFO[step]; const prog = journeyProgress(journey);
@@ -3108,9 +3184,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           {ending.active && ending.seasonN != null && (() => {
             const afford = credits >= SEASON_PACK.cost;
             return (
-              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${SEASON_PACK.color} 0%, color-mix(in srgb, ${SEASON_PACK.color} 87%, transparent) 55%, color-mix(in srgb, ${SEASON_PACK.color} 67%, transparent) 100%)`, marginBottom: 12 }}>
-                <div className="ut-pack__shine" />
-                <div className="ut-pack__art"><Flame size={44} strokeWidth={1.4} /></div>
+              <div className="ut-pack" style={{ '--pack': SEASON_PACK.color, marginBottom: 12 } as CSSProperties}>
+                <PackArt icon={Flame} label={ct('Temporada')} cards={SEASON_PACK.cards} />
                 <div className="ut-pack__name">{ct('Pacote da Temporada')} · {ct('Edição')} {editionLabel(ending.seasonN)}</div>
                 <div className="ut-pack__desc">{ct('7 cartas, 2 Ouro ou melhor garantidas — TODAS em forma: +2 OVR até o fim da temporada. Depois viram Legado')} {editionLabel(ending.seasonN)}.</div>
                 <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(SEASON_PACK)} · {ct('pacotes comuns: 10% por carta de sair em forma')}</div>
@@ -3134,9 +3209,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             const promoPack = ultimatePromoPack();
             const afford = credits >= promoPack.cost;
             return (
-              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${promo.theme.color} 0%, color-mix(in srgb, ${promo.theme.color} 87%, transparent) 55%, color-mix(in srgb, ${promo.theme.color} 67%, transparent) 100%)`, marginBottom: 12 }}>
-                <div className="ut-pack__shine" />
-                <div className="ut-pack__art"><Sparkles size={44} strokeWidth={1.4} /></div>
+              <div className="ut-pack" style={{ '--pack': promo.theme.color, marginBottom: 12 } as CSSProperties}>
+                <PackArt icon={Sparkles} label={ct('Promo')} cards={promoPack.cards} />
                 <div className="ut-pack__name">{ct('Pacote Promo')} · {promo.theme.name}</div>
                 <div className="ut-pack__desc">{ct(promo.theme.desc)} — {ct('11 cartas promo (+2 OVR) este mês, 1 garantida no pack.')}</div>
                 <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(ultimatePromoPack())}</div>
@@ -3150,9 +3224,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           {/* Pacote TOTW — os 7 in-forms da semana (rotaciona toda segunda). O card
               lista os nicks da semana e a contagem até a rotação. */}
           {totwView && (
-            <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${TOTW_PACK.color} 0%, color-mix(in srgb, ${TOTW_PACK.color} 87%, transparent) 55%, color-mix(in srgb, ${TOTW_PACK.color} 67%, transparent) 100%)`, marginBottom: 12 }}>
-              <div className="ut-pack__shine" />
-              <div className="ut-pack__art"><Zap size={44} strokeWidth={1.4} /></div>
+            <div className="ut-pack" style={{ '--pack': TOTW_PACK.color, marginBottom: 12 } as CSSProperties}>
+              <PackArt icon={Zap} label={'TOTW'} cards={TOTW_PACK.cards} />
               <div className="ut-pack__name">{ct('Pacote TOTW')} · {ct('Time da Semana')}</div>
               <div className="ut-pack__desc">{ct('Os 7 in-forms da semana (+2 OVR), 1 garantido no pack:')} {totwView.nicks}</div>
               <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Rotaciona em')} {totwView.dd}d {totwView.hh}h · {ct('segunda-feira, 00:00 UTC')}</div>
@@ -3167,9 +3240,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           {(() => {
             const afford = credits >= ICON_PACK.cost;
             return (
-              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${ICON_PACK.color} 0%, color-mix(in srgb, ${ICON_PACK.color} 87%, transparent) 55%, color-mix(in srgb, ${ICON_PACK.color} 67%, transparent) 100%)`, marginBottom: 12 }}>
-                <div className="ut-pack__shine" />
-                <div className="ut-pack__art"><Trophy size={44} strokeWidth={1.4} /></div>
+              <div className="ut-pack" style={{ '--pack': ICON_PACK.color, marginBottom: 12 } as CSSProperties}>
+                <PackArt icon={Trophy} label={ct('Ícone')} cards={ICON_PACK.cards} />
                 <div className="ut-pack__name">{ct('Pacote Ícone')} · {ct('Lendas do CS')}</div>
                 <div className="ut-pack__desc">{ct('GeT_RiGhT, cogu, kennyS, NEO… as lendas aposentadas do CS como Ícones Históricos — e elas SÓ caem aqui. 1 Ícone garantido.')}</div>
                 <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(ICON_PACK)}</div>
@@ -3179,13 +3251,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               </div>
             );
           })()}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
+          <div className="ut-pack-grid">
             {PACK_DEFS.map((pack) => {
               const afford = credits >= pack.cost;
               return (
-                <div key={pack.id} className="ut-pack" style={{ background: `linear-gradient(155deg, ${pack.color} 0%, color-mix(in srgb, ${pack.color} 87%, transparent) 55%, color-mix(in srgb, ${pack.color} 67%, transparent) 100%)` }}>
-                  <div className="ut-pack__shine" />
-                  <div className="ut-pack__art"><Package size={44} strokeWidth={1.4} /></div>
+                <div key={pack.id} className="ut-pack" style={{ '--pack': pack.color } as CSSProperties}>
+                  <PackArt icon={Package} label={pack.name} cards={pack.cards} />
                   <div className="ut-pack__name">{pack.name}</div>
                   <div className="ut-pack__desc">{pack.desc}</div>
                   <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }} title={ct('Chance de sair pelo menos 1 carta dessa raridade no pack, contando as garantias. Calculado da definição do pack.')}>{packOddsLine(pack)}</div>
@@ -3280,7 +3351,10 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                         <div key={`${row.card.key}#${row.evo}#${row.style ?? ''}#${row.ev ?? ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                           <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(baseCard.rarity, baseCard.ovr, isDup)} evo={row.evo} ev={row.ev} ed={row.ed} />
                           <DuelChips card={row.card} styleId={row.style} light />
-                          <div style={{ display: 'flex', gap: 6 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 170 }}>
+                            <button onClick={() => setHistCard({ card: row.card, ownedIds: row.ownedIds })} style={sellBtn} title={ct('História da carta')}>
+                              {ct('história')}
+                            </button>
                             <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
                               {isDup ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
                             </button>
@@ -3530,7 +3604,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             {rankedMode === 'rivals' ? (
               // Rivals = PvP online de verdade: a fila pareia com outro manager por RP.
               <div style={{ marginTop: 12 }}>
-                {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} eventId={rankedEvent} onQueueEmpty={() => flash(`${ct('Fila vazia por enquanto.')} ${ct('Alternativa: jogue um Amistoso vs IA neste formato (não vale o evento).')}`, 3600)} />
+                {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} onServerResult={finishServerPvp} eventId={rankedEvent} onQueueEmpty={() => flash(`${ct('Fila vazia por enquanto.')} ${ct('Alternativa: jogue um Amistoso vs IA neste formato (não vale o evento).')}`, 3600)} />
                 <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
                   {ct('Você enfrenta o squad de outro manager de verdade. Vitória sobe RP, pode promover de divisão e conta no ranking global. Derrota tira RP.')}
                 </div>
@@ -3694,7 +3768,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         <UtPanel label={<>{ct('Duelo Privado')} <em>· {ct('com amigo')}</em></>} icon={<Globe size={15} className="ut-panel__lead" />}
           right={<span style={{ fontFamily: 'var(--ut-font-mono)' }}>{pvpNick}</span>}
           info={ct('Crie uma sala ou entre com código pra enfrentar um amigo. Amistoso: não vale RP nem ranking global.')}>
-          {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="private" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} initialJoinCode={duelInvite} />
+          {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="private" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} onServerResult={finishServerPvp} initialJoinCode={duelInvite} />
           {/* [U11] RIVAIS por conta: head-to-head, revanche (nova sala + link) e share do confronto */}
           <div style={{ marginTop: 14 }}>
             <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color: 'var(--ut-muted)', marginBottom: 6 }}>⚔️ {ct('RIVAIS')} <span style={{ fontWeight: 400, letterSpacing: 0 }}>· {ct('por conta, ranqueada e duelo privado')}</span></div>
@@ -4453,6 +4527,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       })()}
 
       {/* ── mercado P2P: definir o preço da listagem ── */}
+      {histCard && (
+        <Modal open onClose={() => setHistCard(null)} title={`${histCard.card.nick} · ${ct('história')}`} size="sm">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <UltCardView card={histCard.card} size={150} />
+            {histCard.card.eventLabel && <span className="small" style={{ color: '#f97316', fontWeight: 800 }}>{histCard.card.eventLabel}</span>}
+            <div style={{ alignSelf: 'stretch' }}><CardHistoryBlock cardIds={histCard.ownedIds} /></div>
+          </div>
+        </Modal>
+      )}
       {mktSellTarget && (() => {
         const p = Math.trunc(Number(mktPrice) || 0);
         const inRange = mktBounds ? p >= mktBounds.min && p <= mktBounds.max : p > 0;
@@ -4507,6 +4590,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           {toast}
         </div>
       )}
+      <CardArtCredit />
       </div>{/* /.ut-page */}
     </div>
     </GameShell>

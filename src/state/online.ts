@@ -1,6 +1,7 @@
 // Lógica compartilhada do modo online. O draft e a simulação são
 // determinísticos a partir do seed do lobby: todos os clientes computam
 // exatamente as mesmas opções e o mesmo resultado, sem servidor de jogo.
+import type { MatchView } from '../engine/ultimate/pvpMatch';
 import { BASE_TEAMS } from '../data/teams';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { buildUserTeam, playerOvr, teamSeasonToTTeam } from '../engine/ratings';
@@ -8,6 +9,7 @@ import { simulateSeries } from '../engine/match';
 import { makeRng, type Rng } from '../engine/rng';
 import { autoVeto } from '../engine/veto';
 import { hashStr } from './hash';
+import { getToken } from './account';
 import { createTournamentFromTeams, pairingBestOf, placementCode, resolveRound, standings, type PlacementCode } from '../engine/swiss';
 import type { MapId, Pairing, Player, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
 
@@ -108,6 +110,16 @@ export interface UltimatePvpSquad {
   // DOIS snapshots são v≥2 (cliente antigo ignora o campo — o novo também tem que ignorar).
   v?: number;
   approach?: 'aggressive' | 'control' | 'adaptive' | null;
+  // [F1] true = snapshot montado pelo servidor (ranqueada/evento); false = amistoso
+  // declarado pelo cliente. Só o servidor preenche.
+  auth?: boolean;
+  // [F1] só no ENVIO do pick: cópias escaladas (ordem dos slots) + formação. O
+  // servidor monta o snapshot a partir disso nas salas ranqueadas/de evento.
+  cardIds?: string[];
+  formationId?: string;
+  // [F2] cliente que joga o duelo resolvido NO SERVIDOR (beat a beat). Só quando
+  // os DOIS snapshots têm a marca a partida vai pro servidor; senão, replay local.
+  live?: boolean;
 }
 
 // O Ultimate Team mistura cartas históricas com o elenco atual de 2026. As duas
@@ -447,14 +459,30 @@ export function majorStandings(major: OnlineMajor) {
 
 // ---- chamadas de API ----
 
-export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; matched?: boolean; queued?: boolean; waiting?: number; waitedMs?: number; window?: number }> {
+export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; matched?: boolean; queued?: boolean; waiting?: number; waitedMs?: number; window?: number; needAccount?: boolean; squadError?: boolean }> {
+  // [F1] a conta viaja em toda chamada quando existe: fila e sala ranqueada/de
+  // evento exigem; o amistoso por código ignora.
+  const token = getToken();
   const res = await fetch('/api/lobby', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(token ? { ...body, token } : body),
     signal: AbortSignal.timeout(9000),
   });
-  return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState };
+  return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; needAccount?: boolean; squadError?: boolean };
+}
+
+// [F2] partida PvP resolvida no servidor: matchStart | matchState | decide.
+export async function ultMatchApi(body: { action: 'matchStart' | 'matchState' | 'decide'; code: string; nick: string; style?: string; beat?: number }): Promise<{ ok?: boolean; match?: MatchView; error?: string; needAccount?: boolean; status: number }> {
+  const token = getToken();
+  const res = await fetch('/api/lobby', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(token ? { ...body, token } : body),
+    signal: AbortSignal.timeout(9000),
+  });
+  const j = (await res.json().catch(() => ({}))) as { ok?: boolean; match?: MatchView; error?: string; needAccount?: boolean };
+  return { ...j, status: res.status };
 }
 
 export interface OpenRoom { code: string; mode: 'duel' | 'party' | 'ultimate'; pool: TournamentPool; host: string; name?: string | null; players: number; max: number; ranked?: boolean; host_mmr?: number | null; }

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 // Economia server-authoritative do Ultimate Squad (fase 1 — fundação, dormente).
 // Carteira + coleção + ledger append-only no Neon, com transações idempotentes.
 // O cliente HOJE guarda credits/coleção no cloud-save (falsificável); as fases
@@ -53,7 +54,11 @@ export interface UltTx {
 }
 
 export type UltTxResult =
-  | { ok: true; replayed: boolean; credits: number }
+  // creditsAfter: saldo GRAVADO no ledger logo depois desta tx (no replay, o da
+  // 1ª execução — resultado gravado; null em linhas antigas sem a coluna)
+  | { ok: true; replayed: boolean; credits: number; creditsAfter?: number | null }
+  // [CSM-4] mesmo op_id já usado com OUTRO payload (hash diferente) — nada aplicado
+  | { ok: false; error: 'op_conflict'; credits: number }
   | { ok: false; error: 'insufficient_credits'; credits: number }
   // precondição `requireOwned` falhou: alguma carta exigida já não está na
   // coleção (ex.: dois quicksell concorrentes da mesma cópia) — nada aplicado.
@@ -157,6 +162,11 @@ export function ultEconomySchemaQueries(sql: SqlTag): SqlQuery[] {
     // bloqueia mktList/mktBuy/packOpen; o jogador vê a mensagem padrão e tem 7
     // dias pra contestar. Setado/limpo SÓ à mão pelo admin (nunca pelo código).
     sql`ALTER TABLE rtm_ult_wallet ADD COLUMN IF NOT EXISTS frozen_at TIMESTAMPTZ`,
+    // [F1] migração única do save local (ultImport): preenchida 1× por conta.
+    sql`ALTER TABLE rtm_ult_wallet ADD COLUMN IF NOT EXISTS imported_at TIMESTAMPTZ`,
+    // [CSM-4] resultado gravado: saldo logo depois da tx (devolvido no replay).
+    // O hash do payload do pedido vai em meta.reqHash (ver ultPayloadHash).
+    sql`ALTER TABLE rtm_ult_ledger ADD COLUMN IF NOT EXISTS credits_after BIGINT`,
   ];
 }
 
@@ -174,26 +184,30 @@ export function ultEconomySchemaQueries(sql: SqlTag): SqlQuery[] {
 // - saldo insuficiente: nada muda, devolve erro;
 // - opts.requireOwned: o insert só acontece se TODAS essas cópias (card_id +
 //   card_key) existirem na coleção agora — senão 'not_owner' e nada muda.
+//
+// [CSM-4] opts.reqHash: hash do PEDIDO que gerou esta tx (ultPayloadHash). Vai
+// em meta.reqHash; replay do mesmo op_id com hash diferente = 'op_conflict'
+// (nada aplicado). Linha antiga sem hash: replay aceito como antes.
 export async function applyUltTransaction(
   sql: SqlTag,
   email: string,
   tx: UltTx,
-  opts?: { requireOwned?: UltOwnedCard[] },
+  opts?: { requireOwned?: UltOwnedCard[]; reqHash?: string },
 ): Promise<UltTxResult> {
   const cardsJson = JSON.stringify(tx.cards);
-  const metaJson = JSON.stringify(tx.meta ?? {});
+  const metaJson = JSON.stringify(opts?.reqHash ? { ...(tx.meta ?? {}), reqHash: opts.reqHash } : (tx.meta ?? {}));
   const owned = opts?.requireOwned ?? [];
   const ownedJson = JSON.stringify(owned.map((c) => ({ cardId: c.cardId, cardKey: c.cardKey })));
   const ownedN = owned.length;
   const [, rows] = await sql.transaction([
     sql`SELECT pg_advisory_xact_lock(hashtext('rtm_ult_economy'), hashtext(${email}))`,
     sql`WITH prior AS (
-          SELECT id FROM rtm_ult_ledger WHERE email=${email} AND op_id=${tx.opId}
+          SELECT id, meta->>'reqHash' AS req_hash, credits_after FROM rtm_ult_ledger WHERE email=${email} AND op_id=${tx.opId}
         ), bal AS (
           SELECT COALESCE((SELECT credits FROM rtm_ult_wallet WHERE email=${email}), 0)::bigint AS credits
         ), ins AS (
-          INSERT INTO rtm_ult_ledger (email, op_id, kind, credits_delta, cards, meta)
-          SELECT ${email}, ${tx.opId}, ${tx.kind}, ${tx.creditsDelta}, ${cardsJson}::jsonb, ${metaJson}::jsonb
+          INSERT INTO rtm_ult_ledger (email, op_id, kind, credits_delta, cards, meta, credits_after)
+          SELECT ${email}, ${tx.opId}, ${tx.kind}, ${tx.creditsDelta}, ${cardsJson}::jsonb, ${metaJson}::jsonb, (SELECT credits FROM bal) + ${tx.creditsDelta}
           WHERE NOT EXISTS (SELECT 1 FROM prior)
             AND (SELECT credits FROM bal) + ${tx.creditsDelta} >= 0
             AND (SELECT count(*) FROM rtm_ult_cards WHERE email=${email}
@@ -223,6 +237,8 @@ export async function applyUltTransaction(
         )
         SELECT
           (SELECT id FROM prior) AS prior_id,
+          (SELECT req_hash FROM prior) AS prior_hash,
+          (SELECT credits_after FROM prior) AS prior_after,
           (SELECT id FROM ins) AS inserted_id,
           (SELECT credits FROM wallet) AS new_credits,
           (SELECT credits FROM bal) AS old_credits,
@@ -231,13 +247,27 @@ export async function applyUltTransaction(
   ]);
   const r = rows?.[0] ?? {};
   const oldCredits = Number(r.old_credits ?? 0);
-  if (r.inserted_id != null) return { ok: true, replayed: false, credits: Number(r.new_credits ?? 0) };
-  if (r.prior_id != null) return { ok: true, replayed: true, credits: oldCredits };
+  if (r.inserted_id != null) return { ok: true, replayed: false, credits: Number(r.new_credits ?? 0), creditsAfter: Number(r.new_credits ?? 0) };
+  if (r.prior_id != null) {
+    if (opts?.reqHash && r.prior_hash != null && String(r.prior_hash) !== opts.reqHash) return { ok: false, error: 'op_conflict', credits: oldCredits };
+    return { ok: true, replayed: true, credits: oldCredits, creditsAfter: r.prior_after == null ? null : Number(r.prior_after) };
+  }
   if (r.owned_ok === false) return { ok: false, error: 'not_owner', credits: oldCredits };
   return { ok: false, error: 'insufficient_credits', credits: oldCredits };
 }
 
 // ------------------------------------------------------- tx vinda do cliente
+
+// [CSM-4] hash canônico (chaves ordenadas) do PEDIDO do cliente — base da
+// verificação de parâmetros no replay de idempotência.
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  if (isPlainObject(v)) return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`;
+  return JSON.stringify(v ?? null);
+}
+export function ultPayloadHash(payload: unknown): string {
+  return createHash('sha256').update(canonical(payload)).digest('hex').slice(0, 32);
+}
 
 // Regra de forma do O0-02 (sem banco): kind na allowlist do cliente, nenhuma
 // carta entrando, nenhum crédito positivo fora do quicksell.
@@ -305,9 +335,13 @@ export async function applyClientUltTx(
     }
     tx = { ...tx, creditsDelta: value, meta: { ...(tx.meta ?? {}), clientDelta: parsed.tx.creditsDelta, valuedBy: 'server' } };
   }
-  const result = await applyUltTransaction(sql, email, tx, { requireOwned });
+  // hash do que o CLIENTE pediu (antes da valoração do servidor)
+  const p = parsed.tx;
+  const reqHash = ultPayloadHash({ a: 'tx', kind: p.kind, creditsDelta: p.creditsDelta, cards: p.cards.map((c) => ({ op: c.op, cardId: c.cardId, cardKey: c.cardKey ?? null })) });
+  const result = await applyUltTransaction(sql, email, tx, { requireOwned, reqHash });
   if (!result.ok) return { status: 409, body: { error: result.error, credits: result.credits } };
-  return { status: 200, body: { ok: true, replayed: result.replayed, credits: result.credits } };
+  // replay: devolve também o resultado GRAVADO (saldo logo depois da 1ª execução)
+  return { status: 200, body: { ok: true, replayed: result.replayed, credits: result.credits, ...(result.replayed ? { recorded: { creditsAfter: result.creditsAfter ?? null } } : {}) } };
 }
 
 // ------------------------------------------------------------- congelamento
