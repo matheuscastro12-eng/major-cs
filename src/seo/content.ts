@@ -1,54 +1,116 @@
-// Texto público das páginas indexáveis (SEO/compartilhamento). Fonte única: a
-// Landing usa o FAQ daqui e scripts/prerender.mts gera o HTML estático que os
-// buscadores e o X leem antes do JS rodar.
+// Texto público das páginas indexáveis (SEO/compartilhamento). O prerender
+// (scripts/prerender.mts, no fim de todo `vite build`) grava daqui o HTML
+// estático que buscadores e robôs de preview leem antes do JS rodar; o React
+// (createRoot) troca o conteúdo do #root ao montar, então o jogo não muda.
+//
+// Nada aqui é texto novo: a landing é uma CÓPIA FIEL de src/components/Landing.tsx
+// (hero, "Em 1 minuto", modos e FAQ), conferida por scripts/test-seo.mts, que
+// acusa qualquer frase que não exista mais na landing. As outras páginas usam as
+// frases da própria landing e dos dados do jogo. A lista de páginas está em
+// ./pages.ts; a do Major em ./major.ts (datas, formato e times do JSON,
+// favoritos calculados pelo engine).
+import type { LandingDoorId, LandingModeId } from '../data/majorLanding';
+import { DEFAULT_PRICE_CENTS, priceLabel } from '../state/price';
+
 export const SITE_URL = 'https://roadtomajor.com.br';
 export const SITE_NAME = 'Road to Major';
+/** imagem padrão; se o index.html já trouxer og:image absoluto, vale o dele (render.ts) */
 export const OG_IMAGE = `${SITE_URL}/og.png`;
 export const X_HANDLE = '@castroomath';
 
-export const LANDING_FAQ: [string, string][] = [
-  ['Preciso pagar pra jogar?', 'Não. Carreira, Ultimate, Draft, Diário e Online são de graça, incluindo a ranqueada online, e o Road to Pro tem demo grátis. O save fica no seu navegador. A conta de R$20 guarda o progresso na nuvem e libera o Road to Pro completo.'],
-  ['O que a conta vitalícia me dá?', 'O Road to Pro completo com a Série do Dia, save na nuvem pra jogar no PC e no celular, compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. É um pagamento único, sem mensalidade.'],
-  ['Funciona no celular?', 'Sim. O jogo roda no navegador do celular com a mesma interface do PC, e dá pra instalar na tela inicial como um app.'],
-  ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça: a conta só entra pra salvar na nuvem e comprar coins.'],
-  ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
-  ['Como pago os R$20?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
-  ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, do CS 1.6 ao CS2.'],
-];
+/** Item de lista: título opcional (em negrito, com link se houver página), texto e metadado. */
+export interface SeoItem { title?: string; text: string; href?: string; meta?: string }
+export type SeoBlock =
+  | { kind: 'p'; text: string }
+  | { kind: 'h3'; text: string }
+  | { kind: 'list'; items: SeoItem[]; ordered?: boolean; start?: number };
+export interface SeoSection { id: string; kicker?: string; title: string; blocks: SeoBlock[] }
+export interface SeoLink { href: string; label: string }
 
 export interface SeoPage {
-  path: string;            // URL pública
-  file: string;            // HTML gerado em dist/
+  path: string;            // URL pública (canônica)
+  file: string;            // HTML gerado em dist/ (fora do caminho da URL: a Vercel serve o arquivo antes dos rewrites)
+  nav: string;             // rótulo curto nos links entre páginas e no BreadcrumbList
   title: string;
   description: string;
+  kicker?: string;
   h1: string;
-  body: string[];          // parágrafos
+  lead: string[];          // parágrafos logo abaixo do h1
+  ctas?: SeoLink[];
+  sections?: SeoSection[];
+  faq?: [string, string][];
+  /** 'home' = WebSite + VideoGame; 'page' = WebPage com breadcrumb */
+  schema: 'home' | 'page';
+  /** do que a página trata (WebPage.about); sem isto, o jogo */
+  about?: string;
   priority: number;        // sitemap
   changefreq: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  faq?: [string, string][];
+  lastmod?: string;        // AAAA-MM-DD, só quando a data do conteúdo é conhecida
+  /** aviso de rodapé extra (além do de independência) */
+  footnote?: string;
 }
 
-export const SEO_PAGES: SeoPage[] = [
-  {
-    path: '/', file: 'index.html', priority: 1, changefreq: 'weekly',
-    title: 'Road to Major · manager e simulador de CS2 no navegador',
-    description: 'Manager e simulador de Counter-Strike no navegador: monte o time dos sonhos com lendas do CS 1.6, Source, CS:GO e CS2, viva a carreira de pro e vença o Major. Grátis no PC e no celular.',
-    h1: 'Seu time de CS rumo ao Major',
-    body: [
-      'Manager e simulador de Counter-Strike no navegador. Comande uma org, viva a carreira de pro ou dispute a ranqueada online, no PC e no celular.',
-      'Modos: Carreira (gerencie uma org por splits e Majors), Ultimate (monte seu elenco com jogadores reais de 2026 e suba de divisão na ranqueada), Road to Pro (a carreira de um jogador), Draft (time dos sonhos de todas as eras), Diário (um desafio novo por dia) e Online.',
-      'Beta aberto: joga de graça no navegador, sem instalar nada.',
-    ],
-    faq: LANDING_FAQ,
+// ── cópia da landing (src/components/Landing.tsx) ──────────────────────────
+// Cada string abaixo existe literalmente na Landing.tsx (scripts/test-seo.mts
+// confere). {preço} é trocado pelo preço padrão (state/price.ts) na renderização,
+// como o withPrice() da landing faz antes do servidor responder.
+export const LANDING = {
+  heroMajor: {
+    kicker: 'PGL Major Singapore, de 24/11 a 13/12',
+    h1: ["Faça seu pick'em", 'do Major de Singapura'],
+    sub: 'Escolha quem passa em cada stage, monte a chave dos playoffs e simule o Major inteiro. Depois, jogue as séries com um time ou chame os amigos pra uma liga.',
+    assure: 'Grátis, sem cadastro, no navegador e no celular.',
+    cta: "Fazer meu pick'em do Major",
+    play: 'Jogar grátis',
   },
-  { path: '/ultimate', file: 'p/ultimate.html', priority: 0.9, changefreq: 'weekly', title: 'Ultimate · monte seu elenco de CS2 e suba na ranqueada · Road to Major', description: 'Abra packs com os jogadores reais de 2026, monte o elenco e enfrente outros managers na fila ranqueada do Ultimate. Grátis no navegador.', h1: 'Ultimate: seu elenco de CS2 na ranqueada', body: ['Abra packs, monte seu elenco com os jogadores reais de 2026 e enfrente outros managers na fila ranqueada, subindo de divisão.'] },
-  { path: '/carreira', file: 'p/carreira.html', priority: 0.9, changefreq: 'weekly', title: 'Modo Carreira · gerencie uma org de CS · Road to Major', description: 'Gerencie uma organização de Counter-Strike: contrate, treine, dispute splits e Majors e construa uma dinastia. Grátis no navegador.', h1: 'Modo Carreira: gerencie uma org de CS', body: ['Contrate jogadores, monte a comissão técnica, dispute splits e Majors e construa a história da sua org, split a split.'] },
-  { path: '/road-to-pro', file: 'p/road-to-pro.html', priority: 0.8, changefreq: 'weekly', title: 'Road to Pro · a carreira de um jogador de CS · Road to Major', description: 'Crie seu jogador, jogue a Série do Dia e suba do amador ao Major no Road to Pro. Demo grátis no navegador.', h1: 'Road to Pro: do amador ao Major', body: ['Crie seu jogador, evolua a cada série e chegue ao palco do Major. O % que você vê é o % que rola.'] },
-  { path: '/diario', file: 'p/diario.html', priority: 0.7, changefreq: 'daily', title: 'Desafio Diário de CS · Road to Major', description: 'Um desafio novo de Counter-Strike por dia: mesma seed pra todo mundo, compare seu resultado e compartilhe.', h1: 'Desafio Diário', body: ['Todo dia um desafio novo, igual pra todo mundo. Jogue, compare e compartilhe seu resultado.'] },
-  { path: '/online', file: 'p/online.html', priority: 0.6, changefreq: 'weekly', title: 'Online · jogue CS manager contra amigos · Road to Major', description: 'Crie uma sala e enfrente outros managers de Counter-Strike online, direto no navegador.', h1: 'Online', body: ['Crie uma sala, chame os amigos e decida quem monta o melhor time.'] },
-  { path: '/ranking', file: 'p/ranking.html', priority: 0.5, changefreq: 'daily', title: 'Ranking dos managers · Road to Major', description: 'Ranking dos melhores managers do Road to Major.', h1: 'Ranking', body: ['Os melhores managers do Road to Major.'] },
-  { path: '/hall', file: 'p/hall.html', priority: 0.5, changefreq: 'weekly', title: 'Hall da Fama · Road to Major', description: 'Os campeões e recordes do Road to Major.', h1: 'Hall da Fama', body: ['Campeões, recordes e lendas do Road to Major.'] },
-  { path: '/privacidade', file: 'p/privacidade.html', priority: 0.2, changefreq: 'yearly', title: 'Política de privacidade · Road to Major', description: 'Como o Road to Major trata seus dados.', h1: 'Política de privacidade', body: ['Como o Road to Major coleta, usa e protege seus dados.'] },
-  { path: '/termos', file: 'p/termos.html', priority: 0.2, changefreq: 'yearly', title: 'Termos de uso · Road to Major', description: 'Termos de uso do Road to Major.', h1: 'Termos de uso', body: ['As regras de uso do Road to Major.'] },
-  { path: '/reembolso', file: 'p/reembolso.html', priority: 0.2, changefreq: 'yearly', title: 'Política de reembolso · Road to Major', description: 'Política de reembolso do Road to Major.', h1: 'Política de reembolso', body: ['Como funcionam reembolsos no Road to Major.'] },
-];
+  heroGeral: {
+    badge: 'Beta aberto, joga de graça no navegador',
+    h1: ['Seu time de CS', 'rumo ao Major'],
+    sub: 'Manager e simulador de Counter-Strike no navegador. Comande uma org, viva a carreira de pro ou dispute a ranqueada online, no PC e no celular.',
+    cta: 'Jogar agora, de graça',
+  },
+  desk: {
+    where: 'Singapura · 32 times',
+    label: 'Favoritos ao título na simulação',
+    runs: 'Majors simulados no jogo',
+    listProjection: 'lista provisória até 02/11',
+    listOfficial: 'lista oficial',
+    foot: '3 stages suíços · playoffs em MD3 · final em MD5',
+  },
+  quick: {
+    kicker: 'Em 1 minuto',
+    title: 'Escolha por onde começar',
+    subMajor: 'O Modo Major abre na hora. Nos outros, você cria um manager em segundos, sem e-mail.',
+    subGeral: 'Você cria um manager em segundos, sem e-mail, e já entra jogando.',
+  },
+  doors: {
+    major: { time: '~1 min', title: 'Modo Major', desc: "Faça o pick'em dos 32 times, jogue o Major com um time ou simule o campeonato inteiro.", meta: 'sem conta · grátis' },
+    diario: { time: '2 min', title: 'Diário', desc: 'Quatro desafios por dia, os mesmos pra todo mundo.', meta: 'todo dia · grátis' },
+    draft: { time: '~15 min', title: 'Draft', desc: 'Monte um cinco com lendas de cada era e dispute um Major avulso.', meta: 'partida rápida · rejogável' },
+    carreira: { time: 'Campanha', title: 'Carreira', desc: 'Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.', meta: 'campanha longa · save neste navegador' },
+  } satisfies Record<LandingDoorId, { time: string; title: string; desc: string; meta: string }>,
+  modesHead: { kicker: 'Mais modos', title: 'Quando quiser ir mais fundo' },
+  modes: {
+    carreira: { title: 'Carreira', desc: 'Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.', meta: ['1 jogador · campanha'] },
+    rtp: { title: 'Road to Pro', desc: 'Você é o jogador. Nos momentos-chave, a chance de cada jogada fica na tela: o % que você vê é o % que rola.', meta: ['Demo grátis', 'carreira completa na conta vitalícia'] },
+    ultimate: { title: 'Ultimate', desc: 'Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.', meta: ['Online · ranqueada'] },
+    online: { title: 'Online', desc: 'Ranqueada contra outros managers, duelo privado com amigos e o Major da Semana.', meta: ['Com o seu squad do Ultimate'] },
+  } satisfies Record<LandingModeId, { title: string; desc: string; meta: string[] }>,
+  faqTitle: 'Perguntas frequentes',
+  faqLead: 'O essencial sobre modos, conta e pagamento. Ainda com dúvida? Chama no X: @castroomath.',
+  /** só com o hero do Major, e em primeiro */
+  faqMajor: ['O Modo Major é de graça?', "É. Pick'em dos 32 times, jogar o Major com um time, liga com os amigos e a simulação do campeonato inteiro, sem conta e sem criar manager. O palpite fica salvo neste navegador."] as [string, string],
+  faq: [
+    ['Preciso pagar pra jogar?', 'Não. Carreira, Ultimate, Draft, Diário e Online são de graça, incluindo a ranqueada online, e o Road to Pro tem demo grátis. O save fica no seu navegador. A conta de {preço} guarda o progresso na nuvem e libera o Road to Pro completo.'],
+    ['O que a conta vitalícia me dá?', 'O Road to Pro completo com a Série do Dia, save na nuvem pra jogar no PC e no celular, compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. É um pagamento único, sem mensalidade.'],
+    ['Funciona no celular?', 'Sim. O jogo roda no navegador do celular com a mesma interface do PC, e dá pra instalar na tela inicial como um app.'],
+    ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça: a conta só entra pra salvar na nuvem e comprar coins.'],
+    ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
+    ['Como pago os {preço}?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
+    ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, do CS 1.6 ao CS2.'],
+  ] as [string, string][],
+  footer: 'Produto comercial independente, não afiliado ou endossado pela Valve, HLTV, Liquipedia, equipes ou jogadores.',
+} as const;
+
+/** {preço} → preço padrão formatado (o mesmo que a landing mostra antes de /api/account responder) */
+export const withDefaultPrice = (s: string): string => s.split('{preço}').join(priceLabel(DEFAULT_PRICE_CENTS));
