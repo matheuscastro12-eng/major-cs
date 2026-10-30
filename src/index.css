@@ -2208,6 +2208,15 @@ table.standings tr.is-user td {
   min-height: 112px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
+/* o banner do confronto (veto, pré-jogo) tem fundo escuro fixo: no tema claro
+   o texto ficava escuro sobre escuro ("MD3", "Veto de mapas" sumiam). O banner
+   leva data-theme="dark" (flags.tsx), então as camadas legadas são recalculadas
+   nele a partir destas tintas, as mesmas de :root em tokens.css. */
+[data-theme='light'] .match-banner {
+  --c-ink: #eaf0f8;
+  --c-ink-dim: #b7c4d8;
+  --c-ink-faint: #8fa2bf;
+}
 
 .mb-side {
   position: relative;
@@ -2479,6 +2488,14 @@ table.standings tr.is-user td {
   inset: 0;
   background: linear-gradient(90deg, rgba(18, 22, 27, 0.86), rgba(18, 22, 27, 0.58), rgba(18, 22, 27, 0.86));
   pointer-events: none;
+}
+/* tema claro: o véu sobre a arte do mapa clareia junto. O texto do placar já
+   segue o tema (escuro), e sobre o véu escuro acima ficava ilegível. */
+[data-theme='light'] .live-stage::after {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--c-surface-1) 90%, transparent),
+    color-mix(in srgb, var(--c-surface-1) 74%, transparent),
+    color-mix(in srgb, var(--c-surface-1) 90%, transparent));
 }
 
 .live-score {
@@ -4784,6 +4801,12 @@ button.world-champ:focus-visible, button.world-runner:focus-visible { outline: 2
 .pb-track i.bad { background: linear-gradient(180deg, #6b7686, #495161); }
 .pb-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--muted); }
 @media (max-width: 560px) { .potm-bars { gap: 6px; } .pb-track { width: 10px; height: 42px; } .pb-label { font-size: 0.55rem; } }
+/* celular estreito (360px): as 7 barras não cabem numa linha e a última
+   (Rating, a principal) saía da tela. Vira uma grade de 4 colunas abaixo do nome. */
+@media (max-width: 420px) {
+  .potm-id { flex-basis: 100%; }
+  .potm-bars { flex-basis: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 10px; }
+}
 
 .scoreboard-modal {
   width: min(940px, 96vw);
