@@ -92,9 +92,11 @@ export function MajorScoreboard({ t, picks, readOnly, nick = '' }: {
   const starts = fill(t('pcStarts'), { date: fmtDay(STAGE1_END, lang) });
   const lockAt = fmtLock(PICKEM_LOCK_MS, lang);
   // "veja seus pontos" no Início/landing: rola até aqui ao abrir (uma vez)
+  // (o pedido é consumido dentro do frame: no StrictMode o 1º efeito é desfeito
+  // e cancelaria a rolagem depois de já ter gastado o pedido)
   useEffect(() => {
-    if (!takePlacarFocus()) return;
     const raf = requestAnimationFrame(() => {
+      if (!takePlacarFocus()) return;
       const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       document.getElementById(PANEL_ID)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
     });
