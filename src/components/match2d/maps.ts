@@ -14,6 +14,9 @@
 
 import type { MapId } from '../../types';
 import { MIRAGE_CALLS, MIRAGE_RINGS } from './plans/mirage';
+import { TRAIN_CALLS, TRAIN_RINGS } from './plans/train';
+import { ANUBIS_CALLS, ANUBIS_RINGS } from './plans/anubis';
+import { ANCIENT_CALLS, ANCIENT_RINGS } from './plans/ancient';
 import { NUKE_CALLS, NUKE_RINGS } from './plans/nuke';
 import { INFERNO_CALLS, INFERNO_RINGS } from './plans/inferno';
 import { DUST2_CALLS, DUST2_RINGS } from './plans/dust2';
@@ -127,70 +130,26 @@ const MAPS: Record<MapId, Map2D> = {
     stage: ['lobby', 'mid', 'lobby', 'tOut', 'mid'],
     jitter: 0.45,
   }, { x0: 2.4, y0: -0.2, size: 99.1 }, NUKE_RINGS, NUKE_CALLS),
-  ancient: {
+  ancient: fromRadar({
     id: 'ancient',
-    nodes: {
-      tS: { x: 50, y: 88 }, ctS: { x: 50, y: 12 },
-      A: { x: 22, y: 30 }, B: { x: 78, y: 32 },
-      aT: { x: 22, y: 54 }, mainA: { x: 26, y: 74 }, donut: { x: 38, y: 42 },
-      aCT: { x: 32, y: 14 },
-      mid: { x: 50, y: 46 }, tMid: { x: 50, y: 68 }, cave: { x: 63, y: 46 },
-      bT: { x: 80, y: 52 }, rampB: { x: 74, y: 74 }, bCT: { x: 68, y: 14 },
-    },
-    edges: [
-      ['tS', 'mainA', 6], ['mainA', 'aT', 6], ['aT', 'A', 7], ['tS', 'tMid', 6], ['tMid', 'mid', 6],
-      ['mid', 'donut', 5], ['donut', 'A', 5], ['mid', 'ctS', 5], ['mid', 'cave', 5], ['cave', 'B', 5],
-      ['ctS', 'aCT', 6], ['aCT', 'A', 6],
-      ['tS', 'rampB', 6], ['rampB', 'bT', 6], ['bT', 'B', 7], ['ctS', 'bCT', 6], ['bCT', 'B', 6],
-    ],
-    sites: { A: R(23, 31, 26, 26), B: R(79, 31, 26, 26) },
-    spawns: { t: R(50, 88, 28, 12), ct: R(50, 14, 20, 12) },
-    holds: { A: ['aCT', 'donut'], B: ['bCT', 'cave'], mid: ['mid'] },
-    stage: ['mainA', 'tMid', 'rampB', 'mainA', 'rampB'],
-    floor: [
-      [36, 82, 28, 12],   // spawn TR
-      [22, 70, 20, 12], [16, 44, 12, 32],   // A main
-      [10, 18, 26, 26],   // bomb A
-      [28, 8, 44, 12],    // CT (liga A e B)
-      [44, 20, 12, 62],   // meio
-      [32, 36, 14, 10],   // donut
-      [56, 40, 14, 12],   // caverna
-      [66, 18, 26, 26],   // bomb B
-      [56, 70, 24, 12], [72, 44, 14, 30],   // rampa / B main
-    ],
-  },
-  anubis: {
+    nodes: { tS: { x: 48, y: 86 }, tLow: { x: 48, y: 76 }, tMid: { x: 46, y: 58 }, mid: { x: 47, y: 48 }, ctMid: { x: 47.4, y: 30 }, ctS: { x: 50, y: 15 }, aMainLow: { x: 22, y: 62 }, aMain: { x: 21, y: 50.3 }, aT: { x: 18.6, y: 35.3 }, A: { x: 30, y: 26 }, aBack: { x: 18, y: 22 }, aCT: { x: 31, y: 17 }, donut: { x: 35.1, y: 46.1 }, aDonut: { x: 31, y: 37 }, rampLow: { x: 69, y: 78 }, ramp: { x: 77.2, y: 64 }, bT: { x: 77.8, y: 55.4 }, B: { x: 74, y: 40 }, cave: { x: 61.6, y: 56.1 }, bCT: { x: 66, y: 25 }, bBack: { x: 83, y: 30 }, tS_tLow1: { x: 51.9, y: 82.6 }, tLow_tMid1: { x: 34.4, y: 70.6 }, tLow_tMid2: { x: 35.9, y: 58.4 }, ctMid_ctS1: { x: 53.4, y: 22.1 }, mid_donut1: { x: 37.4, y: 45.6 }, donut_aDonut1: { x: 30.9, y: 39.4 }, tLow_aMainLow1: { x: 26.4, y: 68.4 }, aMainLow_aMain1: { x: 21.4, y: 50.4 }, aMain_aT1: { x: 21.6, y: 40.6 }, aMain_aT2: { x: 17.4, y: 36.6 }, ctS_aCT1: { x: 31.1, y: 16.1 }, aCT_A1: { x: 27.4, y: 19.9 }, aCT_A2: { x: 24.4, y: 21.4 }, aCT_A3: { x: 28.6, y: 26.1 }, tS_rampLow1: { x: 51.9, y: 82.6 }, tS_rampLow2: { x: 53.4, y: 78.4 }, ramp_bT1: { x: 78.4, y: 57.4 }, bT_B1: { x: 82.4, y: 53.4 }, bT_B2: { x: 79.6, y: 45.1 }, mid_cave1: { x: 53.9, y: 57.4 }, mid_cave2: { x: 61.4, y: 57.9 }, cave_B1: { x: 66.9, y: 49.6 }, cave_B2: { x: 66.6, y: 39.6 }, cave_B3: { x: 72.6, y: 38.6 }, ctS_bCT1: { x: 56.1, y: 27.6 }, bCT_B1: { x: 70.6, y: 28.1 }, bCT_B2: { x: 73.1, y: 37.6 }, B_bBack1: { x: 82.1, y: 33.1 } },
+    edges: [['tS', 'tS_tLow1'], ['tS_tLow1', 'tLow'], ['tLow', 'tLow_tMid1'], ['tLow_tMid1', 'tLow_tMid2'], ['tLow_tMid2', 'tMid'], ['tMid', 'mid'], ['mid', 'ctMid'], ['ctMid', 'ctMid_ctS1'], ['ctMid_ctS1', 'ctS'], ['mid', 'mid_donut1'], ['mid_donut1', 'donut'], ['donut', 'donut_aDonut1'], ['donut_aDonut1', 'aDonut'], ['aDonut', 'A'], ['tLow', 'tLow_aMainLow1'], ['tLow_aMainLow1', 'aMainLow'], ['aMainLow', 'aMainLow_aMain1'], ['aMainLow_aMain1', 'aMain'], ['aMain', 'aMain_aT1'], ['aMain_aT1', 'aMain_aT2'], ['aMain_aT2', 'aT'], ['aT', 'A'], ['A', 'aBack'], ['ctS', 'ctS_aCT1'], ['ctS_aCT1', 'aCT'], ['aCT', 'aCT_A1'], ['aCT_A1', 'aCT_A2'], ['aCT_A2', 'aCT_A3'], ['aCT_A3', 'A'], ['tS', 'tS_rampLow1'], ['tS_rampLow1', 'tS_rampLow2'], ['tS_rampLow2', 'rampLow'], ['rampLow', 'ramp'], ['ramp', 'ramp_bT1'], ['ramp_bT1', 'bT'], ['bT', 'bT_B1'], ['bT_B1', 'bT_B2'], ['bT_B2', 'B'], ['mid', 'mid_cave1'], ['mid_cave1', 'mid_cave2'], ['mid_cave2', 'cave'], ['cave', 'cave_B1'], ['cave_B1', 'cave_B2'], ['cave_B2', 'cave_B3'], ['cave_B3', 'B'], ['ctS', 'ctS_bCT1'], ['ctS_bCT1', 'bCT'], ['bCT', 'bCT_B1'], ['bCT_B1', 'bCT_B2'], ['bCT_B2', 'B'], ['B', 'B_bBack1'], ['B_bBack1', 'bBack']],
+    sites: { A: R(30, 26, 9, 7), B: R(74, 40, 10, 8) },
+    spawns: { t: R(48, 86, 8, 6), ct: R(50, 14, 8, 8) },
+    holds: { A: ['aCT', 'aBack'], B: ['bCT', 'bBack'], mid: ['ctMid'] },
+    stage: ['tMid', 'aMainLow', 'rampLow', 'tLow', 'tMid'],
+    jitter: 0.45,
+  }, { x0: 3.3, y0: 2, size: 91.1 }, ANCIENT_RINGS, ANCIENT_CALLS),
+  anubis: fromRadar({
     id: 'anubis',
-    nodes: {
-      tS: { x: 50, y: 88 }, ctS: { x: 50, y: 12 },
-      A: { x: 80, y: 28 }, B: { x: 20, y: 28 },
-      aT: { x: 80, y: 52 }, mainA: { x: 76, y: 74 }, water: { x: 62, y: 42 },
-      aCT: { x: 70, y: 14 },
-      mid: { x: 50, y: 50 }, tMid: { x: 50, y: 68 }, bridge: { x: 38, y: 38 },
-      bT: { x: 20, y: 52 }, mainB: { x: 24, y: 74 }, bCT: { x: 30, y: 14 },
-    },
-    edges: [
-      ['tS', 'mainA', 6], ['mainA', 'aT', 6], ['aT', 'A', 7], ['tS', 'tMid', 6], ['tMid', 'mid', 6],
-      ['mid', 'water', 5], ['water', 'A', 5], ['mid', 'bridge', 5], ['bridge', 'B', 5], ['bridge', 'ctS', 5],
-      ['ctS', 'aCT', 6], ['aCT', 'A', 6],
-      ['tS', 'mainB', 6], ['mainB', 'bT', 6], ['bT', 'B', 7], ['ctS', 'bCT', 6], ['bCT', 'B', 6],
-    ],
-    sites: { A: R(81, 29, 26, 26), B: R(21, 29, 26, 26) },
-    spawns: { t: R(50, 88, 28, 12), ct: R(50, 14, 20, 12) },
-    holds: { A: ['aCT', 'water'], B: ['bCT', 'bridge'], mid: ['bridge'] },
-    stage: ['mainA', 'tMid', 'mainB', 'tMid', 'mainB'],
-    floor: [
-      [36, 82, 28, 12],   // spawn TR
-      [58, 70, 22, 12], [72, 40, 14, 34],   // A main
-      [68, 16, 26, 26],   // bomb A
-      [28, 8, 44, 12],    // CT (liga A e B)
-      [44, 30, 12, 52],   // meio
-      [54, 36, 14, 12],   // canal / água
-      [32, 32, 14, 12], [38, 18, 10, 16],   // ponte → CT
-      [8, 16, 26, 26],    // bomb B
-      [22, 70, 20, 12], [14, 40, 12, 34],   // B main
-    ],
-  },
+    nodes: { tS: { x: 47, y: 89 }, tMid: { x: 47.8, y: 69.2 }, mid: { x: 51, y: 52 }, ctMid: { x: 48.2, y: 38 }, ctS: { x: 43, y: 21 }, bMain1: { x: 32.3, y: 78.3 }, bMain2: { x: 22, y: 60 }, bT: { x: 26, y: 50 }, B: { x: 35.5, y: 47.5 }, bCon: { x: 40, y: 58 }, bCT: { x: 29.8, y: 30.3 }, bBack: { x: 29, y: 42 }, aMain1: { x: 62, y: 80 }, aMain2: { x: 73.2, y: 58.9 }, aT: { x: 71, y: 50 }, A: { x: 75, y: 25 }, aCon: { x: 62, y: 58 }, aCT: { x: 60, y: 24 }, aBack: { x: 83, y: 38 }, tS_tMid1: { x: 63.1, y: 85.4 }, tS_tMid2: { x: 60.4, y: 74.1 }, tS_tMid3: { x: 49.4, y: 68.4 }, mid_ctMid1: { x: 56.9, y: 37.9 }, mid_ctMid2: { x: 53.9, y: 33.1 }, mid_ctMid3: { x: 48.4, y: 34.9 }, ctMid_ctS1: { x: 47.4, y: 24.4 }, tS_bMain11: { x: 34.6, y: 85.4 }, bMain1_bMain21: { x: 33.4, y: 73.6 }, bMain2_bT1: { x: 23.4, y: 54.9 }, bT_B1: { x: 34.6, y: 46.4 }, mid_bCon1: { x: 47.9, y: 58.6 }, mid_bCon2: { x: 41.1, y: 59.9 }, bCon_B1: { x: 34.4, y: 54.1 }, ctS_bCT1: { x: 29.6, y: 29.6 }, bCT_B1: { x: 31.1, y: 45.4 }, tS_aMain11: { x: 63.1, y: 85.4 }, aMain1_aMain21: { x: 69.1, y: 68.4 }, aMain1_aMain22: { x: 66.9, y: 61.4 }, aMain1_aMain23: { x: 71.6, y: 57.9 }, aT_A1: { x: 77.4, y: 46.1 }, aT_A2: { x: 82.1, y: 44.6 }, aT_A3: { x: 82.4, y: 31.4 }, mid_aCon1: { x: 51.4, y: 58.4 }, aCon_aT1: { x: 69.9, y: 55.6 }, ctS_aCT1: { x: 54.1, y: 12.1 }, ctS_aCT2: { x: 58.1, y: 18.6 }, aCT_A1: { x: 66.6, y: 25.4 }, aCT_A2: { x: 70.6, y: 21.4 }, A_aBack1: { x: 83.9, y: 37.4 } },
+    edges: [['tS', 'tS_tMid1'], ['tS_tMid1', 'tS_tMid2'], ['tS_tMid2', 'tS_tMid3'], ['tS_tMid3', 'tMid'], ['tMid', 'mid'], ['mid', 'mid_ctMid1'], ['mid_ctMid1', 'mid_ctMid2'], ['mid_ctMid2', 'mid_ctMid3'], ['mid_ctMid3', 'ctMid'], ['ctMid', 'ctMid_ctS1'], ['ctMid_ctS1', 'ctS'], ['tS', 'tS_bMain11'], ['tS_bMain11', 'bMain1'], ['bMain1', 'bMain1_bMain21'], ['bMain1_bMain21', 'bMain2'], ['bMain2', 'bMain2_bT1'], ['bMain2_bT1', 'bT'], ['bT', 'bT_B1'], ['bT_B1', 'B'], ['mid', 'mid_bCon1'], ['mid_bCon1', 'mid_bCon2'], ['mid_bCon2', 'bCon'], ['bCon', 'bCon_B1'], ['bCon_B1', 'B'], ['ctS', 'ctS_bCT1'], ['ctS_bCT1', 'bCT'], ['bCT', 'bCT_B1'], ['bCT_B1', 'B'], ['B', 'bBack'], ['tS', 'tS_aMain11'], ['tS_aMain11', 'aMain1'], ['aMain1', 'aMain1_aMain21'], ['aMain1_aMain21', 'aMain1_aMain22'], ['aMain1_aMain22', 'aMain1_aMain23'], ['aMain1_aMain23', 'aMain2'], ['aMain2', 'aT'], ['aT', 'aT_A1'], ['aT_A1', 'aT_A2'], ['aT_A2', 'aT_A3'], ['aT_A3', 'A'], ['mid', 'mid_aCon1'], ['mid_aCon1', 'aCon'], ['aCon', 'aCon_aT1'], ['aCon_aT1', 'aT'], ['ctS', 'ctS_aCT1'], ['ctS_aCT1', 'ctS_aCT2'], ['ctS_aCT2', 'aCT'], ['aCT', 'aCT_A1'], ['aCT_A1', 'aCT_A2'], ['aCT_A2', 'A'], ['A', 'A_aBack1'], ['A_aBack1', 'aBack']],
+    sites: { A: R(75, 25, 10, 9), B: R(35, 48.5, 8, 7) },
+    spawns: { t: R(47, 89, 10, 5), ct: R(43, 21, 10, 7) },
+    holds: { A: ['aCT', 'aBack'], B: ['bCT', 'bBack'], mid: ['ctMid'] },
+    stage: ['tMid', 'bMain1', 'aMain1', 'tMid', 'bMain2'],
+    jitter: 0.45,
+  }, { x0: -0.3, y0: -3.5, size: 101.7 }, ANUBIS_RINGS, ANUBIS_CALLS),
   dust2: fromRadar({
     id: 'dust2',
     nodes: { tS: { x: 39, y: 89 }, ctS: { x: 61, y: 21 }, A: { x: 79, y: 17 }, B: { x: 19, y: 15 }, outsideLong: { x: 64, y: 74 }, longDoors: { x: 68.5, y: 58 }, longA: { x: 86, y: 57 }, aT: { x: 87, y: 32 }, tMid: { x: 44.5, y: 72 }, mid: { x: 47, y: 52 }, xbox: { x: 47, y: 40 }, ctMid: { x: 47, y: 28 }, cat: { x: 57, y: 41 }, short: { x: 63, y: 33 }, aShort: { x: 69, y: 22 }, aCT: { x: 72, y: 21 }, outsideTun: { x: 17, y: 70 }, upperTun: { x: 15, y: 45 }, bT: { x: 11, y: 33 }, lowerTun: { x: 34, y: 40 }, bCT: { x: 30, y: 20 }, aCar: { x: 84, y: 22 }, bBack: { x: 12, y: 10 }, tS_outsideLong1: { x: 60.4, y: 80.4 }, outsideLong_longDoors1: { x: 69.4, y: 58.9 }, longDoors_longA1: { x: 73.1, y: 51.6 }, tS_tMid1: { x: 45.9, y: 83.6 }, cat_short1: { x: 63.1, y: 34.6 }, short_aShort1: { x: 68.1, y: 22.6 }, tS_outsideTun1: { x: 19.6, y: 76.4 }, outsideTun_upperTun1: { x: 16.6, y: 46.9 }, upperTun_bT1: { x: 10.9, y: 37.1 }, upperTun_lowerTun1: { x: 30.4, y: 43.1 }, lowerTun_mid1: { x: 45.9, y: 41.9 } },
@@ -201,40 +160,16 @@ const MAPS: Record<MapId, Map2D> = {
     stage: ['outsideLong', 'tMid', 'outsideTun', 'outsideLong', 'outsideTun'],
     jitter: 0.45,
   }, { x0: -2.3, y0: -4.7, size: 104.8 }, DUST2_RINGS, DUST2_CALLS),
-  train: {
+  train: fromRadar({
     id: 'train',
-    nodes: {
-      tS: { x: 12, y: 66 }, ctS: { x: 86, y: 36 }, tIvy: { x: 11, y: 22 },
-      A: { x: 56, y: 44 }, B: { x: 62, y: 78 },
-      aT: { x: 40, y: 48 }, ivy: { x: 26, y: 22 }, mainA: { x: 28, y: 49 },
-      aCT: { x: 72, y: 40 }, conn: { x: 58, y: 24 },
-      mid: { x: 42, y: 64 }, pop: { x: 54, y: 60 },
-      bT: { x: 44, y: 82 }, lowerB: { x: 28, y: 82 }, bCT: { x: 78, y: 70 },
-    },
-    edges: [
-      ['tS', 'mainA', 6], ['mainA', 'aT', 6], ['aT', 'A', 7], ['tS', 'tIvy', 5], ['tIvy', 'ivy', 5], ['ivy', 'conn', 5], ['conn', 'A', 5], ['conn', 'ctS', 5],
-      ['ctS', 'aCT', 6], ['aCT', 'A', 6], ['tS', 'mid', 5], ['mid', 'pop', 5], ['pop', 'A', 5], ['pop', 'B', 5],
-      ['tS', 'lowerB', 6], ['lowerB', 'bT', 6], ['bT', 'B', 7], ['ctS', 'bCT', 6], ['bCT', 'B', 6],
-    ],
-    sites: { A: R(57, 44, 26, 20), B: R(63, 77, 22, 14) },
-    spawns: { t: R(12, 66, 16, 20), ct: R(85, 37, 18, 22) },
-    holds: { A: ['aCT', 'conn'], B: ['bCT', 'B'], mid: ['pop'] },
-    stage: ['mainA', 'ivy', 'lowerB', 'mid', 'lowerB'],
-    floor: [
-      [4, 56, 16, 20], [6, 18, 10, 40],   // spawn TR + subida pro ivy
-      [6, 18, 24, 10], [24, 16, 40, 12],   // ivy
-      [52, 26, 10, 10], [60, 20, 18, 12],   // conector → CT
-      [76, 26, 18, 22],   // spawn CT
-      [68, 34, 10, 10],   // CT do A
-      [18, 44, 26, 10], [18, 52, 8, 8],   // A main
-      [44, 34, 26, 20],   // bomb A (trens)
-      [18, 60, 28, 8],    // meio
-      [44, 52, 16, 14], [54, 64, 8, 8],   // pop dog
-      [16, 74, 38, 14],   // lower / B main
-      [52, 70, 22, 14],   // bomb B
-      [74, 44, 12, 30],   // CT do B
-    ],
-  },
+    nodes: { tS: { x: 12, y: 17 }, alley: { x: 30, y: 16 }, ivy: { x: 60, y: 12 }, ivy2: { x: 81.6, y: 25 }, aIvy: { x: 76, y: 38 }, A: { x: 63, y: 47 }, tCon: { x: 36, y: 40 }, aT: { x: 41, y: 56 }, tLow: { x: 31.6, y: 60 }, bT: { x: 41.6, y: 70.9 }, lowerB: { x: 28.4, y: 82 }, lowerB2: { x: 40, y: 91 }, B: { x: 55, y: 80 }, mid: { x: 64.2, y: 63.4 }, ctS: { x: 88, y: 78 }, ctStairs: { x: 95, y: 62 }, aCT: { x: 78, y: 52 }, bCT: { x: 78, y: 80 }, bBack: { x: 66, y: 88 }, ivy_ivy21: { x: 78.4, y: 12.6 }, ivy2_aIvy1: { x: 79.1, y: 38.1 }, aT_A1: { x: 43.6, y: 58.4 }, tCon_tLow1: { x: 36.6, y: 55.6 }, tLow_bT1: { x: 34.4, y: 70.6 }, lowerB_lowerB21: { x: 34.4, y: 91.1 }, lowerB2_B1: { x: 47.4, y: 88.4 }, mid_B1: { x: 71.4, y: 68.4 }, ctS_ctStairs1: { x: 95.9, y: 70.9 }, ctStairs_aCT1: { x: 92.4, y: 52.6 }, aCT_A1: { x: 73.6, y: 44.9 }, ctS_bCT1: { x: 86.1, y: 70.9 }, ctS_bCT2: { x: 78.6, y: 72.9 } },
+    edges: [['tS', 'alley'], ['alley', 'ivy'], ['ivy', 'ivy_ivy21'], ['ivy_ivy21', 'ivy2'], ['ivy2', 'ivy2_aIvy1'], ['ivy2_aIvy1', 'aIvy'], ['aIvy', 'A'], ['alley', 'tCon'], ['tCon', 'aT'], ['aT', 'aT_A1'], ['aT_A1', 'A'], ['tCon', 'tCon_tLow1'], ['tCon_tLow1', 'tLow'], ['tLow', 'tLow_bT1'], ['tLow_bT1', 'bT'], ['bT', 'B'], ['tLow', 'lowerB'], ['lowerB', 'lowerB_lowerB21'], ['lowerB_lowerB21', 'lowerB2'], ['lowerB2', 'lowerB2_B1'], ['lowerB2_B1', 'B'], ['A', 'mid'], ['mid', 'mid_B1'], ['mid_B1', 'B'], ['ctS', 'ctS_ctStairs1'], ['ctS_ctStairs1', 'ctStairs'], ['ctStairs', 'ctStairs_aCT1'], ['ctStairs_aCT1', 'aCT'], ['aCT', 'aCT_A1'], ['aCT_A1', 'A'], ['aIvy', 'aCT'], ['ctS', 'ctS_bCT1'], ['ctS_bCT1', 'ctS_bCT2'], ['ctS_bCT2', 'bCT'], ['bCT', 'B'], ['B', 'bBack']],
+    sites: { A: R(63, 47, 12, 9), B: R(55, 80, 12, 9) },
+    spawns: { t: R(12, 17, 10, 4), ct: R(90, 80, 7, 9) },
+    holds: { A: ['aCT', 'mid'], B: ['bCT', 'bBack'], mid: ['aIvy'] },
+    stage: ['alley', 'tCon', 'tLow', 'alley', 'tLow'],
+    jitter: 0.45,
+  }, { x0: -1.4, y0: -4.1, size: 103.8 }, TRAIN_RINGS, TRAIN_CALLS),
 };
 
 export function map2dOf(map: MapId | string): Map2D {
