@@ -82,6 +82,11 @@
     "server/ultimate-pack.test.ts",
     "server/weekend-league.ts",
     "server/weekend-league.test.ts",
-    "server/wlSettleCron.ts"
+    "server/wlSettleCron.ts",
+    "api/og-pickem.ts",
+    "api/og-pickem-page.ts",
+    "server/og-pickem.ts",
+    "server/og-pickem-image.ts",
+    "server/og-pickem.test.ts"
   ]
 }

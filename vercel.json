@@ -3,6 +3,8 @@
     "api/lobby.ts": { "memory": 256, "maxDuration": 10 },
     "api/cloud-save.ts": { "memory": 256, "maxDuration": 10 },
     "api/bo3-edits.ts": { "memory": 256, "maxDuration": 10 },
+    "api/og-pickem.ts": { "memory": 512, "maxDuration": 10, "includeFiles": "{server/og-assets/*.ttf,src/data/major-singapore-2026.json,public/logos/*,node_modules/harfbuzzjs/hb.wasm,node_modules/@resvg/resvg-wasm/index_bg.wasm}" },
+    "api/og-pickem-page.ts": { "memory": 128, "maxDuration": 10, "includeFiles": "src/data/major-singapore-2026.json" },
     "api/*.ts": { "memory": 128, "maxDuration": 10 }
   },
   "crons": [
@@ -29,6 +31,14 @@
     { "source": "/hall", "destination": "/p/hall.html" },
     { "source": "/banners", "destination": "/" },
     { "source": "/design", "destination": "/" },
+    {
+      "source": "/major-singapore",
+      "has": [
+        { "type": "header", "key": "user-agent", "value": ".*([Tt]witter[Bb]ot|[Ff]acebook[Ee]xternal[Hh]it|[Ww]hats[Aa]pp|[Dd]iscord[Bb]ot|[Tt]elegram[Bb]ot|[Ss]lack[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ee]mbedly|[Ss]kype[Uu]ri[Pp]review).*" },
+        { "type": "query", "key": "p" }
+      ],
+      "destination": "/api/og-pickem-page"
+    },
     { "source": "/major-singapore", "destination": "/" },
     { "source": "/jogo/:path*", "destination": "/" },
     { "source": "/admin", "destination": "/" },
