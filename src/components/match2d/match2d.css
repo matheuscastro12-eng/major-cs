@@ -146,6 +146,11 @@
   .r2d-bar { padding: var(--sp-2); }
   .r2d-buy { display: none; }
   .r2d-feed { min-height: 0; }
+  .r2d-calls text { font-size: 2.4px; }
+}
+/* celular: o radar tem ~380px; as calls crescem para continuar legíveis */
+@media (max-width: 560px) {
+  .r2d-calls text { font-size: 2.6px; opacity: 0.85; }
 }
 @media (prefers-reduced-motion: reduce) {
   .r2d-bomb-pulse, .r2d-moment, .r2d-fl { animation: none; }

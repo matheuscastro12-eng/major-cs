@@ -168,6 +168,31 @@ test('planta real: nós e arestas da Mirage ficam dentro do piso', () => {
   assert.ok(map2dOf('mirage').plan, 'a Mirage tem a planta real');
 });
 
+test('planta real: nomes das calls ficam dentro do piso e longe de onde os jogadores param', () => {
+  // tamanho do texto no celular (match2d.css, max-width 560px): 2.6 unidades;
+  // bolinha r=1.9 + espalhamento => 2.8 de folga até a borda do texto
+  const FS = 2.6, CLEAR = 2.8;
+  for (const id of MAP_POOL) {
+    const m = map2dOf(id);
+    if (!m.plan) continue;
+    const spots = [...new Set([...m.holds.A, ...m.holds.B, ...m.holds.mid, ...m.stage])].map((n) => ({ n, ...m.nodes[n] }));
+    for (const [t, x, y, a] of m.plan.calls) {
+      assert.ok(inPlan(m.plan.rings, x, y), `${id}: call ${t} fora do piso`);
+      const w = t.length * FS * 0.62;
+      const [hw, hh] = a ? [FS / 2, w / 2] : [w / 2, FS / 2];
+      // desktop: texto 2.1 e o nick do jogador embaixo da bolinha (até ~12 de largura)
+      const dw = t.length * 2.1 * 0.62;
+      const [dhw, dhh] = a ? [1.05, dw / 2] : [dw / 2, 1.05];
+      for (const s of spots) {
+        const d = Math.hypot(Math.max(0, Math.abs(s.x - x) - hw), Math.max(0, Math.abs(s.y - y) - hh));
+        assert.ok(d >= CLEAR, `${id}: call ${t} embaixo de quem para em ${s.n} (folga ${d.toFixed(1)})`);
+        const nx = Math.max(0, Math.abs(s.x - x) - dhw - 6), ny = Math.max(0, Math.abs(s.y + 3.6 - y) - dhh - 1.4);
+        assert.ok(Math.hypot(nx, ny) >= 0.4, `${id}: call ${t} embaixo do nome de quem para em ${s.n}`);
+      }
+    }
+  }
+});
+
 const K = (killer: string, kt: 0 | 1, victim: string): KillEvent => ({ round: 1, killerId: killer, victimId: victim, killerTeam: kt, victimTeam: kt === 0 ? 1 : 0, weapon: 'AK-47', headshot: false, opening: false, trade: false });
 
 test('momentos: ace, clutch 1v3, eco vencido, virada', () => {
