@@ -8,18 +8,21 @@
 //     do Início e a paleta ⌘K, todos via openPatchNotes()).
 //   - Na primeira abertura por user que ainda não viu o CURRENT_PATCH_ID,
 //     o modal abre automaticamente UMA VEZ (controlado por localStorage).
+//     Visitante sem manager (1ª visita) não vê: ver patchAutoOpen.
 //   - Fechar o modal marca o patch atual como visto.
 //
 // Pra adicionar patch novo: editar src/data/patchNotes.ts (ver doc lá).
 
 import { useEffect, useState } from 'react';
 import { useOverlayHeld } from '../state/overlayHold';
+import { getManager } from '../state/manager';
 import { Modal } from './ds';
 import {
   CURRENT_PATCH_ID,
   PATCHES,
   hasUnseenPatch,
   markPatchSeen,
+  patchAutoOpen,
   type PatchNote,
   type PatchNoteItem,
 } from '../data/patchNotes';
@@ -94,7 +97,9 @@ export function PatchNotesHost() {
   // Auto-abre uma vez na primeira mount de quem ainda não viu o patch atual.
   // Atrasamos 600ms pra não competir com Landing/login na 1ª impressão.
   useEffect(() => {
-    if (!hasUnseenPatch()) return;
+    const action = patchAutoOpen({ unseen: hasUnseenPatch(), hasManager: !!getManager(), path: window.location.pathname });
+    if (action === 'mark-seen' && CURRENT_PATCH_ID) markPatchSeen(CURRENT_PATCH_ID);
+    if (action !== 'open') return;
     const timer = setTimeout(() => setOpen(true), 600);
     return () => clearTimeout(timer);
   }, []);

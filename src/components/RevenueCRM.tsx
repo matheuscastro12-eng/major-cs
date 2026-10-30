@@ -18,6 +18,7 @@ import {
   getFinance, getRankingIntegrity, getRevenue, getWlBoard, grantAccess, listAccounts, lookupStripe, revokeAccess, settleWl, setUserPassword,
   type AccountsList, type AdminAccount, type FinanceData, type IntegrityData, type RevenueData, type RevenueDay, type StripeLookup, type TrendPoint, type WlAdminBoard, type WlSettlePaid,
 } from '../state/adminAccounts';
+import { priceCents } from '../state/price';
 
 // ── formatadores pt-BR ──────────────────────────────────────────────────────
 const money = (cents: number) => {
@@ -75,7 +76,7 @@ function MethodBars({ rows, total }: { rows: BarRow[]; total: number }) {
 }
 
 // ── derivação por dia: contagens cruas → receita em centavos ────────────────
-// Regra de receita da vitalícia: preço fixo (vitPriceCents = R$ 20). Contas
+// Regra de receita da vitalícia: preço configurado (vitPriceCents = PIX_PRICE_CENTS). Contas
 // 'admin' (concedidas) contam como conta mas NÃO geram receita. Método
 // 'desconhecido' (legado sem trilha de método) conta como PIX no split —
 // decisão do dono (2026-07-05): as vendas legadas sem sessão Stripe foram Pix.
@@ -557,7 +558,7 @@ function AccountsSection() {
 
   const conv = data && data.total ? Math.round((data.paidTotal / data.total) * 100) : 0;
   const refPct = data && data.total ? Math.round(((data.withRefTotal ?? 0) / data.total) * 100) : 0;
-  const revenue = (data?.paidTotal ?? 0) * 20; // conta vitalícia = R$20
+  const revenue = ((data?.paidTotal ?? 0) * priceCents()) / 100; // contagem × preço configurado (PIX_PRICE_CENTS)
 
   const load = useCallback(async (q = '') => {
     setErr('');

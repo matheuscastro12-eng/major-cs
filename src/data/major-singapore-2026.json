@@ -1,0 +1,500 @@
+{
+ "event": {
+  "name": "PGL Major Singapore 2026",
+  "city": "Singapura",
+  "start": "2026-11-24",
+  "end": "2026-12-13",
+  "playoffsStart": "2026-12-10",
+  "listDate": "2026-11-02",
+  "status": "projecao",
+  "updatedAt": "2026-10-26",
+  "sources": [
+   "https://cs2major.com/",
+   "https://www.gosugamers.net/counterstrike/news/78250-singapore-to-host-first-ever-southeast-asia-counter-strike-2-major-in-november-2026",
+   "https://liquipedia.net/counterstrike/PGL/2026/Singapore"
+  ],
+  "note": "PROJEÇÃO até 02/11/2026: a lista oficial sai do ranking VRS de 02/11 (18 Europa, 9 Américas, 5 Ásia). Até lá, ordem pelo ranking mundial do bo3.gg de 29/09/2026 (src/data/bo3-2026.json), respeitando a divisão por região. rating = força derivada dos números dos jogadores no bo3-2026.json. Para atualizar: troque teams (32, seeds 1..32), marque confirmed=true e status='oficial'."
+ },
+ "teams": [
+  {
+   "id": "team-vitality",
+   "name": "Team Vitality",
+   "tag": "VIT",
+   "country": "fr",
+   "seed": 1,
+   "rating": 1700,
+   "colors": [
+    "#1f5135",
+    "#5ae2d9"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 1
+  },
+  {
+   "id": "team-spirit",
+   "name": "Team Spirit",
+   "tag": "TS",
+   "country": "ru",
+   "seed": 2,
+   "rating": 1683,
+   "colors": [
+    "#4d511f",
+    "#93e25a"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 2
+  },
+  {
+   "id": "team-falcons",
+   "name": "Team Falcons",
+   "tag": "FLC",
+   "country": "sa",
+   "seed": 3,
+   "rating": 1665,
+   "colors": [
+    "#51491f",
+    "#b5e25a"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 3
+  },
+  {
+   "id": "natus-vincere",
+   "name": "Natus Vincere",
+   "tag": "NAVI",
+   "country": "ua",
+   "seed": 4,
+   "rating": 1599,
+   "colors": [
+    "#2d511f",
+    "#5ae278"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 4
+  },
+  {
+   "id": "mouz",
+   "name": "MOUZ",
+   "tag": "MOUZ",
+   "country": "de",
+   "seed": 5,
+   "rating": 1596,
+   "colors": [
+    "#1f5139",
+    "#5ae0e2"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 5
+  },
+  {
+   "id": "legacy",
+   "name": "Legacy",
+   "tag": "LGC",
+   "country": "br",
+   "seed": 6,
+   "rating": 1580,
+   "colors": [
+    "#514f1f",
+    "#a5e25a"
+   ],
+   "confirmed": false,
+   "region": "am",
+   "rankRef": 6
+  },
+  {
+   "id": "the-mongolz",
+   "name": "The MongolZ",
+   "tag": "MGLZ",
+   "country": "mn",
+   "seed": 7,
+   "rating": 1555,
+   "colors": [
+    "#1f5151",
+    "#5aa0e2"
+   ],
+   "confirmed": false,
+   "region": "as",
+   "rankRef": 7
+  },
+  {
+   "id": "aurora-gaming",
+   "name": "Aurora Gaming",
+   "tag": "AUR",
+   "country": "ru",
+   "seed": 8,
+   "rating": 1574,
+   "colors": [
+    "#471f51",
+    "#e25ab9"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 8
+  },
+  {
+   "id": "gamerlegion",
+   "name": "GamerLegion",
+   "tag": "GL",
+   "country": "de",
+   "seed": 9,
+   "rating": 1508,
+   "colors": [
+    "#513b1f",
+    "#d9e25a"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 9
+  },
+  {
+   "id": "astralis",
+   "name": "Astralis",
+   "tag": "AST",
+   "country": "dk",
+   "seed": 10,
+   "rating": 1500,
+   "colors": [
+    "#231f51",
+    "#a95ae2"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 10
+  },
+  {
+   "id": "furia",
+   "name": "FURIA",
+   "tag": "FURIA",
+   "country": "br",
+   "seed": 11,
+   "rating": 1650,
+   "colors": [
+    "#511f45",
+    "#e25a7c"
+   ],
+   "confirmed": false,
+   "region": "am",
+   "rankRef": 11
+  },
+  {
+   "id": "fut-esports",
+   "name": "FUT Esports",
+   "tag": "FUT",
+   "country": "tr",
+   "seed": 12,
+   "rating": 1543,
+   "colors": [
+    "#1f5137",
+    "#5ae2e0"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 12
+  },
+  {
+   "id": "g2-esports",
+   "name": "G2 Esports",
+   "tag": "G2",
+   "country": "de",
+   "seed": 13,
+   "rating": 1559,
+   "colors": [
+    "#37511f",
+    "#5ae25d"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 13
+  },
+  {
+   "id": "parivision",
+   "name": "PARIVISION",
+   "tag": "PRV",
+   "country": "ru",
+   "seed": 14,
+   "rating": 1547,
+   "colors": [
+    "#471f51",
+    "#e25ab9"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 14
+  },
+  {
+   "id": "9z",
+   "name": "9z",
+   "tag": "9Z",
+   "country": "ar",
+   "seed": 15,
+   "rating": 1559,
+   "colors": [
+    "#39511f",
+    "#5de25a"
+   ],
+   "confirmed": false,
+   "region": "am",
+   "rankRef": 15
+  },
+  {
+   "id": "b8",
+   "name": "B8",
+   "tag": "B8",
+   "country": "ua",
+   "seed": 16,
+   "rating": 1474,
+   "colors": [
+    "#511f50",
+    "#e25a9a"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 16
+  },
+  {
+   "id": "betboom",
+   "name": "BetBoom",
+   "tag": "BB",
+   "country": "ru",
+   "seed": 17,
+   "rating": 1535,
+   "colors": [
+    "#1f513d",
+    "#5ad4e2"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 17
+  },
+  {
+   "id": "magic",
+   "name": "magic",
+   "tag": "MGC",
+   "country": "ru",
+   "seed": 18,
+   "rating": 1501,
+   "colors": [
+    "#511f36",
+    "#e2615a"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 18
+  },
+  {
+   "id": "pain-gaming",
+   "name": "paiN Gaming",
+   "tag": "PAIN",
+   "country": "br",
+   "seed": 19,
+   "rating": 1493,
+   "colors": [
+    "#1f5051",
+    "#5a9ae2"
+   ],
+   "confirmed": false,
+   "region": "am",
+   "rankRef": 19
+  },
+  {
+   "id": "mibr",
+   "name": "MIBR",
+   "tag": "MIBR",
+   "country": "br",
+   "seed": 20,
+   "rating": 1518,
+   "colors": [
+    "#361f51",
+    "#dd5ae2"
+   ],
+   "confirmed": false,
+   "region": "am",
+   "rankRef": 20
+  },
+  {
+   "id": "faze-clan",
+   "name": "FaZe Clan",
+   "tag": "FAZE",
+   "country": "us",
+   "seed": 21,
+   "rating": 1550,
+   "colors": [
+    "#1f2151",
+    "#9a5ae2"
+   ],
+   "confirmed": false,
+   "region": "am",
+   "rankRef": 22
+  },
+  {
+   "id": "ninjas-in-pyjamas",
+   "name": "Ninjas in Pyjamas",
+   "tag": "NIP",
+   "country": "se",
+   "seed": 22,
+   "rating": 1529,
+   "colors": [
+    "#511f31",
+    "#e26f5a"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 23
+  },
+  {
+   "id": "lynn-vision",
+   "name": "Lynn Vision",
+   "tag": "LVG",
+   "country": "cn",
+   "seed": 23,
+   "rating": 1513,
+   "colors": [
+    "#511f2a",
+    "#e2815a"
+   ],
+   "confirmed": false,
+   "region": "as",
+   "rankRef": 24
+  },
+  {
+   "id": "wildcard",
+   "name": "Wildcard",
+   "tag": "WC",
+   "country": "us",
+   "seed": 24,
+   "rating": 1497,
+   "colors": [
+    "#1f4c51",
+    "#5a91e2"
+   ],
+   "confirmed": false,
+   "region": "am",
+   "rankRef": 25
+  },
+  {
+   "id": "envy",
+   "name": "ENVY",
+   "tag": "NV",
+   "country": "fr",
+   "seed": 25,
+   "rating": 1453,
+   "colors": [
+    "#2f1f51",
+    "#c95ae2"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 26
+  },
+  {
+   "id": "heroic",
+   "name": "HEROIC",
+   "tag": "HERO",
+   "country": "dk",
+   "seed": 26,
+   "rating": 1470,
+   "colors": [
+    "#1f514b",
+    "#5ab0e2"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 27
+  },
+  {
+   "id": "big",
+   "name": "BIG",
+   "tag": "BIG",
+   "country": "de",
+   "seed": 27,
+   "rating": 1512,
+   "colors": [
+    "#1f1f51",
+    "#9e5ae2"
+   ],
+   "confirmed": false,
+   "region": "eu",
+   "rankRef": 28
+  },
+  {
+   "id": "tyloo",
+   "name": "TYLOO",
+   "tag": "TYLOO",
+   "country": "cn",
+   "seed": 28,
+   "rating": 1511,
+   "colors": [
+    "#51461f",
+    "#bbe25a"
+   ],
+   "confirmed": false,
+   "region": "as",
+   "rankRef": 32
+  },
+  {
+   "id": "m80",
+   "name": "M80",
+   "tag": "M80",
+   "country": "us",
+   "seed": 29,
+   "rating": 1484,
+   "colors": [
+    "#1f5151",
+    "#5a9ce2"
+   ],
+   "confirmed": false,
+   "region": "am",
+   "rankRef": 33
+  },
+  {
+   "id": "jijiehao",
+   "name": "JiJieHao",
+   "tag": "JIJI",
+   "country": "cn",
+   "seed": 30,
+   "rating": 1474,
+   "colors": [
+    "#4f511f",
+    "#97e25a"
+   ],
+   "confirmed": false,
+   "region": "as",
+   "rankRef": 44
+  },
+  {
+   "id": "team-liquid",
+   "name": "Team Liquid",
+   "tag": "TL",
+   "country": "us",
+   "seed": 31,
+   "rating": 1511,
+   "colors": [
+    "#511f44",
+    "#e25a7a"
+   ],
+   "confirmed": false,
+   "region": "am",
+   "rankRef": 45
+  },
+  {
+   "id": "thunder-downunder",
+   "name": "THUNDER dOWNUNDER",
+   "tag": "THUN",
+   "country": "au",
+   "seed": 32,
+   "rating": 1440,
+   "colors": [
+    "#271f51",
+    "#b55ae2"
+   ],
+   "confirmed": false,
+   "region": "as",
+   "rankRef": 64
+  }
+ ]
+}

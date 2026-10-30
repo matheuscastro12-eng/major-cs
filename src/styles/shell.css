@@ -870,6 +870,11 @@ button.gs-widget:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   animation: gs-enter var(--dur-3) var(--ease-out);
 }
 .gs--flush .gs-content { padding: 0; }
+/* crédito das fotos do bo3.gg (link ativo, exigido pelos termos do bo3.gg) */
+.gs-credit { margin: var(--sp-6) 0 0; font-size: 12px; text-align: right; color: var(--c-ink-dim); }
+.gs-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.gs-credit a:hover { color: var(--c-ink); }
+.gs--flush .gs-credit, .gs--immersive .gs-credit { margin: 0; padding: var(--sp-2) var(--sp-4) var(--sp-3); }
 @keyframes gs-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* imersivo: só a barra (partida ao vivo, veto, reveal) */

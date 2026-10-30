@@ -15,6 +15,7 @@ import { cliffCountdown } from '../../engine/rtp/demoCliff';
 import { RtpIcon } from './RtpIcon';
 import { goUpgradeFromCliff } from './demoCliffUi';
 import type { DemoCliff, RoadToProSave } from '../../engine/rtp/types';
+import { priceLabel, usePrice } from '../../state/price';
 
 const SQUAD_LABEL: Record<string, string> = {
   star: ct('Estrela'), starter: ct('Titular'), rotation: ct('Rotação'), bench: ct('Reserva'),
@@ -39,6 +40,7 @@ export function RtpCliffOfferCard({ cliff, nick, now }: { cliff: DemoCliff; nick
 // Banner da ÚLTIMA semana grátis: a proposta chegou, mas responder é da
 // vitalícia. Fixo no rodapé, por cima do hub — não bloqueia treinar/jogar.
 export function RtpDemoCliffBanner({ save, onUpgrade }: { save: RoadToProSave; onUpgrade: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const cliff = save.demoCliff;
   const [open, setOpen] = useState(true);
   useEffect(() => { if (cliff) trackRtpDemo('cliff_view'); }, [cliff]);
@@ -76,7 +78,7 @@ export function RtpDemoCliffBanner({ save, onUpgrade }: { save: RoadToProSave; o
       <div className="rtp-offer-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" className="rtp-nextmatch-btn" onClick={go}>🔒 {ct('Aceitar')}</button>
         <button type="button" className="rtp-btn-ghost" onClick={go}>🔒 {ct('Negociar (+salário)')}</button>
-        <button type="button" className="rtp-cta" onClick={go} style={{ marginLeft: 'auto' }}>{ct('GARANTIR A VITALÍCIA')} · R$ 20</button>
+        <button type="button" className="rtp-cta" onClick={go} style={{ marginLeft: 'auto' }}>{ct('GARANTIR A VITALÍCIA')} · {priceLabel()}</button>
       </div>
     </div>
   );

@@ -16,7 +16,7 @@
 // visuais (player profile mostra a árvore). Em PR separado, `engine/match.ts`
 // pode usar atributos específicos pra calcular kills mais granularmente.
 
-import { hashStr } from '../state/hash';
+import { hashStr } from '../state/hash.js';
 import type { Role } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────

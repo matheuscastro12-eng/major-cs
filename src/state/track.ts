@@ -24,12 +24,41 @@ export function sessionId(): string {
   }
 }
 
-// FUNIL DE CONVERSÃO (visitante → vitalícia R$20): eventos raros e de alto
+// FUNIL DE CONVERSÃO (visitante → vitalícia): eventos raros e de alto
 // valor — liberados no cliente junto com 'visit'/'ad_click'. Volume é ínfimo
 // (1x por sessão por superfície), então não mexe no controle de custo do Neon.
 // share_card {kind, channel} entra aqui: 1 evento por clique em compartilhar —
 // volume ínfimo e é o numerador do K-factor (quanto compartilhamento vira visita).
-const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card']);
+const FUNNEL_TYPES = new Set([
+  'paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card',
+  // [medição do Major e da ativação] marcos raros, sem dado pessoal (só sid, ref e o modo/superfície)
+  'major_sg_view', 'major_vitrine_click', 'major_pickem_submit', 'major_sg_campaign_done', 'first_match_done',
+]);
+// Marcos que valem 1x por sessão do navegador (sessionStorage, então F5 não
+// repete): a chave inclui a superfície quando houver. Volume esperado: ≤ 5
+// eventos por sessão, todos com o compute do Neon já acordado pela visita.
+const ONCE_PER_SESSION = new Set(['major_sg_view', 'major_vitrine_click', 'major_pickem_submit', 'major_sg_campaign_done']);
+const ONCE_KEY = 'rtm-once';
+const memoryOnce = new Set<string>();
+
+/** chave de dedupe de um marco: tipo + superfície (se houver). Puro, testado em scripts/test-track-funnel.mts */
+export function onceKey(type: string, data: Record<string, unknown>): string {
+  const surface = typeof data.surface === 'string' ? data.surface : '';
+  return surface ? `${type}:${surface}` : type;
+}
+
+function seenOnce(key: string): boolean {
+  if (memoryOnce.has(key)) return true;
+  memoryOnce.add(key);
+  try {
+    const raw = sessionStorage.getItem(ONCE_KEY);
+    const list: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+    if (list.includes(key)) return true;
+    list.push(key);
+    sessionStorage.setItem(ONCE_KEY, JSON.stringify(list.slice(-50)));
+  } catch { /* storage bloqueado: fica o dedupe em memória */ }
+  return false;
+}
 // eventos de VENDA que carregam o ref de compartilhamento da sessão (first-touch)
 const REF_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done']);
 
@@ -63,6 +92,7 @@ function rememberShareRef(ref: string): void {
 export function track(type: string, data: Record<string, unknown> = {}): void {
   // demais tipos existem na allowlist do backend mas estão pausados no cliente
   if (type !== 'visit' && type !== 'ad_click' && !FUNNEL_TYPES.has(type)) return;
+  if (ONCE_PER_SESSION.has(type) && seenOnce(onceKey(type, data))) return;
   try {
     fetch('/api/track', {
       method: 'POST',
@@ -108,7 +138,7 @@ export function startPresenceHeartbeat(): () => void {
   return stopPresence;
 }
 
-// ─── Funil de conversão da vitalícia (R$20) ─────────────────────────────────
+// ─── Funil de conversão da vitalícia ─────────────────────────────────
 // paywall_view {src}      → usuário grátis/deslogado VIU uma superfície de venda
 //                           (1x por sessão de navegação por src, guarda em memória)
 // checkout_open {src,method} → a UI de pagamento realmente abriu (Stripe redirect
@@ -130,7 +160,22 @@ let memorySrc = '';
 export function trackPaywallView(src: string): void {
   if (seenPaywalls.has(src)) return;
   seenPaywalls.add(src);
-  track('paywall_view', { src });
+  // src segue igual (as consultas antigas dependem dele); surface/trigger são o
+  // recorte que o Growth pediu: onde apareceu e o que fez aparecer.
+  track('paywall_view', { src, surface: src, trigger: paywallTrigger(src) });
+}
+
+// O que fez a oferta aparecer:
+//   gate     → o jogador tentou usar algo travado (demo do RtP, mercado, Ultimate sem conta…)
+//   checkout → já está no pagamento (avisos dentro do QR Pix / nudge do checkout)
+//   surface  → viu uma vitrine de venda navegando (landing, Início, perfil, ranking…)
+const PAYWALL_GATES = new Set(['rtp-demo-gate', 'mkt-lock', 'home-ultimate', 'wl-guest', 'wl-free']);
+const PAYWALL_IN_CHECKOUT = new Set(['pix-wait-longo', 'pix-cartao-cedo', 'upsell-pix-cartao-cedo', 'checkout-nudge']);
+export type PaywallTrigger = 'gate' | 'checkout' | 'surface';
+export function paywallTrigger(src: string): PaywallTrigger {
+  if (PAYWALL_GATES.has(src)) return 'gate';
+  if (PAYWALL_IN_CHECKOUT.has(src)) return 'checkout';
+  return 'surface';
 }
 
 /** Marca a origem (CTA clicado) que levou ao checkout. First-touch: só grava se vazio. */
@@ -146,7 +191,9 @@ function getCheckoutSrc(): string {
 
 /** A UI de pagamento da vitalícia abriu de verdade (redirect Stripe ou QR Pix). */
 export function trackCheckoutOpen(method: 'stripe' | 'pix'): void {
-  track('checkout_open', { src: getCheckoutSrc() || 'direto', method });
+  // product: este checkout é só o da conta vitalícia; coins e Passe vão no
+  // ult_funnel (purchase_intent {product_kind}).
+  track('checkout_open', { src: getCheckoutSrc() || 'direto', method, product: 'vitalicia' });
 }
 
 /** QR Pix da vitalícia fechado sem pagamento confirmado (best-effort). */
@@ -232,6 +279,36 @@ export function trackUltFunnel(step: UltFunnelStep, data: Record<string, string 
   if (seenPaywalls.has(key)) return;
   seenPaywalls.add(key);
   track('ult_funnel', { step, ...data });
+  if (step === 'match_completed') trackFirstMatchDone('ultimate');
+}
+
+// ─── ATIVAÇÃO: tempo até o 1º valor ─────────────────────────────────────────
+// first_match_done {mode, secs}: a PRIMEIRA partida/série concluída neste
+// navegador (Draft, Modo Major ou Ultimate), com os segundos desde a primeira
+// visita. 1 evento por navegador na vida (localStorage), nada pessoal.
+const FIRST_SEEN_KEY = 'rtm-first-seen';
+const FIRST_MATCH_KEY = 'rtm-first-match';
+
+function markFirstSeen(nowMs: number): void {
+  try { if (!localStorage.getItem(FIRST_SEEN_KEY)) localStorage.setItem(FIRST_SEEN_KEY, String(nowMs)); } catch { /* sem storage */ }
+}
+
+/** payload do first_match_done. secs = null quando não há registro da 1ª visita. Puro. */
+export function firstMatchPayload(mode: string, firstSeenMs: number | null, nowMs: number): { mode: string; secs: number | null } {
+  const secs = firstSeenMs && nowMs >= firstSeenMs ? Math.round((nowMs - firstSeenMs) / 1000) : null;
+  return { mode: mode.slice(0, 20), secs };
+}
+
+export function trackFirstMatchDone(mode: 'draft' | 'major' | 'ultimate'): void {
+  let firstSeen: number | null;
+  try {
+    if (localStorage.getItem(FIRST_MATCH_KEY)) return;
+    localStorage.setItem(FIRST_MATCH_KEY, '1');
+    firstSeen = Number(localStorage.getItem(FIRST_SEEN_KEY)) || null;
+  } catch {
+    return; // sem storage não dá pra garantir "1x por navegador": não envia
+  }
+  track('first_match_done', firstMatchPayload(mode, firstSeen, Date.now()));
 }
 
 /** Cadastro pré-pagamento: 'start' no submit (1x/sessão), 'done' no sucesso. */
@@ -244,6 +321,7 @@ export function trackSignup(step: 'start' | 'done'): void {
 
 // visita: no máximo 1 evento por sessão de navegação (por hora)
 export function trackVisit(): void {
+  markFirstSeen(Date.now()); // base do first_match_done (tempo até o 1º valor)
   // ATENÇÃO: até out/2026 `data.ref` do visit era o document.referrer. Agora
   // `ref` é a origem do link compartilhado (?ref=) e o referrer vai em `referrer`.
   // Só LÊ a query — limpar a URL é responsabilidade do App.tsx. Lido ANTES do

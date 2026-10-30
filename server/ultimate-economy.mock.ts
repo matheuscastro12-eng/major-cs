@@ -36,6 +36,7 @@ interface LedgerRow {
   cards: Row[];
   meta: Row;
   createdAt: string;
+  creditsAfter?: number; // [CSM-4] credits_after
 }
 
 export class FakeDb {
@@ -44,6 +45,7 @@ export class FakeDb {
   ledger: LedgerRow[] = [];
   listings: FakeListing[] = []; // rtm_ult_listings (mercado P2P)
   frozen = new Set<string>(); // rtm_ult_wallet.frozen_at preenchido [O0-02]
+  imported = new Set<string>(); // rtm_ult_wallet.imported_at preenchido [F1]
   nextId = 1;
   nextListingId = 1;
   executed: string[] = [];
@@ -84,6 +86,22 @@ export class FakeDb {
       return this.frozen.has(email) ? [{ frozen_at: '2026-09-23T00:00:00.000Z' }] : (this.wallets.has(email) ? [{ frozen_at: null }] : []);
     }
 
+    // [F1] marca da migração única (ultImport)
+    if (text.startsWith('SELECT imported_at, credits FROM rtm_ult_wallet WHERE')) {
+      const email = String(params[0]);
+      if (!this.wallets.has(email) && !this.imported.has(email)) return [];
+      return [{ imported_at: this.imported.has(email) ? '2026-10-27T00:00:00.000Z' : null, credits: this.wallets.get(email) ?? 0 }];
+    }
+    if (text.startsWith('INSERT INTO rtm_ult_wallet (email, imported_at)')) {
+      const email = String(params[0]);
+      this.imported.add(email);
+      if (!this.wallets.has(email)) this.wallets.set(email, 0);
+      return [];
+    }
+    if (text.startsWith('SELECT card_id FROM rtm_ult_cards WHERE')) {
+      return this.cardsOf(String(params[0])).map((c) => ({ card_id: c.cardId }));
+    }
+
     // O statement transacional grande (WITH prior AS ...).
     if (text.startsWith('WITH prior AS')) {
       const email = String(params[0]);
@@ -93,15 +111,15 @@ export class FakeDb {
       const cardOps = JSON.parse(String(params[7])) as { op: string; cardId: string; cardKey?: string; meta?: Row }[];
       const meta = JSON.parse(String(params[8])) as Row;
       // requireOwned (params[11]): toda cópia exigida tem que estar na coleção agora
-      const required = JSON.parse(String(params[11] ?? '[]')) as { cardId: string; cardKey: string }[];
+      const required = JSON.parse(String(params[12] ?? '[]')) as { cardId: string; cardKey: string }[];
       const ownedOk = required.every((o) => this.cardsOf(email).some((x) => x.cardId === o.cardId && x.cardKey === o.cardKey));
       const prior = this.ledger.find((l) => l.email === email && l.opId === opId);
       const oldCredits = this.wallets.get(email) ?? 0;
-      if (prior) return [{ prior_id: prior.id, inserted_id: null, new_credits: null, old_credits: oldCredits, owned_ok: ownedOk }];
+      if (prior) return [{ prior_id: prior.id, prior_hash: (prior.meta as Row).reqHash ?? null, prior_after: prior.creditsAfter ?? null, inserted_id: null, new_credits: null, old_credits: oldCredits, owned_ok: ownedOk }];
       if (!ownedOk || oldCredits + delta < 0) return [{ prior_id: null, inserted_id: null, new_credits: null, old_credits: oldCredits, owned_ok: ownedOk }];
       const id = this.nextId++;
-      this.ledger.push({ id, email, opId, kind, delta, cards: cardOps as unknown as Row[], meta, createdAt: new Date(1_700_000_000_000 + id * 1000).toISOString() });
       const newCredits = oldCredits + delta;
+      this.ledger.push({ id, email, opId, kind, delta, cards: cardOps as unknown as Row[], meta, createdAt: new Date(1_700_000_000_000 + id * 1000).toISOString(), creditsAfter: newCredits });
       this.wallets.set(email, newCredits);
       const list = this.cardsOf(email);
       for (const c of cardOps) {

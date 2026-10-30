@@ -29,6 +29,7 @@
     { "source": "/hall", "destination": "/p/hall.html" },
     { "source": "/banners", "destination": "/" },
     { "source": "/design", "destination": "/" },
+    { "source": "/major-singapore", "destination": "/" },
     { "source": "/jogo/:path*", "destination": "/" },
     { "source": "/admin", "destination": "/" },
     { "source": "/admin/:path*", "destination": "/" }

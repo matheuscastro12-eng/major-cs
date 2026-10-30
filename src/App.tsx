@@ -86,6 +86,7 @@ const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m)
 // style guide do design system "Broadcast Desk" (/design) — fora do bundle das telas
 const DesignScreen = lazyWithReload(() => import('./pages/DesignScreen').then((m) => ({ default: m.DesignScreen })));
 const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
+const MajorSingaporeScreen = lazyWithReload(() => import('./components/major/MajorSingaporeScreen').then((m) => ({ default: m.MajorSingaporeScreen })));
 const RoadToPro = lazyWithReload(() => import('./components/rtp/RoadToPro').then((m) => ({ default: m.RoadToPro })));
 
 // Ultimate Squad: VISÍVEL em localhost (dev/preview local), OCULTO no site real
@@ -140,7 +141,7 @@ import { ModeErrorBoundary } from './components/ModeErrorBoundary';
 import { SaveHealthBanner } from './components/SaveHealthBanner';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
-import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackPaywallView, trackVisit } from './state/track';
+import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackFirstMatchDone, trackPaywallView, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -174,7 +175,8 @@ type Screen =
   | 'privacy'
   | 'terms'
   | 'refund'
-  | 'design';
+  | 'design'
+  | 'majorsg';
 
 const SCREEN_PATH: Record<Screen, string> = {
   landing: '/',
@@ -207,6 +209,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   terms: '/termos',
   refund: '/reembolso',
   design: '/design',
+  majorsg: '/major-singapore',
 };
 
 // Modo de cada tela → acento do design system (tokens.css: [data-mode]). Telas
@@ -375,7 +378,7 @@ export default function App() {
     // — a conversão acontece DENTRO do jogo (RtpDemoGate), não mais na porta.
     if (accountReady && screen === 'ultimate' && !account && !utGuest) setScreen('landing');
   }, [screen, accountReady, account, utGuest]);
-  // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
+  // funil: grátis/deslogado vendo a landing (pricing da vitalícia) conta como paywall_view
   useEffect(() => {
     if (screen === 'landing' && accountReady && !account?.paid) trackPaywallView('landing');
   }, [screen, accountReady, account?.paid]);
@@ -657,7 +660,7 @@ export default function App() {
     const TITLES: Partial<Record<Screen, string>> = {
       draft: 'Draft', hub: 'Campeonato', veto: 'Veto de mapas', match: 'Partida ao vivo',
       final: 'Resultado', online: 'Online', career: 'Modo Carreira', hall: 'Hall da Fama', editor: 'Editor de base',
-      design: 'Design system',
+      design: 'Design system', majorsg: 'PGL Major Singapore',
       stats: 'Estatísticas', admin: 'Admin',
       privacy: 'Privacidade', terms: 'Termos', refund: 'Reembolso',
     };
@@ -874,6 +877,7 @@ export default function App() {
     const clone = structuredClone(tournament) as Tournament;
     const p = clone.pairings.find((x) => x.a === 'user' || x.b === 'user');
     if (p) p.result = series;
+    trackFirstMatchDone('draft'); // ativação: 1ª série concluída (1x por navegador)
     resolveRound(clone, rngRef.current);
     setMatchCtx(null);
     afterResolve(clone);
@@ -1013,6 +1017,7 @@ export default function App() {
     ...(ULTIMATE_ENABLED ? [{ id: 'online' as const, label: 'Online', short: 'Online', icon: Swords, hint: ct('Ranqueada, duelo e Major da Semana'), onSelect: () => openUltimateMode('ranked') }] : []),
   ];
   const shellCommands: ShellCommand[] = [
+    { id: 'major-sg', label: ct('Modo Major: PGL Major Singapore'), group: ct('Ações'), icon: Trophy, keywords: 'major singapore pickem pick em chave bracket pgl', run: () => { track('major_vitrine_click', { surface: 'palette' }); setScreen('majorsg'); } },
     { id: 'new-major', label: ct('Novo Major (draft)'), group: ct('Ações'), icon: Plus, keywords: 'draft major rapido', run: newMajor },
     { id: 'editor', label: ct('Editor de base'), group: ct('Ações'), icon: PencilRuler, keywords: 'editor base database jogadores times fm', run: () => openEditor('home') },
     { id: 'achievements', label: ct('Conquistas'), group: ct('Você'), icon: Medal, run: () => setAchOpen(true) },
@@ -1044,6 +1049,7 @@ export default function App() {
     { id: 'principal', label: ct('Principal'), icon: House, items: [
       { id: 'home', label: ct('Portal'), icon: LayoutDashboard },
       { id: 'news', label: ct('Novidades'), icon: Newspaper, alert: hasNewPatch() },
+      { id: 'majorsg', label: ct('Modo Major'), icon: Trophy },
     ] },
     { id: 'voce', label: ct('Você'), icon: CircleUser, items: [
       { id: 'profile', label: ct('Perfil do manager'), icon: CircleUser },
@@ -1058,6 +1064,7 @@ export default function App() {
     ] },
   ].map((g) => ({ ...g, items: g.items.map((it) => ({ ...it, alert: it.alert && it.id !== active })) }));
   const onHomeNav = (id: string) => {
+    if (id === 'majorsg') track('major_vitrine_click', { surface: 'sidebar' });
     if (id === 'news') openPatchNotes();
     else if (id === 'achievements') setAchOpen(true);
     else if (id === 'howto') openHowToPlay();
@@ -1134,10 +1141,22 @@ export default function App() {
     );
   }
 
+  // Modo Major (PGL Major Singapore): aberto a qualquer um, sem manager — o link
+  // do pick'em compartilhado tem que abrir direto pra quem não joga ainda
+  if (screen === 'majorsg') {
+    return withShell(
+      <GameShell mode="inicio" identity={{ title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> }} title={ct('Modo Major')} crumbs={[{ label: ct('Principal') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav}>
+        <Suspense fallback={<Loader text="…" />}>
+          <MajorSingaporeScreen />
+        </Suspense>
+      </GameShell>,
+    );
+  }
+
   if (screen === 'landing') {
     return (
       <>
-        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} />
+        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} onMajor={() => { track('major_vitrine_click', { surface: 'landing' }); setScreen('majorsg'); }} />
         {!bannerPreview && <AdBanner />}
       </>
     );
@@ -1279,7 +1298,12 @@ export default function App() {
           onGuest={() => { setUtGateOpen(false); enableUtGuest(); setScreen('ultimate'); }}
         />
       )}
-      {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
+      {showOnboarding && screen === 'home' && (
+        <Onboarding
+          onClose={() => setShowOnboarding(false)}
+          onRoute={(route) => { if (route === 'major') setScreen('majorsg'); else if (route === 'draft') openDraftMode(); else openCareerMode(); }}
+        />
+      )}
 
       {/* "Não consegui salvar" + avisos da nuvem (413 / restore sem espaço) */}
       <SaveHealthBanner />
@@ -1315,6 +1339,7 @@ export default function App() {
           onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onDaily={() => setScreen('daily')}
+          onMajor={() => { track('major_vitrine_click', { surface: 'home' }); setScreen('majorsg'); }}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
@@ -1447,7 +1472,7 @@ export default function App() {
           />
         </GameShell>
       )}
-      {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
+      {/* carreira aberta de graça pra todos (a vitalícia vale por save na nuvem + ranking) */}
       {/* key={careerEpoch}: o save trocou por fora (nuvem, lápide, outra aba) →
           remonta a carreira inteira [O0-28/O1-35]. Pagante (ou conta ainda
           carregando) espera o sync da nuvem antes de montar. */}
