@@ -1,17 +1,18 @@
 // Início (Portal) — a porta de entrada do Road to Major no shell universal.
-// Estilo FM: painéis com o que está em andamento em cada modo (carreira, Road
-// to Pro, Major rápido, Diário), os modos de jogo, a conta e as novidades.
-// O CONTINUAR da topbar leva à coisa mais relevante agora (streak em risco,
-// campeonato em andamento, carreira salva…).
+// Uma ação principal no topo (PRÓXIMA AÇÃO, regra pura em state/homeNext.ts,
+// a mesma do CONTINUAR da topbar), o bloco do PGL Major (contagem até 24/11,
+// AO VIVO de 24/11 a 13/12, some depois), os modos numa grade compacta com o
+// tempo de cada um, a conta, a última novidade e o apoio, nessa ordem. No
+// celular a sidebar fica atrás do Menu: esta tela é o que o jogador vê.
 //
-// Funil (mantido do menu antigo, mesmos src de telemetria): card do Road to
-// Pro com DEMO GRÁTIS + atalho "pular a demo" (home-rtp / home-rtp-direto),
-// pill de Fundador pra conta grátis (home-pill), CTA de conta pro convidado
+// Funil (mantido do menu antigo, mesmos src de telemetria): Road to Pro com
+// DEMO GRÁTIS + atalho "pular a demo" (home-rtp / home-rtp-direto), pill de
+// Fundador pra conta grátis (home-pill), CTA de conta pro convidado
 // (acct-chip-guest), aviso de streak em risco (streak_at_risk_seen).
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  CalendarDays, ChevronRight, Crosshair, Flame, Heart, Layers, LayoutDashboard, Newspaper, Play,
-  Shuffle, Sparkles, Star, Swords, Trophy, TriangleAlert, UserRound, Crown, Globe, Lock, Medal, PencilRuler,
+  Award, CalendarDays, ChevronRight, Crosshair, Flame, Heart, Layers, Newspaper, Play,
+  Shuffle, Star, Swords, Trophy, UserRound, Crown, Lock, Medal, PencilRuler, type LucideIcon,
 } from 'lucide-react';
 import { type Difficulty, type TournamentPool } from '../types';
 import { setCheckoutSrc, trackPaywallView, trackUltFunnel } from '../state/track';
@@ -25,12 +26,13 @@ import { getManager } from '../state/manager';
 import { ct } from '../state/career-i18n';
 import { readSlot, getActiveSlot } from '../state/careerSaves';
 import { PATCHES } from '../data/patchNotes';
-import { majorPromoOn } from '../data/majorWindow';
+import { majorClock, majorPromoOn, type MajorClock } from '../data/majorWindow';
+import { nextAction, readMajorLocal, type HomeAction, type MajorRunBrief, type PickemProgress } from '../state/homeNext';
+import { openPatchNotes } from './PatchNotesModal';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { useFounders } from '../state/founders';
-import { TeamBadge } from './ui';
-import { GameShell, Panel, Button, Segmented, type ShellNavGroup, type ShellNext, type ShellPending } from './ds/index';
+import { GameShell, Panel, Button, Segmented, Tag, LiveBadge, ProgressBar, type ShellNavGroup, type ShellNext, type ShellPending } from './ds/index';
 import type { Account } from '../state/account';
 import { priceLabel, usePrice, withPrice } from '../state/price';
 
@@ -85,6 +87,39 @@ function rtpBrief(): { nick?: string; ovr?: number; team?: string; week?: number
   } catch { return null; }
 }
 
+/** relógio da tela (contagem do Major): 1 tique a cada 30 s, só com o portal aberto */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [active]);
+  return now;
+}
+
+const majorPhaseLabel = (r: MajorRunBrief) => (r.phase === 4 ? 'Playoffs' : `Stage ${r.phase}`);
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** o que cada ação mostra: bloco principal, linha secundária e o CONTINUAR do shell */
+interface ActionView {
+  icon: LucideIcon;
+  kicker: string;
+  title: string;
+  detail: string;
+  cta: string;
+  /** rótulo e detalhe curtos (linha secundária) */
+  short: string;
+  sub: string;
+  /** verbo e detalhe do CONTINUAR da topbar */
+  verb: string;
+  shellDetail: string;
+  tag?: ReactNode;
+  onGo: () => void;
+}
+
 export function Home(props: Props) {
   usePrice(); // re-renderiza quando o preço do servidor chega
   const {
@@ -130,19 +165,11 @@ export function Home(props: Props) {
   const founderSoldOut = !!founders && founders.founders >= founders.limit;
   const career = useMemo(() => readSlot(getActiveSlot()), []);
   const rtp = useMemo(() => rtpBrief(), []);
+  // pick'em e campanha do Modo Major, lidos crus do navegador (sem o JSON dos 32 times)
+  const majorLocal = useMemo(() => readMajorLocal(), []);
+  const now = useNow(view === 'menu');
 
   const start = () => onStart(mode, name.trim() || 'DREAM FIVE', pool, difficulty);
-
-  // ── CONTINUAR: a coisa mais relevante agora ──
-  const pending: ShellPending[] = [];
-  if (dStreak.atRisk && onDaily) pending.push({ id: 'streak', label: `${ct('Sua sequência de')} ${dStreak.current} ${ct('dias acaba em')} ${dStreak.hoursLeft}h`, tone: 'warn', icon: Flame, onGo: onDaily });
-  if (accountReady && !account) pending.push({ id: 'acct', label: ct('Jogando sem conta: o progresso fica só neste navegador'), tone: 'info', icon: Lock, onGo: () => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); } });
-  let next: ShellNext | undefined;
-  if (dStreak.atRisk && onDaily) next = { label: ct('Continuar'), detail: `${ct('Diário')} #${dayNo} · ${ct('salve a sequência')}`, onGo: onDaily, pending };
-  else if (savedCampaign && onResume) next = { label: ct('Continuar'), detail: `${savedCampaign.name}`, onGo: onResume, pending };
-  else if (career.exists && career.org && onCareer) next = { label: ct('Continuar'), detail: `${career.org} · Split ${career.split ?? 1}`, onGo: onCareer, pending };
-  else if (onDaily && dayStatus.done < DAILY_GAMES.length) next = { label: ct('Jogar'), detail: `${ct('Diário')} #${dayNo}`, onGo: onDaily, icon: Play, pending };
-  else next = { label: ct('Jogar'), detail: ct('Novo Major'), onGo: () => setView('draft'), icon: Play, pending };
 
   const today = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
   const meta = (
@@ -209,8 +236,99 @@ export function Home(props: Props) {
     );
   }
 
-  const latest = PATCHES.slice(0, 2).flatMap((p) => p.items.slice(0, 3).map((it) => ({ ...it, date: p.date })));
-  const dailyLeft = DAILY_GAMES.length - dayStatus.done;
+  // ── PRÓXIMA AÇÃO: uma só, pela regra de state/homeNext.ts ──
+  const dailyTotal = DAILY_GAMES.length;
+  const dailyLeft = dailyTotal - dayStatus.done;
+  const majorWindow = majorPromoOn(now);
+  const clock = majorClock(now);
+  const { pickem, run } = majorLocal;
+  const plan = nextAction({
+    majorRun: run,
+    draftRun: savedCampaign ?? null,
+    streak: { atRisk: dStreak.atRisk, current: dStreak.current },
+    majorWindow,
+    pickem,
+    daily: { done: dayStatus.done, total: dailyTotal },
+    can: { major: !!onMajor, resume: !!onResume, daily: !!onDaily, career: !!onCareer },
+  });
+  const days = (n: number) => `${n} ${n === 1 ? ct('dia') : ct('dias')}`;
+  const careerSub = career.exists && career.org ? `${career.org} · Split ${career.split ?? 1}` : '';
+
+  const describe = (a: HomeAction): ActionView => {
+    switch (a.id) {
+      case 'major-run': {
+        const r = run!;
+        const sub = r.wins + r.losses > 0 ? `${majorPhaseLabel(r)} · ${r.wins}–${r.losses}` : ct('1ª série esperando');
+        return {
+          icon: Award, kicker: ct('Modo Major · sua campanha'), title: ct('Continuar o Major'),
+          detail: r.wins + r.losses > 0 ? `${majorPhaseLabel(r)} · ${r.wins}–${r.losses} ${ct('em séries')}. ${ct('A próxima série está esperando o seu time.')}` : ct('Time escolhido. A 1ª série está esperando o seu time.'),
+          cta: ct('Continuar'), short: ct('Continuar o Major'), sub, verb: ct('Continuar'), shellDetail: `${ct('Modo Major')} · ${sub}`, onGo: onMajor!,
+        };
+      }
+      case 'draft-run': {
+        const s = savedCampaign!;
+        return {
+          icon: Swords, kicker: ct('Draft · campeonato em andamento'), title: s.name, detail: s.phase,
+          cta: ct('Continuar'), short: ct('Retomar campeonato'), sub: s.name, verb: ct('Continuar'), shellDetail: s.name, onGo: onResume!,
+        };
+      }
+      case 'streak':
+        return {
+          icon: Flame, kicker: `${ct('Diário')} #${dayNo}`, title: ct('Salvar a sequência'),
+          detail: cap(`${ct('você perde')} ${dStreak.current} ${ct('dias em')} ${dStreak.hoursLeft}h — ${ct('jogue qualquer um dos 4 pra manter.')}`),
+          cta: ct('Jogar o Diário'), short: ct('Salvar a sequência'), sub: `${days(dStreak.current)} · ${dStreak.hoursLeft}h`,
+          verb: ct('Continuar'), shellDetail: `${ct('Diário')} #${dayNo} · ${ct('salve a sequência')}`,
+          tag: <Tag tone="warn" icon={<Flame size={12} aria-hidden />}>{days(dStreak.current)} · {dStreak.hoursLeft}h</Tag>,
+          onGo: onDaily!,
+        };
+      case 'pickem':
+        return {
+          icon: Award, kicker: 'PGL Major Singapore', title: ct("Fazer meu pick'em do Major"),
+          detail: pickem.steps > 0
+            ? `${pickem.steps} ${ct('de')} ${pickem.total} ${ct('etapas feitas. Falta fechar o resto até o campeão.')}`
+            : ct("Escolha quem avança em cada Stage e monte a chave até o campeão. Grátis, sem conta."),
+          cta: ct("Fazer meu pick'em"), short: ct("Fazer meu pick'em"), sub: `${pickem.steps}/${pickem.total} ${ct('etapas')}`,
+          verb: ct('Jogar'), shellDetail: ct("Pick'em do Major"), onGo: onMajor!,
+        };
+      case 'daily':
+        return {
+          icon: CalendarDays, kicker: `${ct('Diário')} #${dayNo}`, title: ct('Jogar o Diário'),
+          detail: dayStatus.done === 0 ? ct('Quatro desafios por dia — o mesmo pra todo mundo. Grátis, sem conta.') : `${dailyLeft} ${ct('desafios esperando')}`,
+          cta: ct('Jogar o de hoje'), short: ct('Jogar o Diário'), sub: `#${dayNo} · ${dayStatus.done}/${dailyTotal}`,
+          verb: ct('Jogar'), shellDetail: `${ct('Diário')} #${dayNo}`, onGo: onDaily!,
+        };
+      case 'career':
+        return career.exists ? {
+          icon: Trophy, kicker: ct('Carreira'), title: career.org ?? ct('Carreira salva'),
+          detail: `Split ${career.split ?? 1} · ${career.titles ?? 0} ${ct('títulos')}${career.budget != null ? ` · $ ${Math.round(career.budget / 1000)} mil` : ''}`,
+          cta: ct('Continuar'), short: ct('Continuar a Carreira'), sub: careerSub || ct('campanha'),
+          verb: ct('Continuar'), shellDetail: careerSub || ct('Carreira'), onGo: onCareer!,
+        } : {
+          icon: Trophy, kicker: ct('Carreira'), title: ct('Começar a Carreira'),
+          detail: ct('Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.'),
+          cta: ct('Começar'), short: ct('Começar a Carreira'), sub: ct('campanha'), verb: ct('Começar'), shellDetail: ct('Carreira'), onGo: onCareer!,
+        };
+      case 'draft-new':
+      default:
+        return {
+          icon: Layers, kicker: ct('Partida rápida'), title: ct('Novo Major'),
+          detail: ct('Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.'),
+          cta: ct('Montar'), short: ct('Partida rápida'), sub: 'Draft · ~15 min', verb: ct('Jogar'), shellDetail: ct('Novo Major'), onGo: () => setView('draft'),
+        };
+    }
+  };
+  const primary = describe(plan.primary);
+  const secondary = plan.secondary.map((a) => ({ a, v: describe(a) }));
+
+  // ── CONTINUAR da topbar: a mesma ação principal ──
+  const pending: ShellPending[] = [];
+  if (dStreak.atRisk && onDaily) pending.push({ id: 'streak', label: `${ct('Sua sequência de')} ${dStreak.current} ${ct('dias acaba em')} ${dStreak.hoursLeft}h`, tone: 'warn', icon: Flame, onGo: onDaily });
+  if (accountReady && !account) pending.push({ id: 'acct', label: ct('Jogando sem conta: o progresso fica só neste navegador'), tone: 'info', icon: Lock, onGo: () => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); } });
+  const next: ShellNext = { label: primary.verb, detail: primary.shellDetail, onGo: primary.onGo, icon: primary.icon, pending };
+
+  const patch = PATCHES[0];
+  const PrimaryIcon = primary.icon;
+  const showMajor = !!onMajor && clock.phase !== 'after';
 
   return (
     <GameShell
@@ -239,99 +357,98 @@ export function Home(props: Props) {
         </button>
       ) : undefined}
     >
-      <div className="home-grid">
-        {/* ── coluna 1: continuar ── */}
-        <div className="gs-stack">
-          <Panel icon={<Play size={16} />} title={ct('Continue de onde parou')} flush>
-            {career.exists && onCareer && (
-              <ResumeRow
-                icon={career.tag && career.colors ? <TeamBadge tag={career.tag} colors={career.colors} logoUrl={career.logo} size={40} /> : <Trophy size={20} />}
-                kicker={ct('Carreira')}
-                title={career.org ?? ct('Carreira salva')}
-                sub={`Split ${career.split ?? 1} · ${career.titles ?? 0} ${ct('títulos')}${career.budget != null ? ` · $ ${Math.round(career.budget / 1000)} mil` : ''}`}
-                onGo={onCareer}
+      <div className={`home2${showMajor ? '' : ' home2--solo'}`}>
+        {/* ── 1. próxima ação ── */}
+        <section className="home-next" aria-labelledby="home-next-title">
+          <div className="home-next__lead">
+            <p className="home-next__kicker">
+              <span>{ct('Próxima ação')}</span>
+              <span className="home-next__sep" aria-hidden>/</span>
+              <span className="home-next__why">{primary.kicker}</span>
+            </p>
+            <h2 id="home-next-title" className="home-next__title">{primary.title}</h2>
+            {primary.tag}
+            <p className="home-next__detail">{primary.detail}</p>
+            <div className="home-next__go">
+              <Button variant="primary" size="lg" icon={<PrimaryIcon size={18} aria-hidden />} onClick={primary.onGo}>{primary.cta}</Button>
+              {plan.primary.id === 'draft-run' && onDiscardCampaign && (
+                <button type="button" className="home-discard" onClick={onDiscardCampaign}>{ct('Descartar')}</button>
+              )}
+            </div>
+          </div>
+          {secondary.length > 0 && (
+            <div className="home-next__more">
+              <p className="ds-kicker">{ct('Ou, se preferir')}</p>
+              <ul className="home-alts">
+                {secondary.map(({ a, v }) => {
+                  const Icon = v.icon;
+                  return (
+                    <li key={a.id}>
+                      <button type="button" className="home-alt" onClick={v.onGo}>
+                        <Icon size={18} aria-hidden className="home-alt__ic" />
+                        <span className="home-alt__txt"><b>{v.short}</b><small>{v.sub}</small></span>
+                        <ChevronRight size={16} aria-hidden className="home-alt__go" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
+
+        {/* ── 2. PGL Major Singapore ── */}
+        {showMajor && <MajorBlock clock={clock} pickem={pickem} onMajor={onMajor!} />}
+
+        {/* ── 3. modos ── */}
+        <section className="home-modes2" aria-labelledby="home-modes-title">
+          <h2 id="home-modes-title" className="home-h">{ct('Modos de jogo')}</h2>
+          <ul className="home-tiles">
+            {onMajor && majorWindow && (
+              <Tile mode="major" icon={Award} title={ct('Modo Major')} time={ct('~1 min')}
+                status={pickem.complete ? ct("pick'em feito") : pickem.steps > 0 ? `pick'em ${pickem.steps}/${pickem.total}` : ct('grátis')}
+                onGo={onMajor} />
+            )}
+            {onDaily && (
+              <Tile mode="diario" icon={CalendarDays} title={ct('Diário')} time={ct('2 min')}
+                status={dayStatus.done >= dailyTotal ? ct('Completo · volte amanhã') : `${dayStatus.done}/${dailyTotal} ${ct('feitos hoje')}`}
+                onGo={onDaily} />
+            )}
+            <Tile mode="major" icon={Layers} title="Draft" time="~15 min" status={savedCampaign ? ct('em andamento') : undefined} onGo={() => setView('draft')} />
+            {onCareer && (
+              <Tile mode="carreira" icon={Trophy} title={ct('Carreira')} time={ct('campanha')} status={careerSub || undefined} onGo={onCareer} />
+            )}
+            {onRoadToPro && (
+              <Tile
+                mode="rtp" icon={Crosshair} title="Road to Pro" wide={premiumLocked}
+                time={premiumLocked ? ct('demo grátis') : ct('campanha')}
+                status={rtp?.nick ? `${rtp.nick}${rtp.ovr ? ` · OVR ${rtp.ovr}` : ''}` : undefined}
+                cta={premiumLocked ? ct('Jogar a demo grátis') : undefined}
+                onGo={onRoadToPro}
+                foot={premiumLocked ? (
+                  <>
+                    <small className="home-tile__price">{`${priceLabel()} · ${ct('pagamento único, acesso vitalício — sem mensalidade')}`}</small>
+                    <FounderCounter />
+                    <button type="button" className="home-skip" onClick={() => { setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
+                      {ct('Já quero virar Fundador · pular a demo')} →
+                    </button>
+                  </>
+                ) : undefined}
               />
             )}
-            {rtp?.nick && onRoadToPro && (
-              <ResumeRow icon={<Crosshair size={20} />} kicker="Road to Pro" title={rtp.nick} sub={`${rtp.team ?? ''}${rtp.ovr ? ` · OVR ${rtp.ovr}` : ''}${rtp.week ? ` · ${ct('semana')} ${rtp.week}` : ''}`} onGo={onRoadToPro} />
+            {onUltimate && (
+              <Tile mode="ultimate" icon={Star} title="Ultimate" time={ct('online')}
+                status={ultimateLocked ? withPrice(ct('Desbloquear · {preço}')) : ct('pacotes e ranqueada')}
+                onGo={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())} />
             )}
-            {savedCampaign && onResume && (
-              <ResumeRow icon={<Swords size={20} />} kicker={ct('Major rápido')} title={savedCampaign.name} sub={savedCampaign.phase} onGo={onResume} extra={onDiscardCampaign && (
-                <button type="button" className="home-discard" onClick={(e) => { e.stopPropagation(); onDiscardCampaign(); }}>{ct('Descartar')}</button>
-              )} />
+            {onEditor && (
+              <Tile mode="carreira" icon={PencilRuler} title={ct('Editor de base')} status={ct('jogadores, times e elencos')} onGo={onEditor} />
             )}
-            {!career.exists && !rtp?.nick && !savedCampaign && (
-              <div className="home-empty">
-                <Sparkles size={22} aria-hidden />
-                <p>{ct('Nada em andamento ainda. Escolha um modo — a Carreira é o coração do jogo.')}</p>
-                {onCareer && <Button variant="primary" onClick={onCareer}><Trophy size={16} aria-hidden /> {ct('Começar a Carreira')}</Button>}
-              </div>
-            )}
-          </Panel>
+          </ul>
+        </section>
 
-          {onDaily && (
-            <Panel icon={<CalendarDays size={16} />} title={`${ct('Diário')} #${dayNo}`} actions={dStreak.current >= 1 ? <span className="home-streak"><Flame size={14} aria-hidden /> {dStreak.current} {dStreak.current === 1 ? ct('dia') : ct('dias')}</span> : undefined} flush>
-              {dStreak.atRisk && (
-                <div className="ds-row home-risk"><TriangleAlert size={16} aria-hidden /> {ct('você perde')} {dStreak.current} {ct('dias em')} {dStreak.hoursLeft}h — {ct('jogue qualquer um dos 4 pra manter.')}</div>
-              )}
-              {DAILY_GAMES.map((g) => {
-                const p = dayStatus.perGame[g.id];
-                return (
-                  <button key={g.id} type="button" className="ds-row home-daily" onClick={onDaily}>
-                    <span className="home-daily__state" data-s={p?.done ? (p.won ? 'won' : 'lost') : 'new'} aria-hidden />
-                    <b>{g.title}</b>
-                    <span className="ds-dim">{p?.done ? (p.won ? ct('completo') : ct('foi por pouco')) : ct('novo')}</span>
-                    <ChevronRight size={15} aria-hidden className="home-chev" />
-                  </button>
-                );
-              })}
-            </Panel>
-          )}
-        </div>
-
-        {/* ── coluna 2: modos ── */}
-        <Panel icon={<LayoutDashboard size={16} />} title={ct('Modos de jogo')} flush className="home-modes">
-          {/* durante o Major o modo do evento vem primeiro; no celular a sidebar fica atrás do Menu */}
-          {onMajor && majorPromoOn() && (
-            <ModeRow mode="major" icon={<Trophy size={20} />} title={ct('Modo Major')} kicker="PGL Major Singapore" desc={ct("Faça o pick'em dos 32 times, jogue o Major com o seu time e dispute a liga com os amigos.")} meta={ct('24/11 a 13/12 · grátis')} cta={ct('Abrir')} onGo={onMajor} />
-          )}
-          {onCareer && (
-            <ModeRow mode="carreira" icon={<Trophy size={20} />} title={ct('Carreira')} kicker={ct('Destaque')} desc={ct('Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.')} meta={ct('1 jogador · campanha')} cta={ct('Entrar')} onGo={onCareer} />
-          )}
-          {onRoadToPro && (
-            <ModeRow
-              mode="rtp" icon={<Crosshair size={20} />} title="Road to Pro" kicker={premiumLocked ? ct('Demo grátis') : ct('Novo')}
-              desc={ct('Você não treina o time — você É o jogador. Viva a carreira de astro do CS: treine, gerencie sua vida e brilhe nos momentos decisivos.')}
-              meta={premiumLocked ? `${priceLabel()} · ${ct('pagamento único, acesso vitalício — sem mensalidade')}` : ct('1 jogador · você é o atleta')}
-              cta={premiumLocked ? ct('Jogar a demo grátis') : ct('Jogar')}
-              onGo={onRoadToPro}
-              extra={premiumLocked ? (
-                <span className="home-mode__extra">
-                  <FounderCounter style={{ fontSize: '11px' }} />
-                  <button type="button" className="home-skip" onClick={(e) => { e.stopPropagation(); setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
-                    {ct('Já quero virar Fundador · pular a demo')} →
-                  </button>
-                </span>
-              ) : undefined}
-            />
-          )}
-          {onUltimate && (
-            <ModeRow mode="ultimate" icon={<Star size={20} />} title="Ultimate" kicker={ct('Competitivo · Online')} desc={ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')} meta={ultimateLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')} cta={ultimateLocked ? withPrice(ct('Desbloquear · {preço}')) : ct('Jogar')} onGo={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())} />
-          )}
-          <ModeRow mode="major" icon={<Layers size={20} />} title="Draft" kicker={ct('Partida rápida')} desc={ct('Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.')} meta={ct('1 jogador · ~15 min')} cta={ct('Montar')} onGo={() => setView('draft')} />
-          {onDaily && (
-            <ModeRow mode="diario" icon={<CalendarDays size={20} />} title={ct('Diário')} kicker={ct('Todo dia')} desc={ct('Quatro desafios por dia — o mesmo pra todo mundo. Grátis, sem conta.')} meta={ct('1 jogador · 2 min')} cta={ct('Jogar o de hoje')} onGo={onDaily} />
-          )}
-          {onEditor && (
-            <ModeRow mode="carreira" icon={<PencilRuler size={20} />} title={ct('Editor de base')} kicker={ct('Estilo FM')} desc={ct('Edite jogadores (atributos, ocultos, CA/PA), times e elencos, crie os seus e comece uma carreira com a sua base.')} meta={ct('Exporte e importe em JSON')} cta={ct('Abrir')} onGo={onEditor} />
-          )}
-          {onUltimate && !ultimateLocked && (
-            <ModeRow mode="online" icon={<Globe size={20} />} title="Online" kicker={ct('Ranqueada')} desc={ct('Ranqueada contra outros managers, duelo privado com amigos e o Major da Semana.')} meta={ct('Com o seu squad do Ultimate')} cta={ct('Competir')} onGo={onUltimate} />
-          )}
-        </Panel>
-
-        {/* ── coluna 3: conta + novidades ── */}
-        <div className="gs-stack">
+        {/* ── 4. conta + 5. novidade (coluna da direita no desktop largo) ── */}
+        <div className="home-side">
           <Panel icon={<UserRound size={16} />} title={ct('Sua conta')}>
             {!accountReady ? (
               <p className="ds-dim">{ct('Carregando…')}</p>
@@ -340,7 +457,7 @@ export function Home(props: Props) {
                 <p>{ct('Você está jogando sem conta. Crie a sua pra salvar na nuvem e jogar no PC e no celular.')}</p>
                 <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · {priceLabel()}</Button>
                 <small className="ds-dim">{ct('pagamento único · sem mensalidade')}</small>
-                <FounderCounter style={{ fontSize: '11px' }} />
+                <FounderCounter />
                 {onAccount && <button type="button" className="home-link" onClick={onAccount}>{ct('Já tenho conta · entrar')}</button>}
               </div>
             ) : (
@@ -358,7 +475,7 @@ export function Home(props: Props) {
                       <Crown size={16} aria-hidden /> {founderSoldOut ? ct('Conta vitalícia') : ct('Vire Fundador')} · {priceLabel()}
                     </Button>
                     <small className="ds-dim">{founderSoldOut ? ct('cloud sync, 5 carreiras e ranking real') : ct('selo #001–#500, cloud sync e 5 carreiras')}</small>
-                    <FounderCounter style={{ fontSize: '11px' }} />
+                    <FounderCounter />
                   </>
                 )}
                 <div className="home-acct__links">
@@ -372,58 +489,87 @@ export function Home(props: Props) {
             )}
           </Panel>
 
-          <Panel icon={<Newspaper size={16} />} title={ct('Novidades')} actions={<button type="button" className="home-link" onClick={() => onShellNav('news')}>{ct('Ver tudo')}</button>} flush>
-            {latest.map((it, i) => (
-              <div key={i} className="ds-row home-news">
-                <span className="home-news__tag" data-kind={it.kind}>{it.kind === 'feature' ? ct('Novo') : it.kind === 'fix' ? 'Fix' : ct('Ajuste')}</span>
-                <span className="home-news__txt"><b>{it.area}</b> {it.text}</span>
-              </div>
-            ))}
-          </Panel>
-
-          <Panel icon={<Heart size={16} />} title={ct('Apoie o projeto')}>
-            <p className="ds-dim home-small">{ct('O Road to Major é independente. Cada apoio vira servidor, times novos e modos novos.')}</p>
-            <Button variant="secondary" onClick={onDonate}><Heart size={16} aria-hidden /> {ct('Apoiar')}</Button>
-          </Panel>
+          {/* novidades: só o patch mais recente (título + 1 linha) */}
+          {patch && (
+            <Panel icon={<Newspaper size={16} />} title={ct('Novidades')}
+              actions={<button type="button" className="home-link" onClick={openPatchNotes}>{ct('Ver tudo')}</button>}>
+              <p className="home-patch__when">{patch.date}</p>
+              <h3 className="home-patch__title">{patch.title}</h3>
+              {patch.items[0] && <p className="home-patch__line">{patch.items[0].text}</p>}
+            </Panel>
+          )}
         </div>
+
+        {/* ── 6. apoio, pequeno, no fim ── */}
+        <aside className="home-support" aria-label={ct('Apoie o projeto')}>
+          <Heart size={16} aria-hidden className="home-support__ic" />
+          <p>{ct('O Road to Major é independente. Cada apoio vira servidor, times novos e modos novos.')}</p>
+          <Button variant="ghost" size="sm" onClick={onDonate}>{ct('Apoiar')}</Button>
+        </aside>
       </div>
     </GameShell>
   );
 }
 
-function ResumeRow({ icon, kicker, title, sub, onGo, extra }: { icon: ReactNode; kicker: string; title: string; sub: string; onGo: () => void; extra?: ReactNode }) {
+/** PGL Major Singapore: contagem até 24/11, AO VIVO até 13/12 (depois o bloco nem renderiza) */
+function MajorBlock({ clock, pickem, onMajor }: { clock: MajorClock; pickem: PickemProgress; onMajor: () => void }) {
+  if (clock.phase === 'after') return null;
+  const live = clock.phase === 'live';
   return (
-    <div className="home-resume">
-      <button type="button" className="home-resume__main" onClick={onGo}>
-        <span className="home-resume__ic">{icon}</span>
-        <span className="home-resume__txt">
-          <span className="ds-kicker">{kicker}</span>
-          <b>{title}</b>
-          <small>{sub}</small>
-        </span>
-        <Play size={18} aria-hidden className="home-resume__go" />
-      </button>
-      {extra}
-    </div>
+    <section className="home-major" data-live={live || undefined} aria-labelledby="home-major-title">
+      <div className="home-major__top">
+        <p className="home-major__kicker"><Award size={14} aria-hidden /> PGL Major Singapore</p>
+        {live ? <LiveBadge>{ct('Ao vivo')}</LiveBadge> : <Tag>{ct('24/11 a 13/12')}</Tag>}
+      </div>
+      {clock.phase === 'before' ? (
+        <>
+          <h2 id="home-major-title" className="home-major__title">{ct('Começa em')}</h2>
+          <div className="home-clock" role="timer">
+            <span className="ds-sr-only">
+              {`${clock.days} ${clock.days === 1 ? ct('dia') : ct('dias')}, ${clock.hours} ${ct('horas')} ${ct('e')} ${clock.minutes} ${ct('minutos')}`}
+            </span>
+            <span className="home-clock__cell" aria-hidden><b>{clock.days}</b><small>{clock.days === 1 ? ct('dia') : ct('dias')}</small></span>
+            <span className="home-clock__cell" aria-hidden><b>{pad2(clock.hours)}</b><small>{ct('horas')}</small></span>
+            <span className="home-clock__cell" aria-hidden><b>{pad2(clock.minutes)}</b><small>{ct('min')}</small></span>
+          </div>
+          <p className="home-major__meta">{ct('Singapura · playoffs de 10 a 13/12')}</p>
+        </>
+      ) : (
+        <>
+          <h2 id="home-major-title" className="home-major__title">
+            {clock.finalDay ? ct('Hoje é a final') : clock.playoffs ? ct('Playoffs') : ct('Fase suíça')}
+          </h2>
+          <p className="home-major__day"><b>{ct('Dia')} {clock.day}</b> {ct('de')} {clock.of}</p>
+          <p className="home-major__meta">{clock.playoffs ? ct('Singapura · final em 13/12') : ct('Singapura · playoffs de 10 a 13/12')}</p>
+        </>
+      )}
+      <ProgressBar
+        className="home-major__pick" value={pickem.steps} max={pickem.total} label={ct("Seu pick'em")}
+        valueText={pickem.complete ? ct("pick'em feito") : `${pickem.steps}/${pickem.total} ${ct('etapas')}`}
+      />
+      <div className="home-major__go">
+        <Button variant="secondary" onClick={onMajor} iconRight={<ChevronRight size={16} aria-hidden />}>{ct('Abrir o Modo Major')}</Button>
+      </div>
+    </section>
   );
 }
 
-function ModeRow({ mode, icon, title, kicker, desc, meta, cta, onGo, extra }: {
-  mode: string; icon: ReactNode; title: string; kicker: string; desc: string; meta: string; cta: string; onGo: () => void; extra?: ReactNode;
+/** um modo na grade: nome, o tempo honesto que ele pede e o estado (save, progresso de hoje) */
+function Tile({ mode, icon: Icon, title, time, status, cta, onGo, wide, foot }: {
+  mode: string; icon: LucideIcon; title: string; time?: string; status?: string; cta?: string; onGo: () => void; wide?: boolean; foot?: ReactNode;
 }) {
   return (
-    <div className="home-mode" data-mode={mode === 'inicio' ? undefined : mode}>
-      <button type="button" className="home-mode__main" onClick={onGo}>
-        <span className="home-mode__ic">{icon}</span>
-        <span className="home-mode__txt">
-          <span className="home-mode__kicker">{kicker}</span>
-          <b>{title}</b>
-          <span className="home-mode__desc">{desc}</span>
-          <small>{meta}</small>
+    <li className={`home-tile${wide ? ' home-tile--wide' : ''}`} data-mode={mode}>
+      <button type="button" className="home-tile__main" onClick={onGo}>
+        <span className="home-tile__top">
+          <span className="home-tile__ic"><Icon size={18} aria-hidden /></span>
+          {time && <span className="home-tile__time">{time}</span>}
+          {cta && <span className="home-tile__cta">{cta} <ChevronRight size={14} aria-hidden /></span>}
         </span>
-        <span className="home-mode__cta">{cta} <ChevronRight size={14} aria-hidden /></span>
+        <b className="home-tile__name">{title}</b>
+        {status && <small className="home-tile__status">{status}</small>}
       </button>
-      {extra}
-    </div>
+      {foot && <div className="home-tile__foot">{foot}</div>}
+    </li>
   );
 }

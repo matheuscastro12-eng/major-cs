@@ -1,54 +1,271 @@
 /* ════════════════════════════════════════════════════════════════════════════
    INÍCIO (Portal) e setup do Major rápido — no shell universal (GameShell).
-   Só tokens. Painéis = primitivo Panel (.ds-panel); linhas = .ds-row.
+   Só tokens. Painéis = primitivo Panel (.ds-panel).
+   Celular primeiro: uma coluna na ordem de leitura (próxima ação → Major →
+   modos → conta → novidade → apoio); a partir de 760px a próxima ação e o
+   Major dividem a linha; a partir de 1280px conta e novidade viram a coluna
+   da direita. Movimento só em transform/opacity.
    ════════════════════════════════════════════════════════════════════════════ */
-.home-grid {
+.home2 {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.15fr) minmax(0, 0.9fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'next' 'major' 'modes' 'side' 'support';
+  gap: var(--sp-4);
   align-items: start;
+  max-width: 1320px;
 }
-@media (max-width: 1279px) { .home-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .home-grid > :last-child { grid-column: span 2; } }
-@media (max-width: 760px) { .home-grid { grid-template-columns: minmax(0, 1fr); } .home-grid > :last-child { grid-column: auto; } }
+.home2--solo { grid-template-areas: 'next' 'modes' 'side' 'support'; }
+.home-next { grid-area: next; align-self: stretch; }
+.home-major { grid-area: major; align-self: stretch; }
+.home-modes2 { grid-area: modes; min-width: 0; }
+.home-side { grid-area: side; display: grid; gap: var(--sp-4); min-width: 0; align-items: start; }
+.home-support { grid-area: support; }
+@media (min-width: 760px) {
+  .home2 { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-areas: 'next major' 'modes modes' 'side side' 'support support'; }
+  .home2--solo { grid-template-areas: 'next next' 'modes modes' 'side side' 'support support'; }
+  .home-side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+  .home2 { grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); grid-template-areas: 'next major' 'modes side' 'support support'; }
+  .home2--solo { grid-template-areas: 'next side' 'modes side' 'support support'; }
+  .home-side { grid-template-columns: minmax(0, 1fr); }
+}
 
-/* continuar */
-.home-resume { border-bottom: 1px solid var(--c-line-soft); }
-.home-resume:last-child { border-bottom: 0; }
-.home-resume__main {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  padding: 12px 14px; border: 0; background: transparent; color: var(--c-ink);
-  font: inherit; text-align: left; cursor: pointer;
-  transition: background-color var(--dur-1) var(--ease-out);
+/* ── 1. próxima ação: lower third de transmissão (luz de tally dourada) ── */
+.home-next {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
+  border-radius: var(--rad-3);
+  box-shadow: inset 3px 0 0 var(--c-brand), var(--shadow-1);
+  overflow: hidden;
 }
-.home-resume__main:hover { background: linear-gradient(90deg, color-mix(in srgb, var(--c-brand) 14%, transparent), transparent); }
-.home-resume__main:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--c-brand); }
-.home-resume__ic {
-  display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
-  border-radius: 10px; background: var(--c-surface-2); color: var(--c-brand-strong); flex-shrink: 0;
+.home-next__lead {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-5) var(--sp-5) var(--sp-5) var(--sp-6);
 }
-.home-resume__txt { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.25; }
-.home-resume__txt b { font-family: var(--font-display); font-size: var(--fs-5); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-resume__txt small { color: var(--c-ink-faint); font-size: var(--fs-2); }
-.home-resume__go { color: var(--c-brand); flex-shrink: 0; transition: transform var(--dur-2) var(--ease-snap); }
-.home-resume__main:hover .home-resume__go { transform: translateX(3px) scale(1.1); }
-.home-discard { margin: -6px 14px 10px 70px; padding: 0; border: 0; background: none; color: var(--c-ink-faint); font: inherit; font-size: var(--fs-2); text-decoration: underline; cursor: pointer; }
+.home-next__kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--c-brand-strong);
+}
+.home-next__sep { color: var(--c-ink-faint); }
+.home-next__why { color: var(--c-ink-dim); }
+.home-next__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-6);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-display);
+  text-transform: uppercase;
+  color: var(--c-ink);
+  overflow-wrap: anywhere;
+}
+.home-next__detail { margin: 0; max-width: 60ch; color: var(--c-ink-dim); font-size: var(--fs-3); line-height: var(--lh-body); }
+.home-next__go { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); width: 100%; margin-top: var(--sp-2); }
+.home-next__more { margin-top: auto; padding: var(--sp-3) var(--sp-5) var(--sp-2) var(--sp-6); border-top: 1px solid var(--c-line-soft); }
+.home-next__more .ds-kicker { margin: 0; }
+.home-alts { margin: 0; padding: 0; list-style: none; }
+.home-alts li + li { border-top: 1px solid var(--c-line-soft); }
+.home-alt {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--sp-2) 0;
+  border: 0;
+  background: transparent;
+  color: var(--c-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-alt:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--rad-2); }
+.home-alt__ic { flex-shrink: 0; color: var(--c-brand); }
+.home-alt__txt { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: var(--lh-snug); }
+.home-alt__txt b { font-size: var(--fs-3); font-weight: 700; }
+.home-alt__txt small { overflow: hidden; color: var(--c-ink-faint); font-size: var(--fs-2); text-overflow: ellipsis; white-space: nowrap; }
+.home-alt:hover .home-alt__txt b { color: var(--c-brand-strong); }
+.home-alt__go { flex-shrink: 0; color: var(--c-ink-faint); transition: transform var(--dur-1) var(--ease-out); }
+.home-alt:hover .home-alt__go { transform: translateX(3px); }
+.home-discard { padding: 0; border: 0; background: none; color: var(--c-ink-faint); font: inherit; font-size: var(--fs-2); text-decoration: underline; cursor: pointer; }
 .home-discard:hover { color: var(--c-loss); }
-.home-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; color: var(--c-ink-dim); }
-.home-empty svg { color: var(--c-brand); }
-.home-empty p { margin: 0; }
+@media (max-width: 759px) {
+  .home-next__lead { padding: var(--sp-4) var(--sp-4) var(--sp-4) var(--sp-5); }
+  .home-next__more { padding: var(--sp-3) var(--sp-4) var(--sp-1) var(--sp-5); }
+  .home-next__go .ds-btn { flex: 1 1 100%; }
+}
 
-/* diário */
-.home-streak { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9px; background: color-mix(in srgb, var(--c-warn) 16%, transparent); color: var(--c-warn); font-size: var(--fs-2); font-weight: 800; }
-.home-risk { gap: 8px; color: var(--c-warn); font-size: var(--fs-2); font-weight: 700; background: var(--c-warn-soft); padding: 8px 14px; }
-.home-daily { font-size: var(--fs-3); }
-.home-daily b { flex: 1; }
-.home-daily .ds-dim { font-size: var(--fs-2); }
-.home-daily__state { width: 9px; height: 9px; border-radius: 50%; background: var(--c-brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-brand) 20%, transparent); flex-shrink: 0; }
-.home-daily__state[data-s='won'] { background: var(--c-win); box-shadow: none; }
-.home-daily__state[data-s='lost'] { background: var(--c-loss); box-shadow: none; }
-.home-chev { color: var(--c-ink-faint); }
+/* ── 2. PGL Major Singapore: contagem em "poços" de placar, ou AO VIVO ── */
+.home-major {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-5);
+  background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
+  border-radius: var(--rad-3);
+  box-shadow: var(--shadow-1);
+}
+.home-major[data-live] { border-color: color-mix(in srgb, var(--c-live) 45%, var(--c-line)); }
+.home-major__top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.home-major__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--c-ink-dim);
+}
+.home-major__kicker svg { color: var(--c-brand); }
+.home-major__title {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-title);
+  font-size: var(--fs-4);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--c-ink);
+}
+.home-clock { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.home-clock__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-2);
+  background: var(--c-surface-0);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--notch)), calc(100% - var(--notch)) 100%, 0 100%);
+}
+.home-clock__cell b {
+  font-family: var(--font-display);
+  font-size: var(--fs-7);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-ink);
+}
+.home-clock__cell small { font-size: var(--fs-1); font-weight: 700; letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-ink-faint); }
+.home-major__day { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-3); }
+.home-major__day b { font-family: var(--font-display); font-size: var(--fs-6); font-weight: 600; letter-spacing: var(--tracking-display); text-transform: uppercase; color: var(--c-ink); }
+.home-major__meta { margin: 0; color: var(--c-ink-faint); font-size: var(--fs-2); }
+.home-major__go { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-top: auto; padding-top: var(--sp-2); }
+.home-major__pick { margin-top: var(--sp-2); }
+@media (max-width: 759px) {
+  .home-major { padding: var(--sp-4); }
+  .home-major__go .ds-btn { flex: 1 1 100%; }
+}
 
-/* modos */
+/* ── 3. modos: grade compacta, o tempo honesto de cada um no canto ── */
+.home-h {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-title);
+  font-size: var(--fs-4);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--c-ink);
+}
+.home-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: row dense;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 760px) { .home-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .home-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.home-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
+  border-radius: var(--rad-3);
+  overflow: hidden;
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.home-tile:hover { border-color: var(--c-line-strong); transform: translateY(-1px); }
+.home-tile--wide { grid-column: span 2; }
+.home-tile__main {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  flex: 1;
+  width: 100%;
+  min-height: 88px;
+  padding: var(--sp-3);
+  border: 0;
+  background: transparent;
+  color: var(--c-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-tile__main:hover { background: var(--c-hover); }
+.home-tile__main:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--c-brand); }
+.home-tile__top { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-1); }
+.home-tile__top > :last-child:not(:first-child) { margin-left: auto; }
+.home-tile__ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--rad-2);
+  background: var(--c-surface-2);
+  color: var(--c-brand);
+}
+.home-tile__time {
+  padding: 2px var(--sp-2);
+  border-radius: var(--rad-1);
+  background: var(--c-surface-2);
+  color: var(--c-ink-dim);
+  font-size: var(--fs-1);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.home-tile__name {
+  font-family: var(--font-display);
+  font-size: var(--fs-4);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-display);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.home-tile__status { overflow: hidden; color: var(--c-ink-faint); font-size: var(--fs-2); text-overflow: ellipsis; white-space: nowrap; }
+.home-tile__cta { display: inline-flex; align-items: center; gap: 2px; color: var(--c-brand-strong); font-size: var(--fs-2); font-weight: 800; white-space: nowrap; }
+.home-tile__foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); padding: 0 var(--sp-3) var(--sp-3); }
+.home-tile__price { flex-basis: 100%; color: var(--c-ink-faint); font-size: var(--fs-1); font-weight: 600; }
+
+/* card de modo da 1ª sessão (Onboarding.tsx reaproveita estas classes) */
 .home-mode { border-bottom: 1px solid var(--c-line-soft); }
 .home-mode:last-child { border-bottom: 0; }
 .home-mode__main {
@@ -71,14 +288,12 @@
 .home-mode__desc { color: var(--c-ink-dim); font-size: var(--fs-2); line-height: var(--lh-snug); }
 .home-mode__txt small { color: var(--c-ink-faint); font-size: var(--fs-1); font-weight: 600; }
 .home-mode__cta { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; color: var(--c-brand-strong); font-size: var(--fs-2); font-weight: 800; white-space: nowrap; }
-.home-mode__extra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 14px 12px 74px; }
 .home-skip { padding: 0; border: 0; background: none; color: var(--c-brand-strong); font: inherit; font-size: var(--fs-2); font-weight: 700; text-decoration: underline; cursor: pointer; }
 @media (max-width: 760px) {
   .home-mode__cta { display: none; }
-  .home-mode__extra { padding-left: 14px; }
 }
 
-/* conta */
+/* ── 4. conta ── */
 .home-acct { display: flex; flex-direction: column; gap: 8px; }
 .home-acct p { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-3); }
 .home-acct__who { display: flex; align-items: center; gap: 10px; }
@@ -89,15 +304,24 @@
 .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--c-brand-strong); font: inherit; font-size: var(--fs-2); font-weight: 700; cursor: pointer; }
 .home-link:hover { text-decoration: underline; }
 .home-link--danger { color: var(--c-loss); }
-.home-small { font-size: var(--fs-2); margin: 0 0 10px; }
 
-/* novidades */
-.home-news { align-items: flex-start; padding-top: 9px; padding-bottom: 9px; }
-.home-news__tag { flex-shrink: 0; min-width: 48px; padding: 2px 6px; border-radius: 4px; background: var(--c-surface-3); color: var(--c-ink-dim); font-size: var(--fs-1); font-weight: 800; text-align: center; text-transform: uppercase; }
-.home-news__tag[data-kind='feature'] { background: color-mix(in srgb, var(--c-brand) 18%, transparent); color: var(--c-brand-strong); }
-.home-news__tag[data-kind='fix'] { background: var(--c-win-soft); color: var(--c-win); }
-.home-news__txt { font-size: var(--fs-2); color: var(--c-ink-dim); line-height: var(--lh-snug); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.home-news__txt b { color: var(--c-ink); }
+/* ── 5. novidade: só o patch mais recente ── */
+.home-patch__when { margin: 0 0 var(--sp-1); color: var(--c-ink-faint); font-size: var(--fs-1); font-weight: 700; letter-spacing: var(--tracking-caps); text-transform: uppercase; }
+.home-patch__title { margin: 0 0 var(--sp-1); font-family: var(--font-title); font-size: var(--fs-4); font-weight: 700; line-height: var(--lh-snug); color: var(--c-ink); }
+.home-patch__line { margin: 0; overflow: hidden; color: var(--c-ink-dim); font-size: var(--fs-3); text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── 6. apoio: uma linha no pé ── */
+.home-support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--c-line-soft);
+  color: var(--c-ink-faint);
+}
+.home-support p { flex: 1 1 240px; margin: 0; font-size: var(--fs-2); line-height: var(--lh-snug); }
+.home-support__ic { flex-shrink: 0; color: var(--c-brand); }
 
 /* setup do Major rápido */
 .home-setup { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; max-width: 1200px; }
@@ -117,10 +341,17 @@
 .home-steps b { font-family: var(--font-title); text-transform: uppercase; letter-spacing: 0.06em; }
 .home-steps span { color: var(--c-ink-dim); font-size: var(--fs-2); }
 
-/* alvos de toque no celular: linhas do Diário e links de texto com 44 px de
+/* alvos de toque no celular: links de texto e botões pequenos com 44 px de
    área clicável (o padding vertical compensado não muda o layout) */
 @media (max-width: 1023px), (pointer: coarse) {
-  .home-daily { min-height: var(--tap); }
   .home-link,
-  .home-skip { display: inline-flex; align-items: center; min-height: var(--tap); margin-block: -12px; }
+  .home-skip,
+  .home-discard { display: inline-flex; align-items: center; min-height: var(--tap); margin-block: -12px; }
+  .home-support .ds-btn { min-height: var(--tap); }
+}
+
+/* movimento reduzido: nada desliza no hover (o base.css já zera as durações) */
+@media (prefers-reduced-motion: reduce) {
+  .home-tile:hover,
+  .home-alt:hover .home-alt__go { transform: none; }
 }
