@@ -13,6 +13,7 @@
 //   mid       meio do mapa
 
 import type { MapId } from '../../types';
+import { MIRAGE_CALLS, MIRAGE_RINGS } from './plans/mirage';
 
 export interface Pt { x: number; y: number }
 
@@ -30,48 +31,79 @@ export interface Map2D {
   // esquerdo). Quando existe, o radar desenha o piso no lugar dos corredores.
   // Traço próprio que segue o formato dos corredores reais.
   floor?: [number, number, number, number][];
+  // planta vetorial fiel ao layout real (protótipo: só a Mirage). Quando existe,
+  // o radar desenha a planta no lugar de `floor` e os nós andam pelos
+  // corredores dela. rings já no quadro 100×100; calls = nomes das áreas.
+  plan?: { rings: number[][]; calls: [string, number, number, number?][] };
+  // escala do espalhamento das bolinhas em volta da rota (1 = padrão). Na
+  // planta real os corredores são estreitos, então espalha menos.
+  jitter?: number;
 }
 
 const R = (x: number, y: number, w: number, h: number) => ({ x, y, w, h });
 
+// Planta real: coordenadas em % do radar (0–100) → quadro 100×100 do SVG,
+// recortando a margem vazia do radar (escala uniforme, sem distorcer).
+interface RadarFrame { x0: number; y0: number; size: number }
+function fromRadar(m: Map2D, f: RadarFrame, rings: number[][], calls: [string, number, number, number?][]): Map2D {
+  const k = 100 / f.size;
+  const X = (x: number) => Math.round((x - f.x0) * k * 10) / 10;
+  const Y = (y: number) => Math.round((y - f.y0) * k * 10) / 10;
+  const box = (r: { x: number; y: number; w: number; h: number }) => R(X(r.x), Y(r.y), Math.round(r.w * k * 10) / 10, Math.round(r.h * k * 10) / 10);
+  return {
+    ...m,
+    nodes: Object.fromEntries(Object.entries(m.nodes).map(([n, p]) => [n, { x: X(p.x), y: Y(p.y) }])),
+    sites: { A: box(m.sites.A), B: box(m.sites.B) },
+    spawns: { t: box(m.spawns.t), ct: box(m.spawns.ct) },
+    plan: {
+      rings: rings.map((r) => r.map((v, i) => (i % 2 ? Y(v) : X(v)))),
+      calls: calls.map(([t, x, y, a]) => [t, X(x), Y(y), a]),
+    },
+  };
+}
+
 const MAPS: Record<MapId, Map2D> = {
-  mirage: {
+  // MIRAGE (protótipo "mapa real"): nós e sites em % do radar, alinhados aos
+  // corredores da planta (plans/mirage.ts); toda aresta fica dentro do piso.
+  mirage: fromRadar({
     id: 'mirage',
     nodes: {
-      tS: { x: 88, y: 62 }, ctS: { x: 16, y: 48 },
-      A: { x: 32, y: 78 }, B: { x: 20, y: 16 },
-      aT: { x: 54, y: 82 }, ramp: { x: 68, y: 72 }, palace: { x: 78, y: 86 },
-      aCT: { x: 18, y: 64 }, jungle: { x: 36, y: 60 },
-      mid: { x: 54, y: 46 }, top: { x: 74, y: 46 }, conn: { x: 38, y: 50 },
-      bT: { x: 40, y: 15 }, apps: { x: 68, y: 15 }, appsIn: { x: 77, y: 26 },
-      bCT: { x: 16, y: 32 }, market: { x: 24, y: 34 }, short: { x: 38, y: 26 },
+      tS: { x: 87, y: 36 }, ctS: { x: 30, y: 70 },
+      A: { x: 54, y: 74 }, B: { x: 23, y: 28 },
+      // TR → A pelo ramp e pelo palace
+      tLow: { x: 87, y: 55 }, rampTop: { x: 76, y: 57 }, ramp: { x: 76, y: 64.2 }, aT: { x: 62, y: 64.2 },
+      palTop: { x: 89, y: 60.5 }, palIn: { x: 82, y: 61 }, palDown: { x: 82, y: 71.5 }, palace: { x: 75, y: 74 },
+      palLow: { x: 72, y: 78 }, palStairs: { x: 64.5, y: 78 }, aPal: { x: 64, y: 75 },
+      // TR → B pelo apps
+      tTop: { x: 86, y: 23 }, appsIn: { x: 76, y: 21 }, appsUp: { x: 73, y: 17 }, apps: { x: 57, y: 16 },
+      appsLow: { x: 56, y: 25 }, bT: { x: 36, y: 25 },
+      // meio: top mid, mid, short, connector, jungle, window
+      topCol: { x: 68, y: 23 }, top: { x: 68, y: 38 }, mid: { x: 55, y: 45 },
+      short: { x: 46, y: 35 }, shortTop: { x: 46, y: 29 }, midConn: { x: 50, y: 47 }, conn: { x: 50, y: 57 },
+      jungle: { x: 46, y: 61 }, jN: { x: 39.5, y: 58.5 }, midW: { x: 41, y: 45 }, window: { x: 40.5, y: 50 }, ctMid: { x: 37, y: 54 },
+      // CT: market/kitchen até o B, e o CT do A
+      ctMk: { x: 31, y: 52 }, mk2: { x: 31, y: 46 }, market: { x: 24, y: 43 }, bCT: { x: 24, y: 37 },
+      ctLow: { x: 32, y: 77 }, aCT: { x: 47, y: 77.5 },
     },
     edges: [
-      ['tS', 'ramp', 7], ['ramp', 'aT', 6], ['tS', 'palace', 5], ['palace', 'aT', 5], ['aT', 'A', 8],
-      ['tS', 'top', 6], ['top', 'mid', 7], ['mid', 'conn', 5], ['conn', 'jungle', 5], ['jungle', 'A', 6],
-      ['ctS', 'aCT', 6], ['aCT', 'A', 6], ['aCT', 'jungle', 4],
-      ['tS', 'appsIn', 6], ['appsIn', 'apps', 6], ['apps', 'bT', 6], ['bT', 'B', 7],
-      ['ctS', 'bCT', 6], ['bCT', 'B', 6], ['conn', 'short', 4], ['short', 'B', 5], ['ctS', 'market', 4], ['market', 'B', 5],
+      ['tS', 'tLow', 6], ['tLow', 'rampTop', 6], ['rampTop', 'ramp', 5], ['ramp', 'aT', 5], ['aT', 'A', 7],
+      ['tLow', 'palTop', 4], ['palTop', 'palIn', 4], ['palIn', 'palDown', 3], ['palDown', 'palace', 5],
+      ['palace', 'palLow', 5], ['palLow', 'palStairs', 4], ['palStairs', 'aPal', 3], ['aPal', 'A', 6],
+      ['tS', 'tTop', 6], ['tTop', 'appsIn', 5], ['appsIn', 'appsUp', 4], ['appsUp', 'apps', 4], ['apps', 'appsLow', 5],
+      ['appsLow', 'bT', 5], ['bT', 'B', 7],
+      ['appsIn', 'topCol', 5], ['topCol', 'top', 4], ['top', 'mid', 7],
+      ['mid', 'short', 5], ['short', 'shortTop', 4], ['shortTop', 'B', 6],
+      ['mid', 'midConn', 5], ['midConn', 'conn', 4], ['conn', 'A', 5], ['conn', 'jungle', 4], ['jungle', 'A', 6],
+      ['mid', 'midW', 5], ['midW', 'window', 3], ['window', 'ctMid', 4], ['jungle', 'jN', 4], ['jN', 'ctMid', 3], ['ctMid', 'ctMk', 5],
+      ['ctS', 'ctMk', 5], ['ctMk', 'mk2', 3], ['mk2', 'market', 4], ['market', 'bCT', 4], ['bCT', 'B', 6],
+      ['ctS', 'ctLow', 5], ['ctLow', 'aCT', 5], ['aCT', 'A', 6],
     ],
-    sites: { A: R(32, 78, 26, 16), B: R(20, 16, 24, 16) },
-    spawns: { t: R(88, 62, 12, 22), ct: R(16, 48, 12, 14) },
-    holds: { A: ['jungle', 'aCT'], B: ['bCT', 'market'], mid: ['conn'] },
+    sites: { A: R(54, 74.5, 14, 10), B: R(23, 28, 14, 12) },
+    spawns: { t: R(87.5, 36, 7, 12), ct: R(28.5, 70, 11, 9) },
+    holds: { A: ['jungle', 'aCT'], B: ['bCT', 'market'], mid: ['window'] },
     stage: ['ramp', 'top', 'appsIn', 'palace', 'top'],
-    floor: [
-      [82, 40, 12, 33],   // spawn TR
-      [56, 67, 28, 10], [78, 60, 6, 8], [56, 76, 6, 9],   // T ramp
-      [56, 84, 26, 8], [76, 72, 8, 16],   // palácio
-      [18, 69, 40, 17],   // bomb A
-      [10, 38, 12, 17], [12, 55, 10, 14], [22, 58, 10, 8],   // spawn CT + ticket + CT → jungle
-      [32, 52, 10, 18],   // jungle / connector
-      [40, 41, 42, 9], [76, 48, 8, 8],   // meio (top mid → mid)
-      [34, 24, 8, 30],    // catwalk / short
-      [72, 18, 11, 34],   // entrada do apps
-      [34, 10, 47, 10],   // apartamentos
-      [8, 8, 26, 17],     // bomb B
-      [12, 25, 18, 14],   // kitchen / market / CT do B
-    ],
-  },
+    jitter: 0.45,
+  }, { x0: 8, y0: 11, size: 86 }, MIRAGE_RINGS, MIRAGE_CALLS),
   inferno: {
     id: 'inferno',
     nodes: {
