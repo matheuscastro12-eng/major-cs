@@ -45,7 +45,8 @@
 
 /* time */
 .msg-team { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
-.msg-team__swatch { width: 4px; height: 18px; border-radius: 1px; flex: none; }
+.msg-crest { display: inline-flex; flex: none; align-items: center; }
+.msg-crest .tbadge { border-radius: 6px; }
 .msg-team__name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg-team__sub { color: var(--c-ink-faint); font-size: var(--fs-2); }
 .msg-seed {
@@ -199,7 +200,14 @@
 /* a Sala dentro do Modo Major */
 .msg-room { display: flex; flex-direction: column; gap: var(--sp-3); }
 .msg-room__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); font-size: var(--fs-3); }
-.msg-room__vs { overflow-wrap: anywhere; }
+.msg-room__vs { overflow-wrap: anywhere; display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.msg-vs { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.msg-runlog__opp { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.msg-slot .msg-crest { margin-right: var(--sp-1); }
+.msg-runhead { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: 14px; border: 1px solid var(--c-line); background: var(--c-surface-1); }
+.msg-runhead > div { display: grid; min-width: 0; }
+.msg-runhead__k { font-family: var(--font-title); font-weight: 700; font-size: var(--fs-1, 0.75rem); letter-spacing: 1.2px; text-transform: uppercase; color: var(--c-achievement); }
+.msg-runhead__name { font-family: var(--font-display); font-weight: 700; font-size: 1.8rem; line-height: 1.05; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* pick'em: 3-0 / 0-3 */
 .msg-extremes { margin-top: var(--sp-4); border-top: 1px solid var(--c-line-soft); padding-top: var(--sp-3); display: grid; gap: var(--sp-3); }
@@ -249,3 +257,30 @@
   .msg-summary p { grid-template-columns: 8ch repeat(3, minmax(0, 1fr)); gap: var(--sp-2); font-size: var(--fs-2); }
   .msg-picks { grid-template-columns: 1fr; }
 }
+
+/* extras: prêmio, elencos, previsões */
+.msg-prize { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; color: var(--c-achievement); }
+.msg-rosters { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.msg-roster { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; gap: 10px; align-items: center; }
+.msg-roster__players { display: flex; flex-wrap: wrap; gap: 10px; }
+.msg-roster__p { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 52px; }
+.msg-roster__p small { font-size: 11px; opacity: .85; }
+.msg-roster__p.is-coach { opacity: .8; }
+.msg-pred-wrap { overflow-x: auto; }
+.msg-pred { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+.msg-pred th, .msg-pred td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--c-line); white-space: nowrap; }
+.msg-pred th:first-child, .msg-pred td:first-child { text-align: left; }
+@media (max-width: 640px) { .msg-roster { grid-template-columns: 1fr; } }
+/* logos locais dos times (sigla quando não há) */
+/* placar do pick'em */
+.msg-board { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.msg-board__row { display: grid; grid-template-columns: 32px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--c-line); font-variant-numeric: tabular-nums; }
+.msg-board__row.is-prize { color: var(--c-achievement); }
+.msg-board__rank { text-align: center; }
+.msg-board__exact { opacity: .7; font-size: 12px; }
+/* envio oficial do pick'em */
+.msg-pksend { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+.msg-pksend__row { display: grid; grid-template-columns: 90px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--c-line); }
+.msg-pksend__status { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.msg-pksend__hint { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 640px) { .msg-pksend__row { grid-template-columns: 1fr auto; } }

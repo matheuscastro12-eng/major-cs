@@ -12,7 +12,7 @@
 // quando a lista oficial sair. Determinístico pelo seed (engine/rng).
 // Testado em scripts/test-major-singapore.mts.
 
-import { makeRng, type Rng } from './rng';
+import { makeRng, type Rng } from './rng.js'; // .js: a função de preview (api/og-pickem*) carrega este arquivo em Node ESM puro
 
 export interface MajorTeam {
   id: string;
@@ -28,6 +28,8 @@ export interface MajorTeam {
   colors?: [string, string];
   /** true = vaga confirmada oficialmente; false = projeção (ranking VRS) */
   confirmed?: boolean;
+  /** id do time em data/bo3-2026.json (elenco + fotos bo3.gg) */
+  bo3Id?: string;
 }
 
 export interface MajorData {
@@ -58,7 +60,7 @@ export interface MajorMatch {
   label: string;
 }
 
-export interface SwissRecord { id: string; w: number; l: number }
+export interface SwissRecord { id: string; w: number; l: number; /** Difficulty Score (Valve) */ buchholz?: number }
 
 export interface StageResult {
   stage: StageNo;
@@ -169,23 +171,57 @@ export function swissBestOf(stage: StageNo, w: number, l: number): 1 | 3 {
   return w === 2 || l === 2 ? 3 : 1;
 }
 
-/**
- * Pareamento dentro de um grupo de mesmo record: melhor seed × pior seed,
- * evitando revanche quando der (troca com o vizinho).
- */
-function pairGroup(ids: string[], played: Set<string>): [string, string][] {
-  const pool = [...ids];
+// Regras OFICIAIS da Valve (Major Supplemental Rulebook,
+// github.com/ValveSoftware/counter-strike_rules_and_regs — Swiss Bracket/Seeding):
+//  - seed no meio do stage: W-L, depois Difficulty Score (Buchholz = soma do
+//    saldo V−D ATUAL de cada adversário já enfrentado), depois seed inicial;
+//  - rodada 1: metade de cima × metade de baixo (1×9, 2×10…);
+//  - rodadas 2 e 3: dentro do grupo de mesmo record, maior seed × menor seed
+//    disponível sem revanche;
+//  - rodadas 4 e 5 (grupos de 6): primeira linha da tabela de prioridade da
+//    Valve sem revanche.
+
+const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+type Rec = { w: number; l: number; opp: string[] };
+
+/** Difficulty Score (Buchholz): soma de (V − D) atuais dos adversários já enfrentados. */
+export function buchholz(rec: Map<string, Rec>, id: string): number {
+  return rec.get(id)!.opp.reduce((s, o) => s + rec.get(o)!.w - rec.get(o)!.l, 0);
+}
+
+/** ordem de seed da Valve dentro do stage: W-L, Buchholz, seed inicial */
+export function valveOrder(ids: string[], rec: Map<string, Rec>, rank: Map<string, number>): string[] {
+  const bz = new Map(ids.map((id) => [id, buchholz(rec, id)]));
+  return [...ids].sort((x, y) => {
+    const a = rec.get(x)!, b = rec.get(y)!;
+    return (b.w - b.l) - (a.w - a.l) || a.l - b.l || bz.get(y)! - bz.get(x)! || rank.get(x)! - rank.get(y)!;
+  });
+}
+
+// rodadas 4 e 5 (grupos de 6): pares por posição (1 = melhor seed do grupo)
+export const VALVE_PRIORITY: [number, number][][] = [
+  [[1, 6], [2, 5], [3, 4]], [[1, 6], [2, 4], [3, 5]], [[1, 5], [2, 6], [3, 4]], [[1, 5], [2, 4], [3, 6]],
+  [[1, 4], [2, 6], [3, 5]], [[1, 4], [2, 5], [3, 6]], [[1, 6], [2, 3], [4, 5]], [[1, 5], [2, 3], [4, 6]],
+  [[1, 3], [2, 6], [4, 5]], [[1, 3], [2, 5], [4, 6]], [[1, 4], [2, 3], [5, 6]], [[1, 3], [2, 4], [5, 6]],
+  [[1, 2], [3, 6], [4, 5]], [[1, 2], [3, 5], [4, 6]], [[1, 2], [3, 4], [5, 6]],
+];
+
+function pairGroup(g: string[], played: Set<string>, round: number): [string, string][] {
+  if (g.length === 6 && round >= 4) {
+    const row = VALVE_PRIORITY.find((r) => r.every(([x, y]) => !played.has(key(g[x - 1], g[y - 1]))));
+    if (row) return row.map(([x, y]) => [g[x - 1], g[y - 1]]);
+  }
+  const pool = [...g];
   const out: [string, string][] = [];
   while (pool.length >= 2) {
     const a = pool.shift()!;
     let j = pool.length - 1;
     while (j > 0 && played.has(key(a, pool[j]))) j--;
-    const b = pool.splice(j, 1)[0];
-    out.push([a, b]);
+    out.push([a, pool.splice(j, 1)[0]]);
   }
   return out;
 }
-const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
 /**
  * Roda um stage suíço de 16. `ordered` em ordem de seed (o primeiro é o
@@ -195,7 +231,7 @@ export function runSwissStage(stage: StageNo, ordered: MajorTeam[], rng: Rng, pl
   if (ordered.length !== 16) throw new Error(`stage ${stage} precisa de 16 times`);
   const team = new Map(ordered.map((t) => [t.id, t]));
   const rank = new Map(ordered.map((t, i) => [t.id, i]));
-  const rec = new Map(ordered.map((t) => [t.id, { w: 0, l: 0 }]));
+  const rec = new Map<string, Rec>(ordered.map((t) => [t.id, { w: 0, l: 0, opp: [] }]));
   const played = new Set<string>();
   const rounds: MajorMatch[][] = [];
   const done = (id: string) => rec.get(id)!.w >= 3 || rec.get(id)!.l >= 3;
@@ -212,8 +248,9 @@ export function runSwissStage(stage: StageNo, ordered: MajorTeam[], rng: Rng, pl
         const g = `${rec.get(id)!.w}-${rec.get(id)!.l}`;
         groups.set(g, [...(groups.get(g) ?? []), id]);
       }
+      const keys = [...groups.keys()].sort((x, y) => Number(y.split('-')[0]) - Number(x.split('-')[0]) || Number(x.split('-')[1]) - Number(y.split('-')[1]));
       pairs = [];
-      for (const ids of groups.values()) pairs.push(...pairGroup(ids.sort((x, y) => rank.get(x)! - rank.get(y)!), played));
+      for (const k of keys) pairs.push(...pairGroup(valveOrder(groups.get(k)!, rec, rank), played, r));
     }
     const matches = pairs.map(([a, b]) => {
       const ra = rec.get(a)!;
@@ -222,15 +259,17 @@ export function runSwissStage(stage: StageNo, ordered: MajorTeam[], rng: Rng, pl
       const loser = m.winner === a ? b : a;
       rec.get(m.winner)!.w++;
       rec.get(loser)!.l++;
+      rec.get(a)!.opp.push(b);
+      rec.get(b)!.opp.push(a);
       return m;
     });
     rounds.push(matches);
   }
 
-  const records = ordered.map((t) => ({ id: t.id, ...rec.get(t.id)! }));
-  const byRecord = (x: SwissRecord, y: SwissRecord) => x.l - y.l || y.w - x.w || rank.get(x.id)! - rank.get(y.id)!;
-  const advanced = records.filter((x) => x.w >= 3).sort(byRecord).map((x) => x.id);
-  const eliminated = records.filter((x) => x.w < 3).sort(byRecord).map((x) => x.id);
+  const records: SwissRecord[] = ordered.map((t) => ({ id: t.id, w: rec.get(t.id)!.w, l: rec.get(t.id)!.l, buchholz: buchholz(rec, t.id) }));
+  const ids = (f: (x: Rec) => boolean) => valveOrder(ordered.map((t) => t.id).filter((id) => f(rec.get(id)!)), rec, rank);
+  const advanced = ids((x) => x.w >= 3);
+  const eliminated = ids((x) => x.w < 3);
   return { stage, teams: ordered.map((t) => t.id), rounds, advanced, eliminated, records };
 }
 
@@ -275,6 +314,33 @@ export function titleOdds(d: MajorData, runs: number, seed = 1): Map<string, num
     wins.set(c, wins.get(c)! + 1);
   }
   return new Map([...wins].map(([id, w]) => [id, w / runs]));
+}
+
+/** previsão por Monte Carlo: % de cada time chegar em cada fase */
+export interface TeamOdds { id: string; s1: number | null; s2: number | null; playoffs: number; sf: number; final: number; title: number }
+
+export function phaseOdds(d: MajorData, runs: number, seed = 20261124): TeamOdds[] {
+  const c = new Map(d.teams.map((t) => [t.id, { s1: 0, s2: 0, playoffs: 0, sf: 0, final: 0, title: 0 }]));
+  for (let i = 0; i < runs; i++) {
+    const r = simulateMajor(d, seed + i * 7919);
+    for (const id of r.stages[0].advanced) c.get(id)!.s1++;
+    for (const id of r.stages[1].advanced) c.get(id)!.s2++;
+    for (const id of r.stages[2].advanced) c.get(id)!.playoffs++;
+    for (const m of r.playoffs.qf) c.get(m.winner)!.sf++;
+    for (const m of r.playoffs.sf) c.get(m.winner)!.final++;
+    c.get(r.playoffs.champion)!.title++;
+  }
+  const entry = new Map(d.teams.map((t) => [t.id, t.seed <= 8 ? 3 : t.seed <= 16 ? 2 : 1]));
+  return d.teams.map((t) => {
+    const x = c.get(t.id)!;
+    const e = entry.get(t.id)!;
+    return {
+      id: t.id,
+      s1: e === 1 ? x.s1 / runs : null,
+      s2: e <= 2 ? x.s2 / runs : null,
+      playoffs: x.playoffs / runs, sf: x.sf / runs, final: x.final / runs, title: x.title / runs,
+    };
+  }).sort((a, b) => b.title - a.title || b.playoffs - a.playoffs);
 }
 
 // ---------------------------------------------------------------- pick'em
@@ -377,6 +443,12 @@ export interface PicksScore {
   max: number;
 }
 
+/**
+ * A regra de pontos do pick'em, numa fonte só: scorePicks (simulação, Liga) e
+ * o placar contra o resultado real (engine/pickemScore.ts) leem daqui.
+ */
+export const PICKEM_POINTS = { qualified: 1, extreme: 2, playoffWin: 2, champion: 5 } as const;
+
 /** 1 ponto por classificado certo, 2 por 3-0 ou 0-3 certo, 2 por vencedor de QF/SF, 5 pelo campeão */
 export function scorePicks(p: MajorPicks, r: MajorResult): PicksScore {
   const hit = (mine: string[], real: string[]) => mine.filter((id) => real.includes(id)).length;
@@ -393,9 +465,12 @@ export function scorePicks(p: MajorPicks, r: MajorResult): PicksScore {
   const rec = (i: number, w: number, l: number) => new Set(r.stages[i].records.filter((x) => x.w === w && x.l === l).map((x) => x.id));
   const x30 = [0, 1, 2].map((i) => (p.x30?.[i] ?? []).filter((id) => rec(i, 3, 0).has(id)).length) as [number, number, number];
   const x03 = [0, 1, 2].map((i) => (p.x03?.[i] ?? []).filter((id) => rec(i, 0, 3).has(id)).length) as [number, number, number];
-  const extremes = [...x30, ...x03].reduce((a, b) => a + b, 0) * 2;
-  const points = stage[0] + stage[1] + stage[2] + extremes + (playoff - (champ ? 1 : 0)) * 2 + (champ ? 5 : 0);
-  return { stage, x30, x03, playoff, champion: champ, points, max: 24 + 24 + 12 + 5 };
+  const P = PICKEM_POINTS;
+  const extremes = [...x30, ...x03].reduce((a, b) => a + b, 0) * P.extreme;
+  const points = (stage[0] + stage[1] + stage[2]) * P.qualified + extremes + (playoff - (champ ? 1 : 0)) * P.playoffWin + (champ ? P.champion : 0);
+  // 3 stages × (8 classificados + 2 de 3-0 + 2 de 0-3) + 6 vencedores de QF/SF + campeão = 65
+  const max = 3 * (8 * P.qualified + 2 * EXTREME_PICKS * P.extreme) + 6 * P.playoffWin + P.champion;
+  return { stage, x30, x03, playoff, champion: champ, points, max };
 }
 
 // ---------------------------------------------------------------- link

@@ -12,11 +12,16 @@ import { TeamBadge } from './components/ui';
 import {
   CalendarDays, Star, ChartColumn, CircleUser, Crosshair, Heart, House, Landmark, Layers, ListOrdered, LogIn,
   Medal, Network, Swords, Trophy, Plus, Shuffle, Play, FastForward, CalendarRange,   LayoutDashboard, Newspaper, BookOpen, ArrowLeftRight, PencilRuler,
+  Dices, Gamepad2, ListChecks, UsersRound,
 } from 'lucide-react';
 import { openPatchNotes, hasNewPatch } from './components/PatchNotesModal';
 import { openHowToPlay } from './components/HowToPlayHost';
 import { Home } from './components/Home';
 import { DailyScreen } from './components/daily/DailyScreen';
+import { DAILY_GAMES, dateKeyOf } from './engine/daily/lines';
+import { dailyDayStatus } from './state/daily';
+import { majorClock } from './data/majorWindow';
+import { initialMajorTab, type MajorTab } from './components/major/majorTabs';
 import { Hub } from './components/Hub';
 import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
@@ -125,6 +130,7 @@ import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { ct, setCareerLang } from './state/career-i18n';
 import { Landing, AccountModal } from './components/Landing';
+import type { LandingDoor } from './data/majorLanding';
 import { LegalPage } from './components/Legal';
 import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
@@ -141,7 +147,7 @@ import { ModeErrorBoundary } from './components/ModeErrorBoundary';
 import { SaveHealthBanner } from './components/SaveHealthBanner';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
-import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackPaywallView, trackVisit } from './state/track';
+import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackFirstMatchDone, trackPaywallView, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -433,6 +439,8 @@ export default function App() {
   const [ultTabReq, setUltTabReq] = useState<{ tab: string; n: number } | null>(null);
   const [homeViewReq, setHomeViewReq] = useState<{ view: 'menu' | 'draft'; n: number }>({ view: 'menu', n: 0 });
   const [showOnboarding, setShowOnboarding] = useState(() => shouldOnboard());
+  // porta escolhida no "Em 1 minuto" da landing: sem manager, o Setup vem antes e a porta abre logo depois dele
+  const [doorAfterSetup, setDoorAfterSetup] = useState<LandingDoor | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
   const routeReadyRef = useRef(false);
   const popNavigationRef = useRef(false);
@@ -877,6 +885,7 @@ export default function App() {
     const clone = structuredClone(tournament) as Tournament;
     const p = clone.pairings.find((x) => x.a === 'user' || x.b === 'user');
     if (p) p.result = series;
+    trackFirstMatchDone('draft'); // ativação: 1ª série concluída (1x por navegador)
     resolveRound(clone, rngRef.current);
     setMatchCtx(null);
     afterResolve(clone);
@@ -1005,18 +1014,44 @@ export default function App() {
     setScreen('home');
   };
   const newMajor = () => { setHomeViewReq((r) => ({ view: 'draft', n: r.n + 1 })); setScreen('home'); };
+  // portas da landing: já escolheu por onde começar, então o modal das 3 rotas não cobre o modo nesta visita
+  const openLandingDoor = (d: LandingDoor) => {
+    setShowOnboarding(false);
+    if (d === 'diario') setScreen('daily'); else if (d === 'draft') openDraftMode(); else if (accountReady) openCareerMode(); else setScreen('home');
+  };
   const openAccount = () => { if (account) setScreen(manager ? 'profile' : 'setup'); else { setAuthMode('login'); setAuthOpen(true); } };
+  // Modo Major no trilho só na janela do evento (até 13/12): selo com a
+  // contagem ("24d") antes e AO VIVO durante; depois volta pro painel do Início.
+  // O clique segue medido como 'sidebar' (a navegação lateral), com o lugar em `via`.
+  const mClock = majorClock();
+  const majorInRail = mClock.phase !== 'after';
+  const majorStatus = mClock.phase === 'live' ? `${ct('AO VIVO')} · ${ct('Dia')} ${mClock.day}/${mClock.of}`
+    : mClock.phase === 'before' ? `${ct('Começa em')} ${mClock.days > 0 ? `${mClock.days} ${ct('dias')}` : `${mClock.hours}h`}` : '';
+  const majorRail: ShellMode[] = mClock.phase === 'after' ? [] : [{
+    id: 'majorsg', label: ct('Modo Major'), short: 'Major', icon: Trophy, inPalette: false,
+    badge: mClock.phase === 'live' ? ct('AO VIVO') : mClock.days > 0 ? `${mClock.days}d` : `${mClock.hours}h`,
+    badgeTone: mClock.phase === 'live' ? 'live' : 'brand',
+    hint: mClock.phase === 'live' ? majorStatus : `PGL Major Singapore · ${majorStatus}`,
+    onSelect: (src) => { track('major_vitrine_click', { surface: 'sidebar', via: src ?? 'rail' }); setScreen('majorsg'); },
+  }];
+  // desafios do Diário que faltam hoje (selo no trilho); relido a cada troca de tela
+  const dailyLeft = useMemo(() => {
+    const st = dailyDayStatus(DAILY_GAMES.map((g) => g.id), dateKeyOf(new Date()));
+    return st.total - st.done;
+  }, [screen]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [majorTab, setMajorTab] = useState<MajorTab>(initialMajorTab);
   const shellModes: ShellMode[] = [
     { id: 'inicio', label: ct('Início'), short: ct('Início'), icon: House, onSelect: () => { setHomeViewReq((r) => ({ view: 'menu', n: r.n + 1 })); setScreen('home'); } },
+    ...majorRail,
     { id: 'carreira', label: ct('Carreira'), short: ct('Carreira'), icon: Trophy, onSelect: openCareerMode },
     ...(RTP_ENABLED ? [{ id: 'rtp' as const, label: 'Road to Pro', short: 'Road to Pro', icon: Crosshair, hint: account?.paid ? undefined : ct('Demo grátis'), onSelect: () => setScreen('rtp') }] : []),
     ...(ULTIMATE_ENABLED ? [{ id: 'ultimate' as const, label: 'Ultimate', short: 'Ultimate', icon: Star, onSelect: () => openUltimateMode('hub') }] : []),
     { id: 'major', label: 'Draft', short: 'Draft', icon: Layers, hint: tournament || savedSession?.tournament ? ct('Campeonato em andamento') : undefined, onSelect: openDraftMode },
-    { id: 'diario', label: ct('Diário'), short: ct('Diário'), icon: CalendarDays, onSelect: () => setScreen('daily') },
+    { id: 'diario', label: ct('Diário'), short: ct('Diário'), icon: CalendarDays, badge: dailyLeft > 0 ? dailyLeft : undefined, hint: dailyLeft > 0 ? `${dailyLeft} ${ct('desafios esperando')}` : undefined, onSelect: () => setScreen('daily') },
     ...(ULTIMATE_ENABLED ? [{ id: 'online' as const, label: 'Online', short: 'Online', icon: Swords, hint: ct('Ranqueada, duelo e Major da Semana'), onSelect: () => openUltimateMode('ranked') }] : []),
   ];
   const shellCommands: ShellCommand[] = [
-    { id: 'major-sg', label: ct('Modo Major: PGL Major Singapore'), group: ct('Ações'), icon: Trophy, keywords: 'major singapore pickem pick em chave bracket pgl', run: () => setScreen('majorsg') },
+    { id: 'major-sg', label: ct('Modo Major: PGL Major Singapore'), group: ct('Ações'), icon: Trophy, keywords: 'major singapore pickem pick em chave bracket pgl', run: () => { track('major_vitrine_click', { surface: 'palette' }); setScreen('majorsg'); } },
     { id: 'new-major', label: ct('Novo Major (draft)'), group: ct('Ações'), icon: Plus, keywords: 'draft major rapido', run: newMajor },
     { id: 'editor', label: ct('Editor de base'), group: ct('Ações'), icon: PencilRuler, keywords: 'editor base database jogadores times fm', run: () => openEditor('home') },
     { id: 'achievements', label: ct('Conquistas'), group: ct('Você'), icon: Medal, run: () => setAchOpen(true) },
@@ -1036,33 +1071,49 @@ export default function App() {
       onOpen: openAccount,
     } : undefined,
     alerts: { count: hasNewPatch() ? 1 : 0, onClick: openPatchNotes },
+    // menu "Conta" no pé do trilho: o lugar único de perfil e conta, de qualquer modo
     railFoot: [
-      { id: 'rf-ranking', label: ct('Ranking'), icon: ListOrdered, run: () => setScreen('leaderboard') },
-      { id: 'rf-hall', label: ct('Hall da Fama'), icon: Trophy, run: () => setScreen('hall') },
-      { id: 'rf-donate', label: ct('Apoiar o projeto'), icon: Heart, run: () => { track('donate_click', { from: 'rail' }); setDonateOpen(true); } },
       { id: 'rf-account', label: account ? ct('Perfil e conta') : ct('Entrar'), icon: account ? CircleUser : LogIn, run: openAccount },
+      { id: 'rf-achievements', label: ct('Conquistas'), icon: Medal, run: () => setAchOpen(true) },
+      { id: 'rf-ranking', label: ct('Ranking'), icon: ListOrdered, run: () => setScreen('leaderboard') },
+      { id: 'rf-hall', label: ct('Hall da Fama'), icon: Landmark, run: () => setScreen('hall') },
+      { id: 'rf-donate', label: ct('Apoiar o projeto'), icon: Heart, run: () => { track('donate_click', { from: 'rail' }); setDonateOpen(true); } },
     ],
   };
-  // Início: seções da casa (portal, você, projeto)
+  // Início: só o contexto da casa. Os modos (e o Modo Major, na janela) estão
+  // no trilho; perfil e conta, no menu Conta do pé do trilho.
   const homeNav = (active?: string): ShellNavGroup[] => [
     { id: 'principal', label: ct('Principal'), icon: House, items: [
-      { id: 'home', label: ct('Portal'), icon: LayoutDashboard },
+      { id: 'home', label: ct('Visão geral'), icon: LayoutDashboard },
       { id: 'news', label: ct('Novidades'), icon: Newspaper, alert: hasNewPatch() },
-      { id: 'majorsg', label: ct('Modo Major'), icon: Trophy },
+      ...(majorInRail ? [] : [{ id: 'majorsg', label: ct('Modo Major'), icon: Trophy }]),
     ] },
-    { id: 'voce', label: ct('Você'), icon: CircleUser, items: [
-      { id: 'profile', label: ct('Perfil do manager'), icon: CircleUser },
+    { id: 'progresso', label: ct('Progresso'), icon: Medal, items: [
       { id: 'achievements', label: ct('Conquistas'), icon: Medal },
       { id: 'leaderboard', label: ct('Ranking'), icon: ListOrdered },
       { id: 'hall', label: ct('Hall da Fama'), icon: Landmark },
     ] },
-    { id: 'projeto', label: ct('Projeto'), icon: Heart, items: [
+    { id: 'mais', label: ct('Mais'), icon: Heart, items: [
       { id: 'editor', label: ct('Editor de base'), icon: PencilRuler },
       { id: 'howto', label: ct('Como jogar'), icon: BookOpen },
       { id: 'donate', label: ct('Apoiar o projeto'), icon: Heart },
     ] },
   ].map((g) => ({ ...g, items: g.items.map((it) => ({ ...it, alert: it.alert && it.id !== active })) }));
+  // tab bar do Início no celular: o Modo Major entra como atalho do modo (na
+  // janela) ou como item do painel (depois); o que não existir some
+  const homeMobileNav = ['home', 'mode:majorsg', 'majorsg', 'news', 'leaderboard'];
+  // Modo Major na janela: o painel são as abas do próprio modo
+  const majorNav: ShellNavGroup[] = [
+    { id: 'major', label: 'PGL Major Singapore', icon: Trophy, items: [
+      { id: 'overview', label: ct('Visão geral'), icon: LayoutDashboard },
+      { id: 'pickem', label: "Pick'em", icon: ListChecks },
+      { id: 'league', label: ct('Liga'), icon: UsersRound },
+      { id: 'play', label: ct('Jogar'), icon: Gamepad2 },
+      { id: 'sim', label: ct('Simular'), icon: Dices },
+    ] },
+  ];
   const onHomeNav = (id: string) => {
+    if (id === 'majorsg') track('major_vitrine_click', { surface: 'sidebar' });
     if (id === 'news') openPatchNotes();
     else if (id === 'achievements') setAchOpen(true);
     else if (id === 'howto') openHowToPlay();
@@ -1142,19 +1193,27 @@ export default function App() {
   // Modo Major (PGL Major Singapore): aberto a qualquer um, sem manager — o link
   // do pick'em compartilhado tem que abrir direto pra quem não joga ainda
   if (screen === 'majorsg') {
-    return withShell(
-      <GameShell mode="inicio" identity={{ title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> }} title={ct('Modo Major')} crumbs={[{ label: ct('Início') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav}>
+    const identity = { title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> };
+    const onLogin = () => { setAuthMode('login'); setAuthOpen(true); };
+    return withShell(majorInRail ? (
+      <GameShell mode="majorsg" identity={{ ...identity, subtitle: majorStatus }} crumbs={[]} variant="full" nav={majorNav} active={majorTab} onNav={(id) => setMajorTab(id as MajorTab)} mobileNav={['mode:inicio', 'overview', 'pickem', 'league']}>
         <Suspense fallback={<Loader text="…" />}>
-          <MajorSingaporeScreen />
+          <MajorSingaporeScreen onLogin={onLogin} tab={majorTab} onTab={setMajorTab} />
         </Suspense>
-      </GameShell>,
-    );
+      </GameShell>
+    ) : (
+      <GameShell mode="inicio" identity={identity} title={ct('Modo Major')} crumbs={[{ label: ct('Início') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav} mobileNav={homeMobileNav}>
+        <Suspense fallback={<Loader text="…" />}>
+          <MajorSingaporeScreen onLogin={onLogin} />
+        </Suspense>
+      </GameShell>
+    ));
   }
 
   if (screen === 'landing') {
     return (
       <>
-        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} />
+        <Landing onPlay={() => { setDoorAfterSetup(null); setScreen(manager ? 'home' : 'setup'); }} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} onMajor={() => { track('major_vitrine_click', { surface: 'landing' }); setScreen('majorsg'); }} onDoor={(d) => { if (manager) openLandingDoor(d); else { setDoorAfterSetup(d); setScreen('setup'); } }} />
         {!bannerPreview && <AdBanner />}
       </>
     );
@@ -1167,12 +1226,12 @@ export default function App() {
   // Portão do Setup: não vive só no botão "Jogar". Sem manager criado, qualquer
   // entrada direta no jogo (deep link, F5, retorno do Stripe em /jogar) cai aqui.
   if (screen === 'setup' || !manager) {
-    return <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); setScreen('home'); }} />;
+    return <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); const d = doorAfterSetup; setDoorAfterSetup(null); if (d) openLandingDoor(d); else setScreen('home'); }} />;
   }
 
   if (screen === 'profile' && manager) {
     return withShell(
-      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Perfil')} crumbs={[{ label: ct('Você') }]} variant="full" nav={homeNav('profile')} active="profile" onNav={onHomeNav}>
+      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Perfil')} crumbs={[{ label: ct('Conta') }]} variant="full" nav={homeNav('profile')} active="profile" onNav={onHomeNav} mobileNav={homeMobileNav}>
         <ManagerProfile
           manager={manager}
           account={account}
@@ -1193,7 +1252,7 @@ export default function App() {
 
   if (screen === 'leaderboard') {
     return withShell(
-      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Ranking')} crumbs={[{ label: ct('Você') }]} nav={homeNav('leaderboard')} active="leaderboard" onNav={onHomeNav}>
+      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Ranking')} crumbs={[{ label: ct('Progresso') }]} nav={homeNav('leaderboard')} active="leaderboard" onNav={onHomeNav} mobileNav={homeMobileNav}>
         <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); goToCheckout(); }} />
       </GameShell>,
     );
@@ -1296,7 +1355,12 @@ export default function App() {
           onGuest={() => { setUtGateOpen(false); enableUtGuest(); setScreen('ultimate'); }}
         />
       )}
-      {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
+      {showOnboarding && screen === 'home' && (
+        <Onboarding
+          onClose={() => setShowOnboarding(false)}
+          onRoute={(route) => { if (route === 'major') { track('major_vitrine_click', { surface: 'onboarding' }); setScreen('majorsg'); } else if (route === 'draft') openDraftMode(); else openCareerMode(); }}
+        />
+      )}
 
       {/* "Não consegui salvar" + avisos da nuvem (413 / restore sem espaço) */}
       <SaveHealthBanner />
@@ -1332,6 +1396,7 @@ export default function App() {
           onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onDaily={() => setScreen('daily')}
+          onMajor={() => { track('major_vitrine_click', { surface: 'home' }); setScreen('majorsg'); }}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
@@ -1527,7 +1592,7 @@ export default function App() {
       )}
 
       {screen === 'hall' && manager && (
-        <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Hall da Fama')} crumbs={[{ label: ct('Você') }]} nav={homeNav('hall')} active="hall" onNav={onHomeNav}>
+        <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Hall da Fama')} crumbs={[{ label: ct('Progresso') }]} nav={homeNav('hall')} active="hall" onNav={onHomeNav} mobileNav={homeMobileNav}>
           <HallScreen onBack={() => setScreen(tournament ? (tournament.phase === 'done' ? 'final' : 'hub') : 'home')} />
         </GameShell>
       )}
