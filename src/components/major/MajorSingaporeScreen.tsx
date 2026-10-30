@@ -4,7 +4,7 @@
 // navegador e compartilhável por link/PNG), Liga com amigos (MajorLeague) e
 // simulação do Major inteiro pontuando o palpite. A lógica é toda de
 // engine/majorSingapore.ts; os times vêm de data/major-singapore-2026.json.
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, Copy, Download, Dices, Eraser, Sparkles, Trophy } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import data from '../../data/major-singapore-2026.json';
@@ -31,6 +31,7 @@ import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
 import { ChallengeBanner, ChallengeBar, ChallengeVs, useChallenge } from './MajorChallenge';
 import { MajorScoreboard } from './MajorScoreboard';
+import { initialMajorTab, type MajorTab } from './majorTabs';
 import { ensurePickSnapshots } from '../../state/pickSnapshots';
 import '../../styles/major.css';
 
@@ -42,8 +43,7 @@ const MajorPlay = lazy(() => import('./MajorPlay').then((m) => ({ default: m.Maj
 const STORE = 'rtm-major-sg-picks-v1';
 const MAJOR_PATH = '/major-singapore';
 
-type Tab = 'overview' | 'play' | 'pickem' | 'league' | 'sim';
-const TABS: [Tab, MajorKey][] = [['overview', 'tabOverview'], ['play', 'tabPlay'], ['pickem', 'tabPickem'], ['league', 'tabLeague'], ['sim', 'tabSim']];
+const TABS: [MajorTab, MajorKey][] = [['overview', 'tabOverview'], ['play', 'tabPlay'], ['pickem', 'tabPickem'], ['league', 'tabLeague'], ['sim', 'tabSim']];
 
 function loadMine(): MajorPicks {
   try {
@@ -53,21 +53,27 @@ function loadMine(): MajorPicks {
   return emptyPicks();
 }
 
-function hasLeagueParam(): boolean {
-  try { return new URLSearchParams(window.location.search).has('liga'); } catch { return false; }
-}
-
 function readSharedCode(): string | null {
   try { return new URLSearchParams(window.location.search).get('p'); } catch { return null; }
 }
 
-export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {}) {
+/** `tab`/`onTab`: o App controla a aba pelo menu do shell (painel e tab bar) e a
+ *  tela não desenha as abas próprias; sem eles, a tela tem as abas no topo */
+export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin?: () => void; tab?: MajorTab; onTab?: (t: MajorTab) => void } = {}) {
   const { lang } = useLang();
   const t = majorT(lang);
   const teams = useMemo(() => new Map(D.teams.map((x) => [x.id, x])), []);
   const sharedCode = useMemo(() => readSharedCode(), []);
   const shared = useMemo(() => (sharedCode ? decodePicks(D, sharedCode) : null), [sharedCode]);
-  const [tab, setTab] = useState<Tab>(sharedCode ? 'pickem' : hasLeagueParam() ? 'league' : 'overview');
+  const [tabState, setTabState] = useState<MajorTab>(initialMajorTab);
+  const tab = onTab ? tabProp ?? tabState : tabState;
+  const setTab = onTab ?? setTabState;
+  // aba trocada pelo menu do shell (no celular, a tab bar fica embaixo): volta ao topo
+  const firstTab = useRef(true);
+  useEffect(() => {
+    if (firstTab.current) { firstTab.current = false; return; }
+    if (onTab) window.scrollTo({ top: 0 });
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const [mine, setMine] = useState<MajorPicks>(loadMine);
   const [viewShared, setViewShared] = useState(!!shared);
   const [sim, setSim] = useState<MajorResult | null>(null);
@@ -155,13 +161,15 @@ export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {})
         <div className="msg-hero__kicker">{t('title')}</div>
         <h1 className="msg-hero__title">{D.event.name}</h1>
         <p className="msg-hero__meta">{t('dates')} · {t('playoffsDates')}</p>
-        <nav className="msg-tabs" role="tablist" aria-label={t('title')}>
-          {TABS.map(([id, key]) => (
-            <button key={id} role="tab" aria-selected={tab === id} className="msg-tab" onClick={() => setTab(id)}>
-              {t(key)}
-            </button>
-          ))}
-        </nav>
+        {!onTab && (
+          <nav className="msg-tabs" role="tablist" aria-label={t('title')}>
+            {TABS.map(([id, key]) => (
+              <button key={id} role="tab" aria-selected={tab === id} className="msg-tab" onClick={() => setTab(id)}>
+                {t(key)}
+              </button>
+            ))}
+          </nav>
+        )}
       </header>
 
       {D.event.status === 'projecao'
