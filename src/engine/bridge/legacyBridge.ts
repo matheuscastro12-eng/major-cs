@@ -188,13 +188,9 @@ export function coachFromLegacy(p: LegacyProfile, org = ''): LegacyCoach {
   };
 }
 
-// Rótulo curto do chip "Ex-pro · …" (UI do ManagerSetup).
-export function legacyChipLabel(o: Pick<LegacyOrigin, 'titles' | 'majors' | 'tierLabel'>): string {
-  const parts = [`Ex-pro · ${o.tierLabel}`];
-  if (o.majors > 0) parts.push(`${o.majors} Major${o.majors > 1 ? 's' : ''}`);
-  if (o.titles > 0) parts.push(`${o.titles} título${o.titles > 1 ? 's' : ''}`);
-  return parts.join(' · ');
-}
+// Rótulo curto do chip "Ex-pro · …": mora em ./legacyLabel (o ManagerSetup
+// entra na carga inicial e não pode puxar o motor do Road to Pro por ele).
+export { legacyChipLabel } from './legacyLabel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3) Perfil → CARD do Ultimate

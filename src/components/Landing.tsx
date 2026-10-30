@@ -31,7 +31,8 @@ import { loadDuelInvite } from '../state/duelInvite';
 import { dateKeyOf, dayNumberOf } from '../engine/daily/lines';
 // [URG-2] evento de fim de semana: banner público (deslogado também) com contador e a carta exclusiva
 import { fetchActiveLiveops } from '../state/liveops';
-import { weekendEventView, weekendExclusiveCard, type WeekendEventView } from '../state/weekendEvent';
+import type { WeekendEventView } from '../state/weekendEvent';
+import type { UltCard } from '../engine/ultimate/cards';
 import { formatCountdown } from '../engine/ultimate/weekendEvent';
 import { useCommunityGoalPublic } from '../state/communityGoal'; // [URG-5]
 import '../styles/landing.css';
@@ -928,17 +929,24 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
   const duelInvite = loadDuelInvite(); // [U11]
   // [URG-2] evento de fim de semana: lê o live-ops público (o servidor mescla o automático) e
   // recalcula a cada minuto pro contador; sem rede cai no cálculo local do mesmo engine.
-  // Começa já com o cálculo local (o mesmo engine): a faixa entra no primeiro
-  // render e não empurra o hero quando a resposta do servidor chega (CLS).
-  const [wknd, setWknd] = useState<WeekendEventView | null>(() => weekendEventView());
+  // O módulo do evento vem sob demanda: o cálculo local usa o catálogo do
+  // Ultimate (a base de jogadores, ~124 KB gz) e não pode entrar na primeira
+  // carga da landing. Até ele chegar, a faixa ocupa o mesmo lugar sem texto
+  // visível (não empurra o hero quando aparece: CLS).
+  const [wk, setWk] = useState<{ view: WeekendEventView; card: UltCard | null } | null>(null);
   useEffect(() => {
     let on = true;
-    const compute = () => { if (on) setWknd(weekendEventView()); };
-    void fetchActiveLiveops().then(compute, compute);
-    const t = window.setInterval(compute, 60_000);
+    let t = 0;
+    void import('../state/weekendEvent').then((m) => {
+      const compute = () => { if (on) { const view = m.weekendEventView(); setWk({ view, card: m.weekendExclusiveCard(view) }); } };
+      compute();
+      void fetchActiveLiveops().then(compute, compute);
+      t = window.setInterval(compute, 60_000);
+    }, () => { /* sem o chunk: a faixa fica de fora */ });
     return () => { on = false; window.clearInterval(t); };
   }, []);
-  const wkndCard = wknd ? weekendExclusiveCard(wknd) : null;
+  const wknd = wk?.view ?? null;
+  const wkndCard = wk?.card ?? null;
   const wkndRemain = wknd ? (wknd.open ? wknd.endsAtMs : wknd.startsAtMs) - Date.now() : 0;
   return (
     <div ref={ref} className="lp-page">
@@ -956,6 +964,14 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
             </div>
           )}
           {/* [URG-2] evento de fim de semana: discreto, acima da dobra, mesmo deslogado */}
+          {!wk && (
+            // reserva o lugar da faixa do evento enquanto o módulo carrega (sem CLS)
+            <div className="lp-notice lp-notice--wait" aria-hidden>
+              <Gift size={16} aria-hidden />
+              <span>{ct('Evento até domingo')}: <b>Fim de Semana</b> · {ct('carta exclusiva')} <b>…</b> · {ct('termina em')} <b>…</b></span>
+              <span className="lp-notice__go">{ct('Jogar')} <ArrowRight size={14} aria-hidden /></span>
+            </div>
+          )}
           {wknd && (
             <div className="lp-notice">
               <Gift size={16} aria-hidden />

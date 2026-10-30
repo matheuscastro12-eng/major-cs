@@ -17,7 +17,6 @@ import {
 import { openPatchNotes, hasNewPatch } from './components/PatchNotesModal';
 import { openHowToPlay } from './components/HowToPlayHost';
 import { Home } from './components/Home';
-import { DailyScreen } from './components/daily/DailyScreen';
 import { DAILY_GAMES, dateKeyOf } from './engine/daily/lines';
 import { dailyDayStatus } from './state/daily';
 import { majorClock } from './data/majorWindow';
@@ -93,6 +92,10 @@ const DesignScreen = lazyWithReload(() => import('./pages/DesignScreen').then((m
 const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
 const MajorSingaporeScreen = lazyWithReload(() => import('./components/major/MajorSingaporeScreen').then((m) => ({ default: m.MajorSingaporeScreen })));
 const RoadToPro = lazyWithReload(() => import('./components/rtp/RoadToPro').then((m) => ({ default: m.RoadToPro })));
+// o Diário puxa a base de jogadores (bo3) e o catálogo do Ultimate: fora da carga inicial
+const DailyScreen = lazyWithReload(() => import('./components/daily/DailyScreen').then((m) => ({ default: m.DailyScreen })));
+// a criação de perfil puxa o Hall do Road to Pro (motor do RtP + base de jogadores)
+const ManagerSetup = lazyWithReload(() => import('./components/ManagerSetup').then((m) => ({ default: m.ManagerSetup })));
 
 // Ultimate Squad: VISÍVEL em localhost (dev/preview local), OCULTO no site real
 // (roadtomajor.com.br). O código existe no bundle, mas o menu e a rota só ligam
@@ -132,7 +135,6 @@ import { ct, setCareerLang } from './state/career-i18n';
 import { Landing, AccountModal } from './components/Landing';
 import type { LandingDoor } from './data/majorLanding';
 import { LegalPage } from './components/Legal';
-import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
 import { Leaderboard } from './components/Leaderboard';
 import { beginCheckout, claim as claimAccount, useAccount } from './state/account';
@@ -1226,7 +1228,11 @@ export default function App() {
   // Portão do Setup: não vive só no botão "Jogar". Sem manager criado, qualquer
   // entrada direta no jogo (deep link, F5, retorno do Stripe em /jogar) cai aqui.
   if (screen === 'setup' || !manager) {
-    return <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); const d = doorAfterSetup; setDoorAfterSetup(null); if (d) openLandingDoor(d); else setScreen('home'); }} />;
+    return (
+      <Suspense fallback={<Loader text="…" />}>
+        <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); const d = doorAfterSetup; setDoorAfterSetup(null); if (d) openLandingDoor(d); else setScreen('home'); }} />
+      </Suspense>
+    );
   }
 
   if (screen === 'profile' && manager) {

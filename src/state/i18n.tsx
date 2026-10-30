@@ -51,6 +51,10 @@ export function setLang(l: Lang): void {
   }
   listeners.forEach((f) => f());
 }
+/** re-renderiza quem usa useLang (ex.: o dicionário en/es do ct() chegou) */
+export function refreshLang(): void {
+  listeners.forEach((f) => f());
+}
 
 type Dict = Record<string, string>;
 
