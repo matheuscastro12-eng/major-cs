@@ -120,3 +120,16 @@ export function hasUnseenPatch(): boolean {
   if (!CURRENT_PATCH_ID) return false;
   return !getSeenPatchIds().includes(CURRENT_PATCH_ID);
 }
+
+// Decide o que fazer na primeira mount. Quem ainda não criou manager está na
+// primeira visita: não tem o que "rever", e o changelog cobria o CTA da landing
+// (no celular, a tela inteira). Esse visitante não vê o modal e o patch atual
+// fica marcado como visto; só um patch NOVO abre sozinho depois que ele joga.
+export type PatchAutoOpen = 'open' | 'skip' | 'mark-seen';
+export function patchAutoOpen(opts: { unseen: boolean; hasManager: boolean; path: string }): PatchAutoOpen {
+  if (!opts.unseen) return 'skip';
+  // link do pick'em do Modo Major: quem chega por ele vê o palpite, não o changelog
+  if (opts.path.toLowerCase().startsWith('/major-singapore')) return 'skip';
+  if (!opts.hasManager) return 'mark-seen';
+  return 'open';
+}
