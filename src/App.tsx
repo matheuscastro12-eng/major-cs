@@ -1301,7 +1301,7 @@ export default function App() {
       {showOnboarding && screen === 'home' && (
         <Onboarding
           onClose={() => setShowOnboarding(false)}
-          onRoute={(route) => { if (route === 'major') setScreen('majorsg'); else if (route === 'draft') openDraftMode(); else openCareerMode(); }}
+          onRoute={(route) => { if (route === 'major') { track('major_vitrine_click', { surface: 'onboarding' }); setScreen('majorsg'); } else if (route === 'draft') openDraftMode(); else openCareerMode(); }}
         />
       )}
 

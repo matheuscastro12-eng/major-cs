@@ -43,7 +43,7 @@ const ALLOWED_TYPES = new Set([
   // ref e modo/superfície. Dedupe no cliente (src/state/track.ts): 1x por
   // sessão por superfície; first_match_done 1x por navegador.
   'major_sg_view',          // {shared} — abriu /major-singapore
-  'major_vitrine_click',    // {surface: 'landing'|'home'|'sidebar'|'palette'} — entrou no Modo Major por um atalho
+  'major_vitrine_click',    // {surface: 'landing'|'home'|'sidebar'|'palette'|'onboarding'} — entrou no Modo Major por um atalho
   'major_pickem_submit',    // {} — completou o pick'em (campeão escolhido)
   'major_sg_campaign_done', // {champion: 0|1} — terminou um Major jogado com um time
   'first_match_done',       // {mode, secs} — 1ª partida concluída e segundos desde a 1ª visita
