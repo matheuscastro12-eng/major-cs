@@ -3126,6 +3126,9 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "A sala expira em algumas horas.": { en: "The room expires in a few hours.", es: "La sala expira en unas horas." },
   "Entrar e aceitar": { en: "Sign in and accept", es: "Entrar y aceptar" },
   "Evento até domingo": { en: "Event until Sunday", es: "Evento hasta el domingo" },
+  // [lembrete .ics] faixa do Major na landing (MajorCalendarButton)
+  "Lembrar no calendário": { en: "Remind me in my calendar", es: "Recordar en el calendario" },
+  "Arquivo baixado: abra para salvar": { en: "File downloaded: open it to save", es: "Archivo descargado: ábrelo para guardar" },
   "carta exclusiva": { en: "exclusive card", es: "carta exclusiva" },
   "termina em": { en: "ends in", es: "termina en" },
   "Próximo evento em": { en: "Next event in", es: "Próximo evento en" },

@@ -31,6 +31,9 @@ const S = {
   teamsTitle: { pt: 'Os 32 times', en: 'The 32 teams', es: 'Los 32 equipos' },
   favorites: { pt: 'Favoritos (1.000 simulações)', en: 'Favorites (1,000 simulations)', es: 'Favoritos (1.000 simulaciones)' },
   startPickem: { pt: "Fazer meu Pick'em", en: 'Make my Pick’em', es: "Hacer mi Pick'em" },
+  // [lembrete .ics] botão "Adicionar ao calendário" (MajorCalendarButton)
+  calAdd: { pt: 'Adicionar ao calendário', en: 'Add to calendar', es: 'Añadir al calendario' },
+  calDone: { pt: 'Arquivo baixado: abra para salvar', en: 'File downloaded: open it to save', es: 'Archivo descargado: ábrelo para guardar' },
   pickStage: { pt: 'Escolha os 8 que avançam', en: 'Pick the 8 that advance', es: 'Elige los 8 que avanzan' },
   needPrev: { pt: 'Complete o stage anterior primeiro.', en: 'Finish the previous stage first.', es: 'Completa el stage anterior primero.' },
   picked: { pt: 'escolhidos', en: 'picked', es: 'elegidos' },

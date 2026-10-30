@@ -16,6 +16,7 @@ import {
   MAJOR_FAVORITES, MAJOR_SG_MILESTONES, landingDoors, landingHero, landingModes, majorPhase, milestonesReached,
   type LandingDoor, type LandingDoorId, type LandingHero, type LandingModeId, type MajorPhase,
 } from '../data/majorLanding';
+import { MajorCalendarButton } from './major/MajorCalendarButton';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
@@ -188,6 +189,9 @@ function MajorDesk({ now }: { now: number }) {
         </p>
       </div>
       <p className="lp-desk__foot">{ct('3 stages suíços · playoffs em MD3 · final em MD5')}</p>
+      <div className="lp-desk__cal">
+        <MajorCalendarButton className="lp-notice__go" label={ct('Lembrar no calendário')} doneLabel={ct('Arquivo baixado: abra para salvar')} surface="landing" />
+      </div>
     </aside>
   );
 }

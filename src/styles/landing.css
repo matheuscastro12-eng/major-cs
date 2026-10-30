@@ -478,6 +478,7 @@
   color: var(--c-ink);
 }
 .lp-desk__note { margin-top: var(--sp-3); font-size: var(--fs-2); color: var(--c-ink-faint); text-wrap: pretty; }
+.lp-desk__cal { padding: var(--sp-1) var(--sp-4); border-top: 1px solid var(--c-line); }
 .lp-desk__foot {
   padding: var(--sp-3) var(--sp-5);
   border-top: 1px solid var(--c-line);
