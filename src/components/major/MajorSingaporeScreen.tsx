@@ -18,6 +18,7 @@ import { useLang } from '../../state/i18n';
 import { shareUrl } from '../../state/shareLink';
 import { postOnX } from '../../state/shareX';
 import { track, trackShare } from '../../state/track';
+import { markFirstValue } from '../../state/paywallPolicy';
 import { Alert, Button, EmptyState, Panel, Skeleton, Tag } from '../ds';
 import { PlayerAvatar } from '../ui';
 import bo3Teams from '../../data/bo3-2026.json';
@@ -140,7 +141,8 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
 
   const complete = picksComplete(picks);
   // pick'em fechado (campeão escolhido) no palpite do próprio jogador; 1x por sessão (track.ts)
-  useEffect(() => { if (complete && !readOnly) track('major_pickem_submit', {}); }, [complete, readOnly]);
+  // e conta como o 1º valor do jogador (a oferta passiva só aparece depois: state/paywallPolicy.ts)
+  useEffect(() => { if (complete && !readOnly) { track('major_pickem_submit', {}); markFirstValue('pickem'); } }, [complete, readOnly]);
   const link = complete ? shareUrl(`${MAJOR_PATH}?p=${encodePicks(D, picks)}`, 'major-pickem') : '';
   const champName = teams.get(picks.bracket[6])?.name ?? '';
   const copyLink = async () => {

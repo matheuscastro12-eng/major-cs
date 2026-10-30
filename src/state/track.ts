@@ -140,14 +140,18 @@ export function startPresenceHeartbeat(): () => void {
 
 // ─── Funil de conversão da vitalícia ─────────────────────────────────
 // paywall_view {src}      → usuário grátis/deslogado VIU uma superfície de venda
-//                           (1x por sessão de navegação por src, guarda em memória)
+//                           (1x por sessão do navegador por src, em sessionStorage)
 // checkout_open {src,method} → a UI de pagamento realmente abriu (Stripe redirect
 //                           ou QR Pix na tela); src = atribuição de PRIMEIRO clique
 // checkout_abandon {src,method,secondsOpen} → fechou o QR Pix sem pagar (best-effort)
 // signup_start/done {src} → cadastro pré-pagamento (rtm_pending_signups) começou/terminou
 
-// dedupe por sessão por src: Set em memória (não localStorage — recarregar a
-// página conta como nova "vista", o que é o comportamento desejado do funil)
+// paywall_view: 1x por sessão do navegador por src (sessionStorage, como os
+// marcos do Major). Antes era só em memória e cada recarga contava outra vista:
+// 631 eventos para 182 sessões em 24h (30/10). Agora o evento acompanha o que o
+// jogador viu: cada superfície uma vez por sessão (ver state/paywallPolicy.ts).
+// Os outros degraus do funil (rtp_demo, ult_funnel, signup) seguem com o
+// dedupe em memória abaixo.
 const seenPaywalls = new Set<string>();
 
 // atribuição de origem do checkout: PRIMEIRO clique de CTA da sessão vence
@@ -158,8 +162,7 @@ let memorySrc = '';
 
 /** Registra que uma superfície de venda da vitalícia foi VISTA (1x/sessão/src). */
 export function trackPaywallView(src: string): void {
-  if (seenPaywalls.has(src)) return;
-  seenPaywalls.add(src);
+  if (seenOnce(`paywall_view:${src}`)) return;
   // src segue igual (as consultas antigas dependem dele); surface/trigger são o
   // recorte que o Growth pediu: onde apareceu e o que fez aparecer.
   track('paywall_view', { src, surface: src, trigger: paywallTrigger(src) });
