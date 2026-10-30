@@ -48,6 +48,6 @@ export const INFERNO_CALLS: [string, number, number, number?][] = [
   ['Arch', 77, 42.1, -90],
   ['Library', 83, 41],
   ['Pit', 88.6, 86.3],
-  ['Balcony', 70.1, 77.2],
+  ['Balcony', 70.4, 77.6],
   ['CT', 89, 28],
 ];
