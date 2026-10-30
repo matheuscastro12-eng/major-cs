@@ -8,12 +8,16 @@ export function hasLeagueParam(): boolean {
   try { return new URLSearchParams(window.location.search).has('liga'); } catch { return false; }
 }
 
-/** aba de entrada: link de palpite (?p=) abre o pick'em; convite de liga (?liga=), a liga */
-export function initialMajorTab(): MajorTab {
-  try {
-    const q = new URLSearchParams(window.location.search);
-    if (q.get('p')) return 'pickem';
-    if (q.has('liga')) return 'league';
-  } catch { /* sem window */ }
+/** aba de entrada pela query: link de palpite (?p=) abre o pick'em; convite de
+ *  liga (?liga=), a liga; desafio da campanha (?aba=jogar, state/shareInvite.ts), o Jogar */
+export function majorTabFromSearch(search: string): MajorTab {
+  const q = new URLSearchParams(search);
+  if (q.get('p')) return 'pickem';
+  if (q.has('liga')) return 'league';
+  if (q.get('aba') === 'jogar') return 'play';
   return 'overview';
+}
+
+export function initialMajorTab(): MajorTab {
+  try { return majorTabFromSearch(window.location.search); } catch { return 'overview'; /* sem window */ }
 }

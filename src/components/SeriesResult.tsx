@@ -5,21 +5,24 @@
 // Só lê o SeriesResult: nenhum número é recalculado de outro jeito (o
 // destaque da partida usa a mesma regra do Scoreboard).
 import { useState } from 'react';
-import { CircleAlert, CircleCheck, Crosshair, Flame, Info, Mic, Share2, Star, Trophy } from 'lucide-react';
+import { CircleAlert, CircleCheck, Crosshair, Flame, Info, Mic, Star, Trophy } from 'lucide-react';
 import type { SeriesResult, TTeam } from '../types';
 import { ct } from '../state/career-i18n';
-import { shareUrl } from '../state/shareLink';
-import { postOnX, shareText } from '../state/shareX';
+import { inviteKind, inviteMessage, inviteUrl, seriesDareText } from '../state/shareInvite';
+import { shareCard, shareText } from '../state/shareX';
+import { drawSeriesCard, seriesCardData } from '../state/seriesShareCard';
+import { ShareInvite } from './ShareInvite';
 import '../styles/series-result.css';
 
 import { bestRunOf, readTacticalNext, seriesPotm, TACTICAL_NEXT_KEY } from '../state/seriesResult';
 
-const SHARE_KIND = 'series';
+// convite do fim da série (ShareInvite): medição share_card {kind, channel}
+const DARE_KIND = inviteKind('serie', 'desafio');
+const CARD_KIND = inviteKind('serie', 'card');
 
 export function SeriesResultHero({ series, teams, userIdx, onContinue }: {
   series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; onContinue: () => void;
 }) {
-  const [shared, setShared] = useState<'native' | 'copy' | null>(null);
   const opp: 0 | 1 = userIdx === 0 ? 1 : 0;
   const won = series.winner === userIdx;
   const me = teams[userIdx], them = teams[opp];
@@ -29,12 +32,28 @@ export function SeriesResultHero({ series, teams, userIdx, onContinue }: {
   const run = bestRunOf(series, userIdx);
   const tag = (i: 0 | 1) => teams[i].tag || teams[i].name;
 
-  const url = shareUrl('/', SHARE_KIND);
+  // texto do post do card (o mesmo do antigo "Postar no X")
   const text = `${won ? ct('Vitória') : ct('Derrota')} ${mine}-${theirs} · ${me.name} x ${them.name} · Road to Major`
     + (potm ? `\n${ct('Destaque da partida')}: ${potm.nick} (${potm.rating.toFixed(2)})` : '');
-  const share = async () => {
-    const ch = await shareText(SHARE_KIND, `${text}\n${ct('Jogue a sua')}: ${url}`);
-    if (ch === 'native' || ch === 'copy') { setShared(ch); setTimeout(() => setShared(null), 2000); }
+  // desafio: o link é a página inicial (não existe link que monte esta mesma série)
+  const dare = async () => {
+    const dareText = seriesDareText(
+      { won, me: me.name, opp: them.name, mapScore: series.mapScore, userIdx },
+      { win: ct('{me} {score} {opp} no Road to Major. Duvido você fazer melhor:'), loss: ct('{me} {score} {opp} no Road to Major. Você vence essa?') },
+    );
+    const ch = await shareText(DARE_KIND, inviteMessage(dareText, inviteUrl('serie', 'desafio')));
+    return ch === 'copy' ? ct('Desafio copiado') : ch === 'native' ? ct('Compartilhado!') : null;
+  };
+  const postCard = async () => {
+    let dataUrl = '';
+    try {
+      dataUrl = drawSeriesCard(seriesCardData(series, [teams[0].name, teams[1].name], userIdx, potm), {
+        win: ct('Vitória'), loss: ct('Derrota'), potm: ct('Destaque da partida'), foot: `roadtomajor.com.br · ${ct('Jogue a sua').toLowerCase()}`,
+      });
+    } catch { /* canvas indisponível: segue só com o texto */ }
+    const ch = await shareCard(CARD_KIND, { dataUrl, filename: 'serie-road-to-major.png', text, url: inviteUrl('serie', 'card') });
+    if (ch === 'native') return ct('Compartilhado!');
+    return ch === 'x' && dataUrl ? ct('Abriu o X: anexa a imagem que baixou 😉') : null;
   };
 
   return (
@@ -72,11 +91,16 @@ export function SeriesResultHero({ series, teams, userIdx, onContinue }: {
       </ul>
       <div className="sr-actions">
         <button type="button" className="btn gold" onClick={onContinue}>{ct('Continuar')}</button>
-        <button type="button" className="btn ghost" onClick={share} aria-live="polite">
-          <Share2 size={16} aria-hidden /> {shared === 'copy' ? ct('Copiado!') : shared === 'native' ? ct('Compartilhado!') : ct('Compartilhar resultado')}
-        </button>
-        <button type="button" className="btn ghost" onClick={() => postOnX(SHARE_KIND, text, url)}>{ct('Postar no X')}</button>
       </div>
+      {/* convite pra compartilhar: as duas ações no lugar do antigo "Compartilhar resultado" + "Postar no X" */}
+      <ShareInvite
+        lead={ct('Seu amigo faria melhor? Mande o desafio.')}
+        dareLabel={ct('Desafie um amigo')}
+        cardLabel={ct('Postar o card')}
+        onDare={dare}
+        onCard={postCard}
+        darePrimary={false}
+      />
     </section>
   );
 }

@@ -2,7 +2,7 @@
 // Pro (RtpRoundRoom, a mesma máquina de engine/rtp/room.ts) e vê o Major andar.
 // Toda a regra está em engine/majorCampaign.ts; aqui é só tela e storage.
 import { useEffect, useMemo, useState } from 'react';
-import { Award, Dices, Download, Play, RotateCcw } from 'lucide-react';
+import { Award, Dices, Play, RotateCcw } from 'lucide-react';
 import data from '../../data/major-singapore-2026.json';
 import { bySeed, type MajorData, type MajorResult } from '../../engine/majorSingapore';
 import {
@@ -13,11 +13,11 @@ import { randomSeed } from '../../engine/rng';
 import type { Role } from '../../types';
 import type { MomentOutcome } from '../../engine/rtp/moments';
 import type { MapId } from '../../types';
-import { track, trackFirstMatchDone, trackShare } from '../../state/track';
+import { track, trackFirstMatchDone } from '../../state/track';
 import { RtpRoundRoom } from '../rtp/RtpRoundRoom';
 import { Alert, Button, Panel, Tag } from '../ds';
-import { downloadDataUrl, drawCampaignCard } from './majorShareCard';
 import { MajorResultView } from './MajorResultView';
+import { CampaignInvite } from './MajorShareInvite';
 import { MajorCrest } from './MajorCrest';
 import type { MajorKey } from './majorStrings';
 
@@ -45,6 +45,8 @@ export function MajorPlay({ t }: { t: T }) {
   const [teamId, setTeamId] = useState(camp?.teamId ?? 'furia');
   const [role, setRole] = useState<Role>(camp?.role ?? 'Rifler');
   const [inRoom, setInRoom] = useState(false);
+  // a campanha acabou AGORA (não veio pronta do storage): o convite rola pra tela
+  const [justDone, setJustDone] = useState(false);
 
   useEffect(() => {
     try {
@@ -65,7 +67,7 @@ export function MajorPlay({ t }: { t: T }) {
       const last = c.played[c.played.length - 1];
       track('major_sg_series', { phase: next.phase, won: last.winner === camp.teamId ? 1 : 0, rating: last.heroRating });
       trackFirstMatchDone('major'); // ativação: 1ª série concluída (1x por navegador)
-      trackCampaignDone(c);
+      if (trackCampaignDone(c)) setJustDone(true);
       setCamp(c);
       setInRoom(false);
     };
@@ -158,33 +160,34 @@ export function MajorPlay({ t }: { t: T }) {
           </p>
           <div className="msg-toolbar">
             <Button variant="primary" icon={<Play size={16} aria-hidden />} onClick={() => setInRoom(true)}>{t('playRoom')}</Button>
-            <Button icon={<Dices size={16} aria-hidden />} onClick={() => { const c = simulatePending(camp, D, view.next!); trackCampaignDone(c); setCamp(c); }}>{t('simThis')}</Button>
+            <Button icon={<Dices size={16} aria-hidden />} onClick={() => { const c = simulatePending(camp, D, view.next!); if (trackCampaignDone(c)) setJustDone(true); setCamp(c); }}>{t('simThis')}</Button>
           </div>
         </Panel>
       )}
 
-      {view?.result && <CampaignEnd t={t} camp={camp} result={view.result} summary={summary} />}
+      {view?.result && <CampaignEnd t={t} camp={camp} result={view.result} summary={summary} reveal={justDone} onRevealed={() => setJustDone(false)} />}
     </div>
   );
 }
 
-// a campanha acabou (campeão ou eliminado e o resto simulado): 1 marco por sessão (track.ts)
-function trackCampaignDone(c: MajorCampaign): void {
+// a campanha acabou (campeão ou eliminado e o resto simulado): 1 marco por sessão (track.ts).
+// Devolve se acabou, pra tela trazer o convite de compartilhar.
+function trackCampaignDone(c: MajorCampaign): boolean {
   const v = campaignView(D, c);
-  if (!v.next && v.result) track('major_sg_campaign_done', { champion: v.result.playoffs.champion === c.teamId ? 1 : 0 });
+  if (v.next || !v.result) return false;
+  track('major_sg_campaign_done', { champion: v.result.playoffs.champion === c.teamId ? 1 : 0 });
+  return true;
 }
 
-function CampaignEnd({ t, camp, result, summary }: { t: T; camp: MajorCampaign; result: MajorResult; summary: ReturnType<typeof campaignSummary> }) {
+function CampaignEnd({ t, camp, result, summary, reveal, onRevealed }: {
+  t: T; camp: MajorCampaign; result: MajorResult; summary: ReturnType<typeof campaignSummary>; reveal: boolean; onRevealed: () => void;
+}) {
   const champ = result.playoffs.champion === camp.teamId;
-  const saveCard = () => {
-    downloadDataUrl(drawCampaignCard(D, camp, result, summary, {
-      champion: t('champion'), record: t('record'), maps: t('mapsWL'), rating: t('avgRating'), mvp: t('mvp'), foot: t('cardFoot'),
-    }), 'campanha-major-singapore.png');
-    trackShare('major-campaign-img', 'copy'); // download do card conta como compartilhamento (share_card)
-  };
   return (
     <>
       <Alert tone={champ ? 'success' : 'info'}>{champ ? t('championMsg') : t('eliminatedMsg')}</Alert>
+      {/* convite: "Desafie um amigo" + "Postar o card" (o card da campanha, que antes só baixava) */}
+      <CampaignInvite t={t} camp={camp} result={result} summary={summary} reveal={reveal} onRevealed={onRevealed} />
       <Panel title={t('mvp')} accent="gold">
         <div className="msg-mvp">
           <Award size={28} aria-hidden className={summary.mvp ? 'is-on' : ''} />
@@ -193,9 +196,6 @@ function CampaignEnd({ t, camp, result, summary }: { t: T; camp: MajorCampaign; 
             {summary.best && <p className="msg-muted">{t('bestSeries')}: {summary.best.heroRating.toFixed(2)}</p>}
             <p className="msg-muted">{t('mvpRule')}</p>
           </div>
-        </div>
-        <div className="msg-toolbar">
-          <Button icon={<Download size={16} aria-hidden />} onClick={saveCard}>{t('shareRun')}</Button>
         </div>
       </Panel>
       <MajorResultView t={t} result={result} highlight={camp.teamId} />
