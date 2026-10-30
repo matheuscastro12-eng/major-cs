@@ -782,7 +782,16 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           (ouro) e o cartão passa a secundário, sem tirar a opção de ninguém. */}
       {pixFocus ? null : mode === 'signup' || mode === 'pay' ? (
         <>
-          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={goPix}>
+          {/* funil: dado real (28d) — 10 dos 26 checkout_abandon(pix) (38%) fecham
+              em MENOS de 15s, rápido demais pra ser espera de pagamento. É gente
+              clicando "Pagar com Pix" sem o banco à mão e desistindo assim que o
+              QR aparece. Os nudges existentes (troca pro cartão, reassurance)
+              só entram DEPOIS que o QR já está na tela — não alcançam esse grupo.
+              Avisa ANTES do clique, sem fricção nem passo extra. */}
+          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
+            {ct('Separe o celular com o app do seu banco — o QR aparece assim que você clicar')}
+          </p>
+          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '8px' }} onClick={goPix}>
             {busy ? ct('Aguarde…') : ct('Pagar com Pix')}
           </Button>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '6px 0 0' }}>{ct('Confirma na hora, sem sair desta tela')}</p>
