@@ -1,24 +1,29 @@
 // Landing page de marketing (rota /). Mesma identidade da interface nova do
-// jogo: marinho + dourado da marca, escudo, Oswald/Barlow. Hero com UMA ação
-// principal (jogar de graça), a vitrine com capturas reais de cada modo, o
-// destaque da sala do Road to Pro, planos (grátis x conta vitalícia; preço via state/price.ts),
-// como funciona, FAQ, CTA final e o modal de conta (checkout real: Pix/Stripe).
+// jogo: marinho + dourado da marca, escudo, Oswald/Barlow.
+// Enquanto a vitrine do PGL Major Singapore estiver no ar (data/majorWindow.ts),
+// o hero é do Modo Major: pick'em em ~1 min, sem conta, com a régua do evento
+// e os favoritos da simulação. Depois da janela volta o hero geral. Em seguida:
+// "Em 1 minuto" (3 portas com tempo honesto), os outros modos numa seção
+// compacta, planos (preço via state/price.ts), FAQ, CTA final e o modal de
+// conta (checkout real: Pix/Stripe).
+// Qual hero, quais portas e os favoritos: data/majorLanding.ts (puro e sem o
+// JSON dos 32 times, que não pode entrar no chunk inicial).
 // Estilos em src/styles/landing.css (só tokens).
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, Crosshair, Eye, Gauge, Gift, Globe, Layers, Play, Swords, Target, Trophy, Star } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Check, ChevronDown, Crosshair, Gift, Globe, Play, Star, Swords, Target, Trophy } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
-import { majorPromoOn } from '../data/majorWindow';
+import {
+  MAJOR_FAVORITES, MAJOR_SG_MILESTONES, landingDoors, landingHero, landingModes, majorPhase, milestonesReached,
+  type LandingDoor, type LandingDoorId, type LandingHero, type LandingModeId, type MajorPhase,
+} from '../data/majorLanding';
 import { MajorCalendarButton } from './major/MajorCalendarButton';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
-import { AnnouncementTweet, TwitterLink } from './social';
-import { openPatchNotes } from './PatchNotesModal';
-import { PATCHES } from '../data/patchNotes';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
 import { login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, type PixCharge } from '../state/account';
-import { ct } from '../state/career-i18n';
+import { careerLang, ct } from '../state/career-i18n';
 import { loadGhost } from '../state/ghost';
 import { loadDuelInvite } from '../state/duelInvite';
 import { dateKeyOf, dayNumberOf } from '../engine/daily/lines';
@@ -32,6 +37,12 @@ import { priceLabel, usePrice, withPrice } from '../state/price';
 
 // capturas reais da interface do jogo (public/landing/, WebP)
 const SHOT = '/landing/';
+// bastidores e avisos saem primeiro no X (a seção de Novidades saiu da landing)
+const X_PROFILE = 'https://x.com/castroomath';
+
+// número no formato do idioma da interface (31,6 · 31.6)
+const numLocale = () => (careerLang() === 'en' ? 'en-US' : careerLang() === 'es' ? 'es-ES' : 'pt-BR');
+const fmtPct = (n: number) => `${n.toLocaleString(numLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
 // Revela as seções abaixo da dobra ao entrar na tela. Quem já está visível no
 // carregamento nunca some; a trava de segurança (1,6s) garante que nada fica
@@ -79,7 +90,7 @@ function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: (
     io.observe(el);
     return () => io.disconnect();
   }, []);
-  const links: [string, string][] = [['modos', 'Modos'], ['conta', 'Conta'], ['como', 'Como funciona'], ['faq', 'Perguntas']];
+  const links: [string, string][] = [['comecar', 'Em 1 minuto'], ['modos', 'Modos'], ['conta', 'Conta'], ['faq', 'Perguntas']];
   return (
     <>
       <span ref={sentinel} aria-hidden style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 24 }} />
@@ -119,8 +130,104 @@ function CommunityGoalBar({ onPlay }: { onPlay: () => void }) {
   );
 }
 
-function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+// "Criar conta · {preço}" do hero: link, não disputa com o jogar (src landing-hero).
+// Preço + "pagamento único" no próprio texto, a reassurance que já ajudou nas
+// outras superfícies.
+function HeroOffer({ onAccount }: { onAccount: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
+  return (
+    <div className="lp-offer">
+      <button type="button" className="lp-textlink" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</button>
+      <span>{ct('Pagamento único · sem mensalidade')}</span>
+    </div>
+  );
+}
+
+// ── hero do Major (enquanto majorPromoOn) ────────────────────────────────────
+function phaseLabel(p: MajorPhase): string {
+  if (p.kind === 'pre') return p.days === 1 ? ct('Começa amanhã') : `${ct('Começa em')} ${p.days} ${ct('dias')}`;
+  if (p.kind === 'stages') return ct('Stages suíços em andamento');
+  return ct('Playoffs de 10 a 13/12');
+}
+
+// O visual do hero: não há captura do Modo Major em public/landing/, então é
+// HTML com dado real e pequeno (data/majorLanding.ts): a régua do evento e os 4
+// favoritos ao título do painel do Modo Major, sem o JSON dos 32 times.
+function MajorDesk({ now }: { now: number }) {
+  const F = MAJOR_FAVORITES;
+  const top = F.teams[0]?.pct || 1;
+  const reached = milestonesReached(now);
+  return (
+    <aside className="lp-desk" aria-label={ct('PGL Major Singapore: datas e favoritos na simulação')}>
+      <div className="lp-desk__head">
+        <span className="lp-desk__chip">{phaseLabel(majorPhase(now))}</span>
+        <p className="lp-desk__event">PGL Major Singapore</p>
+        <p className="lp-desk__where">{ct('Singapura · 32 times')}</p>
+      </div>
+      <ol className="lp-desk__line">
+        {MAJOR_SG_MILESTONES.map((m, i) => (
+          <li key={m.date} data-on={i < reached || undefined}>
+            <b>{m.date}</b>
+            <span>{ct(m.label)}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="lp-desk__body">
+        <p className="lp-desk__label" id="lp-desk-favs">{ct('Favoritos ao título na simulação')}</p>
+        <ol className="lp-favs" aria-labelledby="lp-desk-favs">
+          {F.teams.map((t, i) => (
+            <li key={t.id}>
+              <span className="lp-favs__rank" aria-hidden>{i + 1}</span>
+              <span className="lp-favs__team"><b>{t.tag}</b>{t.name !== t.tag && <> <span>{t.name}</span></>}</span>
+              <span className="lp-favs__bar" aria-hidden><span style={{ transform: `scaleX(${Math.min(1, t.pct / top)})` }} /></span>
+              <span className="lp-favs__pct">{fmtPct(t.pct)}</span>
+            </li>
+          ))}
+        </ol>
+        <p className="lp-desk__note">
+          {F.runs.toLocaleString(numLocale())} {ct('Majors simulados no jogo')} · {F.status === 'projecao' ? ct('lista provisória até 02/11') : ct('lista oficial')}
+        </p>
+      </div>
+      <p className="lp-desk__foot">{ct('3 stages suíços · playoffs em MD3 · final em MD5')}</p>
+      <div className="lp-desk__cal">
+        <MajorCalendarButton className="lp-notice__go" label={ct('Lembrar no calendário')} doneLabel={ct('Arquivo baixado: abra para salvar')} surface="landing" />
+      </div>
+    </aside>
+  );
+}
+
+function HeroMajor({ now, onMajor, onPlay, onAccount }: { now: number; onMajor: () => void; onPlay: () => void; onAccount: () => void }) {
+  return (
+    <section id="topo" className="lp-hero lp-hero--major" aria-labelledby="lp-hero-title">
+      <div className="lp-wrap lp-hero__grid">
+        <div className="lp-hero__copy">
+          <span className="lp-kicker"><Trophy size={14} aria-hidden /> {ct('PGL Major Singapore, de 24/11 a 13/12')}</span>
+          <h1 className="lp-h1" id="lp-hero-title">
+            {ct("Faça seu pick'em")} <span>{ct('do Major de Singapura')}</span>
+          </h1>
+          <p className="lp-hero__sub">
+            {ct('Escolha quem passa em cada stage, monte a chave dos playoffs e simule o Major inteiro. Depois, jogue as séries com um time ou chame os amigos pra uma liga.')}
+          </p>
+          <div className="lp-hero__cta">
+            {/* o clique no Major é medido no App (major_vitrine_click, surface landing) */}
+            <div className="lp-hero__btns">
+              <Button size="big" onClick={onMajor}>{ct("Fazer meu pick'em do Major")} <ArrowRight size={18} aria-hidden /></Button>
+              <Button size="big" variant="secondary" onClick={onPlay}>{ct('Jogar grátis')}</Button>
+            </div>
+            <p className="lp-hero__assure"><Check size={16} aria-hidden /> {ct('Grátis, sem cadastro, no navegador e no celular.')}</p>
+            <HeroOffer onAccount={onAccount} />
+          </div>
+        </div>
+        <div className="lp-hero__stage lp-hero__stage--desk">
+          <MajorDesk now={now} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── hero geral (depois da janela do Major) ───────────────────────────────────
+function HeroGeneral({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
   return (
     <section id="topo" className="lp-hero" aria-labelledby="lp-hero-title">
       <div className="lp-wrap lp-hero__grid">
@@ -134,14 +241,8 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
           </p>
           <div className="lp-hero__cta">
             <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
-            {/* funil: o CTA pago do Hero é a maior exposição do funil (paywall_view
-                src=landing). Continua aqui, mas como link: não disputa com o jogar.
-                Preço + "pagamento único" no próprio texto (a reassurance que já
-                ajudou nas outras superfícies) e o contador REAL de Fundadores. */}
-            <div className="lp-offer">
-              <button type="button" className="lp-textlink" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</button>
-              <span>{ct('Pagamento único · sem mensalidade')}</span>
-            </div>
+            <HeroOffer onAccount={onAccount} />
+            {/* prova social REAL: contador de Fundadores do servidor (falhou? não mostra nada) */}
             <FounderCounter />
           </div>
         </div>
@@ -167,95 +268,86 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
   );
 }
 
-// fatos conferidos no código, nada inventado sobre o negócio:
-// 6 modos = ModeId do shell (ds/shell/types.ts, fora o Início); 4 versões =
-// GAME_ORDER (data/teams.ts); 16 times = usuário + 15 do pool (engine/swiss.ts);
-// HLTV e Liquipedia = fonte do dataset (README, área admin).
-function Facts() {
-  const FACTS: [string, string, boolean?][] = [
-    ['6', 'modos de jogo'],
-    ['4', 'versões do CS, do 1.6 ao CS2'],
-    ['16', 'times por Major'],
-    ['HLTV + Liquipedia', 'fonte dos dados', true],
-  ];
-  return (
-    <div className="lp-wrap">
-      <dl className="lp-facts">
-        {FACTS.map(([v, l, text]) => (
-          <div key={l}><dt>{ct(l)}</dt><dd className={text ? 'is-text' : undefined}>{v}</dd></div>
-        ))}
-      </dl>
-    </div>
-  );
-}
+// ── "Em 1 minuto": 3 portas, cada uma com o tempo honesto ───────────────────
+// Tempos iguais aos do onboarding (onboard.*Meta) e dos cards do Início. O card
+// inteiro é clicável pelo botão (o ::after cobre o card); o título continua h3.
+type DoorCard = { time: string; title: string; desc: string; meta: string; cta: string };
+const DOORS: Record<LandingDoorId, DoorCard> = {
+  major: { time: '~1 min', title: 'Modo Major', desc: "Faça o pick'em dos 32 times, jogue o Major com um time ou simule o campeonato inteiro.", meta: 'sem conta · grátis', cta: "Fazer meu pick'em" },
+  diario: { time: '2 min', title: 'Diário', desc: 'Quatro desafios por dia, os mesmos pra todo mundo.', meta: 'todo dia · grátis', cta: 'Jogar o de hoje' },
+  draft: { time: '~15 min', title: 'Draft', desc: 'Monte um cinco com lendas de cada era e dispute um Major avulso.', meta: 'partida rápida · rejogável', cta: 'Montar meu cinco' },
+  carreira: { time: 'Campanha', title: 'Carreira', desc: 'Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.', meta: 'campanha longa · save neste navegador', cta: 'Fundar minha org' },
+};
 
-type ModeCard = { id: string; icon: ReactNode; kicker: string; title: string; desc: string; meta: ReactNode; img: string; alt: string; lead?: boolean };
-
-function Modes({ onPlay }: { onPlay: () => void }) {
-  const MODES: ModeCard[] = [
-    { id: 'carreira', lead: true, icon: <Trophy size={18} />, kicker: 'Destaque', title: 'Carreira', desc: 'Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.', meta: ct('1 jogador · campanha'), img: 'modo-carreira.webp', alt: 'Elenco da Carreira com os titulares, atributos, OVR e valor de mercado' },
-    { id: 'rtp', lead: true, icon: <Crosshair size={18} />, kicker: 'Demo grátis', title: 'Road to Pro', desc: 'Você não treina o time: você é o jogador. Treine, cuide da sua vida de pro e brilhe nos momentos decisivos.', meta: <><b>{ct('Demo grátis')}</b> · {ct('carreira completa na conta vitalícia')}</>, img: 'modo-rtp.webp', alt: 'Visão geral do Road to Pro: próxima série, energia do jogador, finanças e ranking mundial' },
-    { id: 'ultimate', icon: <Star size={18} />, kicker: 'Competitivo · Online', title: 'Ultimate', desc: 'Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.', meta: ct('Online · ranqueada'), img: 'modo-ultimate.webp', alt: 'Squad do Ultimate com as cartas dos jogadores e a química do time' },
-    { id: 'online', icon: <Globe size={18} />, kicker: 'Ranqueada', title: 'Online', desc: 'Ranqueada contra outros managers, duelo privado com amigos e o Major da Semana.', meta: ct('Com o seu squad do Ultimate'), img: 'modo-online.webp', alt: 'Ranqueada online com as divisões do Bronze ao Elite' },
-    { id: 'draft', icon: <Layers size={18} />, kicker: 'Partida rápida', title: 'Draft', desc: 'Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.', meta: ct('1 jogador · ~15 min'), img: 'modo-draft.webp', alt: 'Draft do elenco: escolha um jogador de um elenco histórico sorteado' },
-    { id: 'diario', icon: <CalendarDays size={18} />, kicker: 'Todo dia', title: 'Diário', desc: 'Quatro desafios por dia, os mesmos pra todo mundo. Grátis, sem conta.', meta: ct('1 jogador · 2 min'), img: 'modo-diario.webp', alt: 'Os quatro desafios do Diário: Lines Históricas, Quem é o Pro, O Impostor e Placar do Clássico' },
-  ];
+function QuickStart({ hero, onMajor, onDoor }: { hero: LandingHero; onMajor: () => void; onDoor: (door: LandingDoor) => void }) {
+  const doors = landingDoors(hero);
   return (
-    <section id="modos" className="lp-section" aria-labelledby="lp-modos-title">
+    <section id="comecar" className="lp-section lp-section--first" aria-labelledby="lp-comecar-title">
       <div className="lp-wrap">
-        <SectionHead id="lp-modos-title" center title={ct('Seis modos, um jogo só')} sub={ct('Tudo na mesma interface, com o trilho de modos à mão. Estas são telas reais do jogo.')} />
-        <div className="lp-modes">
-          {MODES.map((m) => (
-            <article key={m.id} className={`lp-mode lp-reveal${m.lead ? ' lp-mode--lead' : ''}`} aria-labelledby={`lp-mode-${m.id}`}>
-              <div className="lp-mode__shot">
-                <img src={SHOT + m.img} width={960} height={600} loading="lazy" decoding="async" alt={ct(m.alt)} />
-              </div>
-              <div className="lp-mode__body">
-                <div className="lp-mode__top">
-                  <span className="lp-mode__icon" aria-hidden>{m.icon}</span>
-                  <span className="lp-kicker">{ct(m.kicker)}</span>
-                </div>
-                <h3 id={`lp-mode-${m.id}`}>{ct(m.title)}</h3>
-                <p>{ct(m.desc)}</p>
-                <span className="lp-mode__meta">{m.meta}</span>
-              </div>
-            </article>
-          ))}
-        </div>
-        <div className="lp-modes__cta lp-reveal">
-          <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
-        </div>
+        <SectionHead
+          id="lp-comecar-title"
+          kicker={ct('Em 1 minuto')}
+          title={ct('Escolha por onde começar')}
+          sub={hero === 'major'
+            ? ct('O Modo Major abre na hora. Nos outros, você cria um manager em segundos, sem e-mail.')
+            : ct('Você cria um manager em segundos, sem e-mail, e já entra jogando.')}
+        />
+        <ul className="lp-doors">
+          {doors.map((id) => {
+            const d = DOORS[id];
+            return (
+              <li key={id} className="lp-door lp-reveal" data-lead={id === 'major' || undefined}>
+                <span className="lp-door__time">{ct(d.time)}</span>
+                <h3 id={`lp-door-${id}`}>{ct(d.title)}</h3>
+                <p>{ct(d.desc)}</p>
+                <span className="lp-door__meta">{ct(d.meta)}</span>
+                <button type="button" className="lp-door__go" aria-describedby={`lp-door-${id}`} onClick={() => (id === 'major' ? onMajor() : onDoor(id))}>
+                  {ct(d.cta)} <ArrowRight size={16} aria-hidden />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </section>
   );
 }
 
-// A sala do Road to Pro: o diferencial que merece seção própria.
-function RtpSpotlight() {
-  const POINTS: [ReactNode, string, string][] = [
-    [<Eye size={18} />, 'Nada escondido', 'Cada escolha mostra a chance e de onde ela vem: base, mira, cansaço, tendência do adversário, OVR de quem está do outro lado.'],
-    [<Gauge size={18} />, 'Você decide e executa', 'Depois de escolher, o seu tempo de reação ainda move as odds em até 8%, pra cima ou pra baixo.'],
-    [<Target size={18} />, 'Demo grátis', 'A peneira e as três primeiras semanas são de graça. A carreira inteira vem com a conta vitalícia.'],
-  ];
+// ── os outros modos, compactos (capturas reais do jogo) ──────────────────────
+type ModeCard = { icon: ReactNode; title: string; desc: string; meta: ReactNode; img: string; h?: number; alt: string };
+
+function Modes({ hero, onPlay }: { hero: LandingHero; onPlay: () => void }) {
+  const MODES: Record<LandingModeId, ModeCard> = {
+    carreira: { icon: <Trophy size={16} />, title: 'Carreira', desc: 'Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.', meta: ct('1 jogador · campanha'), img: 'modo-carreira.webp', alt: 'Elenco da Carreira com os titulares, atributos, OVR e valor de mercado' },
+    rtp: { icon: <Crosshair size={16} />, title: 'Road to Pro', desc: 'Você é o jogador. Nos momentos-chave, a chance de cada jogada fica na tela: o % que você vê é o % que rola.', meta: <><b>{ct('Demo grátis')}</b> · {ct('carreira completa na conta vitalícia')}</>, img: 'modo-rtp-sala.webp', h: 800, alt: 'Momento-chave do Road to Pro: round de pistola com três jogadas, cada uma com a sua chance em porcentagem e os modificadores que a formam' },
+    ultimate: { icon: <Star size={16} />, title: 'Ultimate', desc: 'Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.', meta: ct('Online · ranqueada'), img: 'modo-ultimate.webp', alt: 'Squad do Ultimate com as cartas dos jogadores e a química do time' },
+    online: { icon: <Globe size={16} />, title: 'Online', desc: 'Ranqueada contra outros managers, duelo privado com amigos e o Major da Semana.', meta: ct('Com o seu squad do Ultimate'), img: 'modo-online.webp', alt: 'Ranqueada online com as divisões do Bronze ao Elite' },
+  };
+  const ids = landingModes(hero);
   return (
-    <section id="road-to-pro" className="lp-section" aria-labelledby="lp-rtp-title">
-      <div className="lp-wrap lp-spot">
-        <div className="lp-spot__copy lp-reveal">
-          <span className="lp-kicker"><Crosshair size={14} aria-hidden /> Road to Pro</span>
-          <h2 className="lp-h2" id="lp-rtp-title">{ct('O % que você vê')} <span>{ct('é o % que rola')}</span></h2>
-          <p className="lp-lead">{ct('No Road to Pro você é o jogador. Nos momentos-chave da partida, o jogo abre a conta na sua frente e você escolhe a jogada.')}</p>
-          <ul className="lp-points">
-            {POINTS.map(([icon, t, d]) => (
-              <li key={t}><span aria-hidden>{icon}</span><div><b>{ct(t)}</b><p>{ct(d)}</p></div></li>
-            ))}
-          </ul>
+    <section id="modos" className="lp-section" aria-labelledby="lp-modos-title">
+      <div className="lp-wrap">
+        <SectionHead id="lp-modos-title" kicker={ct('Mais modos')} title={ct('Quando quiser ir mais fundo')} sub={ct('Estas são telas reais do jogo. Tudo na mesma interface, no PC e no celular.')} />
+        <ul className="lp-modes" data-count={ids.length}>
+          {ids.map((id) => {
+            const m = MODES[id];
+            return (
+              <li key={id} className="lp-mode lp-reveal">
+                <div className="lp-mode__shot">
+                  <img src={SHOT + m.img} width={960} height={m.h ?? 600} loading="lazy" decoding="async" alt={ct(m.alt)} />
+                </div>
+                <div className="lp-mode__body">
+                  <h3><span aria-hidden>{m.icon}</span>{ct(m.title)}</h3>
+                  <p>{ct(m.desc)}</p>
+                  <span className="lp-mode__meta">{m.meta}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="lp-modes__cta lp-reveal">
+          <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
         </div>
-        <figure className="lp-spot__media lp-reveal">
-          <div className="lp-screen lp-screen--gold">
-            <img src={SHOT + 'modo-rtp-sala.webp'} width={960} height={800} loading="lazy" decoding="async" alt={ct('Momento-chave do Road to Pro: round de pistola com três jogadas, cada uma com a sua chance em porcentagem e os modificadores que a formam')} />
-          </div>
-          <figcaption>{ct('Round de pistola numa partida real: três jogadas, três chances.')}</figcaption>
-        </figure>
       </div>
     </section>
   );
@@ -299,30 +391,12 @@ function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => v
   );
 }
 
-function How() {
-  const STEPS: [string, string][] = [
-    ['Crie o seu manager', 'Nick, idade, país e a cor da sua organização. Leva dez segundos.'],
-    ['Escolha o modo', 'Carreira, Road to Pro, Ultimate, Draft, Diário ou Online. Dá pra trocar a qualquer hora.'],
-    ['Jogue a partida', 'Veto de mapa, killfeed ao vivo e scoreboard no estilo HLTV.'],
-    ['Suba no ranking', 'Na ranqueada online você enfrenta outros managers e sobe do Bronze ao Elite.'],
-  ];
-  return (
-    <section id="como" className="lp-section" aria-labelledby="lp-como-title">
-      <div className="lp-wrap">
-        <SectionHead id="lp-como-title" title={ct('Como funciona')} />
-        <ol className="lp-steps lp-reveal">
-          {STEPS.map(([t, d]) => (
-            <li key={t}><div><h3>{ct(t)}</h3><p>{ct(d)}</p></div></li>
-          ))}
-        </ol>
-      </div>
-    </section>
-  );
-}
-
-function Faq() {
+function Faq({ hero }: { hero: LandingHero }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
+  // durante o Major, a pergunta de quem chega pelos posts do Major vem primeiro (e aberta)
+  const MAJOR_Q: [string, string] = ['O Modo Major é de graça?', "É. Pick'em dos 32 times, jogar o Major com um time, liga com os amigos e a simulação do campeonato inteiro, sem conta e sem criar manager. O palpite fica salvo neste navegador."];
   const Q: [string, string][] = [
+    ...(hero === 'major' ? [MAJOR_Q] : []),
     ['Preciso pagar pra jogar?', 'Não. Carreira, Ultimate, Draft, Diário e Online são de graça, incluindo a ranqueada online, e o Road to Pro tem demo grátis. O save fica no seu navegador. A conta de {preço} guarda o progresso na nuvem e libera o Road to Pro completo.'],
     ['O que a conta vitalícia me dá?', 'O Road to Pro completo com a Série do Dia, save na nuvem pra jogar no PC e no celular, compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. É um pagamento único, sem mensalidade.'],
     ['Funciona no celular?', 'Sim. O jogo roda no navegador do celular com a mesma interface do PC, e dá pra instalar na tela inicial como um app.'],
@@ -360,8 +434,9 @@ function Faq() {
   );
 }
 
-function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+function FinalCta({ hero, onMajor, onAccount, onPlay }: { hero: LandingHero; onMajor: () => void; onAccount: () => void; onPlay: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
+  const major = hero === 'major';
   return (
     <section className="lp-section lp-section--last" aria-labelledby="lp-final-title">
       <div className="lp-wrap">
@@ -369,18 +444,28 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
           <img src="/maps/nuke.jpg" alt="" loading="lazy" decoding="async" width={300} height={168} />
           <BrandMark size={56} />
           <h2 className="lp-h2" id="lp-final-title">{ct('O título não é dado, é conquistado')}</h2>
-          <p className="lp-lead">{ct('Comece de graça agora. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')}</p>
+          <p className="lp-lead">
+            {major
+              ? ct("Faça seu pick'em agora, de graça. Quando quiser guardar tudo na nuvem, é só criar a sua conta.")
+              : ct('Comece de graça agora. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')}
+          </p>
           <div className="lp-final__cta">
-            <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
+            {major
+              ? <Button size="big" onClick={onMajor}>{ct("Fazer meu pick'em do Major")} <ArrowRight size={18} aria-hidden /></Button>
+              : <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>}
             {/* funil: CTA final da página, com o preço no texto do botão (a seção de
                 planos já ficou pra trás na rolagem). src landing-final. */}
             <Button size="big" variant="gold" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>
           </div>
+          {major && <button type="button" className="lp-textlink" onClick={onPlay}>{ct('Ou jogue os outros modos, de graça')}</button>}
         </div>
         <footer className="lp-footer">
           <span className="lp-footer__brand"><BrandMark size={22} /> Road to Major</span>
           <p>{ct('Produto comercial independente, não afiliado ou endossado pela Valve, HLTV, Liquipedia, equipes ou jogadores.')}</p>
-          <LegalLinks />
+          <span className="lp-footer__links">
+            <a className="lp-footer__x" href={X_PROFILE} target="_blank" rel="noreferrer">{ct('Siga @castroomath no X')} <ArrowUpRight size={14} aria-hidden /></a>
+            <LegalLinks />
+          </span>
         </footer>
       </div>
     </section>
@@ -792,84 +877,23 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   );
 }
 
-// Novidades: o tweet de anúncio do @castroomath como prova social, mas sem
-// depender dele. O cartão com as últimas notas do jogo (patchNotes) aparece na
-// hora; o widget do X só é carregado quando a seção entra na tela e só troca o
-// cartão se renderizar em até 3,5s. Bloqueador, rede lenta ou falha: fica o
-// cartão, nunca um buraco.
-const X_PROFILE = 'https://x.com/castroomath';
-
-function NewsCard() {
-  const patch = PATCHES[0];
-  if (!patch) return null;
-  return (
-    <article className="lp-newscard" aria-labelledby="lp-newscard-title">
-      <div className="lp-newscard__head">
-        <h3 id="lp-newscard-title">{patch.title}</h3>
-        <span>{patch.date}</span>
-      </div>
-      <ul className="lp-newscard__list">
-        {patch.items.slice(0, 3).map((it) => (
-          <li key={it.text}><b>{it.area}</b> {it.text}</li>
-        ))}
-      </ul>
-      <div className="lp-newscard__foot">
-        <button type="button" className="lp-textlink" onClick={openPatchNotes}>{ct('Ver todas as novidades')}</button>
-        <a className="lp-xbtn" href={X_PROFILE} target="_blank" rel="noreferrer">{ct('Siga @castroomath no X')} <ArrowUpRight size={16} aria-hidden /></a>
-      </div>
-    </article>
-  );
-}
-
-function NewsBand() {
-  const slot = useRef<HTMLDivElement>(null);
-  const embed = useRef<HTMLDivElement>(null);
-  const [phase, setPhase] = useState<'idle' | 'loading' | 'ready' | 'fallback'>('idle');
-  useEffect(() => {
-    const el = slot.current;
-    if (!el || phase !== 'idle') return;
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setPhase('loading'); io.disconnect(); } }, { rootMargin: '200px 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [phase]);
-  useEffect(() => {
-    if (phase !== 'loading') return;
-    const started = Date.now();
-    const t = window.setInterval(() => {
-      const frame = embed.current?.querySelector('iframe');
-      const rendered = !!frame && frame.getBoundingClientRect().height > 120 && getComputedStyle(frame).visibility !== 'hidden';
-      // só troca se a seção não estiver acima da tela: crescer ali empurraria o
-      // que a pessoa está lendo (ex.: pulou pro FAQ pela nav)
-      const safe = (slot.current?.getBoundingClientRect().top ?? -1) >= 0;
-      if (rendered && safe) { setPhase('ready'); window.clearInterval(t); }
-      else if (Date.now() - started > 3500) { setPhase('fallback'); window.clearInterval(t); }
-    }, 250);
-    return () => window.clearInterval(t);
-  }, [phase]);
-  const embedOn = phase === 'loading' || phase === 'ready';
-  return (
-    <section id="novidades" className="lp-section" aria-labelledby="lp-news-title">
-      <div className="lp-wrap lp-news">
-        <SectionHead id="lp-news-title" center title={ct('Novidades')} sub={ct('O que mudou no jogo por último. Bastidores e avisos saem primeiro no X.')} />
-        <div ref={slot} className="lp-news__slot lp-reveal" data-phase={phase}>
-          {phase !== 'ready' && <NewsCard />}
-          {embedOn && (
-            <div ref={embed} className="lp-news__embed" data-ready={phase === 'ready'} inert={phase !== 'ready'}>
-              <AnnouncementTweet />
-            </div>
-          )}
-        </div>
-        {phase === 'ready' && <TwitterLink />}
-      </div>
-    </section>
-  );
-}
-
-export function Landing({ onPlay, onCheckout, openSignup, onMajor }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean; onMajor?: () => void }) {
+export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
+  onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean;
+  /** abre o Modo Major (o App mede o clique: major_vitrine_click, surface landing) */
+  onMajor?: () => void;
+  /** porta do "Em 1 minuto" (Diário, Draft, Carreira); sem ela, cai no onPlay */
+  onDoor?: (door: LandingDoor) => void;
+}) {
   usePrice(); // re-renderiza quando o preço do servidor chega
   const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar OU clique numa trava dentro do app: pula a landing e abre direto o cadastro
   const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
   const ref = useReveal();
+  // hero do Major enquanto a vitrine estiver no ar (data/majorWindow.ts) e o App
+  // souber abrir o modo; o instante é lido 1x por visita (régua e contagem)
+  const [now] = useState(() => Date.now());
+  const hero = landingHero(now, !!onMajor);
+  const openMajor = onMajor ?? onPlay;
+  const openDoor = onDoor ?? (() => onPlay());
   // funil: CTA da landing abrindo o modal de conta. first-touch, então quem
   // chegou de uma trava (home-rtp, wl-lock...) mantém a origem original.
   // src por botão: landing-nav, landing-hero, landing-pricing, landing-final e
@@ -898,16 +922,8 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor }: { onPlay: (
       <a className="lp-skip" href="#conteudo">{ct('Pular para o conteúdo')}</a>
       <Nav onAccount={() => openAcct('signup', 'landing-nav')} onLogin={() => openAcct('login')} onPlay={onPlay} />
       <main id="conteudo" tabIndex={-1}>
+        {/* o Modo Major não tem mais faixa aqui: com a vitrine no ar, ele é o hero */}
         <div className="lp-notices">
-          {/* Modo Major: quem chega pelos posts do Major vai direto pro pick'em, sem criar manager */}
-          {onMajor && majorPromoOn() && (
-            <div className="lp-notice">
-              <Trophy size={16} aria-hidden />
-              <span><b>{ct('Modo Major')}</b>: {ct('PGL Major Singapore, de 24/11 a 13/12')} · {ct("faça seu pick'em e jogue o Major com o seu time, grátis")}</span>
-              <button type="button" className="lp-notice__go" onClick={onMajor}>{ct('Abrir o Modo Major')} <ArrowRight size={14} aria-hidden /></button>
-              <MajorCalendarButton className="lp-notice__go" label={ct('Lembrar no calendário')} doneLabel={ct('Arquivo baixado: abra para salvar')} surface="landing" />
-            </div>
-          )}
           {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
           {duelInvite && (
             <div className="lp-notice">
@@ -937,15 +953,14 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor }: { onPlay: (
           )}
           <CommunityGoalBar onPlay={onPlay} />
         </div>
-        <Hero onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />
-        <Facts />
-        <Modes onPlay={onPlay} />
-        <RtpSpotlight />
+        {hero === 'major'
+          ? <HeroMajor now={now} onMajor={openMajor} onPlay={onPlay} onAccount={() => openAcct('signup', 'landing-hero')} />
+          : <HeroGeneral onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />}
+        <QuickStart hero={hero} onMajor={openMajor} onDoor={openDoor} />
+        <Modes hero={hero} onPlay={onPlay} />
         <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPlay={onPlay} />
-        <How />
-        <NewsBand />
-        <Faq />
-        <FinalCta onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
+        <Faq hero={hero} />
+        <FinalCta hero={hero} onMajor={openMajor} onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
       </main>
       {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} />}
     </div>

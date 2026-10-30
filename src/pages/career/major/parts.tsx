@@ -2,6 +2,7 @@
 // contagem regressiva, walkout e a chave (suíço por recorde / mata-mata).
 import { useEffect, useState } from 'react';
 import { Flag, TeamBadge } from '../../../components/ui';
+import { logoForName } from '../../../data/media';
 import type { Pairing, TPlayer, TTeam } from '../../../types';
 import { play, useReducedMotion, useSound } from './audio';
 import { mt } from './i18n';
@@ -14,7 +15,7 @@ export function teamLookup(...pools: (TTeam[] | undefined)[]): TeamOf {
   for (const p of pools) for (const t of p ?? []) if (!m.has(t.id)) m.set(t.id, t);
   return (id) => {
     const t = m.get(id);
-    if (t) return t;
+    if (t) return t.logoUrl ? t : { ...t, logoUrl: logoForName(t.name, t.id) };
     const tag = (id.split(/[-_:]/)[0] || id).slice(0, 6).toUpperCase();
     return { id, tag, name: tag, country: '', colors: ['var(--c-surface-3)', 'var(--c-ink-faint)'] as [string, string], players: [] };
   };

@@ -125,6 +125,7 @@ import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { ct, setCareerLang } from './state/career-i18n';
 import { Landing, AccountModal } from './components/Landing';
+import type { LandingDoor } from './data/majorLanding';
 import { LegalPage } from './components/Legal';
 import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
@@ -433,6 +434,8 @@ export default function App() {
   const [ultTabReq, setUltTabReq] = useState<{ tab: string; n: number } | null>(null);
   const [homeViewReq, setHomeViewReq] = useState<{ view: 'menu' | 'draft'; n: number }>({ view: 'menu', n: 0 });
   const [showOnboarding, setShowOnboarding] = useState(() => shouldOnboard());
+  // porta escolhida no "Em 1 minuto" da landing: sem manager, o Setup vem antes e a porta abre logo depois dele
+  const [doorAfterSetup, setDoorAfterSetup] = useState<LandingDoor | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
   const routeReadyRef = useRef(false);
   const popNavigationRef = useRef(false);
@@ -1006,6 +1009,11 @@ export default function App() {
     setScreen('home');
   };
   const newMajor = () => { setHomeViewReq((r) => ({ view: 'draft', n: r.n + 1 })); setScreen('home'); };
+  // portas da landing: já escolheu por onde começar, então o modal das 3 rotas não cobre o modo nesta visita
+  const openLandingDoor = (d: LandingDoor) => {
+    setShowOnboarding(false);
+    if (d === 'diario') setScreen('daily'); else if (d === 'draft') openDraftMode(); else if (accountReady) openCareerMode(); else setScreen('home');
+  };
   const openAccount = () => { if (account) setScreen(manager ? 'profile' : 'setup'); else { setAuthMode('login'); setAuthOpen(true); } };
   const shellModes: ShellMode[] = [
     { id: 'inicio', label: ct('Início'), short: ct('Início'), icon: House, onSelect: () => { setHomeViewReq((r) => ({ view: 'menu', n: r.n + 1 })); setScreen('home'); } },
@@ -1156,7 +1164,7 @@ export default function App() {
   if (screen === 'landing') {
     return (
       <>
-        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} onMajor={() => { track('major_vitrine_click', { surface: 'landing' }); setScreen('majorsg'); }} />
+        <Landing onPlay={() => { setDoorAfterSetup(null); setScreen(manager ? 'home' : 'setup'); }} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} onMajor={() => { track('major_vitrine_click', { surface: 'landing' }); setScreen('majorsg'); }} onDoor={(d) => { if (manager) openLandingDoor(d); else { setDoorAfterSetup(d); setScreen('setup'); } }} />
         {!bannerPreview && <AdBanner />}
       </>
     );
@@ -1169,7 +1177,7 @@ export default function App() {
   // Portão do Setup: não vive só no botão "Jogar". Sem manager criado, qualquer
   // entrada direta no jogo (deep link, F5, retorno do Stripe em /jogar) cai aqui.
   if (screen === 'setup' || !manager) {
-    return <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); setScreen('home'); }} />;
+    return <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); const d = doorAfterSetup; setDoorAfterSetup(null); if (d) openLandingDoor(d); else setScreen('home'); }} />;
   }
 
   if (screen === 'profile' && manager) {
@@ -1301,7 +1309,7 @@ export default function App() {
       {showOnboarding && screen === 'home' && (
         <Onboarding
           onClose={() => setShowOnboarding(false)}
-          onRoute={(route) => { if (route === 'major') setScreen('majorsg'); else if (route === 'draft') openDraftMode(); else openCareerMode(); }}
+          onRoute={(route) => { if (route === 'major') { track('major_vitrine_click', { surface: 'onboarding' }); setScreen('majorsg'); } else if (route === 'draft') openDraftMode(); else openCareerMode(); }}
         />
       )}
 
