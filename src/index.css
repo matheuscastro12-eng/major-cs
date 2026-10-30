@@ -2209,17 +2209,13 @@ table.standings tr.is-user td {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 /* o banner do confronto (veto, pré-jogo) tem fundo escuro fixo: no tema claro
-   o texto voltava escuro sobre escuro ("MD3", "Veto de mapas" sumiam). Aqui ele
-   segue com as tintas do tema escuro (mesmos valores de :root em tokens.css). */
+   o texto ficava escuro sobre escuro ("MD3", "Veto de mapas" sumiam). O banner
+   leva data-theme="dark" (flags.tsx), então as camadas legadas são recalculadas
+   nele a partir destas tintas, as mesmas de :root em tokens.css. */
 [data-theme='light'] .match-banner {
   --c-ink: #eaf0f8;
   --c-ink-dim: #b7c4d8;
   --c-ink-faint: #8fa2bf;
-  --text: var(--c-ink);
-  --text-strong: var(--c-ink);
-  --dim: var(--c-ink-dim);
-  --faint: var(--c-ink-faint);
-  --gold: color-mix(in srgb, var(--c-accent) 55%, var(--c-ink));
 }
 
 .mb-side {
