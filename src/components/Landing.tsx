@@ -22,7 +22,9 @@ import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
-import { login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, type PixCharge } from '../state/account';
+import { AccountError, login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, useAccount, type PixCharge } from '../state/account';
+import { pixErrorKind, type PixErrorKind } from '../state/pixView';
+import { PixPanel } from './PixPanel';
 import { careerLang, ct } from '../state/career-i18n';
 import { loadGhost } from '../state/ghost';
 import { loadDuelInvite } from '../state/duelInvite';
@@ -512,9 +514,16 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [accepted, setAccepted] = useState(false);
-  // Pix Woovi (merge origin/master) + visual em-* (HEAD)
-  const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  // Pix Woovi: a cobrança na tela, o e-mail da conta e quando ela chegou (base do
+  // prazo do Woovi). A tela do QR é o PixPanel (igual ao do UpsellCard).
+  const [pix, setPix] = useState<{ charge: PixCharge; email: string; at: number } | null>(null);
+  // conta que já passou pelo cadastro/login nesta tela: daqui pra frente o modal
+  // é só o Pix, e gerar de novo (código expirou, deu erro) não refaz o cadastro.
+  const [pixEmail, setPixEmail] = useState('');
+  const [pixGenerating, setPixGenerating] = useState(false);
+  const [pixErr, setPixErr] = useState<PixErrorKind | null>(null);
+  // o polling automático bateu no teto de 15 min: a tela pede o "verificar agora"
+  const [pollPaused, setPollPaused] = useState(false);
   const [nudge, setNudge] = useState(false);
   // funil: refinando o achado anterior — de 60 checkout_abandon (pix) nos últimos
   // 28 dias, 18 (30%) fecham em menos de 60s, e 11 desses entre 15s–60s, ou seja,
@@ -580,11 +589,12 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     let alive = true;
     const startedAt = Date.now();
     const CAP_MS = 15 * 60_000;
+    setPollPaused(false);
     const check = async () => {
       try { const me = await fetchMe(); if (alive && me?.paid) { pixConfirmed.current = true; setPix(null); onPlay(); } } catch { /* ignora */ }
     };
     const t = setInterval(() => {
-      if (Date.now() - startedAt > CAP_MS) { clearInterval(t); return; } // Pix expirou
+      if (Date.now() - startedAt > CAP_MS) { clearInterval(t); if (alive) setPollPaused(true); return; } // Pix expirou: a tela oferece o "verificar agora"
       if (document.hidden) return;                                       // aba oculta: webhook cobre
       void check();
     }, 6000);
@@ -616,35 +626,48 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
       await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento (checkout_open é do App.startCheckout)
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
   };
-  // Pix via Woovi (merged de origin/master): cria/entra na conta, gera a cobrança
-  // e mostra QR + copia-e-cola INLINE. O webhook (/api/woovi-webhook) marca a conta
-  // como paga e o polling acima detecta na mesma tela e libera o acesso.
+  // Pix via Woovi: cria/entra na conta, gera a cobrança e mostra QR + copia-e-cola
+  // INLINE. O webhook (/api/woovi-webhook) marca a conta como paga e o polling
+  // acima detecta na mesma tela e libera o acesso.
+  // Gera a cobrança da conta já resolvida. Também é o "Gerar novo código" /
+  // "Tentar de novo": o checkout_open conta só a 1ª vez que um QR aparece neste
+  // modal, e o pixOpenedAt (base do abandono) fica nessa 1ª abertura.
+  const requestPix = async (acctEmail: string) => {
+    setPixErr(null); setPixGenerating(true);
+    try {
+      const charge = await beginPix();
+      if (!charge) { pixConfirmed.current = true; setPix(null); onPlay(); return; } // já estava paga
+      setPix({ charge, email: acctEmail, at: Date.now() });
+      if (!pixOpenedAt.current) {
+        pixOpenedAt.current = Date.now();
+        trackCheckoutOpen('pix'); // funil: QR Pix da vitalícia na tela
+      }
+    } catch (e) {
+      // sem token o beginPix nem chega no servidor: é sessão (como o 401)
+      setPixErr(pixErrorKind(e instanceof AccountError ? e.status : 401));
+    }
+    setPixGenerating(false);
+  };
   const goPix = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
     try {
-      const acct = await resolveAccount();
+      const acct = pixEmail ? { email: pixEmail, paid: false } : await resolveAccount();
       if (acct.paid) { onPlay(); return; }
-      const charge = await beginPix();
-      if (!charge) { onPlay(); return; } // já estava paga
-      setPix({ charge, email: acct.email });
-      pixOpenedAt.current = Date.now();
-      trackCheckoutOpen('pix'); // funil: QR Pix da vitalícia na tela
-      setBusy(false);
-    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
+      setPixEmail(acct.email);
+      await requestPix(acct.email);
+    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); }
+    setBusy(false);
   };
-  const copyBr = async () => {
-    if (!pix?.charge.brCode) return;
-    try { await navigator.clipboard.writeText(pix.charge.brCode); setCopied(true); setTimeout(() => setCopied(false), 2200); } catch { /* sem permissão */ }
-  };
+  const regenPix = () => { if (pixEmail && !pixGenerating) void requestPix(pixEmail); };
   // troca pro cartão sem perder o cadastro: a conta já foi criada no goPix, então
   // só dispara o checkout do Stripe (mesmo onCheckout do botão "Ativar com
   // cartão" acima) — não é um segundo cadastro.
   const switchToCard = async () => {
-    if (!pix || cardSwitching) return;
+    if (!pixEmail || cardSwitching) return;
     setCardSwitching(true);
     pixSwitchedMethod.current = true;
-    await onCheckout(pix.email, nick.trim() || payAcct?.nick || '');
+    await onCheckout(pixEmail, nick.trim() || payAcct?.nick || '');
   };
   // pixFirst + conta grátis já logada: não há o que cadastrar — o QR Pix abre
   // sozinho (1x). Quem prefere cartão tem o botão logo abaixo do QR.
@@ -655,8 +678,11 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     void goPix();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixFirst, mode]);
-  // com o QR na tela (pixFirst), o formulário sai do caminho: QR + cartão sem rolar
-  const pixFocus = pixFirst && !!pix;
+  // Passo do Pix: com a conta resolvida e o Pix gerando, na tela ou com erro, o
+  // modal vira só o PixPanel. Antes o formulário (e o preço) ficava em cima e, no
+  // celular, o QR e o "Copiar" caíam abaixo da dobra. pixFirst + conta grátis já
+  // abre direto no passo (sem piscar o preço antes do auto-Pix).
+  const pixStep = !!pix || pixGenerating || (!!pixErr && !!pixEmail) || (pixFirst && mode === 'pay');
   // fechar com o QR Pix aberto e sem pagamento confirmado: UM nudge leve inline
   // (1x por sessão), honesto e descartável. Depois disso, fechar fecha mesmo.
   const requestClose = () => {
@@ -671,7 +697,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const title = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
       <BrandMark size={22} />
-      <span>{mode === 'signup' ? ct('Criar conta') : mode === 'pay' ? ct('Ativar a vitalícia') : mode === 'reset' ? ct('Recuperar senha') : ct('Entrar')}</span>
+      <span>{pixStep || mode === 'pay' ? ct('Ativar a vitalícia') : mode === 'signup' ? ct('Criar conta') : mode === 'reset' ? ct('Recuperar senha') : ct('Entrar')}</span>
     </span>
   );
 
@@ -698,7 +724,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   };
   return (
     <Modal open onClose={requestClose} title={title} size="sm">
-      {(mode === 'signup' || mode === 'pay') && !pixFocus && (
+      {(mode === 'signup' || mode === 'pay') && !pixStep && (
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
             <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--em-gold)' }}>{priceLabel()}</span>
@@ -721,13 +747,8 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <FounderCounter style={{ marginTop: '8px' }} />
         </div>
       )}
-      {pixFocus && playerNick && (
-        <p style={{ margin: '0 0 4px', fontSize: '0.78rem', color: 'var(--em-muted)', fontWeight: 600 }}>
-          {ct('Pix aprova na hora · o')} {playerNick} {ct('continua de onde parou')}
-        </p>
-      )}
-      {info && mode !== 'signup' && <p style={{ color: 'var(--c-win)', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
-      {mode === 'pay' || pixFocus ? null : mode !== 'reset' ? (
+      {info && mode !== 'signup' && !pixStep && <p style={{ color: 'var(--c-win)', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
+      {mode === 'pay' || pixStep ? null : mode !== 'reset' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
           <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
@@ -739,7 +760,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
                 {showPw ? ct('ocultar') : ct('mostrar')}
               </button>
             </div>
-            <input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type={showPw ? 'text' : 'password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} />
+            <input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type={showPw ? 'text' : 'password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && (mode === 'signup' ? goPix() : go())} />
           </div>
           {/* Confirmação só no CADASTRO: um typo aqui cria uma conta com senha que
               ninguém conhece. O reset por e-mail existe e resolve, mas obriga quem
@@ -756,7 +777,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
                 type={showPw ? 'text' : 'password'}
                 autoComplete="new-password"
                 aria-invalid={pwMismatch}
-                onKeyDown={(e) => e.key === 'Enter' && go()}
+                onKeyDown={(e) => e.key === 'Enter' && goPix()}
               />
               {pwMismatch && <p style={{ color: '#e2574c', fontSize: '0.74rem', margin: '6px 0 0' }}>{ct('As senhas não são iguais.')}</p>}
             </div>
@@ -794,18 +815,18 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           )}
         </div>
       )}
-      {mode === 'signup' && !pixFocus && (
+      {mode === 'signup' && !pixStep && (
         <label className="checkout-legal-accept">
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
           <span>{ct('Li e aceito os')} <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">{ct('Termos')}</a> {ct('e a')} <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">{ct('Política de Reembolso')}</a>{ct(', consultei a')} <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">{ct('Privacidade')}</a> {ct('e confirmo ser maior de 18 anos ou responsável legal pela compra.')}</span>
         </label>
       )}
-      {err && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
+      {err && !pixStep && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
       {/* funil: dado real (checkout_open x rtm_paid_emails, por método) mostra o Pix
           confirmando a imensa maioria dos checkouts abertos, enquanto o cartão perde
           a maior parte no redirect pro Stripe — então o Pix vira o CTA primário
           (ouro) e o cartão passa a secundário, sem tirar a opção de ninguém. */}
-      {pixFocus ? null : mode === 'signup' || mode === 'pay' ? (
+      {pixStep ? null : mode === 'signup' || mode === 'pay' ? (
         <>
           {/* funil: dado real (28d) — 10 dos 26 checkout_abandon(pix) (38%) fecham
               em MENOS de 15s, rápido demais pra ser espera de pagamento. É gente
@@ -814,7 +835,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
               só entram DEPOIS que o QR já está na tela — não alcançam esse grupo.
               Avisa ANTES do clique, sem fricção nem passo extra. */}
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
-            {ct('Separe o celular com o app do seu banco — o QR aparece assim que você clicar')}
+            {ct('Tenha o app do banco à mão: o código Pix aparece logo em seguida')}
           </p>
           <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '8px' }} onClick={goPix}>
             {busy ? ct('Aguarde…') : ct('Pagar com Pix')}
@@ -827,87 +848,39 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
       ) : mode === 'login' ? (
         <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : ct('Entrar')}</Button>
       ) : null}
-      {pix && (
-        <div style={{ marginTop: '14px', background: 'color-mix(in srgb, var(--c-win) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-win) 35%, transparent)', borderRadius: '6px', padding: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 8px var(--c-win)', animation: 'pulse 1.4s infinite' }} />
-            <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
-          </div>
-          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-            {/* funil: a mediana real de espera do Pix é ~133s — "aprovado em
-                segundos" prometia rápido demais e pode ter puxado parte dos 30%
-                de abandonos que saem em menos de 1min. Troca por expectativa
-                honesta desde o primeiro segundo, sem depender só do timer acima. */}
-            {ct('Esta tela confirma sozinha assim que o Pix cair — não precisa recarregar. Costuma levar de 1 a 3 minutos.')}
-          </p>
-          {pix.charge.qrCodeImage && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
-              <img src={pix.charge.qrCodeImage} alt="QR Pix" style={{ width: '200px', height: '200px', background: '#fff', padding: '8px', borderRadius: '8px' }} />
-            </div>
-          )}
-          {pix.charge.brCode && (
-            <>
-              <label style={lbl}>{ct('Pix copia e cola')}</label>
-              <textarea readOnly value={pix.charge.brCode} rows={3} onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-                style={{ ...input, fontFamily: 'monospace', fontSize: '0.72rem', resize: 'none', wordBreak: 'break-all' }} />
-              <button type="button" onClick={copyBr}
-                style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'color-mix(in srgb, var(--c-win) 20%, transparent)' : 'var(--em-panel-2)', border: '1px solid var(--em-border)', color: 'var(--em-text)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                {copied ? ct('Copiado!') : ct('Copiar código Pix')}
-              </button>
-            </>
-          )}
-          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
-            {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
-          </p>
-          {/* saída honesta pro cartão — visível desde que o QR abre, não mais só
-              aos 25s (ver comentário no effect acima: 29% dos abandonos do Pix
-              desistem antes disso). O Pix continua o CTA primário e o QR não some. */}
-          <button
-            type="button"
-            onClick={() => void switchToCard()}
-            disabled={cardSwitching}
-            style={{ display: 'block', width: '100%', marginTop: '10px', padding: '8px', borderRadius: '6px', cursor: cardSwitching ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: cardSwitching ? 0.6 : 1 }}
-          >
-            {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
-          </button>
-          {pixWaitLong && (
-            <>
-              {/* reassurance honesta pra quem passou de 25s esperando (ver comentário no effect acima) */}
-              <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
-                {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
-              </p>
-              {/* botão de controle pra quem já pagou e só está esperando a confirmação (ver comentário no checkPixNow acima) */}
-              <button
-                type="button"
-                onClick={() => void checkPixNow()}
-                disabled={checkingNow}
-                style={{ display: 'block', width: '100%', marginTop: '8px', padding: '8px', borderRadius: '6px', cursor: checkingNow ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--em-gold, #e8c170)', color: 'var(--em-gold, #e8c170)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: checkingNow ? 0.6 : 1 }}
-              >
-                {checkingNow ? ct('Checando…') : ct('Já paguei, verificar agora')}
-              </button>
-            </>
-          )}
-          {nudge && (
-            /* nudge anti-abandono (1x/sessão): inline, honesto, descartável */
-            <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(232,193,112,.08)', border: '1px solid rgba(232,193,112,.4)', borderRadius: '6px' }}>
-              <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--em-text)', lineHeight: 1.5 }}>
-                {ct('Ficou alguma dúvida? O acesso é vitalício e o Pix confirma na hora.')}
-              </p>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" onClick={() => setNudge(false)}
-                  style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'var(--em-gold)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                  {ct('Continuar pagamento')}
-                </button>
-                <button type="button" onClick={onClose}
-                  style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                  {ct('Fechar')}
-                </button>
+      {pixStep && (
+        <PixPanel
+          charge={pix?.charge ?? null}
+          chargeAt={pix?.at ?? 0}
+          generating={pixGenerating}
+          error={pixErr}
+          onRegenerate={regenPix}
+          /* saída honesta pro cartão — visível desde que o QR abre, não mais só
+             aos 25s (ver comentário no effect acima: 29% dos abandonos do Pix
+             desistem antes disso). O Pix continua o CTA primário e o QR não some. */
+          onCard={() => void switchToCard()}
+          cardSwitching={cardSwitching}
+          /* reassurance + "Já paguei, verificar agora" a partir dos 25s (ver os
+             comentários do pixWaitLong e do checkPixNow acima) */
+          waitLong={pixWaitLong}
+          onCheckNow={() => void checkPixNow()}
+          checkingNow={checkingNow}
+          pollPaused={pollPaused}
+          note={playerNick ? <>{ct('Pix aprova na hora · o')} {playerNick} {ct('continua de onde parou')}</> : undefined}
+          interrupt={nudge ? (
+            /* nudge anti-abandono (1x/sessão): inline, honesto, descartável. Logo
+               abaixo do status (antes ficava no fim do QR, fora da tela no celular). */
+            <div className="pix-panel__nudge" role="group" aria-label={ct('Continuar pagamento')}>
+              <p>{ct('Ficou alguma dúvida? O acesso é vitalício e o Pix confirma na hora.')}</p>
+              <div className="pix-panel__nudge-actions">
+                <Button variant="secondary" autoFocus onClick={() => setNudge(false)}>{ct('Continuar pagamento')}</Button>
+                <Button variant="ghost" onClick={onClose}>{ct('Fechar')}</Button>
               </div>
             </div>
-          )}
-        </div>
+          ) : undefined}
+        />
       )}
-      <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
+      {mode !== 'pay' && !pixStep && <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
         {mode === 'reset' ? (
           <button type="button" onClick={() => { setMode('login'); setResetStep('ask'); setErr(''); setInfo(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>← {ct('Voltar pro login')}</button>
         ) : (
@@ -916,7 +889,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); setInfo(''); setPw2(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
           </>
         )}
-      </p>
+      </p>}
       <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', opacity: 0.75, textAlign: 'center', margin: '10px 0 0' }}>{ct('Cartão pelo Stripe ou Pix pelo Woovi. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.')}</p>
     </Modal>
   );
@@ -944,6 +917,11 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
   // src por botão: landing-nav, landing-hero, landing-pricing, landing-final e
   // landing-ghost; o "Entrar" segue com o src padrão 'landing'.
   const openAcct = (mode: 'signup' | 'login' = 'signup', src: string = 'landing') => { setCheckoutSrc(src); setAcctMode(mode); setAcct(true); };
+  // conta grátis já logada (cadastro pendente) que chegou aqui pra pagar (trava do
+  // perfil/ranking → goToCheckout, /?criar): vai direto pro passo do pagamento,
+  // sem refazer o cadastro (antes: os 4 campos + o aceite de novo).
+  const { account } = useAccount();
+  const payingAccount = acctMode === 'signup' && account && !account.paid ? { email: account.email, nick: account.nick } : null;
   // desafio de fantasma pendente (link aberto sem vitalícia): o motivo de
   // comprar HOJE, o desafio expira à meia-noite.
   const ghost = loadGhost(dayNumberOf(dateKeyOf(new Date())));
@@ -1007,7 +985,7 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
         <Faq hero={hero} />
         <FinalCta hero={hero} onMajor={openMajor} onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
       </main>
-      {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} />}
+      {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} payingAccount={payingAccount} />}
     </div>
   );
 }
