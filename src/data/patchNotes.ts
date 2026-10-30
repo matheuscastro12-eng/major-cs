@@ -26,6 +26,18 @@ export interface PatchNote {
 
 export const PATCHES: PatchNote[] = [
   {
+    id: '2026.10.30',
+    date: '30 out 2026',
+    title: 'MODO MAJOR — o PGL Major Singapore chegou ao jogo',
+    items: [
+      { kind: 'feature', area: 'Modo Major', text: "Pick'em do PGL Major Singapore (24/11 a 13/12): escolha quem avança em cada Stage, quem fecha 3-0 ou cai 0-3 e monte a chave dos playoffs até o campeão. Grátis, sem conta." },
+      { kind: 'feature', area: 'Modo Major', text: 'Jogue o Major com um time: escolha a equipe e a sua função e dispute as séries na Sala, decisão a decisão. O resto do torneio é simulado em volta do seu resultado.' },
+      { kind: 'feature', area: 'Modo Major', text: "Major com amigos: crie uma liga, mande o código e todo mundo faz o pick'em do mesmo Major. Quando o dono revelar, sai o ranking." },
+      { kind: 'feature', area: 'Modo Major', text: 'Simular: os favoritos ao título em 1.000 simulações do torneio.' },
+      { kind: 'tweak', area: 'Modo Major', text: "Compartilhe o seu pick'em com link, imagem ou direto no X." },
+    ],
+  },
+  {
     id: '2026.07.23',
     date: '23 jul 2026',
     title: 'ULTIMATE DRAFT — o modo mais pedido chegou',
