@@ -12,7 +12,7 @@
 // quando a lista oficial sair. Determinístico pelo seed (engine/rng).
 // Testado em scripts/test-major-singapore.mts.
 
-import { makeRng, type Rng } from './rng';
+import { makeRng, type Rng } from './rng.js'; // .js: a função de preview (api/og-pickem*) carrega este arquivo em Node ESM puro
 
 export interface MajorTeam {
   id: string;
