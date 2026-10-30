@@ -138,6 +138,36 @@ test('todos os mapas do pool têm minimapa próprio, conexo', () => {
   }
 });
 
+// ponto dentro da planta (even-odd sobre todos os anéis)
+function inPlan(rings: number[][], x: number, y: number): boolean {
+  let c = false;
+  for (const r of rings) {
+    for (let i = 0, n = r.length / 2; i < n; i++) {
+      const x1 = r[2 * i], y1 = r[2 * i + 1], x2 = r[(2 * i + 2) % r.length], y2 = r[(2 * i + 3) % r.length];
+      if ((y1 > y) !== (y2 > y) && x < ((x2 - x1) * (y - y1)) / (y2 - y1) + x1) c = !c;
+    }
+  }
+  return c;
+}
+
+test('planta real: nós e arestas da Mirage ficam dentro do piso', () => {
+  for (const id of MAP_POOL) {
+    const m = map2dOf(id);
+    if (!m.plan) continue;
+    for (const [n, p] of Object.entries(m.nodes)) assert.ok(inPlan(m.plan.rings, p.x, p.y), `${id}: nó ${n} fora do piso`);
+    for (const [u, v] of m.edges) {
+      const a = m.nodes[u], b = m.nodes[v];
+      const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.4);
+      for (let i = 0; i <= steps; i++) {
+        const x = a.x + ((b.x - a.x) * i) / steps, y = a.y + ((b.y - a.y) * i) / steps;
+        assert.ok(inPlan(m.plan.rings, x, y), `${id}: aresta ${u}-${v} atravessa parede em (${x.toFixed(1)}, ${y.toFixed(1)})`);
+      }
+    }
+    for (const s of ['A', 'B'] as const) assert.ok(inPlan(m.plan.rings, m.sites[s].x, m.sites[s].y), `${id}: site ${s}`);
+  }
+  assert.ok(map2dOf('mirage').plan, 'a Mirage tem a planta real');
+});
+
 const K = (killer: string, kt: 0 | 1, victim: string): KillEvent => ({ round: 1, killerId: killer, victimId: victim, killerTeam: kt, victimTeam: kt === 0 ? 1 : 0, weapon: 'AK-47', headshot: false, opening: false, trade: false });
 
 test('momentos: ace, clutch 1v3, eco vencido, virada', () => {
