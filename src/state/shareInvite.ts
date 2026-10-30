@@ -1,16 +1,18 @@
-// CONVITE PARA COMPARTILHAR nos 3 momentos de pico (pick'em fechado, fim de
-// uma série, fim da campanha do Major): duas ações, "Desafie um amigo" e
+// CONVITE PARA COMPARTILHAR nos momentos de pico (pick'em fechado, fim de uma
+// série, fim da campanha do Major e o placar do pick'em quando sai o resultado
+// de um Stage): duas ações, "Desafie um amigo" e
 // "Postar o card". Aqui fica só o que é puro: o kind estável de cada clique
 // (share_card {kind, channel}), o link com atribuição de cada ação e a escolha
 // do texto pronto. O lado DOM (share sheet, clipboard, X) é o state/shareX.ts e
 // a tela é o components/ShareInvite.tsx.
 // TS PURO: sem React, sem window. Testado em scripts/test-share-invite.mts.
 import { cleanNick } from '../engine/pickemChallenge';
+import type { PlacarRecap } from '../engine/pickemScore';
 import { shareUrl, SITE } from './shareLink';
 
-export type InviteMoment = 'pickem' | 'serie' | 'campanha';
+export type InviteMoment = 'pickem' | 'serie' | 'campanha' | 'placar';
 export type InviteAction = 'desafio' | 'card';
-export const INVITE_MOMENTS: readonly InviteMoment[] = ['pickem', 'serie', 'campanha'];
+export const INVITE_MOMENTS: readonly InviteMoment[] = ['pickem', 'serie', 'campanha', 'placar'];
 export const INVITE_ACTIONS: readonly InviteAction[] = ['desafio', 'card'];
 
 /** kind do share_card: `pickem-desafio`, `serie-card`… Estável: é a chave da medição. */
@@ -24,9 +26,9 @@ export const CAMPAIGN_PATH = `${MAJOR_PATH}?aba=jogar`;
 
 /**
  * Link de cada ação, com ?ref=<kind> + utm (shareLink.ts).
- * - pick'em: o palpite viaja em ?p=<código> (o OG dinâmico do #147 mostra o
- *   palpite no preview). Só o desafio leva &de=<nick>, e só se o jogador deixar.
- *   Sem código não há link: devolve ''.
+ * - pick'em e placar: o palpite viaja em ?p=<código> (o OG dinâmico do #147
+ *   mostra o palpite no preview; quem abre cai no placar desse palpite). Só o
+ *   desafio leva &de=<nick>, e só se o jogador deixar. Sem código não há link: ''.
  * - série: a página inicial (não há link que monte a mesma série).
  * - campanha: o Modo Major na aba Jogar.
  */
@@ -77,6 +79,25 @@ export function campaignText(
   tpl: { champ: string; run: string },
 ): string {
   return fillTemplate(c.champion ? tpl.champ : tpl.run, { team: c.team, record: `${c.record[0]}–${c.record[1]}` });
+}
+
+/**
+ * Texto do "Postar o card" do placar: "Meu pick'em do PGL Major Singapore ·
+ * Stage 1: 12 pts · acertei 6 de 8 classificados". Com mais de uma parte
+ * pontuada, soma o total ("Total até agora: 30 de 48"; no fim, "Total no Major").
+ */
+export function placarShareText(
+  r: Pick<PlacarRecap, 'part' | 'points' | 'hits' | 'of' | 'total' | 'totalMax' | 'final' | 'parts'>,
+  tpl: { title: string; hitsStage: string; hitsPlayoffs: string; total: string; totalFinal: string },
+): string {
+  const part = r.part === 'playoffs' ? 'Playoffs' : `Stage ${r.part}`;
+  const vars = { hits: String(r.hits), of: String(r.of), pts: String(r.total), max: String(r.totalMax) };
+  const out = [
+    `${tpl.title} · ${part}: ${r.points} pts`,
+    fillTemplate(r.part === 'playoffs' ? tpl.hitsPlayoffs : tpl.hitsStage, vars),
+  ];
+  if (r.parts.filter(Boolean).length > 1) out.push(fillTemplate(r.final ? tpl.totalFinal : tpl.total, vars));
+  return out.join(' · ');
 }
 
 /** dataURL → bytes + tipo (base64 ou texto). Síncrono: o share sheet sai no mesmo toque. */

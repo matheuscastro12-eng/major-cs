@@ -20,7 +20,7 @@ import { Home } from './components/Home';
 import { DAILY_GAMES, dateKeyOf } from './engine/daily/lines';
 import { dailyDayStatus } from './state/daily';
 import { majorClock } from './data/majorWindow';
-import { initialMajorTab, type MajorTab } from './components/major/majorTabs';
+import { MAJOR_TABS, initialMajorTab, type MajorTab } from './components/major/majorTabs';
 import { Hub } from './components/Hub';
 import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
@@ -1042,6 +1042,8 @@ export default function App() {
     return st.total - st.done;
   }, [screen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [majorTab, setMajorTab] = useState<MajorTab>(initialMajorTab);
+  // Início e landing abrem o Modo Major numa aba (ao vivo: "veja seus pontos" → pickem, "jogar com um time" → play)
+  const openMajorAt = (tab?: MajorTab) => { if (tab && MAJOR_TABS.includes(tab)) setMajorTab(tab); setScreen('majorsg'); };
   const shellModes: ShellMode[] = [
     { id: 'inicio', label: ct('Início'), short: ct('Início'), icon: House, onSelect: () => { setHomeViewReq((r) => ({ view: 'menu', n: r.n + 1 })); setScreen('home'); } },
     ...majorRail,
@@ -1215,7 +1217,7 @@ export default function App() {
   if (screen === 'landing') {
     return (
       <>
-        <Landing onPlay={() => { setDoorAfterSetup(null); setScreen(manager ? 'home' : 'setup'); }} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} onMajor={() => { track('major_vitrine_click', { surface: 'landing' }); setScreen('majorsg'); }} onDoor={(d) => { if (manager) openLandingDoor(d); else { setDoorAfterSetup(d); setScreen('setup'); } }} />
+        <Landing onPlay={() => { setDoorAfterSetup(null); setScreen(manager ? 'home' : 'setup'); }} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} onMajor={(tab) => { track('major_vitrine_click', { surface: 'landing' }); openMajorAt(tab); }} onDoor={(d) => { if (manager) openLandingDoor(d); else { setDoorAfterSetup(d); setScreen('setup'); } }} />
         {!bannerPreview && <AdBanner />}
       </>
     );
@@ -1402,7 +1404,7 @@ export default function App() {
           onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onDaily={() => setScreen('daily')}
-          onMajor={() => { track('major_vitrine_click', { surface: 'home' }); setScreen('majorsg'); }}
+          onMajor={(tab) => { track('major_vitrine_click', { surface: 'home' }); openMajorAt(tab); }}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}

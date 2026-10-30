@@ -2,7 +2,10 @@
 // jogo: marinho + dourado da marca, escudo, Oswald/Barlow.
 // Enquanto a vitrine do PGL Major Singapore estiver no ar (data/majorWindow.ts),
 // o hero é do Modo Major: pick'em em ~1 min, sem conta, com a régua do evento
-// e os favoritos da simulação. Depois da janela volta o hero geral. Em seguida:
+// e os favoritos da simulação. No AO VIVO (24/11 a 13/12) a etiqueta diz o
+// Stage do dia (data/majorLive.ts) e, depois da trava do Stage 1, o CTA vira
+// "Ver meu placar" (tem palpite no navegador) ou "Jogar o Major com um time"
+// (chegou depois: palpite novo não pontua). Depois da janela volta o hero geral. Em seguida:
 // "Em 1 minuto" (3 portas com tempo honesto), os outros modos numa seção
 // compacta, planos (preço via state/price.ts), FAQ, CTA final e o modal de
 // conta (checkout real: Pix/Stripe).
@@ -13,9 +16,12 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, Crosshair, Gift, Globe, Play, Star, Swords, Target, Trophy } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
 import {
-  MAJOR_FAVORITES, MAJOR_SG_MILESTONES, landingDoors, landingHero, landingModes, majorPhase, milestonesReached,
-  type LandingDoor, type LandingDoorId, type LandingHero, type LandingModeId, type MajorPhase,
+  MAJOR_FAVORITES, MAJOR_SG_MILESTONES, landingDoors, landingHero, landingMajorCta, landingModes, majorPhase, milestonesReached,
+  type LandingDoor, type LandingDoorId, type LandingHero, type LandingMajorCta, type LandingModeId, type MajorPhase,
 } from '../data/majorLanding';
+import { LIVE_LOCKS, livePublished, liveStage, requestPlacarFocus, type LiveStage } from '../data/majorLive';
+import { pickemStanding, readMajorLocal } from '../state/homeNext';
+import type { MajorTab } from './major/majorTabs';
 import { MajorCalendarButton } from './major/MajorCalendarButton';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
@@ -153,17 +159,36 @@ function phaseLabel(p: MajorPhase): string {
   return ct('Playoffs de 10 a 13/12');
 }
 
+/** etiqueta do painel: contagem até 24/11; no ar, "AO VIVO · Stage 2" (o Stage do dia pelas travas do pick'em) */
+function deskChip(now: number, stage: LiveStage): { label: string; live: boolean } {
+  const p = majorPhase(now);
+  if (p.kind === 'pre') return { label: phaseLabel(p), live: false };
+  if (stage.kind === 'stage') return { label: `${ct('AO VIVO')} · Stage ${stage.n}`, live: true };
+  if (stage.kind === 'gap') return { label: ct('Playoffs em 10/12'), live: false };
+  if (stage.kind === 'playoffs') return { label: `${ct('AO VIVO')} · Playoffs`, live: true };
+  if (stage.kind === 'final') return { label: `${ct('AO VIVO')} · ${ct('Final')}`, live: true };
+  return { label: phaseLabel(p), live: false };
+}
+
+/** o botão do Major em cada lugar da landing (hero/final usam o longo; a porta, o curto) */
+function majorCtaLabel(cta: LandingMajorCta, short = false): string {
+  if (cta === 'placar') return ct('Ver meu placar');
+  if (cta === 'jogar') return ct('Jogar o Major com um time');
+  return short ? ct("Fazer meu pick'em") : ct("Fazer meu pick'em do Major");
+}
+
 // O visual do hero: não há captura do Modo Major em public/landing/, então é
 // HTML com dado real e pequeno (data/majorLanding.ts): a régua do evento e os 4
 // favoritos ao título do painel do Modo Major, sem o JSON dos 32 times.
-function MajorDesk({ now }: { now: number }) {
+function MajorDesk({ now, stage }: { now: number; stage: LiveStage }) {
   const F = MAJOR_FAVORITES;
   const top = F.teams[0]?.pct || 1;
   const reached = milestonesReached(now);
+  const chip = deskChip(now, stage);
   return (
     <aside className="lp-desk" aria-label={ct('PGL Major Singapore: datas e favoritos na simulação')}>
       <div className="lp-desk__head">
-        <span className="lp-desk__chip">{phaseLabel(majorPhase(now))}</span>
+        <span className="lp-desk__chip" data-live={chip.live || undefined}>{chip.label}</span>
         <p className="lp-desk__event">PGL Major Singapore</p>
         <p className="lp-desk__where">{ct('Singapura · 32 times')}</p>
       </div>
@@ -199,22 +224,31 @@ function MajorDesk({ now }: { now: number }) {
   );
 }
 
-function HeroMajor({ now, onMajor, onPlay, onAccount }: { now: number; onMajor: () => void; onPlay: () => void; onAccount: () => void }) {
+function HeroMajor({ now, stage, cta, onMajor, onPlay, onAccount }: {
+  now: number; stage: LiveStage; cta: LandingMajorCta; onMajor: () => void; onPlay: () => void; onAccount: () => void;
+}) {
   return (
     <section id="topo" className="lp-hero lp-hero--major" aria-labelledby="lp-hero-title">
       <div className="lp-wrap lp-hero__grid">
         <div className="lp-hero__copy">
           <span className="lp-kicker"><Trophy size={14} aria-hidden /> {ct('PGL Major Singapore, de 24/11 a 13/12')}</span>
+          {/* depois da trava do Stage 1 o hero não promete ponto pra palpite novo */}
           <h1 className="lp-h1" id="lp-hero-title">
-            {ct("Faça seu pick'em")} <span>{ct('do Major de Singapura')}</span>
+            {cta === 'placar' ? <>{ct("Acompanhe o seu pick'em")} <span>{ct('do Major de Singapura')}</span></>
+              : cta === 'jogar' ? <>{ct('Jogue o Major')} <span>{ct('de Singapura com um time')}</span></>
+              : <>{ct("Faça seu pick'em")} <span>{ct('do Major de Singapura')}</span></>}
           </h1>
           <p className="lp-hero__sub">
-            {ct('Escolha quem passa em cada stage, monte a chave dos playoffs e simule o Major inteiro. Depois, jogue as séries com um time ou chame os amigos pra uma liga.')}
+            {cta === 'placar'
+              ? ct('Os pontos de cada Stage entram quando sai o resultado oficial. Enquanto isso, jogue as séries do Major com um time ou chame os amigos pra uma liga.')
+              : cta === 'jogar'
+                ? ct('Palpite feito agora não entra no placar, que travou no início do Stage 1. Mas dá para escolher um time e jogar as séries do Major, chamar os amigos pra uma liga ou simular o campeonato inteiro.')
+                : ct('Escolha quem passa em cada stage, monte a chave dos playoffs e simule o Major inteiro. Depois, jogue as séries com um time ou chame os amigos pra uma liga.')}
           </p>
           <div className="lp-hero__cta">
             {/* o clique no Major é medido no App (major_vitrine_click, surface landing) */}
             <div className="lp-hero__btns">
-              <Button size="big" onClick={onMajor}>{ct("Fazer meu pick'em do Major")} <ArrowRight size={18} aria-hidden /></Button>
+              <Button size="big" onClick={onMajor}>{majorCtaLabel(cta)} <ArrowRight size={18} aria-hidden /></Button>
               <Button size="big" variant="secondary" onClick={onPlay}>{ct('Jogar grátis')}</Button>
             </div>
             <p className="lp-hero__assure"><Check size={16} aria-hidden /> {ct('Grátis, sem cadastro, no navegador e no celular.')}</p>
@@ -222,7 +256,7 @@ function HeroMajor({ now, onMajor, onPlay, onAccount }: { now: number; onMajor: 
           </div>
         </div>
         <div className="lp-hero__stage lp-hero__stage--desk">
-          <MajorDesk now={now} />
+          <MajorDesk now={now} stage={stage} />
         </div>
       </div>
     </section>
@@ -282,8 +316,9 @@ const DOORS: Record<LandingDoorId, DoorCard> = {
   carreira: { time: 'Campanha', title: 'Carreira', desc: 'Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.', meta: 'campanha longa · save neste navegador', cta: 'Fundar minha org' },
 };
 
-function QuickStart({ hero, onMajor, onDoor }: { hero: LandingHero; onMajor: () => void; onDoor: (door: LandingDoor) => void }) {
+function QuickStart({ hero, cta, onMajor, onDoor }: { hero: LandingHero; cta: LandingMajorCta; onMajor: () => void; onDoor: (door: LandingDoor) => void }) {
   const doors = landingDoors(hero);
+  const lateDesc = ct('Jogue o Major com um time, chame os amigos pra uma liga ou simule o campeonato inteiro.');
   return (
     <section id="comecar" className="lp-section lp-section--first" aria-labelledby="lp-comecar-title">
       <div className="lp-wrap">
@@ -298,14 +333,15 @@ function QuickStart({ hero, onMajor, onDoor }: { hero: LandingHero; onMajor: () 
         <ul className="lp-doors">
           {doors.map((id) => {
             const d = DOORS[id];
+            const live = id === 'major' && cta !== 'pickem';
             return (
               <li key={id} className="lp-door lp-reveal" data-lead={id === 'major' || undefined}>
                 <span className="lp-door__time">{ct(d.time)}</span>
                 <h3 id={`lp-door-${id}`}>{ct(d.title)}</h3>
-                <p>{ct(d.desc)}</p>
+                <p>{live ? lateDesc : ct(d.desc)}</p>
                 <span className="lp-door__meta">{ct(d.meta)}</span>
                 <button type="button" className="lp-door__go" aria-describedby={`lp-door-${id}`} onClick={() => (id === 'major' ? onMajor() : onDoor(id))}>
-                  {ct(d.cta)} <ArrowRight size={16} aria-hidden />
+                  {id === 'major' ? majorCtaLabel(cta, true) : ct(d.cta)} <ArrowRight size={16} aria-hidden />
                 </button>
               </li>
             );
@@ -443,7 +479,7 @@ function Faq({ hero }: { hero: LandingHero }) {
   );
 }
 
-function FinalCta({ hero, onMajor, onAccount, onPlay }: { hero: LandingHero; onMajor: () => void; onAccount: () => void; onPlay: () => void }) {
+function FinalCta({ hero, cta, onMajor, onAccount, onPlay }: { hero: LandingHero; cta: LandingMajorCta; onMajor: () => void; onAccount: () => void; onPlay: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
   const major = hero === 'major';
   return (
@@ -454,13 +490,15 @@ function FinalCta({ hero, onMajor, onAccount, onPlay }: { hero: LandingHero; onM
           <BrandMark size={56} />
           <h2 className="lp-h2" id="lp-final-title">{ct('O título não é dado, é conquistado')}</h2>
           <p className="lp-lead">
-            {major
+            {major && cta === 'pickem'
               ? ct("Faça seu pick'em agora, de graça. Quando quiser guardar tudo na nuvem, é só criar a sua conta.")
-              : ct('Comece de graça agora. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')}
+              : major
+                ? ct('Jogue o Major agora, de graça. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')
+                : ct('Comece de graça agora. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')}
           </p>
           <div className="lp-final__cta">
             {major
-              ? <Button size="big" onClick={onMajor}>{ct("Fazer meu pick'em do Major")} <ArrowRight size={18} aria-hidden /></Button>
+              ? <Button size="big" onClick={onMajor}>{majorCtaLabel(cta)} <ArrowRight size={18} aria-hidden /></Button>
               : <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>}
             {/* funil: CTA final da página, com o preço no texto do botão (a seção de
                 planos já ficou pra trás na rolagem). src landing-final. */}
@@ -898,8 +936,8 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
 
 export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
   onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean;
-  /** abre o Modo Major (o App mede o clique: major_vitrine_click, surface landing) */
-  onMajor?: () => void;
+  /** abre o Modo Major, numa aba se pedir (o App mede o clique: major_vitrine_click, surface landing) */
+  onMajor?: (tab?: MajorTab) => void;
   /** porta do "Em 1 minuto" (Diário, Draft, Carreira); sem ela, cai no onPlay */
   onDoor?: (door: LandingDoor) => void;
 }) {
@@ -911,7 +949,18 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
   // souber abrir o modo; o instante é lido 1x por visita (régua e contagem)
   const [now] = useState(() => Date.now());
   const hero = landingHero(now, !!onMajor);
-  const openMajor = onMajor ?? onPlay;
+  // ao vivo: o Stage do dia (data/majorLive.ts) e o CTA pelo palpite deste navegador
+  const [live] = useState(() => {
+    const { parts, snaps } = readMajorLocal();
+    return { stage: liveStage(now, livePublished()), cta: landingMajorCta(pickemStanding(parts, snaps, LIVE_LOCKS, now)) };
+  });
+  // nunca repassa o evento do clique como aba
+  const openMajor = () => {
+    if (!onMajor) return onPlay();
+    if (live.cta === 'placar') { requestPlacarFocus(); onMajor('pickem'); }
+    else if (live.cta === 'jogar') onMajor('play');
+    else onMajor();
+  };
   const openDoor = onDoor ?? (() => onPlay());
   // funil: CTA da landing abrindo o modal de conta. first-touch, então quem
   // chegou de uma trava (home-rtp, wl-lock...) mantém a origem original.
@@ -993,13 +1042,13 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
           <CommunityGoalBar onPlay={onPlay} />
         </div>
         {hero === 'major'
-          ? <HeroMajor now={now} onMajor={openMajor} onPlay={onPlay} onAccount={() => openAcct('signup', 'landing-hero')} />
+          ? <HeroMajor now={now} stage={live.stage} cta={live.cta} onMajor={openMajor} onPlay={onPlay} onAccount={() => openAcct('signup', 'landing-hero')} />
           : <HeroGeneral onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />}
-        <QuickStart hero={hero} onMajor={openMajor} onDoor={openDoor} />
+        <QuickStart hero={hero} cta={live.cta} onMajor={openMajor} onDoor={openDoor} />
         <Modes hero={hero} onPlay={onPlay} />
         <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPlay={onPlay} />
         <Faq hero={hero} />
-        <FinalCta hero={hero} onMajor={openMajor} onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
+        <FinalCta hero={hero} cta={live.cta} onMajor={openMajor} onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
       </main>
       {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} payingAccount={payingAccount} />}
     </div>

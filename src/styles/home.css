@@ -171,6 +171,35 @@
 .home-major__meta { margin: 0; color: var(--c-ink-faint); font-size: var(--fs-2); }
 .home-major__go { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-top: auto; padding-top: var(--sp-2); }
 .home-major__pick { margin-top: var(--sp-2); }
+/* "Saiu o resultado do Stage N: veja seus pontos" → placar (só com palpite que conta) */
+.home-major__news {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-accent-soft);
+  border: 1px solid var(--c-accent-line);
+  border-radius: var(--rad-2);
+  color: var(--c-ink);
+  font: inherit;
+  font-size: var(--fs-3);
+  font-weight: 600;
+  line-height: var(--lh-snug);
+  text-align: left;
+  cursor: pointer;
+}
+.home-major__news-ic { flex-shrink: 0; color: var(--c-brand); }
+.home-major__news-txt { flex: 1; min-width: 0; text-wrap: pretty; }
+.home-major__news-go { flex-shrink: 0; color: var(--c-brand); transition: transform var(--dur-1) var(--ease-out); }
+.home-major__news:hover .home-major__news-txt { color: var(--c-brand-strong); }
+.home-major__news:hover .home-major__news-go { transform: translateX(3px); }
+.home-major__news:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (prefers-reduced-motion: reduce) {
+  .home-major__news-go { transition: none; }
+}
 @media (max-width: 759px) {
   .home-major { padding: var(--sp-4); }
   .home-major__go .ds-btn { flex: 1 1 100%; }

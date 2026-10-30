@@ -208,7 +208,7 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
             <ChallengeBanner ch={challenge} viewing={viewShared} onView={() => setViewShared(true)} onBuild={() => setViewShared(false)}
               onUse={() => { commit(shared); setViewShared(false); }} />
           )}
-          <MajorScoreboard t={t} picks={picks} readOnly={viewingShared} />
+          <MajorScoreboard t={t} picks={picks} readOnly={viewingShared} nick={challenge.sign ? challenge.myNick : ''} />
           {!readOnly && (
             <div className="msg-toolbar">
               <Button size="sm" icon={<Sparkles size={16} aria-hidden />} onClick={autofill}>{t('auto')}</Button>
