@@ -3,11 +3,13 @@
 import { EDITOR_STR } from './career-strings-editor';
 import { LEGADO_STR } from './career-strings-legado';
 import { CHECKOUT_STR } from './career-strings-checkout';
+import { PIX_STR } from './career-strings-pix';
 
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   ...LEGADO_STR, // [SA2 · legado]
   ...EDITOR_STR, // [fase 4 · editor de base] (as entradas abaixo, se repetidas, valem)
   ...CHECKOUT_STR, // [growth · checkout in-place da trava do RtP]
+  ...PIX_STR, // [pix · celular] tela do QR Pix (PixPanel)
   // [paywall sem repetição] chip do convidado no Início antes da 1ª partida
   "Você está jogando sem conta: o progresso fica neste navegador. Jogue à vontade; quando quiser, a conta guarda tudo na nuvem.": { en: "You're playing without an account: your progress stays in this browser. Play as much as you like; whenever you want, an account keeps everything in the cloud.", es: "Estás jugando sin cuenta: el progreso se queda en este navegador. Juega todo lo que quieras; cuando quieras, la cuenta guarda todo en la nube." },
   // [fase 4 · frente CIRCUITO] calendário, circuito, VRS, qualificatórios, RMR, LAN, visto e bootcamp
