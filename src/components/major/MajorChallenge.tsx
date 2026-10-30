@@ -79,6 +79,8 @@ export interface Challenge {
   pickRival: (i: number) => void;
   /** comparação com o amigo escolhido; só existe com o SEU palpite completo */
   vs: PicksComparison | null;
+  /** o SEU palpite está completo (a barra de desafio aparece mesmo sem amigo guardado) */
+  done: boolean;
   myNick: string;
   sign: boolean;
   setSign: (v: boolean) => void;
@@ -115,7 +117,7 @@ export function useChallenge(mine: MajorPicks, shared: MajorPicks | null, t: T):
   const [myNick] = useState(() => cleanNick(getManager()?.nick));
   const [sign, setSign] = useState(true);
   const [copied, setCopied] = useState(false);
-  const link = done ? shareUrl(`${MAJOR_PATH}?p=${encodePicks(D, mine)}`, 'major-pickem', sign && myNick ? { de: myNick } : {}) : '';
+  const link = done ? shareUrl(`${MAJOR_PATH}?p=${encodePicks(D, mine)}`, SHARE_KIND, sign && myNick ? { de: myNick } : {}) : '';
   const text = fillText(t('chText'), { champ: teamName(mine.bracket[6]) });
 
   const copy = async () => {
@@ -129,7 +131,7 @@ export function useChallenge(mine: MajorPicks, shared: MajorPicks | null, t: T):
   };
   const postX = () => { if (link) postOnX(SHARE_KIND, text, link); }; // postOnX já conta o 'x'
 
-  return { t, mine, incoming, ownLink, rivals, rival, pickRival: setIdx, vs, myNick, sign, setSign, copied, copy, postX };
+  return { t, mine, incoming, ownLink, rivals, rival, pickRival: setIdx, vs, done, myNick, sign, setSign, copied, copy, postX };
 }
 
 /**
@@ -287,11 +289,13 @@ export function ChallengeVs({ ch }: { ch: Challenge }) {
 /**
  * Barra "Desafiar de volta": fica no fim do Pick'em e gruda no pé da tela
  * (acima da tab bar do shell no celular) enquanto a página rola, então o
- * botão está à mão sem descer até o fim. Só com palpite completo e amigo guardado.
+ * botão está à mão sem descer até o fim. Com palpite completo: com amigo guardado
+ * mostra o placar "Você x amigo"; sem amigo, convida a desafiar o primeiro.
  */
 export function ChallengeBar({ ch }: { ch: Challenge }) {
   const { t, vs, rival } = ch;
-  if (!vs || !rival) return null;
+  if (!ch.done) return null;
+  if (!vs || !rival) return <DareBar ch={ch} />;
   const who = rival.nick || t('chFriendMid');
   return (
     <div className="mch-bar" role="region" aria-label={t('chBack')}>
@@ -303,6 +307,31 @@ export function ChallengeBar({ ch }: { ch: Challenge }) {
       <div className="mch-bar__actions">
         <Button variant="primary" className="mch-bar__go" icon={ch.copied ? <Check size={16} aria-hidden /> : <Swords size={16} aria-hidden />} onClick={ch.copy}>
           {ch.copied ? t('chCopied') : t('chBack')}
+        </Button>
+        <Button onClick={ch.postX}>{t('postX')}</Button>
+      </div>
+      <span className="ds-sr-only" role="status">{ch.copied ? t('chCopied') : ''}</span>
+    </div>
+  );
+}
+
+/** barra sem amigo guardado: o palpite está pronto, desafie o primeiro */
+function DareBar({ ch }: { ch: Challenge }) {
+  const { t } = ch;
+  return (
+    <div className="mch-bar" role="region" aria-label={t('chDare')}>
+      <p className="mch-bar__sum">
+        <span>{t('chDareSum')}</span>
+        {ch.myNick && (
+          <label className="mch-sign">
+            <input type="checkbox" checked={ch.sign} onChange={(e) => ch.setSign(e.target.checked)} />
+            <span>{fill(t('chSign'), { nick: <strong>{ch.myNick}</strong> })}</span>
+          </label>
+        )}
+      </p>
+      <div className="mch-bar__actions">
+        <Button variant="primary" className="mch-bar__go" icon={ch.copied ? <Check size={16} aria-hidden /> : <Swords size={16} aria-hidden />} onClick={ch.copy}>
+          {ch.copied ? t('chCopied') : t('chDare')}
         </Button>
         <Button onClick={ch.postX}>{t('postX')}</Button>
       </div>
