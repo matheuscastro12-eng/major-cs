@@ -144,7 +144,8 @@ export function ChallengeBanner({ ch, viewing, onView, onBuild, onUse }: {
   viewing: boolean;
   onView: () => void;
   onBuild: () => void;
-  onUse: () => void;
+  /** sem onUse (palpites já travados) o botão "Usar como meu" some */
+  onUse?: () => void;
 }) {
   const { t, incoming } = ch;
   if (ch.ownLink) {
@@ -179,7 +180,7 @@ export function ChallengeBanner({ ch, viewing, onView, onBuild, onUse }: {
         {viewing ? (
           <>
             <Button variant="primary" onClick={build}>{done ? t('chCompare') : t('chBuild')}</Button>
-            <Button variant="ghost" size="sm" onClick={onUse}>{t('useShared')}</Button>
+            {onUse && <Button variant="ghost" size="sm" onClick={onUse}>{t('useShared')}</Button>}
           </>
         ) : (
           <>

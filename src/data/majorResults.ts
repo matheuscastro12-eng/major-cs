@@ -63,3 +63,11 @@ const ev = D.event as MajorData['event'] & { stage1End?: unknown };
 export const STAGE1_END: string = typeof ev.stage1End === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ev.stage1End) ? ev.stage1End : '2026-11-27';
 /** meia-noite do dia seguinte ao fim do Stage 1, em Brasília (UTC-3) */
 export const STAGE1_ENDS_MS = Date.parse(`${STAGE1_END}T00:00:00-03:00`) + 24 * 3600 * 1000;
+
+// TRAVA DO PALPITE: meia-noite de Singapura (UTC+8) no 1º dia do Stage 1, tirado
+// do event.start do JSON (fonte única). Com start 2026-11-24 → 23/11 às 13h de
+// Brasília. Antes do 1º jogo, mesmo que a PGL comece o dia cedo. Depois disso o
+// pick'em do jogador vira só leitura e quem não completou fica fora do placar
+// (sem foto do palpite: como não dá mais pra editar, o palpite salvo é o de antes).
+export const PICKEM_LOCK_MS = Date.parse(`${D.event.start}T00:00:00+08:00`);
+

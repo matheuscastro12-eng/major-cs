@@ -11,7 +11,7 @@
 import { useMemo, useState } from 'react';
 import { Check, Copy, ExternalLink, Trophy, X } from 'lucide-react';
 import data from '../../data/major-singapore-2026.json';
-import { MAJOR_RESULTS, STAGE1_END, STAGE1_ENDS_MS } from '../../data/majorResults';
+import { MAJOR_RESULTS, PICKEM_LOCK_MS, STAGE1_END, STAGE1_ENDS_MS } from '../../data/majorResults';
 import { MAJOR_SG_PATH } from '../../data/majorWindow';
 import { encodePicks, simulateMajor, type MajorData, type MajorPicks } from '../../engine/majorSingapore';
 import {
@@ -43,6 +43,14 @@ function fmtDay(iso: string, lang: Lang): string {
   return lang === 'en' ? `${MONTHS_EN[m - 1]} ${d}` : `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
 }
 
+/** hora da trava em Brasília (UTC-3): '23/11, 13h' / 'Nov 23, 1 PM' */
+function fmtLock(ms: number, lang: Lang): { date: string; time: string } {
+  const brt = new Date(ms - 3 * 3600 * 1000);
+  const iso = brt.toISOString().slice(0, 10);
+  const h = brt.getUTCHours();
+  return { date: fmtDay(iso, lang), time: lang === 'en' ? `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}` : `${h}h` };
+}
+
 function devOutcomes(): MajorOutcomes | null {
   if (!import.meta.env.DEV) return null;
   try {
@@ -61,8 +69,10 @@ export function MajorScoreboard({ t, picks, readOnly }: { t: T; picks: MajorPick
   const { lang } = useLang();
   const demo = useMemo(() => devOutcomes(), []);
   const results = demo ?? MAJOR_RESULTS;
-  const view = placarView(picks, results, Date.now(), STAGE1_ENDS_MS);
+  const now = Date.now();
+  const view = placarView(picks, results, now, STAGE1_ENDS_MS, readOnly ? Infinity : PICKEM_LOCK_MS);
   const starts = fill(t('pcStarts'), { date: fmtDay(STAGE1_END, lang) });
+  const lockAt = fmtLock(PICKEM_LOCK_MS, lang);
   return (
     <Panel
       title={t('pcTitle')}
@@ -73,6 +83,8 @@ export function MajorScoreboard({ t, picks, readOnly }: { t: T; picks: MajorPick
       {view.kind === 'incomplete' && (
         <p className="msg-pc__text">{t('pcIncomplete')}{!view.started && <> {starts}</>}</p>
       )}
+      {view.kind === 'excluded' && <p className="msg-pc__text">{t('pcExcluded')}</p>}
+      {!readOnly && <p className="msg-muted">{fill(t(now >= PICKEM_LOCK_MS ? 'pcLocked' : 'pcLockAt'), lockAt)}</p>}
       {view.kind === 'waiting' && (
         <p className="msg-pc__text">{view.late ? t('pcLate') : starts}{!readOnly && <> {t('pcSaved')}</>}</p>
       )}

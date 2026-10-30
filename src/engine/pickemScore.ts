@@ -260,6 +260,8 @@ export type PlacarThrough = 1 | 2 | 3 | 'qf' | 'sf' | 'final';
 export type PlacarView =
   /** palpite incompleto; started = já saiu algum resultado */
   | { kind: 'incomplete'; started: boolean }
+  /** palpite incompleto quando os palpites travaram: fora do placar */
+  | { kind: 'excluded' }
   /** palpite completo, nenhum resultado ainda; late = o Stage 1 já devia ter terminado */
   | { kind: 'waiting'; late: boolean }
   /** com pontos; next = o Stage seguinte ainda sem resultado (null nos playoffs) */
@@ -270,9 +272,9 @@ export function hasOutcomes(o: MajorOutcomes): boolean {
 }
 
 /** qual mensagem o placar mostra (MajorScoreboard.tsx) */
-export function placarView(p: MajorPicks, o: MajorOutcomes, nowMs: number, stage1EndsMs: number): PlacarView {
+export function placarView(p: MajorPicks, o: MajorOutcomes, nowMs: number, stage1EndsMs: number, lockMs = Infinity): PlacarView {
   const started = hasOutcomes(o);
-  if (!picksComplete(p)) return { kind: 'incomplete', started };
+  if (!picksComplete(p)) return nowMs >= lockMs ? { kind: 'excluded' } : { kind: 'incomplete', started };
   if (!started) return { kind: 'waiting', late: nowMs >= stage1EndsMs };
   const score = scoreSoFar(p, o);
   const po = o.playoffs;

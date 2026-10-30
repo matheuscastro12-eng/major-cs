@@ -26,6 +26,7 @@ import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
 import { ChallengeBanner, ChallengeBar, ChallengeVs, useChallenge } from './MajorChallenge';
 import { MajorScoreboard } from './MajorScoreboard';
+import { PICKEM_LOCK_MS } from '../../data/majorResults';
 import '../../styles/major.css';
 
 const D = data as unknown as MajorData;
@@ -72,7 +73,10 @@ export function MajorSingaporeScreen() {
   useEffect(() => { track('major_sg_view', { shared: shared ? 1 : 0 }); }, [shared]);
 
   const picks = viewShared && shared ? shared : mine;
-  const readOnly = viewShared && !!shared;
+  const viewingShared = viewShared && !!shared;
+  // depois da trava (meia-noite de Singapura no 1º dia: data/majorResults.ts) o próprio palpite é só leitura
+  const locked = Date.now() >= PICKEM_LOCK_MS;
+  const readOnly = viewingShared || locked;
   const update = (p: MajorPicks) => setMine(normalizePicks(D, p));
   const challenge = useChallenge(mine, shared, t); // link de amigo → desafio (MajorChallenge.tsx)
 
@@ -169,9 +173,9 @@ export function MajorSingaporeScreen() {
           {sharedCode && !shared && <Alert tone="danger">{t('badLink')}</Alert>}
           {shared && (
             <ChallengeBanner ch={challenge} viewing={viewShared} onView={() => setViewShared(true)} onBuild={() => setViewShared(false)}
-              onUse={() => { setMine(shared); setViewShared(false); }} />
+              onUse={locked ? undefined : () => { setMine(shared); setViewShared(false); }} />
           )}
-          <MajorScoreboard t={t} picks={picks} readOnly={readOnly} />
+          <MajorScoreboard t={t} picks={picks} readOnly={viewingShared} />
           {!readOnly && (
             <div className="msg-toolbar">
               <Button size="sm" icon={<Sparkles size={16} aria-hidden />} onClick={autofill}>{t('auto')}</Button>

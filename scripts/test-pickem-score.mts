@@ -15,7 +15,7 @@ import {
   MAX_TOTAL, NO_OUTCOMES, STAGE_MAX, outcomesFromSim, placarView, scorePlayoffs, scoreSoFar, scoreStage, validateMajorResults,
   type MajorOutcomes, type PlayoffOutcome, type StageOutcome,
 } from '../src/engine/pickemScore.ts';
-import { STAGE1_END, STAGE1_ENDS_MS } from '../src/data/majorResults.ts';
+import { PICKEM_LOCK_MS, STAGE1_END, STAGE1_ENDS_MS } from '../src/data/majorResults.ts';
 
 const D = data as unknown as MajorData;
 const SRC = 'https://www.hltv.org/events/9303/pgl-major-singapore-2026-stage-1';
@@ -309,4 +309,20 @@ test('UI: com resultado mostra o placar, até onde vai e o Stage seguinte aguard
   assert.deepEqual(at(4), ['qf', null, false, 56]);
   assert.deepEqual(at(5), ['sf', null, false, 60]);
   assert.deepEqual(at(6), ['final', null, true, 65]);
+});
+
+// ── trava do palpite (meia-noite de Singapura no 1º dia, data/majorResults.ts) ──
+
+test('trava: meia-noite de Singapura no event.start (23/11 13h em Brasília com start 2026-11-24)', () => {
+  const dataLock = data as unknown as { event: { start: string } };
+  assert.equal(PICKEM_LOCK_MS, Date.parse(`${dataLock.event.start}T00:00:00+08:00`));
+  if (dataLock.event.start === '2026-11-24') assert.equal(new Date(PICKEM_LOCK_MS).toISOString(), '2026-11-23T16:00:00.000Z');
+});
+
+test('trava: palpite incompleto depois da trava fica fora do placar; antes, só "complete"', () => {
+  const empty = emptyPicks();
+  assert.equal(placarView(empty, NO_OUTCOMES, 1000, 5000, 2000).kind, 'incomplete');
+  assert.equal(placarView(empty, NO_OUTCOMES, 3000, 5000, 2000).kind, 'excluded');
+  // sem trava informada (palpite de amigo, só leitura) nunca vira "fora do placar"
+  assert.equal(placarView(empty, NO_OUTCOMES, 3000, 5000).kind, 'incomplete');
 });
