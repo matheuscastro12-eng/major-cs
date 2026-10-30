@@ -3951,6 +3951,13 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Suas chamadas': { en: 'Your calls', es: 'Tus llamadas' },
   'Estilo em campo': { en: 'Style on the server', es: 'Estilo en el servidor' },
   'Jogue a sua': { en: 'Play yours', es: 'Juega la tuya' },
+  // [convite pra compartilhar] fim da série (SeriesResult.tsx + ShareInvite.tsx)
+  'Seu amigo faria melhor? Mande o desafio.': { en: 'Would your friend do better? Send the challenge.', es: '¿Tu amigo lo haría mejor? Mándale el desafío.' },
+  'Desafie um amigo': { en: 'Challenge a friend', es: 'Desafía a un amigo' },
+  'Postar o card': { en: 'Post the card', es: 'Publicar la tarjeta' },
+  'Desafio copiado': { en: 'Challenge copied', es: 'Desafío copiado' },
+  '{me} {score} {opp} no Road to Major. Duvido você fazer melhor:': { en: '{me} {score} {opp} on Road to Major. Bet you can’t do better:', es: '{me} {score} {opp} en Road to Major. A que no lo haces mejor:' },
+  '{me} {score} {opp} no Road to Major. Você vence essa?': { en: '{me} {score} {opp} on Road to Major. Can you win this one?', es: '{me} {score} {opp} en Road to Major. ¿Tú ganas esta?' },
   'Você assistiu esta série no automático. Com o Tático ligado, você comanda round a round: postura, timeouts e chamadas mudam o resultado, e cada golpe mostra a % antes de rolar.': { en: 'You watched this series on autopilot. With Tactical on, you command round by round: stance, timeouts and calls change the result, and every move shows its % before it rolls.', es: 'Viste esta serie en automático. Con el Táctico activado, mandas ronda a ronda: postura, timeouts y llamadas cambian el resultado, y cada jugada muestra su % antes de rodar.' },
   'Resumo tático': { en: 'Tactical recap', es: 'Resumen táctico' },
   'suas decisões': { en: 'your decisions', es: 'tus decisiones' },

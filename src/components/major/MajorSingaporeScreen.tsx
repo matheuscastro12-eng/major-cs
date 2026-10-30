@@ -32,6 +32,7 @@ import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
 import { ChallengeBanner, ChallengeBar, ChallengeVs, useChallenge } from './MajorChallenge';
 import { MajorScoreboard } from './MajorScoreboard';
+import { PickemInvite } from './MajorShareInvite';
 import { initialMajorTab, type MajorTab } from './majorTabs';
 import { ensurePickSnapshots } from '../../state/pickSnapshots';
 import '../../styles/major.css';
@@ -79,6 +80,10 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
   const [viewShared, setViewShared] = useState(!!shared);
   const [sim, setSim] = useState<MajorResult | null>(null);
   const [copied, setCopied] = useState(false);
+  // convite do pick'em pronto (MajorShareInvite): rola até ele quando o palpite
+  // fecha por um clique do jogador; a barra fixa do desafio some enquanto ele aparece
+  const [revealInvite, setRevealInvite] = useState(false);
+  const [inviteOnScreen, setInviteOnScreen] = useState(false);
   const odds = useMemo(() => titleOdds(D, 1000), []);
 
   useEffect(() => {
@@ -94,7 +99,13 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
   // toda edição passa por aqui: antes de mudar, tira a foto das travas que já
   // passaram (o placar pontua cada Stage pelo palpite da hora em que ele travou)
   const commit = (p: MajorPicks) => { ensurePickSnapshots(mine); setMine(p); };
-  const update = (p: MajorPicks) => commit(normalizePicks(D, p));
+  // reveal: o clique na chave (é ali que o campeão sai) fechou o palpite. Mexer nos
+  // stages lá em cima ou "preencher com favoritos" não rola a página: a barra fixa avisa
+  const update = (p: MajorPicks, reveal = false) => {
+    const next = normalizePicks(D, p);
+    if (reveal && !picksComplete(mine) && picksComplete(next)) setRevealInvite(true);
+    commit(next);
+  };
   const challenge = useChallenge(mine, shared, t); // link de amigo → desafio (MajorChallenge.tsx)
 
   const toggleExtreme = (kind: 'x30' | 'x03', stage: StageNo, id: string) => {
@@ -117,7 +128,7 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
     if (readOnly || !id) return;
     const bracket = [...mine.bracket];
     bracket[game] = id;
-    update({ ...mine, bracket });
+    update({ ...mine, bracket }, true);
   };
   const autofill = () => {
     // favoritos = maior chance de título; mantém o que já foi escolhido
@@ -208,9 +219,14 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
             <StagePicker key={st} stage={st} picks={picks} readOnly={readOnly} t={t} onToggle={(id) => toggle(st, id)} onExtreme={(k, id) => toggleExtreme(k, st, id)} />
           ))}
           <BracketPicker picks={picks} readOnly={readOnly} t={t} onPick={pickWinner} />
+          {!readOnly && complete && (
+            <PickemInvite t={t} picks={mine} ch={challenge} reveal={revealInvite} onRevealed={() => setRevealInvite(false)} onVisibleChange={setInviteOnScreen} />
+          )}
           <ChallengeVs ch={challenge} />
           {!readOnly && <PickemSubmit picks={mine} onLogin={onLogin} />}
-          <Panel title={t('share')} accent="gold">
+          {/* o palpite próprio completo compartilha pelo convite acima; aqui fica o
+              aviso de palpite incompleto e o palpite recebido (só leitura) */}
+          {(readOnly || !complete) && <Panel title={t('share')} accent="gold">
             {complete ? (
               <div className="msg-share">
                 <p className="msg-share__champ"><Trophy size={18} aria-hidden /> {t('champion')}: <strong>{champName}</strong></p>
@@ -221,8 +237,8 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
                 </div>
               </div>
             ) : <p className="msg-muted">{t('incomplete')}</p>}
-          </Panel>
-          <ChallengeBar ch={challenge} />
+          </Panel>}
+          {!inviteOnScreen && <ChallengeBar ch={challenge} />}
         </div>
       )}
 
