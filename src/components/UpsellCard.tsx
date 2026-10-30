@@ -7,6 +7,7 @@ import { useFounders } from '../state/founders';
 import { priceLabel, usePrice } from '../state/price';
 import { pixErrorKind, type PixErrorKind } from '../state/pixView';
 import { PixPanel } from './PixPanel';
+import { autoOfferAllowed, autoOfferUsed, hasFirstValue, markAutoOfferUsed } from '../state/paywallPolicy';
 
 // Card de ativação (upsell) pra contas GRÁTIS. Abre em momentos estratégicos do
 // jogo (fim de split, título conquistado, etc.) via evento global, o usuário pode
@@ -103,7 +104,10 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
       const trigger = (e as CustomEvent).detail?.trigger as string | undefined;
       const force = Boolean((e as CustomEvent).detail?.force); // clique explícito do usuário fura o cooldown
       const last = Number(localStorage.getItem(LAST_KEY) || 0);
-      if (!force && Date.now() - last < COOLDOWN_MS) return; // respeita cooldown só nos disparos automáticos
+      // disparo automático: só depois do 1º valor, 1x por sessão e com o
+      // cooldown (state/paywallPolicy.ts); clique explícito abre sempre
+      if (!autoOfferAllowed({ force, firstValue: hasFirstValue(), usedThisSession: autoOfferUsed(), msSinceLast: Date.now() - last, cooldownMs: COOLDOWN_MS })) return;
+      if (!force) markAutoOfferUsed();
       setHook(HOOKS[trigger ?? 'default'] ?? HOOKS.default);
       setCardSwitching(false); // botão de cartão destravado a cada abertura (só UI)
       setOpen(true);
