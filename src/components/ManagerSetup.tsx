@@ -8,7 +8,7 @@ import { ACCENTS, SETUP_COUNTRIES, type Manager, type ManagerOrigin } from '../s
 import { ct } from '../state/career-i18n';
 // [W2] LEGADO: pro aposentado do RtP chega aqui pré-preenchido como treinador
 import { clearPendingLegacyCoach, peekPendingLegacyCoach } from '../state/rtpHall';
-import { legacyChipLabel } from '../engine/bridge/legacyBridge';
+import { legacyChipLabel } from '../engine/bridge/legacyLabel';
 
 const NICKS = ['zera', 'taclocal', 'igl_diff', 'awp_main', 'clutchgod', 'br4z1l'];
 const ORGS = ['Time dos Sonhos', 'Selva Gaming', 'Capivara Esports', 'Aurora Major', 'Furacão CS'];

@@ -2,7 +2,7 @@
 // local até o desafiado jogar a Série do Dia. O param é lido UMA vez no boot
 // (e removido da URL); a tela da Série consome via loadGhost(day).
 
-import { parseGhostParam, type GhostChallenge } from '../engine/rtp/dailySeries';
+import { parseGhostParam, type GhostChallenge } from '../engine/rtp/ghostParam';
 import { track } from './track';
 
 const KEY = 'rtm-ghost-v1';
