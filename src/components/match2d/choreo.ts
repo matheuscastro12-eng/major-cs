@@ -187,10 +187,16 @@ export function buildRoundScript(input: RoundInput): RoundScript {
     const side: 't' | 'ct' = team === tTeam ? 't' : 'ct';
     for (let s = 0; s < 5; s++) {
       const id = inp.teamIds[team][s] ?? `${team}-${s}`;
-      const off = { x: (rnd() - 0.5) * 4, y: (rnd() - 0.5) * 4 };
+      const j = m.jitter ?? 1;
+      const off = { x: (rnd() - 0.5) * 4 * j, y: (rnd() - 0.5) * 4 * j };
       const keys: Key[] = [];
       const spawn = side === 't' ? m.spawns.t : m.spawns.ct;
-      const sp = { x: spawn.x + (s - 2) * 2.2 + off.x * 0.4, y: spawn.y + ((s % 2) - 0.5) * 2.4 + off.y * 0.4 };
+      // planta real: os 5 se espalham ao longo do lado maior do spawn (que pode ser estreito)
+      const sp = m.plan
+        ? (spawn.h > spawn.w
+          ? { x: spawn.x + ((s % 2) - 0.5) * spawn.w * 0.4, y: spawn.y + (s - 2) * spawn.h * 0.17 }
+          : { x: spawn.x + (s - 2) * spawn.w * 0.17, y: spawn.y + ((s % 2) - 0.5) * spawn.h * 0.4 })
+        : { x: spawn.x + (s - 2) * 2.2 + off.x * 0.4, y: spawn.y + ((s % 2) - 0.5) * 2.4 + off.y * 0.4 };
       keys.push({ t: 0, ...sp });
       const spawnNode = side === 't' ? 'tS' : 'ctS';
       if (side === 't') {
