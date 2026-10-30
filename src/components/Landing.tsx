@@ -523,6 +523,25 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   useEffect(() => {
     if (pixWaitLong) trackPaywallView('pix-wait-longo'); // funil: reassurance de espera longa exibida (evento existente, novo src)
   }, [pixWaitLong]);
+  // funil: a reassurance dos 25s não é o fim da história — nos checkout_abandon
+  // (pix, 28d), 4 dos 6 abandonos do gancho 'rtp-demo-cliff' (o público mais
+  // engajado do funil) passam de 160s esperando, alguns perto de 400s, e MESMO
+  // ASSIM desistem. Essa galera já viu a reassurance e a saída pro cartão —
+  // só sobra o polling automático e mudo a cada 6s. O botão chama o MESMO
+  // /api/account do polling (nenhuma lógica de pagamento nova), só na hora que
+  // a pessoa pede: devolve a sensação de controle pra quem decidiu pagar e só
+  // está esperando a confirmação cair.
+  const [checkingNow, setCheckingNow] = useState(false);
+  const checkPixNow = async () => {
+    if (!pix || checkingNow) return;
+    setCheckingNow(true);
+    trackPaywallView('pix-check-manual'); // funil: usou o "verificar agora" (src próprio)
+    try {
+      const me = await fetchMe();
+      if (me?.paid) { pixConfirmed.current = true; setPix(null); onPlay(); return; }
+    } catch { /* ignora: a tela segue esperando o polling automático */ }
+    setCheckingNow(false);
+  };
   // funil: a troca pro cartão só aparecia junto da reassurance, aos 25s — mas o
   // dado real (28d) mostra 16 dos 55 abandonos de Pix (29%) desistindo em MENOS
   // de 30s, rápido demais pra terem saído da aba pro app do banco e voltado.
@@ -846,10 +865,21 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
           </button>
           {pixWaitLong && (
-            /* reassurance honesta pra quem passou de 25s esperando (ver comentário no effect acima) */
-            <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
-              {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
-            </p>
+            <>
+              {/* reassurance honesta pra quem passou de 25s esperando (ver comentário no effect acima) */}
+              <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
+                {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
+              </p>
+              {/* botão de controle pra quem já pagou e só está esperando a confirmação (ver comentário no checkPixNow acima) */}
+              <button
+                type="button"
+                onClick={() => void checkPixNow()}
+                disabled={checkingNow}
+                style={{ display: 'block', width: '100%', marginTop: '8px', padding: '8px', borderRadius: '6px', cursor: checkingNow ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--em-gold, #e8c170)', color: 'var(--em-gold, #e8c170)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: checkingNow ? 0.6 : 1 }}
+              >
+                {checkingNow ? ct('Checando…') : ct('Já paguei, verificar agora')}
+              </button>
+            </>
           )}
           {nudge && (
             /* nudge anti-abandono (1x/sessão): inline, honesto, descartável */
