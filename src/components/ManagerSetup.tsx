@@ -11,7 +11,7 @@ import { clearPendingLegacyCoach, peekPendingLegacyCoach } from '../state/rtpHal
 import { legacyChipLabel } from '../engine/bridge/legacyBridge';
 
 const NICKS = ['zera', 'taclocal', 'igl_diff', 'awp_main', 'clutchgod', 'br4z1l'];
-const ORGS = ['Your Dream Team', 'Selva Gaming', 'Capivara Esports', 'Aurora Major', 'Furacão CS'];
+const ORGS = ['Time dos Sonhos', 'Selva Gaming', 'Capivara Esports', 'Aurora Major', 'Furacão CS'];
 const rand = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 
 export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Manager) => void; initial?: Manager | null; defaultNick?: string }) {
@@ -24,7 +24,7 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
   const [name, setName] = useState(legacy?.name ?? initial?.name ?? '');
   const [age, setAge] = useState(legacy?.age ?? initial?.age ?? 24);
   const [cc, setCc] = useState(legacy?.country ?? initial?.country ?? 'br');
-  const [org, setOrg] = useState((legacy?.org || initial?.org) ?? 'Your Dream Team');
+  const [org, setOrg] = useState((legacy?.org || initial?.org) ?? 'Time dos Sonhos');
   const [accent, setAccent] = useState(legacy?.accent ?? initial?.accent ?? ACCENTS[0]);
   const dropLegacy = () => { setOrigin(undefined); clearPendingLegacyCoach(); };
 
@@ -51,7 +51,7 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
   };
   const start = () => {
     clearPendingLegacyCoach();
-    onDone({ nick: nick.trim() || 'manager', name: name.trim(), age, country: cc, accent, org: org.trim() || 'Your Dream Team', ...(origin ? { origin } : {}) });
+    onDone({ nick: nick.trim() || 'manager', name: name.trim(), age, country: cc, accent, org: org.trim() || 'Time dos Sonhos', ...(origin ? { origin } : {}) });
   };
 
   const label: CSSProperties = { fontSize: '10.5px', fontWeight: 700, letterSpacing: '.8px', textTransform: 'uppercase', color: 'var(--rtm-dim)', marginBottom: '6px', display: 'block' };

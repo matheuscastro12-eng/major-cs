@@ -1296,7 +1296,12 @@ export default function App() {
           onGuest={() => { setUtGateOpen(false); enableUtGuest(); setScreen('ultimate'); }}
         />
       )}
-      {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
+      {showOnboarding && screen === 'home' && (
+        <Onboarding
+          onClose={() => setShowOnboarding(false)}
+          onRoute={(route) => { if (route === 'major') setScreen('majorsg'); else if (route === 'draft') openDraftMode(); else openCareerMode(); }}
+        />
+      )}
 
       {/* "Não consegui salvar" + avisos da nuvem (413 / restore sem espaço) */}
       <SaveHealthBanner />
