@@ -11,6 +11,9 @@ import { movesFor, isKeyRound, EFFECT_LABEL, type CallMove } from '../engine/car
 import { derivedIdentity, identityCallOf, identityLabel, scoutingOf, type IdentityCall, type IdentityMod, type TeamIdentity } from '../engine/career/teamIdentity';
 import type { DecisionEvent } from '../engine/roundLog';
 import { DecisionReview } from './DecisionReview';
+import { ResultHighlights, ResultInsights, SeriesResultHero, TacticalInvite } from './SeriesResult';
+import { clearTacticalNext, readTacticalNext } from '../state/seriesResult';
+import { Crosshair, Flame } from 'lucide-react';
 import { narrateRound, type RoundNarration } from '../engine/narration';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
@@ -174,7 +177,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   useEffect(() => { callRef.current = pendingCall; }, [pendingCall]);
   useEffect(() => { siteRef.current = pendingSite; }, [pendingSite]);
   // modo Tático: freezetime de 5s antes de cada round pra escolher a chamada
-  const [tactical, setTactical] = useState(false);
+  // o convite do fim da série anterior ("Ligar o Tático na próxima") liga aqui, uma vez
+  const [tactical, setTactical] = useState(readTacticalNext);
+  useEffect(() => { clearTacticalNext(); }, []);
   const [freeze, setFreeze] = useState(0);
   // impacto da última chamada: a call, a postura ativa, a chance que ENFRENTAVA
   // (odds antes do round) e se deu certo — pro card "decisão → resultado".
@@ -676,7 +681,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moments]);
-  const highlightsTitle = lang === 'en' ? '🎬 Best moments' : lang === 'es' ? '🎬 Mejores momentos' : '🎬 Melhores momentos';
+  const highlightsTitle = lang === 'en' ? 'Best moments' : lang === 'es' ? 'Mejores momentos' : 'Melhores momentos';
+  const insight = useMemo(() => (finished && series ? analyzeSeries(series, teams, userIdx, events) : null), [finished, series, teams, userIdx, events]);
 
   return (
     <div className="fade-in">
@@ -707,11 +713,6 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 {t('match.skipToResult')}
               </button>
             </>
-          )}
-          {finished && series && (
-            <button className="btn gold" onClick={() => onFinish(series)}>
-              ▶ {t('common.continue')}
-            </button>
           )}
         </div>
 
@@ -1098,64 +1099,58 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         </div>
       </div>
 
-      {finished && series && topMoments.length > 0 && (
-        <div className="panel highlights-panel fade-in">
-          <div className="panel-head">{highlightsTitle}</div>
-          <div className="panel-body">
-            {topMoments.map((m, i) => (
-              <div key={i} className={`caster-line ${m.teamIdx === userIdx ? 'mine' : 'opp'}${m.big ? ' big' : ''}`}>
-                <span className="caster-mic">🎙️</span>
-                <span className="caster-text">{m.text}</span>
-              </div>
-            ))}
+      {/* ── RESULTADO DA SÉRIE: o resultado e as ações primeiro, depois a leitura ── */}
+      {finished && series && (
+        <SeriesResultHero series={series} teams={teams} userIdx={userIdx} onContinue={() => onFinish(series)} />
+      )}
+
+      {finished && series && (() => {
+        const noCalls = decisionLog.current.length === 0 && events.length === 0;
+        const hasStyle = series.maps.some((m) => m.styleStats);
+        return (
+          <div className={`sr-grid${hasStyle ? '' : ' sr-grid--solo'}`}>
+            <div className="sr-main">
+              {insight && <ResultInsights verdict={insight.verdict} bullets={insight.bullets} title={t('match.seriesAnalysis')} />}
+              {noCalls ? <TacticalInvite /> : (
+                <>
+                  <DecisionRecapPanel decisions={decisionLog.current} series={series} maps={maps} teams={teams} userIdx={userIdx} />
+                  {/* [W3] SUAS CHAMADAS — o pós-jogo com evidência (mesma tabela da Sala do RtP) */}
+                  <DecisionReview
+                    mode="career"
+                    title={ct('SUAS CHAMADAS')}
+                    nick={teams[userIdx].tag ? `[${teams[userIdx].tag}] ${teams[userIdx].name}` : teams[userIdx].name}
+                    events={events}
+                    won={series.winner === userIdx}
+                    scoreLabel={`${series.mapScore[userIdx]} — ${series.mapScore[userIdx === 0 ? 1 : 0]} vs ${teams[userIdx === 0 ? 1 : 0].tag || teams[userIdx === 0 ? 1 : 0].name}`}
+                  />
+                </>
+              )}
+              {topMoments.length > 0 && <ResultHighlights moments={topMoments} userIdx={userIdx} title={highlightsTitle} />}
+            </div>
+            {hasStyle && (
+              <aside className="sr-side" aria-label={ct('Estilo em campo')}>
+                <StyleStatsPanel series={series} teams={teams} userIdx={userIdx} />
+              </aside>
+            )}
           </div>
-        </div>
-      )}
-
-      {finished && series && (
-        <DecisionRecapPanel decisions={decisionLog.current} series={series} maps={maps} teams={teams} userIdx={userIdx} />
-      )}
-
-      {/* [W3] SUAS CHAMADAS — o pós-jogo com evidência (mesma tabela da Sala do RtP) */}
-      {finished && series && (
-        <DecisionReview
-          mode="career"
-          title={ct('SUAS CHAMADAS')}
-          nick={teams[userIdx].tag ? `[${teams[userIdx].tag}] ${teams[userIdx].name}` : teams[userIdx].name}
-          events={events}
-          won={series.winner === userIdx}
-          scoreLabel={`${series.mapScore[userIdx]} — ${series.mapScore[userIdx === 0 ? 1 : 0]} vs ${teams[userIdx === 0 ? 1 : 0].tag || teams[userIdx === 0 ? 1 : 0].name}`}
-        />
-      )}
-
-      {finished && series && <InsightPanel series={series} teams={teams} userIdx={userIdx} events={events} />}
-
-      {finished && series && <StyleStatsPanel series={series} teams={teams} userIdx={userIdx} />}
+        );
+      })()}
 
       {finished && series && (
         <>
           <Scoreboard series={series} teams={teams} />
           {/* Botões de broadcast 2D por mapa — T2.5. Abre o LiveCanvasGame em
               modo autoplay com o radar/agentes do mapa selecionado. */}
-          <div className="center" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', margin: '12px 0' }}>
+          <div className="sr-broadcast">
             {series.maps.map((m, i) => (
               <button
                 key={i}
                 type="button"
+                className="sr-broadcast__btn"
+                aria-pressed={broadcastMapIdx === i}
                 onClick={() => setBroadcastMapIdx(i)}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: '0.78rem',
-                  fontFamily: 'inherit',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  background: broadcastMapIdx === i ? 'var(--em-gold)' : 'transparent',
-                  color: broadcastMapIdx === i ? '#1a1205' : 'var(--em-text)',
-                  border: '1px solid var(--em-border)',
-                  borderRadius: 3,
-                }}
               >
-                ▶ Broadcast 2D · {m.map}
+                Broadcast 2D · {MAP_LABELS[m.map]}
               </button>
             ))}
           </div>
@@ -1441,14 +1436,14 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
   if (made === 0) {
     return (
       <div className="panel fade-in">
-        <div className="panel-head">🎯 {ct('Resumo tático')}</div>
+        <div className="panel-head"><Crosshair size={16} aria-hidden /> {ct('Resumo tático')}</div>
         <div className="panel-body">
           <div className="muted" style={{ fontSize: '0.84rem', lineHeight: 1.5 }}>
             {ct('Você não deu nenhuma call nesta série — assistiu no automático.')}{' '}
             {ct('Ligue o')} <b>🎯 {ct('Tático')}</b> {ct('no topo da próxima partida pra comandar round a round: postura, timeouts e chamadas mudam o resultado de verdade.')}
           </div>
           {bestRun >= 3 && (
-            <div style={{ marginTop: 10, fontSize: '0.82rem' }}>🔥 {ct('Maior sequência da série')}: <b style={{ color: 'var(--c-win)' }}>{bestRun} {ct('rounds seguidos')}</b></div>
+            <div style={{ marginTop: 10, fontSize: '0.82rem' }}><Flame size={14} aria-hidden /> {ct('Maior sequência da série')}: <b style={{ color: 'var(--c-win)' }}>{bestRun} {ct('rounds seguidos')}</b></div>
           )}
         </div>
       </div>
@@ -1471,13 +1466,13 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
 
   return (
     <div className="panel fade-in">
-      <div className="panel-head">🎯 {ct('Resumo tático')} — {ct('suas decisões')}</div>
+      <div className="panel-head"><Crosshair size={16} aria-hidden /> {ct('Resumo tático')} — {ct('suas decisões')}</div>
       <div className="panel-body">
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
           <span style={{ fontSize: '2rem', fontWeight: 900, color: rateColor, fontFamily: 'var(--font-num)', lineHeight: 1 }}>{won}/{made}</span>
           <span style={{ fontSize: '0.9rem', fontWeight: 700, color: rateColor }}>{Math.round(rate * 100)}% {ct('das calls deram certo')}</span>
           <span className="spacer" />
-          {bestRun >= 3 && <span style={{ fontSize: '0.82rem' }}>🔥 {ct('maior sequência')}: <b style={{ color: 'var(--c-win)' }}>{bestRun}</b></span>}
+          {bestRun >= 3 && <span style={{ fontSize: '0.82rem' }}><Flame size={14} aria-hidden /> {ct('maior sequência')}: <b style={{ color: 'var(--c-win)' }}>{bestRun}</b></span>}
         </div>
         <div style={{ fontSize: '0.82rem', fontStyle: 'italic', color: 'var(--em-text,#d6deea)', marginBottom: 12 }}>{verdict}</div>
 
@@ -1509,27 +1504,6 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
               </div>
             );
           })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InsightPanel({ series, teams, userIdx, events }: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; events?: DecisionEvent[] }) {
-  const { t } = useLang();
-  const insight = useMemo(() => analyzeSeries(series, teams, userIdx, events), [series, teams, userIdx, events]);
-  return (
-    <div className="panel insight-panel fade-in">
-      <div className="panel-head">{t('match.seriesAnalysis')}</div>
-      <div className="panel-body">
-        <div className="verdict">{insight.verdict}</div>
-        <div className="insight-list">
-          {insight.bullets.map((b, i) => (
-            <div key={i} className={`insight-item ${b.tone}`}>
-              <span className="ic">{b.icon}</span>
-              <span>{b.text}</span>
-            </div>
-          ))}
         </div>
       </div>
     </div>
