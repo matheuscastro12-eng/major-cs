@@ -11,7 +11,7 @@
 //   - Kill agora tem FASE SHOOTING: 0.7s antes do timer zerar, o killer
 //     "aponta" pro victim (visualizado como linha amarela + muzzle flash).
 //     Só depois o victim cai. KDA bate 100% com killFeed do simulador.
-//   - Movimento agora respeita a walkable mask do PNG do radar (passada via
+//   - Movimento agora respeita a walkable mask do radar (passada via
 //     `getMask` opcional). Agents deslizam ao bater na parede em vez de
 //     atravessar. Fallback: line walk quando mask ausente.
 
@@ -252,7 +252,13 @@ export function createLiveCanvasSim(opts: LiveSimOptions): LiveCanvasSim {
       if (d > 4) {
         const dir = directionTo(a.pos, a.target);
         const step = a.speed * dt;
-        a.pos = stepWithMask(a.pos, dir, step, mask);
+        const next = stepWithMask(a.pos, dir, step, mask);
+        // Os alvos são retas (spawn → meio → site). Se a parede não deixa
+        // avançar (o deslize não aproxima do alvo), segue reto como na
+        // ausência de máscara, em vez de travar na quina.
+        a.pos = d - distanceTo(next, a.target) > step * 0.2
+          ? next
+          : { x: a.pos.x + dir.x * step, y: a.pos.y + dir.y * step };
         a.facing = Math.atan2(dir.y, dir.x);
       } else {
         a.target = advanceTarget(a, state);
