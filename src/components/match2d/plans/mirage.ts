@@ -36,16 +36,18 @@ export const MIRAGE_RINGS: number[][] = [
   [44.7,35.9,45.2,40.1,41.9,40.2,41.2,41.8,41.1,37.9,44.2,37.6],
 ];
 
-/** nomes das calls: [texto, x, y, rotação em graus] */
+/** nomes das calls: [texto, x, y, rotação em graus]. Ficam fora dos pontos
+ *  onde os jogadores param (holds do CT e espera do TR), para não sumirem
+ *  embaixo das bolinhas (test-match2d confere a distância). */
 export const MIRAGE_CALLS: [string, number, number, number?][] = [
   ['Apps', 64, 17.4],
-  ['Palace', 76, 78.6],
+  ['Palace', 65.5, 78.6],
   ['Ramp', 66.5, 62.6],
   ['Mid', 58, 44.8],
-  ['Top mid', 68.2, 31, -90],
+  ['Top mid', 68.2, 30.6, -90],
   ['Short', 46.2, 31.5, -90],
   ['Connector', 49.6, 55, -90],
-  ['Jungle', 42.5, 61.4],
-  ['Window', 33, 50.6],
-  ['Market', 24, 44.8],
+  ['Jungle', 37.8, 61.5],
+  ['Window', 33.4, 50.3],
+  ['Market', 20.6, 43.9],
 ];

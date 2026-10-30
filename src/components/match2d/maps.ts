@@ -85,7 +85,7 @@ const MAPS: Record<MapId, Map2D> = {
       short: { x: 46, y: 35 }, shortTop: { x: 46, y: 29 }, midConn: { x: 50, y: 47 }, conn: { x: 50, y: 57 },
       jungle: { x: 46, y: 61 }, jN: { x: 39.5, y: 58.5 }, midW: { x: 41, y: 45 }, window: { x: 40.5, y: 50 }, ctMid: { x: 37, y: 54 },
       // CT: market/kitchen até o B, e o CT do A
-      ctMk: { x: 31, y: 52 }, mk2: { x: 31, y: 46 }, market: { x: 24, y: 43 }, bCT: { x: 24, y: 37 },
+      ctMk: { x: 31, y: 52 }, mk2: { x: 31, y: 46 }, market: { x: 28, y: 44.5 }, bCT: { x: 24, y: 37 },
       ctLow: { x: 32, y: 77 }, aCT: { x: 47, y: 77.5 },
     },
     edges: [
