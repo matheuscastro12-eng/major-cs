@@ -6,7 +6,6 @@ import { AdminGate } from './components/AdminGate';
 import { DonateModal } from './components/Donate';
 import { BrandMark } from './components/brand';
 import { AdBanner } from './components/AdBanner';
-import { Draft } from './components/Draft';
 import { GameShell, PeekLayer, ShellProvider, type ShellCommand, type ShellGlobal, type ShellMode, type ShellNavGroup } from './components/ds';
 import { TeamBadge } from './components/ui';
 import {
@@ -21,8 +20,6 @@ import { DAILY_GAMES, dateKeyOf } from './engine/daily/lines';
 import { dailyDayStatus } from './state/daily';
 import { majorClock } from './data/majorWindow';
 import { initialMajorTab, type MajorTab } from './components/major/majorTabs';
-import { Hub } from './components/Hub';
-import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
 import { UpsellCard } from './components/UpsellCard';
 import { UltimateGate } from './components/ultimate/UltimateGate';
@@ -96,6 +93,14 @@ const RoadToPro = lazyWithReload(() => import('./components/rtp/RoadToPro').then
 const DailyScreen = lazyWithReload(() => import('./components/daily/DailyScreen').then((m) => ({ default: m.DailyScreen })));
 // a criação de perfil puxa o Hall do Road to Pro (motor do RtP + base de jogadores)
 const ManagerSetup = lazyWithReload(() => import('./components/ManagerSetup').then((m) => ({ default: m.ManagerSetup })));
+// telas de dentro do jogo: a landing e o /major-singapore não precisam delas
+// (a partida puxa o radar 2D, a narração e o canvas ao vivo)
+const Draft = lazyWithReload(() => import('./components/Draft').then((m) => ({ default: m.Draft })));
+const Hub = lazyWithReload(() => import('./components/Hub').then((m) => ({ default: m.Hub })));
+const VetoScreen = lazyWithReload(() => import('./components/VetoScreen').then((m) => ({ default: m.VetoScreen })));
+const MatchScreen = lazyWithReload(() => import('./components/MatchScreen').then((m) => ({ default: m.MatchScreen })));
+const ManagerProfile = lazyWithReload(() => import('./components/ManagerProfile').then((m) => ({ default: m.ManagerProfile })));
+const Leaderboard = lazyWithReload(() => import('./components/Leaderboard').then((m) => ({ default: m.Leaderboard })));
 
 // Ultimate Squad: VISÍVEL em localhost (dev/preview local), OCULTO no site real
 // (roadtomajor.com.br). O código existe no bundle, mas o menu e a rota só ligam
@@ -124,10 +129,12 @@ const RTP_ENABLED = (() => {
 const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
 const TournamentStats = lazyWithReload(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
 import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
-import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
-import { createTournament, getTeam, pairingBestOf, phaseLabelDisplay, placementCode, resolveRound, userMapRecord, userPairing, userTeam, type PlacementCode } from './engine/swiss';
+import { getTeam, pairingBestOf, phaseLabelDisplay, placementCode, userMapRecord, userPairing, userTeam, type PlacementCode } from './engine/swissView';
+// o motor do suíço (simula as séries da IA com o motor de partida inteiro) só
+// carrega quando o jogo roda: a landing e o /major-singapore não precisam dele
+const loadSwiss = () => import('./engine/swiss');
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendingBaseTeams, resetDataset, saveDataset } from './state/crm';
 import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
@@ -135,8 +142,6 @@ import { ct, setCareerLang } from './state/career-i18n';
 import { Landing, AccountModal } from './components/Landing';
 import type { LandingDoor } from './data/majorLanding';
 import { LegalPage } from './components/Legal';
-import { ManagerProfile } from './components/ManagerProfile';
-import { Leaderboard } from './components/Leaderboard';
 import { beginCheckout, claim as claimAccount, useAccount } from './state/account';
 import { parseCareerPlayerId, isCareerPlayerPath, careerPlayerPath } from './state/career-player-route';
 import { initAppHistory, pushAppEntry, replaceAppEntry } from './state/app-history';
@@ -765,6 +770,9 @@ export default function App() {
   const tournamentName = (pool: TournamentPool, season: number) =>
     `${t(pool === 'br' ? 'home.poolBr' : 'home.poolWorld')}${season > 1 ? ` · ${t('final.season').toUpperCase()} ${season}` : ''}`;
 
+  // no Draft o motor do suíço já começa a baixar: escolher o coach cria o torneio na hora
+  useEffect(() => { if (screen === 'draft') void loadSwiss(); }, [screen]);
+
   const pickCoach = (teamSeasonId: string) => {
     if (!draft) return;
     const coachTeam = dataset.find((t) => t.id === teamSeasonId);
@@ -775,17 +783,19 @@ export default function App() {
       return { player, from };
     });
     const user = buildUserTeam(draft.teamName, picks, coachTeam.coach);
-    const t = createTournament(
-      poolTeams(draft.pool),
-      user,
-      rngRef.current,
-      tournamentName(draft.pool, 1),
-      DIFFICULTY_OPP_BOOST[draft.difficulty],
-    );
-    track('game_start', { pool: draft.pool, difficulty: draft.difficulty, mode: draft.mode });
-    setDraft({ ...draft, pickedCoachTeamId: teamSeasonId });
-    setTournament(t);
-    setScreen('hub');
+    void loadSwiss().then(({ createTournament }) => {
+      const t = createTournament(
+        poolTeams(draft.pool),
+        user,
+        rngRef.current,
+        tournamentName(draft.pool, 1),
+        DIFFICULTY_OPP_BOOST[draft.difficulty],
+      );
+      track('game_start', { pool: draft.pool, difficulty: draft.difficulty, mode: draft.mode });
+      setDraft({ ...draft, pickedCoachTeamId: teamSeasonId });
+      setTournament(t);
+      setScreen('hub');
+    });
   };
 
   // ---------- pick'em ----------
@@ -888,16 +898,20 @@ export default function App() {
     const p = clone.pairings.find((x) => x.a === 'user' || x.b === 'user');
     if (p) p.result = series;
     trackFirstMatchDone('draft'); // ativação: 1ª série concluída (1x por navegador)
-    resolveRound(clone, rngRef.current);
-    setMatchCtx(null);
-    afterResolve(clone);
+    void loadSwiss().then(({ resolveRound }) => {
+      resolveRound(clone, rngRef.current);
+      setMatchCtx(null);
+      afterResolve(clone);
+    });
   };
 
   const simRound = () => {
     if (!tournament) return;
     const clone = structuredClone(tournament) as Tournament;
-    resolveRound(clone, rngRef.current);
-    afterResolve(clone);
+    void loadSwiss().then(({ resolveRound }) => {
+      resolveRound(clone, rngRef.current);
+      afterResolve(clone);
+    });
   };
 
   // ---------- modo carreira ----------
@@ -924,20 +938,22 @@ export default function App() {
   const confirmTransfer = (newTeam: TTeam, cost = 0) => {
     if (!draft) return;
     const nextSeason = career.season + 1;
-    track('season_start', { season: nextSeason, pool: draft.pool });
-    setCareer((c) => ({ ...c, season: nextSeason, budget: c.budget - cost, lastPrize: undefined }));
-    rngRef.current = makeRng(randomSeed());
-    const t = createTournament(
-      poolTeams(draft.pool),
-      newTeam,
-      rngRef.current,
-      tournamentName(draft.pool, nextSeason),
-      DIFFICULTY_OPP_BOOST[draft.difficulty ?? 'normal'],
-    );
-    setPickem({ picks: {}, score: 0, total: 0 });
-    setTransferCtx(null);
-    setTournament(t);
-    setScreen('hub');
+    void loadSwiss().then(({ createTournament }) => {
+      track('season_start', { season: nextSeason, pool: draft.pool });
+      setCareer((c) => ({ ...c, season: nextSeason, budget: c.budget - cost, lastPrize: undefined }));
+      rngRef.current = makeRng(randomSeed());
+      const t = createTournament(
+        poolTeams(draft.pool),
+        newTeam,
+        rngRef.current,
+        tournamentName(draft.pool, nextSeason),
+        DIFFICULTY_OPP_BOOST[draft.difficulty ?? 'normal'],
+      );
+      setPickem({ picks: {}, score: 0, total: 0 });
+      setTransferCtx(null);
+      setTournament(t);
+      setScreen('hub');
+    });
   };
 
   const restart = () => {
@@ -1238,6 +1254,7 @@ export default function App() {
   if (screen === 'profile' && manager) {
     return withShell(
       <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Perfil')} crumbs={[{ label: ct('Conta') }]} variant="full" nav={homeNav('profile')} active="profile" onNav={onHomeNav} mobileNav={homeMobileNav}>
+        <Suspense fallback={<Loader text="…" />}>
         <ManagerProfile
           manager={manager}
           account={account}
@@ -1252,6 +1269,7 @@ export default function App() {
             setScreen('home');
           }}
         />
+        </Suspense>
       </GameShell>,
     );
   }
@@ -1259,7 +1277,9 @@ export default function App() {
   if (screen === 'leaderboard') {
     return withShell(
       <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Ranking')} crumbs={[{ label: ct('Progresso') }]} nav={homeNav('leaderboard')} active="leaderboard" onNav={onHomeNav} mobileNav={homeMobileNav}>
-        <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); goToCheckout(); }} />
+        <Suspense fallback={<Loader text="…" />}>
+          <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); goToCheckout(); }} />
+        </Suspense>
       </GameShell>,
     );
   }
