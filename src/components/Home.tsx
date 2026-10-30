@@ -337,23 +337,18 @@ export function Home(props: Props) {
       nav={shellNav}
       active="home"
       onNav={onShellNav}
-      mobileNav={['home', 'news', 'achievements', 'leaderboard']}
-      title={ct('Portal')}
+      mobileNav={['home', 'mode:majorsg', 'majorsg', 'news', 'leaderboard']}
+      title={ct('Visão geral')}
       crumbs={[]}
       meta={meta}
       next={next}
       bell={{ label: ct('Novidades'), count: 0, onClick: () => onShellNav('news') }}
+      // o Diário de hoje não repete aqui: o selo do Diário no trilho já conta o que falta
       sideWidget={savedCampaign ? (
         <button type="button" className="gs-widget" onClick={onResume}>
           <span className="gs-widget__kicker"><Swords size={13} aria-hidden /> {ct('Campeonato em andamento')}</span>
           <span className="gs-widget__main">{savedCampaign.name}</span>
           <span className="gs-widget__sub">{savedCampaign.phase}</span>
-        </button>
-      ) : onDaily ? (
-        <button type="button" className="gs-widget" onClick={onDaily}>
-          <span className="gs-widget__kicker"><CalendarDays size={13} aria-hidden /> {ct('Diário de hoje')}</span>
-          <span className="gs-widget__main">#{dayNo} <span className="gs-widget__vs">·</span> {dayStatus.done}/{DAILY_GAMES.length}</span>
-          <span className="gs-widget__sub">{dailyLeft > 0 ? `${dailyLeft} ${ct('desafios esperando')}` : ct('Completo · volte amanhã')}</span>
         </button>
       ) : undefined}
     >

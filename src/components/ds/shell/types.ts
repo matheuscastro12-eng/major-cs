@@ -5,11 +5,13 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-export type ModeId = 'inicio' | 'carreira' | 'rtp' | 'ultimate' | 'diario' | 'major' | 'online';
+// 'major' é o Draft (Major rápido); 'majorsg' é o Modo Major (PGL Major Singapore)
+export type ModeId = 'inicio' | 'majorsg' | 'carreira' | 'rtp' | 'ultimate' | 'diario' | 'major' | 'online';
 
-/** valor de data-mode (tokens.css) de cada modo; Início usa o acento base (dourado) */
+/** valor de data-mode (tokens.css) de cada modo; Início e Modo Major usam o acento base (dourado) */
 export const MODE_DATA: Record<ModeId, string | undefined> = {
   inicio: undefined,
+  majorsg: undefined,
   carreira: 'carreira',
   rtp: 'rtp',
   ultimate: 'ultimate',
@@ -24,13 +26,21 @@ export interface ShellMode {
   /** rótulo curto do trilho (cabe em 64px) */
   short?: string;
   icon: LucideIcon;
-  onSelect: () => void;
+  /** `src` diz de onde veio o clique (medição) */
+  onSelect: (src?: ShellModeSrc) => void;
   /** contador de pendência no trilho (ex.: recompensa do dia, jogo de hoje) */
   badge?: number | string;
+  /** 'live' = selo vermelho de AO VIVO */
+  badgeTone?: 'brand' | 'live';
   /** texto extra do tooltip/paleta (ex.: "Demo grátis") */
   hint?: string;
   locked?: boolean;
+  /** false = fora da paleta ⌘K (quando um comando próprio já cobre o modo) */
+  inPalette?: boolean;
 }
+
+/** onde o modo foi aberto: trilho (desktop), menu ou tab bar (celular), paleta */
+export type ShellModeSrc = 'rail' | 'menu' | 'tabbar' | 'palette';
 
 export interface ShellCommand {
   id: string;
@@ -56,7 +66,7 @@ export interface ShellGlobal {
   modes: ShellMode[];
   user?: ShellUser;
   commands: ShellCommand[];
-  /** atalhos do menu "Você" no pé do trilho (ranking, perfil…) */
+  /** atalhos do menu "Conta" no pé do trilho (perfil, ranking…) */
   railFoot?: ShellCommand[];
   /** "Avisos" no pé do trilho (novidades do jogo) */
   alerts?: { count: number; onClick: () => void };

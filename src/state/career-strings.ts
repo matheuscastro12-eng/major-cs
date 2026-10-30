@@ -3929,6 +3929,13 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   // [Modo Major] vitrine na landing e no Início (data/majorWindow.ts)
   'Modo Major': { en: 'Major Mode', es: 'Modo Major' },
   'Principal': { en: 'Main', es: 'Principal' },
+  // [menu] trilho de modos + painel do Início + menu Conta (GameShell)
+  'Progresso': { en: 'Progress', es: 'Progreso' },
+  'Mais': { en: 'More', es: 'Más' },
+  'Avisos': { en: 'Alerts', es: 'Avisos' },
+  'Perfil e conta': { en: 'Profile and account', es: 'Perfil y cuenta' },
+  'Como jogar': { en: 'How to play', es: 'Cómo jugar' },
+  'Apoiar o projeto': { en: 'Support the project', es: 'Apoyar el proyecto' },
   'PGL Major Singapore, de 24/11 a 13/12': { en: 'PGL Major Singapore, Nov 24 – Dec 13', es: 'PGL Major Singapore, del 24/11 al 13/12' },
   "faça seu pick'em e jogue o Major com o seu time, grátis": { en: "make your Pick'em and play the Major with your team, for free", es: "haz tu Pick'em y juega el Major con tu equipo, gratis" },
   'Abrir o Modo Major': { en: 'Open Major Mode', es: 'Abrir el Modo Major' },
