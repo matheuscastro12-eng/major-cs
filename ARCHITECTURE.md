@@ -91,6 +91,14 @@ docs/              # planos e referências; docs/marketing/ para posts e media k
 `vercel.json`**, senão o F5 dá 404 na Vercel. `scripts/test-vercel-rewrites.mts`
 confere isso para todo `SCREEN_PATH` e para os deep links da Carreira.
 
+SEO: o `vite build` termina rodando `scripts/prerender.mts` (plugin em
+`vite.config.ts`), que grava `dist/app.html` (o `index.html` do Vite intacto, a
+casca do SPA), a landing (`dist/index.html`) e as páginas públicas
+(`dist/p/*.html`, texto de `src/seo/`) com metas, JSON-LD e texto no `#root`, mais
+o `sitemap.xml`. Rota do jogo reescreve para `/app.html`; página pública ganha
+entrada em `src/seo/pages.ts` e reescreve para `/p/<nome>.html`
+(`scripts/test-seo.mts` confere, e o build falha se um destino não existir).
+
 ## Versões de save
 
 Cada save guarda a própria versão em `_v` e migra em cadeia até a atual, sempre
