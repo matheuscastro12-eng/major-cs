@@ -45,7 +45,7 @@
 //   updatedAt fora do formato só geram aviso.
 import raw from './major-singapore-2026-results.json';
 import data from './major-singapore-2026.json';
-import { validateMajorResults, type MajorOutcomes } from '../engine/pickemScore';
+import { validateMajorResults, type MajorOutcomes, type PickLocks } from '../engine/pickemScore';
 import type { MajorData } from '../engine/majorSingapore';
 
 const D = data as unknown as MajorData;
@@ -64,10 +64,20 @@ export const STAGE1_END: string = typeof ev.stage1End === 'string' && /^\d{4}-\d
 /** meia-noite do dia seguinte ao fim do Stage 1, em Brasília (UTC-3) */
 export const STAGE1_ENDS_MS = Date.parse(`${STAGE1_END}T00:00:00-03:00`) + 24 * 3600 * 1000;
 
-// TRAVA DO PALPITE: meia-noite de Singapura (UTC+8) no 1º dia do Stage 1, tirado
-// do event.start do JSON (fonte única). Com start 2026-11-24 → 23/11 às 13h de
-// Brasília. Antes do 1º jogo, mesmo que a PGL comece o dia cedo. Depois disso o
-// pick'em do jogador vira só leitura e quem não completou fica fora do placar
-// (sem foto do palpite: como não dá mais pra editar, o palpite salvo é o de antes).
-export const PICKEM_LOCK_MS = Date.parse(`${D.event.start}T00:00:00+08:00`);
-
+// TRAVAS DO PALPITE (meia-noite de Singapura, UTC+8, no 1º dia de cada parte),
+// antes do 1º jogo mesmo que a PGL comece o dia cedo. Stage 1 e playoffs saem do
+// JSON (event.start / event.playoffsStart; a PGL confirmou "entre 24 de novembro e
+// 13 de dezembro de 2026"). Stage 2 (28/11) e Stage 3 (02/12) seguem o HLTV
+// (hltv.org/events/9303: Stage 2 de 28/11 a 01/12; "Stage 3 & Playoffs" a partir
+// de 02/12). Na trava o palpite NÃO fica só leitura: o placar usa a foto daquela
+// hora (engine/pickemScore.ts → takeSnapshots/scoredPicks), e o jogador segue
+// livre pra ajustar os Stages seguintes e enviar ao Pick'em oficial.
+const sgMidnight = (day: string) => Date.parse(`${day}T00:00:00+08:00`);
+export const PICKEM_LOCKS: PickLocks = {
+  s1: sgMidnight(D.event.start),
+  s2: sgMidnight('2026-11-28'),
+  s3: sgMidnight('2026-12-02'),
+  playoffs: sgMidnight(D.event.playoffsStart),
+};
+/** trava do Stage 1 (23/11 às 13h de Brasília com start 2026-11-24) */
+export const PICKEM_LOCK_MS = PICKEM_LOCKS.s1;

@@ -12,10 +12,10 @@ import {
   type MajorData, type MajorPicks, type MajorResult,
 } from '../src/engine/majorSingapore.ts';
 import {
-  MAX_TOTAL, NO_OUTCOMES, STAGE_MAX, outcomesFromSim, placarView, scorePlayoffs, scoreSoFar, scoreStage, validateMajorResults,
+  MAX_TOTAL, NO_OUTCOMES, STAGE_MAX, outcomesFromSim, placarView, scorePlayoffs, scoreSoFar, scoreStage, scoredPicks, takeSnapshots, validateMajorResults,
   type MajorOutcomes, type PlayoffOutcome, type StageOutcome,
 } from '../src/engine/pickemScore.ts';
-import { PICKEM_LOCK_MS, STAGE1_END, STAGE1_ENDS_MS } from '../src/data/majorResults.ts';
+import { PICKEM_LOCK_MS, PICKEM_LOCKS, STAGE1_END, STAGE1_ENDS_MS } from '../src/data/majorResults.ts';
 
 const D = data as unknown as MajorData;
 const SRC = 'https://www.hltv.org/events/9303/pgl-major-singapore-2026-stage-1';
@@ -319,10 +319,32 @@ test('trava: meia-noite de Singapura no event.start (23/11 13h em Brasília com 
   if (dataLock.event.start === '2026-11-24') assert.equal(new Date(PICKEM_LOCK_MS).toISOString(), '2026-11-23T16:00:00.000Z');
 });
 
-test('trava: palpite incompleto depois da trava fica fora do placar; antes, só "complete"', () => {
-  const empty = emptyPicks();
-  assert.equal(placarView(empty, NO_OUTCOMES, 1000, 5000, 2000).kind, 'incomplete');
-  assert.equal(placarView(empty, NO_OUTCOMES, 3000, 5000, 2000).kind, 'excluded');
-  // sem trava informada (palpite de amigo, só leitura) nunca vira "fora do placar"
-  assert.equal(placarView(empty, NO_OUTCOMES, 3000, 5000).kind, 'incomplete');
+test('travas por Stage: meia-noite de Singapura; Stage 1 e playoffs do JSON', () => {
+  const ev = (data as unknown as { event: { start: string; playoffsStart: string } }).event;
+  assert.equal(PICKEM_LOCKS.s1, Date.parse(`${ev.start}T00:00:00+08:00`));
+  assert.equal(PICKEM_LOCKS.playoffs, Date.parse(`${ev.playoffsStart}T00:00:00+08:00`));
+  assert.ok(PICKEM_LOCKS.s1 < PICKEM_LOCKS.s2 && PICKEM_LOCKS.s2 < PICKEM_LOCKS.s3 && PICKEM_LOCKS.s3 < PICKEM_LOCKS.playoffs);
+});
+
+test('foto: só as travas que já passaram, uma vez, com o palpite da hora', () => {
+  const L = { s1: 10, s2: 20, s3: 30, playoffs: 40 };
+  const a = takeSnapshots({}, L, 5, 'A');
+  assert.deepEqual(a, {});
+  const b = takeSnapshots(a, L, 25, 'B');
+  assert.deepEqual(b, { s1: 'B', s2: 'B' });
+  const c = takeSnapshots(b, L, 35, 'C'); // s1/s2 já tinham foto: não mudam
+  assert.deepEqual(c, { s1: 'B', s2: 'B', s3: 'C' });
+  assert.equal(takeSnapshots(c, L, 35, 'D'), c); // nada novo → mesmo objeto
+});
+
+test('placar usa a foto de cada parte travada; o resto, o palpite atual', () => {
+  const L = { s1: 10, s2: 20, s3: 30, playoffs: 40 };
+  const atual = { ...emptyPicks(), s1: ['a'], s2: ['b'], s3: ['c'], bracket: ['x', '', '', '', '', '', 'x'] };
+  const foto = { ...emptyPicks(), s1: ['F1'], s2: ['F2'], s3: ['F3'], bracket: ['f', '', '', '', '', '', 'f'] };
+  const antes = scoredPicks(atual, { s1: foto }, L, 5);
+  assert.deepEqual([antes.s1, antes.s2], [['a'], ['b']]); // nenhuma trava ainda
+  const meio = scoredPicks(atual, { s1: foto, s2: foto }, L, 25);
+  assert.deepEqual([meio.s1, meio.s2, meio.s3, meio.bracket[6]], [['F1'], ['F2'], ['c'], 'x']);
+  const semFoto = scoredPicks(atual, {}, L, 50); // storage bloqueado: cai no atual
+  assert.deepEqual(semFoto.s1, ['a']);
 });

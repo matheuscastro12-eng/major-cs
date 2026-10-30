@@ -257,3 +257,30 @@
   .msg-summary p { grid-template-columns: 8ch repeat(3, minmax(0, 1fr)); gap: var(--sp-2); font-size: var(--fs-2); }
   .msg-picks { grid-template-columns: 1fr; }
 }
+
+/* extras: prêmio, elencos, previsões */
+.msg-prize { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; color: var(--c-achievement); }
+.msg-rosters { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.msg-roster { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; gap: 10px; align-items: center; }
+.msg-roster__players { display: flex; flex-wrap: wrap; gap: 10px; }
+.msg-roster__p { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 52px; }
+.msg-roster__p small { font-size: 11px; opacity: .85; }
+.msg-roster__p.is-coach { opacity: .8; }
+.msg-pred-wrap { overflow-x: auto; }
+.msg-pred { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+.msg-pred th, .msg-pred td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--c-line); white-space: nowrap; }
+.msg-pred th:first-child, .msg-pred td:first-child { text-align: left; }
+@media (max-width: 640px) { .msg-roster { grid-template-columns: 1fr; } }
+/* logos locais dos times (sigla quando não há) */
+/* placar do pick'em */
+.msg-board { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.msg-board__row { display: grid; grid-template-columns: 32px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--c-line); font-variant-numeric: tabular-nums; }
+.msg-board__row.is-prize { color: var(--c-achievement); }
+.msg-board__rank { text-align: center; }
+.msg-board__exact { opacity: .7; font-size: 12px; }
+/* envio oficial do pick'em */
+.msg-pksend { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+.msg-pksend__row { display: grid; grid-template-columns: 90px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--c-line); }
+.msg-pksend__status { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.msg-pksend__hint { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 640px) { .msg-pksend__row { grid-template-columns: 1fr auto; } }

@@ -11,11 +11,12 @@
 import { useMemo, useState } from 'react';
 import { Check, Copy, ExternalLink, Trophy, X } from 'lucide-react';
 import data from '../../data/major-singapore-2026.json';
-import { MAJOR_RESULTS, PICKEM_LOCK_MS, STAGE1_END, STAGE1_ENDS_MS } from '../../data/majorResults';
+import { MAJOR_RESULTS, PICKEM_LOCK_MS, PICKEM_LOCKS, STAGE1_END, STAGE1_ENDS_MS } from '../../data/majorResults';
+import { readPickSnapshots } from '../../state/pickSnapshots';
 import { MAJOR_SG_PATH } from '../../data/majorWindow';
 import { encodePicks, simulateMajor, type MajorData, type MajorPicks } from '../../engine/majorSingapore';
 import {
-  outcomesFromSim, placarView,
+  outcomesFromSim, placarView, scoredPicks,
   type MajorOutcomes, type Mark, type PlacarThrough, type PlacarView, type PlayoffScore, type StageScore,
 } from '../../engine/pickemScore';
 import { useLang, type Lang } from '../../state/i18n';
@@ -70,7 +71,10 @@ export function MajorScoreboard({ t, picks, readOnly }: { t: T; picks: MajorPick
   const demo = useMemo(() => devOutcomes(), []);
   const results = demo ?? MAJOR_RESULTS;
   const now = Date.now();
-  const view = placarView(picks, results, now, STAGE1_ENDS_MS, readOnly ? Infinity : PICKEM_LOCK_MS);
+  // o próprio palpite é pontuado pela foto de cada trava (state/pickSnapshots.ts);
+  // o palpite de um link recebido, como veio
+  const scored = readOnly ? picks : scoredPicks(picks, readPickSnapshots(), PICKEM_LOCKS, now);
+  const view = placarView(scored, results, now, STAGE1_ENDS_MS);
   const starts = fill(t('pcStarts'), { date: fmtDay(STAGE1_END, lang) });
   const lockAt = fmtLock(PICKEM_LOCK_MS, lang);
   return (
@@ -83,12 +87,11 @@ export function MajorScoreboard({ t, picks, readOnly }: { t: T; picks: MajorPick
       {view.kind === 'incomplete' && (
         <p className="msg-pc__text">{t('pcIncomplete')}{!view.started && <> {starts}</>}</p>
       )}
-      {view.kind === 'excluded' && <p className="msg-pc__text">{t('pcExcluded')}</p>}
       {!readOnly && <p className="msg-muted">{fill(t(now >= PICKEM_LOCK_MS ? 'pcLocked' : 'pcLockAt'), lockAt)}</p>}
       {view.kind === 'waiting' && (
         <p className="msg-pc__text">{view.late ? t('pcLate') : starts}{!readOnly && <> {t('pcSaved')}</>}</p>
       )}
-      {view.kind === 'scored' && <Scored t={t} view={view} results={results} picks={picks} readOnly={readOnly} />}
+      {view.kind === 'scored' && <Scored t={t} view={view} results={results} picks={scored} readOnly={readOnly} />}
     </Panel>
   );
 }

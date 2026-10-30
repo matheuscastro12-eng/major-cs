@@ -4,13 +4,13 @@
 // navegador e compartilhável por link/PNG), Liga com amigos (MajorLeague) e
 // simulação do Major inteiro pontuando o palpite. A lógica é toda de
 // engine/majorSingapore.ts; os times vêm de data/major-singapore-2026.json.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Check, Copy, Download, Dices, Eraser, Sparkles, Trophy } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import data from '../../data/major-singapore-2026.json';
 import {
   EXTREME_PICKS, bracketSides, decodePicks, emptyPicks, encodePicks, normalizePicks, pickPool, picksComplete,
-  scorePicks, simulateMajor, stageEntrants, titleOdds,
+  phaseOdds, scorePicks, simulateMajor, stageEntrants, titleOdds,
   type MajorData, type MajorPicks, type MajorResult, type MajorTeam, type StageNo,
 } from '../../engine/majorSingapore';
 import { randomSeed } from '../../engine/rng';
@@ -19,7 +19,11 @@ import { shareUrl } from '../../state/shareLink';
 import { postOnX } from '../../state/shareX';
 import { track, trackShare } from '../../state/track';
 import { Alert, Button, EmptyState, Panel, Skeleton, Tag } from '../ds';
+import { PlayerAvatar } from '../ui';
+import bo3Teams from '../../data/bo3-2026.json';
 import { MajorResultView } from './MajorResultView';
+import { PickemBoard } from './PickemBoard';
+import { PickemSubmit } from './PickemSubmit';
 import { MajorLeague } from './MajorLeague';
 import { MajorCalendarButton } from './MajorCalendarButton';
 import { MajorCrest } from './MajorCrest';
@@ -27,10 +31,12 @@ import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
 import { ChallengeBanner, ChallengeBar, ChallengeVs, useChallenge } from './MajorChallenge';
 import { MajorScoreboard } from './MajorScoreboard';
-import { PICKEM_LOCK_MS } from '../../data/majorResults';
+import { ensurePickSnapshots } from '../../state/pickSnapshots';
 import '../../styles/major.css';
 
 const D = data as unknown as MajorData;
+type Bo3Team = { id: string; players: { nick: string }[]; coach?: { nick: string } };
+const ROSTERS = new Map((bo3Teams as unknown as Bo3Team[]).map((x) => [x.id, x]));
 // a Sala (RtpRoundRoom + engine do RtP) só carrega quando a aba Jogar abre
 const MajorPlay = lazy(() => import('./MajorPlay').then((m) => ({ default: m.MajorPlay })));
 const STORE = 'rtm-major-sg-picks-v1';
@@ -55,7 +61,7 @@ function readSharedCode(): string | null {
   try { return new URLSearchParams(window.location.search).get('p'); } catch { return null; }
 }
 
-export function MajorSingaporeScreen() {
+export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {}) {
   const { lang } = useLang();
   const t = majorT(lang);
   const teams = useMemo(() => new Map(D.teams.map((x) => [x.id, x])), []);
@@ -72,13 +78,16 @@ export function MajorSingaporeScreen() {
     try { localStorage.setItem(STORE, JSON.stringify(mine)); } catch { /* sem storage */ }
   }, [mine]);
   useEffect(() => { track('major_sg_view', { shared: shared ? 1 : 0 }); }, [shared]);
+  // foto das travas que passaram desde a última visita, com o palpite como estava
+  useEffect(() => { ensurePickSnapshots(loadMine()); }, []);
 
   const picks = viewShared && shared ? shared : mine;
   const viewingShared = viewShared && !!shared;
-  // depois da trava (meia-noite de Singapura no 1º dia: data/majorResults.ts) o próprio palpite é só leitura
-  const locked = Date.now() >= PICKEM_LOCK_MS;
-  const readOnly = viewingShared || locked;
-  const update = (p: MajorPicks) => setMine(normalizePicks(D, p));
+  const readOnly = viewingShared;
+  // toda edição passa por aqui: antes de mudar, tira a foto das travas que já
+  // passaram (o placar pontua cada Stage pelo palpite da hora em que ele travou)
+  const commit = (p: MajorPicks) => { ensurePickSnapshots(mine); setMine(p); };
+  const update = (p: MajorPicks) => commit(normalizePicks(D, p));
   const challenge = useChallenge(mine, shared, t); // link de amigo → desafio (MajorChallenge.tsx)
 
   const toggleExtreme = (kind: 'x30' | 'x03', stage: StageNo, id: string) => {
@@ -171,16 +180,18 @@ export function MajorSingaporeScreen() {
 
       {tab === 'pickem' && (
         <div className="msg-stack">
+          <PrizePanel t={t} />
+          <PickemBoard />
           {sharedCode && !shared && <Alert tone="danger">{t('badLink')}</Alert>}
           {shared && (
             <ChallengeBanner ch={challenge} viewing={viewShared} onView={() => setViewShared(true)} onBuild={() => setViewShared(false)}
-              onUse={locked ? undefined : () => { setMine(shared); setViewShared(false); }} />
+              onUse={() => { commit(shared); setViewShared(false); }} />
           )}
           <MajorScoreboard t={t} picks={picks} readOnly={viewingShared} />
           {!readOnly && (
             <div className="msg-toolbar">
               <Button size="sm" icon={<Sparkles size={16} aria-hidden />} onClick={autofill}>{t('auto')}</Button>
-              <Button size="sm" variant="ghost" icon={<Eraser size={16} aria-hidden />} onClick={() => setMine(emptyPicks())}>{t('clear')}</Button>
+              <Button size="sm" variant="ghost" icon={<Eraser size={16} aria-hidden />} onClick={() => commit(emptyPicks())}>{t('clear')}</Button>
             </div>
           )}
           {([1, 2, 3] as StageNo[]).map((st) => (
@@ -188,6 +199,7 @@ export function MajorSingaporeScreen() {
           ))}
           <BracketPicker picks={picks} readOnly={readOnly} t={t} onPick={pickWinner} />
           <ChallengeVs ch={challenge} />
+          {!readOnly && <PickemSubmit picks={mine} onLogin={onLogin} />}
           <Panel title={t('share')} accent="gold">
             {complete ? (
               <div className="msg-share">
@@ -205,7 +217,7 @@ export function MajorSingaporeScreen() {
       )}
 
       {tab === 'sim' && (
-        <SimView t={t} picks={mine} result={sim} onRun={() => { setSim(simulateMajor(D, randomSeed())); track('major_sg_sim', {}); }} />
+        <SimView t={t} picks={mine} predictions={<Predictions t={t} />} result={sim} onRun={() => { setSim(simulateMajor(D, randomSeed())); track('major_sg_sim', {}); }} />
       )}
     </div>
   );
@@ -233,6 +245,7 @@ function Overview({ t, odds, onStart }: { t: T; odds: Map<string, number>; onSta
   return (
     <div className="msg-grid">
       <div className="msg-stack">
+        <PrizePanel t={t} />
         <Panel title={t('formatTitle')}>
           <ol className="msg-format">
             <li>{t('formatS1')}</li>
@@ -277,7 +290,68 @@ function Overview({ t, odds, onStart }: { t: T; odds: Map<string, number>; onSta
           </section>
         ))}
       </Panel>
+      <Rosters t={t} />
     </div>
+  );
+}
+
+function PrizePanel({ t }: { t: T }) {
+  return (
+    <Panel title={t('prizeTitle')} accent="gold">
+      <p className="msg-prize"><Trophy size={18} aria-hidden /> <strong>{t('prizeText')}</strong></p>
+      <p className="msg-muted">{t('prizeRules')}</p>
+    </Panel>
+  );
+}
+
+// elenco de cada time com as fotos do bo3.gg (locais) ou iniciais. O crédito
+// "Fotos: bo3.gg" é o global do GameShell: não repetir aqui.
+function Rosters({ t }: { t: T }) {
+  return (
+    <Panel title={t('rostersTitle')}>
+      <ul className="msg-rosters">
+        {[...D.teams].sort((a, b) => a.seed - b.seed).map((x) => {
+          const r = x.bo3Id ? ROSTERS.get(x.bo3Id) : undefined;
+          return (
+            <li key={x.id} className="msg-roster">
+              <TeamChip team={x} />
+              <span className="msg-roster__players">
+                {(r?.players ?? []).map((p) => (
+                  <span key={p.nick} className="msg-roster__p"><PlayerAvatar nick={p.nick} size={34} /><small>{p.nick}</small></span>
+                ))}
+                {r?.coach && <span className="msg-roster__p is-coach"><PlayerAvatar nick={r.coach.nick} size={28} coach /><small>{t('coach')} {r.coach.nick}</small></span>}
+                {!r && <small className="msg-muted">—</small>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
+
+const PRED_RUNS = 2000;
+function Predictions({ t }: { t: T }) {
+  const rows = useMemo(() => phaseOdds(D, PRED_RUNS), []);
+  const teams = new Map(D.teams.map((x) => [x.id, x]));
+  const pct = (v: number | null) => (v === null ? '—' : `${(v * 100).toFixed(1)}%`);
+  return (
+    <Panel title={t('predTitle')}>
+      <p className="msg-muted">{PRED_RUNS.toLocaleString()} {t('predNote')}</p>
+      <div className="msg-pred-wrap">
+        <table className="msg-pred">
+          <thead><tr><th>{t('predTeam')}</th><th>Stage 1</th><th>Stage 2</th><th>Playoffs</th><th>{t('sf')}</th><th>{t('final')}</th><th>{t('predTitleCol')}</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td><TeamChip team={teams.get(r.id)!} /></td>
+                <td>{pct(r.s1)}</td><td>{pct(r.s2)}</td><td>{pct(r.playoffs)}</td><td>{pct(r.sf)}</td><td>{pct(r.final)}</td><td><strong>{pct(r.title)}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
   );
 }
 
@@ -323,7 +397,7 @@ function StagePicker({ stage, picks, readOnly, t, onToggle, onExtreme }: { stage
                     return (
                       <button key={id} type="button" className={`msg-chip${sel ? ' is-on' : ''}`} aria-pressed={sel}
                         disabled={readOnly || (!sel && on.length >= EXTREME_PICKS)} onClick={() => onExtreme(kind, id)}>
-                        {teams.get(id)?.tag ?? id}
+                        <MajorCrest team={teams.get(id)} size={16} /> {teams.get(id)?.tag ?? id}
                       </button>
                     );
                   })}
@@ -350,7 +424,7 @@ function BracketPicker({ picks, readOnly, t, onPick }: { picks: MajorPicks; read
             const won = !!id && picks.bracket[g] === id;
             return (
               <button key={s} className={`msg-slot${won ? ' is-won' : ''}`} disabled={readOnly || !id || !sides[g][0] || !sides[g][1]} aria-pressed={won} onClick={() => onPick(g, id)}>
-                {tm ? <><span className="msg-seed">{tm.seed}</span><span className="msg-slot__name">{tm.name}</span></> : <span className="msg-slot__tbd">—</span>}
+                {tm ? <><span className="msg-seed">{tm.seed}</span><MajorCrest team={tm} size={18} /><span className="msg-slot__name">{tm.name}</span></> : <span className="msg-slot__tbd">—</span>}
               </button>
             );
           })}
@@ -369,7 +443,7 @@ function BracketPicker({ picks, readOnly, t, onPick }: { picks: MajorPicks; read
           <div className="msg-bcol is-champ">
             <h3 className="msg-bcol__title">{t('champion')}</h3>
             <div className={`msg-champ${champ ? ' is-set' : ''}`}>
-              <Trophy size={22} aria-hidden />
+              {champ ? <MajorCrest team={champ} size={26} /> : <Trophy size={22} aria-hidden />}
               <span>{champ?.name ?? '—'}</span>
             </div>
           </div>
@@ -379,9 +453,9 @@ function BracketPicker({ picks, readOnly, t, onPick }: { picks: MajorPicks; read
   );
 }
 
-function SimView({ t, picks, result, onRun }: { t: T; picks: MajorPicks; result: MajorResult | null; onRun: () => void }) {
+function SimView({ t, picks, result, onRun, predictions }: { t: T; picks: MajorPicks; result: MajorResult | null; onRun: () => void; predictions: ReactNode }) {
   if (!result) {
-    return <EmptyState icon={<Dices size={28} />} title={t('simRun')} action={<Button variant="primary" onClick={onRun}>{t('simRun')}</Button>}>{t('simEmpty')}</EmptyState>;
+    return <div className="msg-stack">{predictions}<EmptyState icon={<Dices size={28} />} title={t('simRun')} action={<Button variant="primary" onClick={onRun}>{t('simRun')}</Button>}>{t('simEmpty')}</EmptyState></div>;
   }
   const sc = picksComplete(picks) ? scorePicks(picks, result) : null;
   return (
@@ -389,6 +463,7 @@ function SimView({ t, picks, result, onRun }: { t: T; picks: MajorPicks; result:
       <div className="msg-toolbar">
         <Button variant="primary" icon={<Dices size={16} aria-hidden />} onClick={onRun}>{t('simAgain')}</Button>
       </div>
+      {predictions}
       <Panel title={t('summaryTitle')}>
         {sc ? (
           <div className="msg-score">

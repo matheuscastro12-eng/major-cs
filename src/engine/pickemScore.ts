@@ -252,6 +252,45 @@ export function scoreSoFar(p: MajorPicks, o: MajorOutcomes): ScoreSoFar {
   };
 }
 
+// ---------------------------------------------------------------- foto do palpite em cada trava
+//
+// O palpite continua EDITÁVEL o Major inteiro: o envio oficial (api/pickem,
+// PickemSubmit) é Stage a Stage, com os times oficiais de cada Stage, e pra
+// montar o Stage 2 com os times reais o jogador precisa mexer no Stage 1 depois
+// que ele começou. Pra o placar não virar "acertei tudo" editado depois do
+// resultado, cada parte é pontuada pela FOTO do palpite tirada quando ela travou
+// (a 1ª vez que o jogo roda depois da trava, antes de qualquer edição).
+
+export type PickPart = 's1' | 's2' | 's3' | 'playoffs';
+export const PICK_PARTS: readonly PickPart[] = ['s1', 's2', 's3', 'playoffs'];
+export type PickLocks = Record<PickPart, number>;
+/** foto de cada parte: o código do palpite inteiro (encodePicks) na hora da trava */
+export type PickSnapshots = Partial<Record<PickPart, string>>;
+
+/** toda parte cuja trava já passou e ainda não tem foto ganha o palpite ATUAL. Puro; devolve o mesmo objeto se nada mudou. */
+export function takeSnapshots(snaps: PickSnapshots, locks: PickLocks, nowMs: number, currentCode: string): PickSnapshots {
+  let out = snaps;
+  for (const k of PICK_PARTS) if (nowMs >= locks[k] && out[k] === undefined) out = { ...out, [k]: currentCode };
+  return out;
+}
+
+/**
+ * O palpite que o placar pontua: cada parte já travada vem da foto dela; as
+ * que ainda não travaram (ou sem foto, ex.: storage bloqueado), do palpite atual.
+ */
+export function scoredPicks(current: MajorPicks, snaps: Partial<Record<PickPart, MajorPicks | null>>, locks: PickLocks, nowMs: number): MajorPicks {
+  const src = (k: PickPart): MajorPicks => (nowMs >= locks[k] && snaps[k] ? snaps[k]! : current);
+  const s = [src('s1'), src('s2'), src('s3')] as const;
+  return {
+    s1: [...s[0].s1],
+    s2: [...s[1].s2],
+    s3: [...s[2].s3],
+    x30: [[...s[0].x30[0]], [...s[1].x30[1]], [...s[2].x30[2]]],
+    x03: [[...s[0].x03[0]], [...s[1].x03[1]], [...s[2].x03[2]]],
+    bracket: [...src('playoffs').bracket],
+  };
+}
+
 // ---------------------------------------------------------------- estado da UI
 
 /** até onde já tem resultado: Stage 1..3, quartas, semis ou final */
@@ -260,8 +299,6 @@ export type PlacarThrough = 1 | 2 | 3 | 'qf' | 'sf' | 'final';
 export type PlacarView =
   /** palpite incompleto; started = já saiu algum resultado */
   | { kind: 'incomplete'; started: boolean }
-  /** palpite incompleto quando os palpites travaram: fora do placar */
-  | { kind: 'excluded' }
   /** palpite completo, nenhum resultado ainda; late = o Stage 1 já devia ter terminado */
   | { kind: 'waiting'; late: boolean }
   /** com pontos; next = o Stage seguinte ainda sem resultado (null nos playoffs) */
@@ -272,9 +309,9 @@ export function hasOutcomes(o: MajorOutcomes): boolean {
 }
 
 /** qual mensagem o placar mostra (MajorScoreboard.tsx) */
-export function placarView(p: MajorPicks, o: MajorOutcomes, nowMs: number, stage1EndsMs: number, lockMs = Infinity): PlacarView {
+export function placarView(p: MajorPicks, o: MajorOutcomes, nowMs: number, stage1EndsMs: number): PlacarView {
   const started = hasOutcomes(o);
-  if (!picksComplete(p)) return nowMs >= lockMs ? { kind: 'excluded' } : { kind: 'incomplete', started };
+  if (!picksComplete(p)) return { kind: 'incomplete', started };
   if (!started) return { kind: 'waiting', late: nowMs >= stage1EndsMs };
   const score = scoreSoFar(p, o);
   const po = o.playoffs;
