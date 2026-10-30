@@ -84,6 +84,7 @@ import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { setCheckoutSrc, trackPaywallView, trackShare, trackUltFunnel } from '../../state/track';
+import { markFirstValue } from '../../state/paywallPolicy';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, beginPassPix, beginPassCheckout, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { collectPaidCoins, collectPaidPass } from '../../state/paidClaim'; // [O0-25] coleta única, crédito fora do ciclo de vida da tela
 import { ultFrozenNotice } from '../../state/ultimateShadow'; // [O0-02]
@@ -1996,6 +1997,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         setPackFromCloud(res.source === 'server');
         if (pack.id === SEASON_PACK.id) trackUltFunnel('season_pack_open', { season: seasonN ?? 0 }); // [URG-1]
         setReveal([...res.cards].sort((a, b) => b.ovr - a.ovr));
+        markFirstValue('pack'); // 1º pacote = 1º valor (a oferta passiva só aparece depois: state/paywallPolicy.ts)
       } finally { setPackBusy(null); }
     })();
   };
