@@ -119,6 +119,7 @@ import { useSectionHistory } from '../../state/app-history';
 import '../../styles/ultimate.css';
 import { priceLabel, usePrice, withPrice } from '../../state/price';
 import { dismissGuestBanner, guestBannerVisible, readGuestBannerDismissed } from '../../state/guestBanner';
+import { planRadarUrl } from '../../data/planRadar';
 
 // [URG-3] deep link do e-mail "rival te passou": /ultimate?tab=ranqueada abre a
 // aba Ranqueada. Lido UMA vez no carregamento do módulo (mesmo motivo do
@@ -2560,7 +2561,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             const tone = wknd.open ? '#f472b6' : '#8a93a2';
             return (
               <section style={{ borderRadius: '14px', overflow: 'hidden', border: `1px solid ${tone}`, marginBottom: '16px', background: '#0e141b', position: 'relative' }}>
-                <span style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/de_inferno.png)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.14 }} />
+                <span style={{ position: 'absolute', inset: 0, backgroundImage: `url("${planRadarUrl('inferno')}")`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.14 }} />
                 <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(244,114,182,.18), rgba(13,17,22,.94) 62%)' }} />
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 22px', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '30px' }}>🎁</span>

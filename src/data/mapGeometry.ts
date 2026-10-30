@@ -4,20 +4,18 @@
 // Modos:
 //   - "abstract": layout genérico top-down (fallback). Hoje só usado pra mapas
 //                que não estejam em SPECIFIC (não acontece — todos os 7 do
-//                MAP_POOL têm radar real).
-//   - "radar":   layout calibrado em cima do radar PNG oficial do CS2.
-//                Coords em PIXEL do PNG 1024×1024.
+//                MAP_POOL têm radar).
+//   - "radar":   layout calibrado no quadro do overview do CS2 (1024×1024 px).
+//                O desenho do radar é a nossa planta vetorial (planRadar.ts,
+//                desenho próprio, sem imagem da Valve), no mesmo quadro.
 //
-// Pipeline pra atualizar quando a Valve mudar o radar de um mapa:
-//   1) `curl -O https://raw.githubusercontent.com/2mlml/cs2-radar-images/master/de_<map>.png`
-//   2) Atualizar entry em SPECIFIC abaixo se as coords do `.txt` mudaram
-//   3) Re-testar visualmente no LiveCanvasGame (Replay 2D)
-//
-// Coords vieram dos arquivos `.txt` do mesmo repo, onde
-// `CTSpawn_x/y`, `TSpawn_x/y`, `bombA_x/y`, `bombB_x/y` são fracionais [0..1]
-// do radar — multiplicamos por 1024 pra ter pixel.
+// Spawns e bombs: as frações [0..1] do overview do jogo (`CTSpawn_x/y`,
+// `TSpawn_x/y`, `bombA_x/y`, `bombB_x/y`) estão anotadas no comentário de
+// cada mapa abaixo; multiplicamos por 1024 pra ter pixel. Se um mapa mudar,
+// atualize a planta em src/components/match2d/plans e confira aqui.
 
 import type { MapId } from '../types';
+import { planRadarUrl } from './planRadar';
 
 export interface Vec2 {
   x: number;
@@ -102,12 +100,12 @@ const RADAR = 1024;
 // Helper: coord normalizada [0..1] → pixel
 const px = (frac: number): number => Math.round(frac * RADAR);
 
-// MIRAGE (de_mirage.txt: CTSpawn 0.28,0.70 · TSpawn 0.87,0.36 · A 0.54,0.76 · B 0.23,0.28)
+// MIRAGE (overview: CTSpawn 0.28,0.70 · TSpawn 0.87,0.36 · A 0.54,0.76 · B 0.23,0.28)
 const MIRAGE: MapLayout = {
   mode: 'radar',
   width: RADAR,
   height: RADAR,
-  radarImage: '/maps/de_mirage.png',
+  radarImage: planRadarUrl('mirage'),
   backgroundImage: '/maps/mirage.jpg',
   spawnsT: spread5({ x: px(0.87), y: px(0.36) }),
   spawnsCT: spread5({ x: px(0.28), y: px(0.70) }),
@@ -125,7 +123,7 @@ const INFERNO: MapLayout = {
   mode: 'radar',
   width: RADAR,
   height: RADAR,
-  radarImage: '/maps/de_inferno.png',
+  radarImage: planRadarUrl('inferno'),
   backgroundImage: '/maps/inferno.webp',
   spawnsT: spread5({ x: px(0.10), y: px(0.67) }),
   spawnsCT: spread5({ x: px(0.90), y: px(0.35) }),
@@ -145,7 +143,7 @@ const NUKE: MapLayout = {
   mode: 'radar',
   width: RADAR,
   height: RADAR,
-  radarImage: '/maps/de_nuke.png',
+  radarImage: planRadarUrl('nuke'),
   backgroundImage: '/maps/nuke.jpg',
   spawnsT: spread5({ x: px(0.19), y: px(0.54) }),
   spawnsCT: spread5({ x: px(0.82), y: px(0.45) }),
@@ -163,7 +161,7 @@ const ANCIENT: MapLayout = {
   mode: 'radar',
   width: RADAR,
   height: RADAR,
-  radarImage: '/maps/de_ancient.png',
+  radarImage: planRadarUrl('ancient'),
   backgroundImage: '/maps/ancient.jpg',
   spawnsT: spread5({ x: px(0.485), y: px(0.87) }),
   spawnsCT: spread5({ x: px(0.51), y: px(0.17) }),
@@ -176,13 +174,13 @@ const ANCIENT: MapLayout = {
   accent: '#5e8a4a',
 };
 
-// ANUBIS (CTSpawn 0.61,0.22 · TSpawn 0.58,0.93 — bombA/bombB não vêm no .txt,
+// ANUBIS (CTSpawn 0.61,0.22 · TSpawn 0.58,0.93 — bombA/bombB não vêm no overview,
 // estimados visualmente: A perto do CT side, B no mid-bottom).
 const ANUBIS: MapLayout = {
   mode: 'radar',
   width: RADAR,
   height: RADAR,
-  radarImage: '/maps/de_anubis.png',
+  radarImage: planRadarUrl('anubis'),
   backgroundImage: '/maps/anubis.jpg',
   spawnsT: spread5({ x: px(0.58), y: px(0.93) }),
   spawnsCT: spread5({ x: px(0.61), y: px(0.22) }),
@@ -200,7 +198,7 @@ const DUST2: MapLayout = {
   mode: 'radar',
   width: RADAR,
   height: RADAR,
-  radarImage: '/maps/de_dust2.png',
+  radarImage: planRadarUrl('dust2'),
   backgroundImage: '/maps/dust2.jpg',
   spawnsT: spread5({ x: px(0.39), y: px(0.91) }),
   spawnsCT: spread5({ x: px(0.62), y: px(0.21) }),
@@ -218,7 +216,7 @@ const TRAIN: MapLayout = {
   mode: 'radar',
   width: RADAR,
   height: RADAR,
-  radarImage: '/maps/de_train.png',
+  radarImage: planRadarUrl('train'),
   backgroundImage: '/maps/train.jpg',
   spawnsT: spread5({ x: px(0.12), y: px(0.25) }),
   spawnsCT: spread5({ x: px(0.86), y: px(0.77) }),
