@@ -8,6 +8,7 @@ import type { MajorData, MajorMatch, MajorPicks, MajorResult } from '../../engin
 import { teamStats, type TeamStats } from '../../engine/majorCampaign';
 import { Panel, Segmented, Table, type Column } from '../ds';
 import type { MajorKey } from './majorStrings';
+import { MajorCrest } from './MajorCrest';
 
 const D = data as unknown as MajorData;
 type T = (k: MajorKey) => string;
@@ -27,6 +28,7 @@ export function MajorResultView({ t, result, picks, highlight }: { t: T; result:
       {([[m.a, m.score[0]], [m.b, m.score[1]]] as [string, number][]).map(([id, sc]) => (
         <div key={id} className={`msg-slot is-static${m.winner === id ? ' is-won' : ''}${highlight === id ? ' is-me' : ''}`}>
           <span className="msg-seed">{teams.get(id)?.seed}</span>
+          <MajorCrest team={teams.get(id)} size={18} />
           <span className="msg-slot__name">{name(id)}</span>
           <span className="msg-slot__score">{sc}</span>
         </div>
