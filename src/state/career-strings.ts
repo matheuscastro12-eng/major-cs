@@ -1751,6 +1751,7 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Entrar ou criar conta": { en: "Sign in or create an account", es: "Inicia sesión o crea una cuenta" },
   "Veto de mapas": { en: "Map veto", es: "Veto de mapas" },
   "Partida ao vivo": { en: "Live match", es: "Partida en vivo" },
+  "Série encerrada": { en: "Series over", es: "Serie terminada" },
   "Modo Carreira": { en: "Career Mode", es: "Modo Carrera" },
   "Estatísticas": { en: "Statistics", es: "Estadísticas" },
   "Admin": { en: "Admin", es: "Admin" },
