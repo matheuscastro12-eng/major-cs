@@ -115,6 +115,8 @@ export function MajorSingaporeScreen() {
   };
 
   const complete = picksComplete(picks);
+  // pick'em fechado (campeão escolhido) no palpite do próprio jogador; 1x por sessão (track.ts)
+  useEffect(() => { if (complete && !readOnly) track('major_pickem_submit', {}); }, [complete, readOnly]);
   const link = complete ? shareUrl(`${MAJOR_PATH}?p=${encodePicks(D, picks)}`, 'major-pickem') : '';
   const champName = teams.get(picks.bracket[6])?.name ?? '';
   const copyLink = async () => {
@@ -126,7 +128,7 @@ export function MajorSingaporeScreen() {
       stage: (n) => `Stage ${n}`, foot: t('cardFoot'),
     });
     downloadDataUrl(url, 'pickem-major-singapore.png');
-    track('major_sg_image', {});
+    trackShare('major-pickem-img', 'copy'); // download da imagem conta como compartilhamento (share_card)
   };
 
   return (
