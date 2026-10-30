@@ -118,6 +118,7 @@ import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQ
 import { useSectionHistory } from '../../state/app-history';
 import '../../styles/ultimate.css';
 import { priceLabel, usePrice, withPrice } from '../../state/price';
+import { dismissGuestBanner, guestBannerVisible, readGuestBannerDismissed } from '../../state/guestBanner';
 
 // [URG-3] deep link do e-mail "rival te passou": /ultimate?tab=ranqueada abre a
 // aba Ranqueada. Lido UMA vez no carregamento do módulo (mesmo motivo do
@@ -492,6 +493,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; draft?: { wins: number; completed: boolean; over: boolean; credits: number; card?: UltCard; daily?: boolean }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean; star?: MatchStar; casterFinal?: string | null; evidence?: MatchEvidence };
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1; pvpCode?: string } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
+  const [guestBannerDismissed, setGuestBannerDismissed] = useState(readGuestBannerDismissed);
   const [shareState, setShareState] = useState<'busy' | 'shared' | 'saved' | null>(null);
   const [liveRound, setLiveRound] = useState(0); // rounds já exibidos no replay (barra de momentum)
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
@@ -2273,6 +2275,35 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     })(),
   };
 
+  const guestWarn = (compact: boolean) => (
+        <div className={`ut-guest-warn${compact ? ' is-compact' : ''}`} style={{ position: 'relative', borderRadius: compact ? 10 : 0, paddingRight: 44, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 16px', background: 'rgba(232,193,112,0.10)', borderBottom: '1px solid rgba(232,193,112,0.35)', color: 'var(--em-text, #eadfce)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', lineHeight: 1.4, flex: '1 1 320px' }}>
+            <Lock size={16} style={{ color: '#e8c170', flexShrink: 0 }} />
+            <span>
+              <b>{ct('Você está jogando sem conta.')}</b>{' '}
+              {ct('Seu progresso do Ultimate fica salvo só neste navegador — se limpar o cache ou trocar de aparelho, você perde tudo.')}
+            </span>
+          </span>
+          {onCreateAccount && (
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={onCreateAccount}
+                style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
+              >
+                {withPrice(ct('Criar conta vitalícia · {preço} · salva na nuvem e joga no PC e no celular'))}
+              </button>
+              {/* prova social real na única superfície de venda do modo convidado (iter42) */}
+              <FounderCounter style={{ fontSize: '10px' }} />
+            </span>
+          )}
+          <button type="button" className="ut-guest-warn__close" aria-label={ct('Fechar aviso')} title={ct('Fechar (volta em 7 dias)')}
+            onClick={() => setGuestBannerDismissed(dismissGuestBanner())}
+            style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid rgba(232,193,112,0.35)', background: 'transparent', color: 'inherit', cursor: 'pointer' }}>
+            <X size={14} />
+          </button>
+        </div>
+  );
   return (
     <GameShell {...shellProps}>
     <div className="ut-root ut-in-shell">
@@ -2296,30 +2327,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           real (acct-chip-guest, upsell-card) já mostrou que repetir o preço no
           próprio texto do botão, e não só num parágrafo ao lado, melhora clique
           em telas pequenas. Aplica o mesmo padrão aqui. */}
-      {guest && (
-        <div className="ut-guest-warn" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 16px', background: 'rgba(232,193,112,0.10)', borderBottom: '1px solid rgba(232,193,112,0.35)', color: 'var(--em-text, #eadfce)' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', lineHeight: 1.4, flex: '1 1 320px' }}>
-            <Lock size={16} style={{ color: '#e8c170', flexShrink: 0 }} />
-            <span>
-              <b>{ct('Você está jogando sem conta.')}</b>{' '}
-              {ct('Seu progresso do Ultimate fica salvo só neste navegador — se limpar o cache ou trocar de aparelho, você perde tudo.')}
-            </span>
-          </span>
-          {onCreateAccount && (
-            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-              <button
-                type="button"
-                onClick={onCreateAccount}
-                style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
-              >
-                {withPrice(ct('Criar conta vitalícia · {preço} · salva na nuvem e joga no PC e no celular'))}
-              </button>
-              {/* prova social real na única superfície de venda do modo convidado (iter42) */}
-              <FounderCounter style={{ fontSize: '10px' }} />
-            </span>
-          )}
-        </div>
-      )}
+      {/* [FIX29] só no Hub (home do Ultimate), com ✕ — ver src/state/guestBanner.ts */}
+      {guestBannerVisible({ guest, tab, dismissedAt: guestBannerDismissed }) && guestWarn(false)}
 
 
       {/* ===== PAGE ===== */}
@@ -3971,6 +3980,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 {result.divChange === 'promoted' ? <><TrendingUp size={15} strokeWidth={2.5} /> {ct('PROMOVIDO')} · {result.divName}</> : <><TrendingUp size={15} strokeWidth={2.5} style={{ transform: 'scaleY(-1)' }} /> {ct('rebaixado')} · {result.divName}</>}
               </div>
             )}
+            {/* [FIX29] fim de run (Gauntlet/Draft encerrados) */}
+            {guestBannerVisible({ guest, tab: 'run-end', runOver: !!(result.gaunt?.over || result.draft?.over), dismissedAt: guestBannerDismissed }) && <div style={{ margin: '0 0 12px' }}>{guestWarn(true)}</div>}
             {result.gaunt?.completed && (
               <div className="ut-divchange promoted"><Flame size={15} strokeWidth={2.5} /> {ct('GAUNTLET COMPLETO')} · 5/5</div>
             )}
