@@ -3,11 +3,13 @@
 import { EDITOR_STR } from './career-strings-editor';
 import { LEGADO_STR } from './career-strings-legado';
 import { CHECKOUT_STR } from './career-strings-checkout';
+import { PIX_STR } from './career-strings-pix';
 
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   ...LEGADO_STR, // [SA2 · legado]
   ...EDITOR_STR, // [fase 4 · editor de base] (as entradas abaixo, se repetidas, valem)
   ...CHECKOUT_STR, // [growth · checkout in-place da trava do RtP]
+  ...PIX_STR, // [pix · celular] tela do QR Pix (PixPanel)
   // [fase 4 · frente CIRCUITO] calendário, circuito, VRS, qualificatórios, RMR, LAN, visto e bootcamp
   "sem field nesta etapa": { en: "no field this stage", es: "sin field en esta etapa" },
   "não disputado": { en: "not held", es: "no disputado" },
