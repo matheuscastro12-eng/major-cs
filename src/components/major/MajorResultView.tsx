@@ -8,7 +8,7 @@ import type { MajorData, MajorMatch, MajorPicks, MajorResult } from '../../engin
 import { teamStats, type TeamStats } from '../../engine/majorCampaign';
 import { Panel, Segmented, Table, type Column } from '../ds';
 import type { MajorKey } from './majorStrings';
-import { TeamLogo } from './TeamLogo';
+import { MajorCrest } from './MajorCrest';
 
 const D = data as unknown as MajorData;
 type T = (k: MajorKey) => string;
@@ -28,7 +28,7 @@ export function MajorResultView({ t, result, picks, highlight }: { t: T; result:
       {([[m.a, m.score[0]], [m.b, m.score[1]]] as [string, number][]).map(([id, sc]) => (
         <div key={id} className={`msg-slot is-static${m.winner === id ? ' is-won' : ''}${highlight === id ? ' is-me' : ''}`}>
           <span className="msg-seed">{teams.get(id)?.seed}</span>
-          <TeamLogo team={teams.get(id)} size={18} />
+          <MajorCrest team={teams.get(id)} size={18} />
           <span className="msg-slot__name">{name(id)}</span>
           <span className="msg-slot__score">{sc}</span>
         </div>
@@ -37,7 +37,7 @@ export function MajorResultView({ t, result, picks, highlight }: { t: T; result:
   );
 
   const cols: Column<TeamStats>[] = [
-    { key: 'team', header: 'Time', cell: (r) => <span className="msg-team"><TeamLogo team={teams.get(r.id)} size={16} /> {name(r.id)}</span>, sort: (r) => name(r.id) },
+    { key: 'team', header: 'Time', cell: (r) => <span className="msg-team"><MajorCrest team={teams.get(r.id)} size={16} /> {name(r.id)}</span>, sort: (r) => name(r.id) },
     { key: 'finish', header: t('finish'), cell: (r) => (r.finish === 'Campeão' ? t('champion') : r.finish), sort: (r) => FINISH_ORDER[r.finish] ?? 9 },
     { key: 'series', header: t('record'), num: true, cell: (r) => `${r.series[0]}–${r.series[1]}`, sort: (r) => r.series[0] - r.series[1] },
     { key: 'maps', header: t('mapsWL'), num: true, cell: (r) => `${r.maps[0]}–${r.maps[1]}`, sort: (r) => r.maps[0] - r.maps[1] },
@@ -63,7 +63,7 @@ export function MajorResultView({ t, result, picks, highlight }: { t: T; result:
           <div className="msg-bcol is-f"><h3 className="msg-bcol__title">{t('final')} · {t('bo')}5</h3>{game(po.final)}</div>
           <div className="msg-bcol is-champ">
             <h3 className="msg-bcol__title">{t('champion')}</h3>
-            <div className="msg-champ is-set"><TeamLogo team={teams.get(po.champion)} size={26} /><span>{name(po.champion)}</span></div>
+            <div className="msg-champ is-set"><MajorCrest team={teams.get(po.champion)} size={26} /><span>{name(po.champion)}</span></div>
           </div>
         </div>
       )}
@@ -74,7 +74,7 @@ export function MajorResultView({ t, result, picks, highlight }: { t: T; result:
             {[...st.records].sort((a, b) => b.w - a.w || a.l - b.l).map((r) => (
               <p key={r.id} className={`msg-standing${r.w === 3 ? ' is-adv' : ''}${highlight === r.id ? ' is-me' : ''}`}>
                 <span className="msg-standing__rec">{r.w}–{r.l}</span>
-                <TeamLogo team={teams.get(r.id)} size={16} /><span className="msg-standing__name">{name(r.id)}</span>
+                <MajorCrest team={teams.get(r.id)} size={16} /><span className="msg-standing__name">{name(r.id)}</span>
                 {picks?.[`s${st.stage}` as 's1'].includes(r.id) && <Check size={14} aria-label="palpite" />}
               </p>
             ))}

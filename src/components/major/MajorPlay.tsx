@@ -13,11 +13,12 @@ import { randomSeed } from '../../engine/rng';
 import type { Role } from '../../types';
 import type { MomentOutcome } from '../../engine/rtp/moments';
 import type { MapId } from '../../types';
-import { track } from '../../state/track';
+import { track, trackFirstMatchDone, trackShare } from '../../state/track';
 import { RtpRoundRoom } from '../rtp/RtpRoundRoom';
 import { Alert, Button, Panel, Tag } from '../ds';
 import { downloadDataUrl, drawCampaignCard } from './majorShareCard';
 import { MajorResultView } from './MajorResultView';
+import { MajorCrest } from './MajorCrest';
 import type { MajorKey } from './majorStrings';
 
 const D = data as unknown as MajorData;
@@ -63,6 +64,8 @@ export function MajorPlay({ t }: { t: T }) {
       const c = recordSeries(D, camp, next, outcomes, liveMaps);
       const last = c.played[c.played.length - 1];
       track('major_sg_series', { phase: next.phase, won: last.winner === camp.teamId ? 1 : 0, rating: last.heroRating });
+      trackFirstMatchDone('major'); // ativação: 1ª série concluída (1x por navegador)
+      trackCampaignDone(c);
       setCamp(c);
       setInRoom(false);
     };
@@ -70,7 +73,11 @@ export function MajorPlay({ t }: { t: T }) {
       <div className="msg-room">
         <div className="msg-room__bar">
           <Tag tone="accent">{phaseLabel(next.phase)} · {roundLabel(next.label, t)} · {t('bo')}{next.bestOf}</Tag>
-          <span className="msg-room__vs"><strong>{name(camp.teamId)}</strong> × {name(next.opp)}</span>
+          <span className="msg-room__vs">
+            <MajorCrest team={teams.get(camp.teamId)} size={30} /><strong>{name(camp.teamId)}</strong>
+            <span aria-hidden>×</span>
+            <MajorCrest team={teams.get(next.opp)} size={30} />{name(next.opp)}
+          </span>
         </div>
         <div className="rtp rtp-screen" data-fx="on">
           <RtpRoundRoom key={`${next.phase}-${next.label}`} save={setup.save} prep={setup.prep} onComplete={onComplete} major />
@@ -111,6 +118,10 @@ export function MajorPlay({ t }: { t: T }) {
 
   return (
     <div className="msg-stack">
+      <div className="msg-runhead">
+        <MajorCrest team={mine} size={56} />
+        <div><span className="msg-runhead__k">{t('yourRun')}</span><b className="msg-runhead__name">{mine.name}</b></div>
+      </div>
       <Panel
         title={`${t('yourRun')} · ${mine.name}`}
         actions={<Button size="sm" variant="ghost" icon={<RotateCcw size={16} aria-hidden />} onClick={restart}>{t('abandon')}</Button>}
@@ -129,7 +140,7 @@ export function MajorPlay({ t }: { t: T }) {
               return (
                 <li key={`${p.phase}-${p.label}`} className={won ? 'is-w' : 'is-l'}>
                   <span className="msg-runlog__when">{phaseLabel(p.phase)} · {roundLabel(p.label, t)}</span>
-                  <span className="msg-runlog__opp">{name(ia ? p.b : p.a)}</span>
+                  <span className="msg-runlog__opp"><MajorCrest team={teams.get(ia ? p.b : p.a)} size={18} />{name(ia ? p.b : p.a)}</span>
                   <span className="msg-runlog__score">{ia ? p.score[0] : p.score[1]}–{ia ? p.score[1] : p.score[0]}</span>
                   <span className="msg-runlog__rt">{p.heroRating > 0 ? p.heroRating.toFixed(2) : t('simulated')}</span>
                 </li>
@@ -143,11 +154,11 @@ export function MajorPlay({ t }: { t: T }) {
         <Panel title={t('nextSeries')} accent="blue">
           <p className="msg-next">
             <Tag tone="accent">{phaseLabel(view.next.phase)} · {roundLabel(view.next.label, t)} · {t('bo')}{view.next.bestOf}</Tag>
-            <span><strong>{mine.name}</strong> × {name(view.next.opp)}</span>
+            <span className="msg-vs"><MajorCrest team={mine} size={24} /><strong>{mine.name}</strong> × <MajorCrest team={teams.get(view.next.opp)} size={24} />{name(view.next.opp)}</span>
           </p>
           <div className="msg-toolbar">
             <Button variant="primary" icon={<Play size={16} aria-hidden />} onClick={() => setInRoom(true)}>{t('playRoom')}</Button>
-            <Button icon={<Dices size={16} aria-hidden />} onClick={() => setCamp(simulatePending(camp, D, view.next!))}>{t('simThis')}</Button>
+            <Button icon={<Dices size={16} aria-hidden />} onClick={() => { const c = simulatePending(camp, D, view.next!); trackCampaignDone(c); setCamp(c); }}>{t('simThis')}</Button>
           </div>
         </Panel>
       )}
@@ -157,13 +168,19 @@ export function MajorPlay({ t }: { t: T }) {
   );
 }
 
+// a campanha acabou (campeão ou eliminado e o resto simulado): 1 marco por sessão (track.ts)
+function trackCampaignDone(c: MajorCampaign): void {
+  const v = campaignView(D, c);
+  if (!v.next && v.result) track('major_sg_campaign_done', { champion: v.result.playoffs.champion === c.teamId ? 1 : 0 });
+}
+
 function CampaignEnd({ t, camp, result, summary }: { t: T; camp: MajorCampaign; result: MajorResult; summary: ReturnType<typeof campaignSummary> }) {
   const champ = result.playoffs.champion === camp.teamId;
   const saveCard = () => {
     downloadDataUrl(drawCampaignCard(D, camp, result, summary, {
       champion: t('champion'), record: t('record'), maps: t('mapsWL'), rating: t('avgRating'), mvp: t('mvp'), foot: t('cardFoot'),
     }), 'campanha-major-singapore.png');
-    track('major_sg_run_image', {});
+    trackShare('major-campaign-img', 'copy'); // download do card conta como compartilhamento (share_card)
   };
   return (
     <>

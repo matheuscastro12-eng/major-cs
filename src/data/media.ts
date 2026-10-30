@@ -90,6 +90,49 @@ export function logoForTeam(team: Pick<TeamSeason, 'id' | 'team'>): string | und
   return local ? `/logos/${local}` : undefined;
 }
 
+// Logo local pelo NOME/sigla do time (times fora do banco de temporadas, ex.: os
+// convidados do Modo Major e os seeds do Major da carreira). Só arquivos de
+// public/logos — nunca Liquipedia. Sem arquivo → undefined (TeamBadge usa a sigla).
+const LOGO_BY_NAME: Record<string, string> = {
+  vitality: 'vitality.png',
+  spirit: 'spirit.png',
+  falcons: 'falcons.png',
+  natusvincere: 'navi.png', navi: 'navi.png',
+  mouz: 'mouz.png', mousesports: 'mouz.png',
+  legacy: 'legacy.png',
+  mongolz: 'mongolz.png',
+  astralis: 'astralis.png',
+  furia: 'furia.png',
+  g2: 'g2.png',
+  '9z': '9z.png',
+  pain: 'pain.png',
+  mibr: 'mibr.png',
+  faze: 'faze.png',
+  ninjasinpyjamas: 'nip.jpg', nip: 'nip.jpg',
+  heroic: 'heroic.png',
+  big: 'big.jpg',
+  tyloo: 'tyloo.png',
+  liquid: 'liquid.png',
+  fnatic: 'fnatic.png', cloud9: 'cloud9.png', ence: 'ence.png',
+  complexity: 'complexity.png', imperial: 'imperial.png',
+  apeks: 'apeks.png', sharks: 'sharks.png', redcanids: 'redcanids.png', oddik: 'oddik.png',
+  w7m: 'w7m.png', virtuspro: 'virtuspro.png',
+};
+const normTeam = (s: string) => s.toLowerCase()
+  .replace(/\b(team|esports|e-sports|gaming|clan|club)\b/g, '')
+  .replace(/^the\s+/, '')
+  .replace(/[^a-z0-9]/g, '');
+
+/** logo local para um time pelo nome, sigla ou id (o primeiro que bater) */
+export function logoForName(...keys: (string | undefined)[]): string | undefined {
+  for (const k of keys) {
+    if (!k) continue;
+    const f = LOGO_BY_NAME[normTeam(k)];
+    if (f) return `/logos/${f}`;
+  }
+  return undefined;
+}
+
 export function liquipediaTeamUrl(team: Pick<TeamSeason, 'team'>): string {
   return `https://liquipedia.net/counterstrike/${team.team.replace(/ /g, '_')}`;
 }
@@ -110,18 +153,3 @@ export function photoForNick(nick: string): string | undefined {
   return k && BO3_LOCAL.has(k) ? `/players/bo3/${k}.webp` : undefined;
 }
 
-// ---- logos do Modo Major (ids de data/major-singapore-2026.json) ----
-// Só os logos LOCAIS que o app já tem em public/logos (os mesmos do logoForTeam,
-// #125). Sem logo local → sigla do time. Nada da Liquipedia nem hotlink.
-const MAJOR_LOGOS: Record<string, string> = {
-  'team-vitality': 'vitality.png', 'team-spirit': 'spirit.png', 'team-falcons': 'falcons.png',
-  'natus-vincere': 'navi.png', mouz: 'mouz.png', legacy: 'legacy.png', 'the-mongolz': 'mongolz.png',
-  astralis: 'astralis.png', furia: 'furia.png', 'g2-esports': 'g2.png', '9z': '9z.png',
-  'pain-gaming': 'pain.png', mibr: 'mibr.png', 'faze-clan': 'faze.png', 'ninjas-in-pyjamas': 'nip.jpg',
-  heroic: 'heroic.png', big: 'big.jpg', tyloo: 'tyloo.png', 'team-liquid': 'liquid.png',
-};
-
-export function logoForMajorTeam(id: string): string | undefined {
-  const f = MAJOR_LOGOS[id];
-  return f ? `/logos/${f}` : undefined;
-}

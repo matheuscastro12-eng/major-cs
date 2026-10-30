@@ -45,7 +45,8 @@
 
 /* time */
 .msg-team { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
-.msg-team__swatch { width: 4px; height: 18px; border-radius: 1px; flex: none; }
+.msg-crest { display: inline-flex; flex: none; align-items: center; }
+.msg-crest .tbadge { border-radius: 6px; }
 .msg-team__name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg-team__sub { color: var(--c-ink-faint); font-size: var(--fs-2); }
 .msg-seed {
@@ -199,7 +200,14 @@
 /* a Sala dentro do Modo Major */
 .msg-room { display: flex; flex-direction: column; gap: var(--sp-3); }
 .msg-room__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); font-size: var(--fs-3); }
-.msg-room__vs { overflow-wrap: anywhere; }
+.msg-room__vs { overflow-wrap: anywhere; display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.msg-vs { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.msg-runlog__opp { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.msg-slot .msg-crest { margin-right: var(--sp-1); }
+.msg-runhead { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: 14px; border: 1px solid var(--c-line); background: var(--c-surface-1); }
+.msg-runhead > div { display: grid; min-width: 0; }
+.msg-runhead__k { font-family: var(--font-title); font-weight: 700; font-size: var(--fs-1, 0.75rem); letter-spacing: 1.2px; text-transform: uppercase; color: var(--c-achievement); }
+.msg-runhead__name { font-family: var(--font-display); font-weight: 700; font-size: 1.8rem; line-height: 1.05; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* pick'em: 3-0 / 0-3 */
 .msg-extremes { margin-top: var(--sp-4); border-top: 1px solid var(--c-line-soft); padding-top: var(--sp-3); display: grid; gap: var(--sp-3); }
@@ -264,10 +272,6 @@
 .msg-pred th:first-child, .msg-pred td:first-child { text-align: left; }
 @media (max-width: 640px) { .msg-roster { grid-template-columns: 1fr; } }
 /* logos locais dos times (sigla quando não há) */
-.msg-logo { flex: none; object-fit: contain; display: inline-block; vertical-align: middle; }
-.msg-logo.is-tag { display: inline-grid; place-items: center; border-radius: 4px; background: var(--c-line); color: var(--c-ink); font-weight: 700; letter-spacing: .02em; line-height: 1; overflow: hidden; }
-.msg-chip .msg-logo { margin-right: 4px; }
-.msg-slot .msg-logo, .msg-standing .msg-logo { margin-right: 6px; }
 /* placar do pick'em */
 .msg-board { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .msg-board__row { display: grid; grid-template-columns: 32px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--c-line); font-variant-numeric: tabular-nums; }

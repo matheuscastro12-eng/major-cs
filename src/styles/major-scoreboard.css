@@ -1,0 +1,71 @@
+/* PLACAR DO PICK'EM (src/components/major/MajorScoreboard.tsx), dentro do
+   Modo Major (major.css). Tokens de tokens.css; acerto em --c-win e erro em
+   --c-loss (significado fixo de resultado). Linhas separadas por divisória,
+   sem card dentro de card. Nada anima. */
+
+.msg-pc { display: flex; flex-direction: column; gap: var(--sp-4); }
+.msg-pc__text { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-4); line-height: var(--lh-body); text-wrap: pretty; }
+
+/* total */
+.msg-pc__head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.msg-pc__big {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-7); line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--c-ink);
+}
+.msg-pc__big small { font-size: var(--fs-5); color: var(--c-ink-faint); margin-left: 2px; }
+.msg-pc__line { margin: 0; min-width: 0; font-size: var(--fs-4); line-height: var(--lh-snug); color: var(--c-ink); text-wrap: pretty; }
+
+/* uma linha por parte: Stage 1, 2, 3, Playoffs */
+.msg-pc__parts { list-style: none; margin: 0; padding: 0; display: grid; }
+.msg-pc__part {
+  display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-4) 0; border-top: 1px solid var(--c-line-soft);
+}
+.msg-pc__part.is-wait { align-items: center; padding: var(--sp-3) 0; }
+.msg-pc__meta { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); min-width: 0; }
+.msg-pc__name {
+  margin: 0; font-family: var(--font-title); font-weight: 600; font-size: var(--fs-4);
+  letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-ink);
+}
+.msg-pc__pts { font-family: var(--font-display); font-size: var(--fs-6); line-height: var(--lh-tight); font-variant-numeric: tabular-nums; color: var(--c-ink); }
+.msg-pc__pts small { font-size: var(--fs-3); color: var(--c-ink-faint); }
+.msg-pc__src {
+  display: inline-flex; align-items: center; gap: var(--sp-1); min-height: 44px;
+  color: var(--c-brand); font-size: var(--fs-3); text-decoration: underline; text-underline-offset: 3px;
+}
+.msg-pc__src:focus-visible { outline: 2px solid var(--c-brand); outline-offset: 2px; }
+
+/* grupos de times com ✓/✗ */
+.msg-pc__body { display: grid; gap: var(--sp-3); min-width: 0; }
+.msg-pc__ext { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3) var(--sp-4); }
+.msg-pc__group { display: grid; gap: var(--sp-1); min-width: 0; align-content: start; }
+.msg-pc__label {
+  font-family: var(--font-title); font-weight: 600; font-size: var(--fs-2);
+  letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-ink-faint);
+}
+.msg-pc__count { margin-left: var(--sp-2); font-family: var(--font-num); font-variant-numeric: tabular-nums; color: var(--c-ink-dim); }
+.msg-pc__marks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-1); }
+.msg-pc__ext .msg-pc__marks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.msg-pc__mark {
+  display: flex; align-items: center; gap: var(--sp-2); min-height: 36px; min-width: 0;
+  padding: 0 var(--sp-2); font-size: var(--fs-3);
+  background: var(--c-surface-2); border: 1px solid var(--c-line); border-radius: var(--rad-1);
+}
+.msg-pc__mark svg { flex: none; }
+.msg-pc__mark.is-hit { background: var(--c-win-soft); border-color: color-mix(in srgb, var(--c-win) 45%, var(--c-line)); }
+.msg-pc__mark.is-hit svg { color: var(--c-win); }
+.msg-pc__mark.is-miss svg { color: var(--c-loss); }
+.msg-pc__mark.is-miss .msg-pc__team { color: var(--c-ink-dim); font-weight: 500; }
+.msg-pc__team { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--c-ink); }
+.msg-pc__wait { color: var(--c-ink-faint); font-size: var(--fs-3); }
+
+@media (max-width: 900px) {
+  .msg-pc__marks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .msg-pc__part { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+  .msg-pc__part.is-wait { grid-template-columns: minmax(0, 1fr) auto; }
+  .msg-pc__meta { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); }
+  .msg-pc__src { margin-left: auto; }
+  .msg-pc__ext .msg-pc__marks { grid-template-columns: minmax(0, 1fr); }
+}

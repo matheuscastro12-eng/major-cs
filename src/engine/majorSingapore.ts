@@ -12,7 +12,7 @@
 // quando a lista oficial sair. Determinístico pelo seed (engine/rng).
 // Testado em scripts/test-major-singapore.mts.
 
-import { makeRng, type Rng } from './rng';
+import { makeRng, type Rng } from './rng.js'; // .js: a função de preview (api/og-pickem*) carrega este arquivo em Node ESM puro
 
 export interface MajorTeam {
   id: string;
@@ -443,6 +443,12 @@ export interface PicksScore {
   max: number;
 }
 
+/**
+ * A regra de pontos do pick'em, numa fonte só: scorePicks (simulação, Liga) e
+ * o placar contra o resultado real (engine/pickemScore.ts) leem daqui.
+ */
+export const PICKEM_POINTS = { qualified: 1, extreme: 2, playoffWin: 2, champion: 5 } as const;
+
 /** 1 ponto por classificado certo, 2 por 3-0 ou 0-3 certo, 2 por vencedor de QF/SF, 5 pelo campeão */
 export function scorePicks(p: MajorPicks, r: MajorResult): PicksScore {
   const hit = (mine: string[], real: string[]) => mine.filter((id) => real.includes(id)).length;
@@ -459,9 +465,12 @@ export function scorePicks(p: MajorPicks, r: MajorResult): PicksScore {
   const rec = (i: number, w: number, l: number) => new Set(r.stages[i].records.filter((x) => x.w === w && x.l === l).map((x) => x.id));
   const x30 = [0, 1, 2].map((i) => (p.x30?.[i] ?? []).filter((id) => rec(i, 3, 0).has(id)).length) as [number, number, number];
   const x03 = [0, 1, 2].map((i) => (p.x03?.[i] ?? []).filter((id) => rec(i, 0, 3).has(id)).length) as [number, number, number];
-  const extremes = [...x30, ...x03].reduce((a, b) => a + b, 0) * 2;
-  const points = stage[0] + stage[1] + stage[2] + extremes + (playoff - (champ ? 1 : 0)) * 2 + (champ ? 5 : 0);
-  return { stage, x30, x03, playoff, champion: champ, points, max: 24 + 24 + 12 + 5 };
+  const P = PICKEM_POINTS;
+  const extremes = [...x30, ...x03].reduce((a, b) => a + b, 0) * P.extreme;
+  const points = (stage[0] + stage[1] + stage[2]) * P.qualified + extremes + (playoff - (champ ? 1 : 0)) * P.playoffWin + (champ ? P.champion : 0);
+  // 3 stages × (8 classificados + 2 de 3-0 + 2 de 0-3) + 6 vencedores de QF/SF + campeão = 65
+  const max = 3 * (8 * P.qualified + 2 * EXTREME_PICKS * P.extreme) + 6 * P.playoffWin + P.champion;
+  return { stage, x30, x03, playoff, champion: champ, points, max };
 }
 
 // ---------------------------------------------------------------- link

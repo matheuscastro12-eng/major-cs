@@ -22,12 +22,16 @@ import { Alert, Button, EmptyState, Panel, Skeleton, Tag } from '../ds';
 import { PlayerAvatar } from '../ui';
 import bo3Teams from '../../data/bo3-2026.json';
 import { MajorResultView } from './MajorResultView';
-import { TeamLogo } from './TeamLogo';
 import { PickemBoard } from './PickemBoard';
 import { PickemSubmit } from './PickemSubmit';
 import { MajorLeague } from './MajorLeague';
+import { MajorCalendarButton } from './MajorCalendarButton';
+import { MajorCrest } from './MajorCrest';
 import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
+import { ChallengeBanner, ChallengeBar, ChallengeVs, useChallenge } from './MajorChallenge';
+import { MajorScoreboard } from './MajorScoreboard';
+import { ensurePickSnapshots } from '../../state/pickSnapshots';
 import '../../styles/major.css';
 
 const D = data as unknown as MajorData;
@@ -63,7 +67,7 @@ export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {})
   const teams = useMemo(() => new Map(D.teams.map((x) => [x.id, x])), []);
   const sharedCode = useMemo(() => readSharedCode(), []);
   const shared = useMemo(() => (sharedCode ? decodePicks(D, sharedCode) : null), [sharedCode]);
-  const [tab, setTab] = useState<Tab>(shared ? 'pickem' : hasLeagueParam() ? 'league' : 'overview');
+  const [tab, setTab] = useState<Tab>(sharedCode ? 'pickem' : hasLeagueParam() ? 'league' : 'overview');
   const [mine, setMine] = useState<MajorPicks>(loadMine);
   const [viewShared, setViewShared] = useState(!!shared);
   const [sim, setSim] = useState<MajorResult | null>(null);
@@ -74,10 +78,17 @@ export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {})
     try { localStorage.setItem(STORE, JSON.stringify(mine)); } catch { /* sem storage */ }
   }, [mine]);
   useEffect(() => { track('major_sg_view', { shared: shared ? 1 : 0 }); }, [shared]);
+  // foto das travas que passaram desde a última visita, com o palpite como estava
+  useEffect(() => { ensurePickSnapshots(loadMine()); }, []);
 
   const picks = viewShared && shared ? shared : mine;
-  const readOnly = viewShared && !!shared;
-  const update = (p: MajorPicks) => setMine(normalizePicks(D, p));
+  const viewingShared = viewShared && !!shared;
+  const readOnly = viewingShared;
+  // toda edição passa por aqui: antes de mudar, tira a foto das travas que já
+  // passaram (o placar pontua cada Stage pelo palpite da hora em que ele travou)
+  const commit = (p: MajorPicks) => { ensurePickSnapshots(mine); setMine(p); };
+  const update = (p: MajorPicks) => commit(normalizePicks(D, p));
+  const challenge = useChallenge(mine, shared, t); // link de amigo → desafio (MajorChallenge.tsx)
 
   const toggleExtreme = (kind: 'x30' | 'x03', stage: StageNo, id: string) => {
     if (readOnly) return;
@@ -122,6 +133,8 @@ export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {})
   };
 
   const complete = picksComplete(picks);
+  // pick'em fechado (campeão escolhido) no palpite do próprio jogador; 1x por sessão (track.ts)
+  useEffect(() => { if (complete && !readOnly) track('major_pickem_submit', {}); }, [complete, readOnly]);
   const link = complete ? shareUrl(`${MAJOR_PATH}?p=${encodePicks(D, picks)}`, 'major-pickem') : '';
   const champName = teams.get(picks.bracket[6])?.name ?? '';
   const copyLink = async () => {
@@ -133,7 +146,7 @@ export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {})
       stage: (n) => `Stage ${n}`, foot: t('cardFoot'),
     });
     downloadDataUrl(url, 'pickem-major-singapore.png');
-    track('major_sg_image', {});
+    trackShare('major-pickem-img', 'copy'); // download da imagem conta como compartilhamento (share_card)
   };
 
   return (
@@ -171,26 +184,21 @@ export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {})
           <PickemBoard />
           {sharedCode && !shared && <Alert tone="danger">{t('badLink')}</Alert>}
           {shared && (
-            <Alert
-              tone="info"
-              action={viewShared
-                ? <Button size="sm" variant="primary" onClick={() => { setMine(shared); setViewShared(false); }}>{t('useShared')}</Button>
-                : <Button size="sm" onClick={() => setViewShared(true)}>{t('sharedBanner')}</Button>}
-            >
-              {viewShared ? t('sharedBanner') : ''}
-              {viewShared && <> <button className="msg-link" onClick={() => setViewShared(false)}>{t('backToMine')}</button></>}
-            </Alert>
+            <ChallengeBanner ch={challenge} viewing={viewShared} onView={() => setViewShared(true)} onBuild={() => setViewShared(false)}
+              onUse={() => { commit(shared); setViewShared(false); }} />
           )}
+          <MajorScoreboard t={t} picks={picks} readOnly={viewingShared} />
           {!readOnly && (
             <div className="msg-toolbar">
               <Button size="sm" icon={<Sparkles size={16} aria-hidden />} onClick={autofill}>{t('auto')}</Button>
-              <Button size="sm" variant="ghost" icon={<Eraser size={16} aria-hidden />} onClick={() => setMine(emptyPicks())}>{t('clear')}</Button>
+              <Button size="sm" variant="ghost" icon={<Eraser size={16} aria-hidden />} onClick={() => commit(emptyPicks())}>{t('clear')}</Button>
             </div>
           )}
           {([1, 2, 3] as StageNo[]).map((st) => (
             <StagePicker key={st} stage={st} picks={picks} readOnly={readOnly} t={t} onToggle={(id) => toggle(st, id)} onExtreme={(k, id) => toggleExtreme(k, st, id)} />
           ))}
           <BracketPicker picks={picks} readOnly={readOnly} t={t} onPick={pickWinner} />
+          <ChallengeVs ch={challenge} />
           {!readOnly && <PickemSubmit picks={mine} onLogin={onLogin} />}
           <Panel title={t('share')} accent="gold">
             {complete ? (
@@ -204,6 +212,7 @@ export function MajorSingaporeScreen({ onLogin }: { onLogin?: () => void } = {})
               </div>
             ) : <p className="msg-muted">{t('incomplete')}</p>}
           </Panel>
+          <ChallengeBar ch={challenge} />
         </div>
       )}
 
@@ -219,7 +228,7 @@ type T = (k: MajorKey) => string;
 function TeamChip({ team, sub }: { team: MajorTeam; sub?: string }) {
   return (
     <span className="msg-team">
-      <TeamLogo team={team} />
+      <MajorCrest team={team} size={22} />
       <span className="msg-team__name">{team.name}</span>
       {sub && <span className="msg-team__sub">{sub}</span>}
     </span>
@@ -245,7 +254,10 @@ function Overview({ t, odds, onStart }: { t: T; odds: Map<string, number>; onSta
             <li>{t('formatPO')}</li>
           </ol>
           <p className="msg-muted">{t('formatNote')}</p>
-          <Button variant="primary" onClick={onStart}>{t('startPickem')}</Button>
+          <div className="msg-toolbar">
+            <Button variant="primary" onClick={onStart}>{t('startPickem')}</Button>
+            <MajorCalendarButton className="ds-btn ds-btn--secondary" label={t('calAdd')} doneLabel={t('calDone')} surface="major" />
+          </div>
         </Panel>
         <Panel title={t('favorites')}>
           <ol className="msg-odds">
@@ -385,7 +397,7 @@ function StagePicker({ stage, picks, readOnly, t, onToggle, onExtreme }: { stage
                     return (
                       <button key={id} type="button" className={`msg-chip${sel ? ' is-on' : ''}`} aria-pressed={sel}
                         disabled={readOnly || (!sel && on.length >= EXTREME_PICKS)} onClick={() => onExtreme(kind, id)}>
-                        <TeamLogo team={teams.get(id)} size={16} /> {teams.get(id)?.tag ?? id}
+                        <MajorCrest team={teams.get(id)} size={16} /> {teams.get(id)?.tag ?? id}
                       </button>
                     );
                   })}
@@ -412,7 +424,7 @@ function BracketPicker({ picks, readOnly, t, onPick }: { picks: MajorPicks; read
             const won = !!id && picks.bracket[g] === id;
             return (
               <button key={s} className={`msg-slot${won ? ' is-won' : ''}`} disabled={readOnly || !id || !sides[g][0] || !sides[g][1]} aria-pressed={won} onClick={() => onPick(g, id)}>
-                {tm ? <><span className="msg-seed">{tm.seed}</span><TeamLogo team={tm} size={18} /><span className="msg-slot__name">{tm.name}</span></> : <span className="msg-slot__tbd">—</span>}
+                {tm ? <><span className="msg-seed">{tm.seed}</span><MajorCrest team={tm} size={18} /><span className="msg-slot__name">{tm.name}</span></> : <span className="msg-slot__tbd">—</span>}
               </button>
             );
           })}
@@ -431,7 +443,7 @@ function BracketPicker({ picks, readOnly, t, onPick }: { picks: MajorPicks; read
           <div className="msg-bcol is-champ">
             <h3 className="msg-bcol__title">{t('champion')}</h3>
             <div className={`msg-champ${champ ? ' is-set' : ''}`}>
-              {champ ? <TeamLogo team={champ} size={26} /> : <Trophy size={22} aria-hidden />}
+              {champ ? <MajorCrest team={champ} size={26} /> : <Trophy size={22} aria-hidden />}
               <span>{champ?.name ?? '—'}</span>
             </div>
           </div>

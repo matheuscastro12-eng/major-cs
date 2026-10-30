@@ -7,7 +7,7 @@ import { useLang } from '../../state/i18n';
 import { Panel, Skeleton } from '../ds';
 
 const TXT = {
-  pt: { title: "Placar do Pick'em", soon: "Em breve: o placar oficial abre quando os palpites do Stage 1 começarem (depois da lista oficial de 02/11).", empty: 'Ninguém pontuou ainda.', pts: 'pts', players: 'participantes', exact: 'cravadas' },
+  pt: { title: "Ranking do Pick'em", soon: "Em breve: o placar oficial abre quando os palpites do Stage 1 começarem (depois da lista oficial de 02/11).", empty: 'Ninguém pontuou ainda.', pts: 'pts', players: 'participantes', exact: 'cravadas' },
   en: { title: "Pick'em leaderboard", soon: 'Coming soon: the official leaderboard opens when Stage 1 picks start (after the official list on Nov 2).', empty: 'Nobody has scored yet.', pts: 'pts', players: 'players', exact: 'exact' },
   es: { title: "Ranking del Pick'em", soon: 'Muy pronto: el ranking oficial abre cuando empiecen los pronósticos del Stage 1 (después de la lista oficial del 02/11).', empty: 'Nadie sumó puntos todavía.', pts: 'pts', players: 'participantes', exact: 'exactas' },
 };

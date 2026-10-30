@@ -2,3 +2,5 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /admin
+
+Sitemap: https://roadtomajor.com.br/sitemap.xml
