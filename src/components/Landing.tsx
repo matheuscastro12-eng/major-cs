@@ -336,7 +336,13 @@ function Modes({ hero, onPlay }: { hero: LandingHero; onPlay: () => void }) {
             return (
               <li key={id} className="lp-mode lp-reveal">
                 <div className="lp-mode__shot">
-                  <img src={SHOT + m.img} width={960} height={m.h ?? 600} loading="lazy" decoding="async" alt={ct(m.alt)} />
+                  {/* 112px no celular e no tablet, a largura do card só a partir de 1100px: a versão de 320px
+                      evita baixar a de 960px para uma miniatura (Lighthouse, 30/10) */}
+                  <img
+                    src={SHOT + m.img} srcSet={`${SHOT}${m.img.replace('.webp', '-320.webp')} 320w, ${SHOT}${m.img} 960w`}
+                    sizes="(min-width: 1100px) 360px, 112px"
+                    width={960} height={m.h ?? 600} loading="lazy" decoding="async" alt={ct(m.alt)}
+                  />
                 </div>
                 <div className="lp-mode__body">
                   <h3><span aria-hidden>{m.icon}</span>{ct(m.title)}</h3>
