@@ -21,6 +21,7 @@ import { track, trackShare } from '../../state/track';
 import { Alert, Button, EmptyState, Panel, Skeleton, Tag } from '../ds';
 import { MajorResultView } from './MajorResultView';
 import { MajorLeague } from './MajorLeague';
+import { MajorCalendarButton } from './MajorCalendarButton';
 import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
 import '../../styles/major.css';
@@ -236,7 +237,10 @@ function Overview({ t, odds, onStart }: { t: T; odds: Map<string, number>; onSta
             <li>{t('formatPO')}</li>
           </ol>
           <p className="msg-muted">{t('formatNote')}</p>
-          <Button variant="primary" onClick={onStart}>{t('startPickem')}</Button>
+          <div className="msg-toolbar">
+            <Button variant="primary" onClick={onStart}>{t('startPickem')}</Button>
+            <MajorCalendarButton className="ds-btn ds-btn--secondary" label={t('calAdd')} doneLabel={t('calDone')} surface="major" />
+          </div>
         </Panel>
         <Panel title={t('favorites')}>
           <ol className="msg-odds">

@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, Crosshair, Eye, Gauge, Gift, Globe, Layers, Play, Swords, Target, Trophy, Star } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
 import { majorPromoOn } from '../data/majorWindow';
+import { MajorCalendarButton } from './major/MajorCalendarButton';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
@@ -904,6 +905,7 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor }: { onPlay: (
               <Trophy size={16} aria-hidden />
               <span><b>{ct('Modo Major')}</b>: {ct('PGL Major Singapore, de 24/11 a 13/12')} · {ct("faça seu pick'em e jogue o Major com o seu time, grátis")}</span>
               <button type="button" className="lp-notice__go" onClick={onMajor}>{ct('Abrir o Modo Major')} <ArrowRight size={14} aria-hidden /></button>
+              <MajorCalendarButton className="lp-notice__go" label={ct('Lembrar no calendário')} doneLabel={ct('Arquivo baixado: abra para salvar')} surface="landing" />
             </div>
           )}
           {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
