@@ -25,6 +25,7 @@ import { MajorCrest } from './MajorCrest';
 import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
 import { ChallengeBanner, ChallengeBar, ChallengeVs, useChallenge } from './MajorChallenge';
+import { MajorScoreboard } from './MajorScoreboard';
 import '../../styles/major.css';
 
 const D = data as unknown as MajorData;
@@ -170,6 +171,7 @@ export function MajorSingaporeScreen() {
             <ChallengeBanner ch={challenge} viewing={viewShared} onView={() => setViewShared(true)} onBuild={() => setViewShared(false)}
               onUse={() => { setMine(shared); setViewShared(false); }} />
           )}
+          <MajorScoreboard t={t} picks={picks} readOnly={readOnly} />
           {!readOnly && (
             <div className="msg-toolbar">
               <Button size="sm" icon={<Sparkles size={16} aria-hidden />} onClick={autofill}>{t('auto')}</Button>
