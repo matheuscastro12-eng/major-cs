@@ -3923,4 +3923,12 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   // [growth] botão de postar no X com texto pronto (shareX.ts)
   'Postar no X': { en: 'Post on X', es: 'Publicar en X' },
   'Abriu o X: anexa a imagem que baixou 😉': { en: 'X is open: attach the image you just downloaded 😉', es: 'X está abierto: adjunta la imagen que descargaste 😉' },
+  // [Modo Major] vitrine na landing e no Início (data/majorWindow.ts)
+  'Modo Major': { en: 'Major Mode', es: 'Modo Major' },
+  'Principal': { en: 'Main', es: 'Principal' },
+  'PGL Major Singapore, de 24/11 a 13/12': { en: 'PGL Major Singapore, Nov 24 – Dec 13', es: 'PGL Major Singapore, del 24/11 al 13/12' },
+  "faça seu pick'em e jogue o Major com o seu time, grátis": { en: "make your Pick'em and play the Major with your team, for free", es: "haz tu Pick'em y juega el Major con tu equipo, gratis" },
+  'Abrir o Modo Major': { en: 'Open Major Mode', es: 'Abrir el Modo Major' },
+  "Faça o pick'em dos 32 times, jogue o Major com o seu time e dispute a liga com os amigos.": { en: "Make your Pick'em for all 32 teams, play the Major with your team and run a league with friends.", es: "Haz el Pick'em de los 32 equipos, juega el Major con tu equipo y compite en la liga con tus amigos." },
+  '24/11 a 13/12 · grátis': { en: 'Nov 24 – Dec 13 · free', es: '24/11 al 13/12 · gratis' },
 };

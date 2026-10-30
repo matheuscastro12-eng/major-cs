@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, Crosshair, Eye, Gauge, Gift, Globe, Layers, Play, Swords, Target, Trophy, Star } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
+import { majorPromoOn } from '../data/majorWindow';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
@@ -863,7 +864,7 @@ function NewsBand() {
   );
 }
 
-export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean }) {
+export function Landing({ onPlay, onCheckout, openSignup, onMajor }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean; onMajor?: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
   const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar OU clique numa trava dentro do app: pula a landing e abre direto o cadastro
   const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
@@ -897,6 +898,14 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
       <Nav onAccount={() => openAcct('signup', 'landing-nav')} onLogin={() => openAcct('login')} onPlay={onPlay} />
       <main id="conteudo" tabIndex={-1}>
         <div className="lp-notices">
+          {/* Modo Major: quem chega pelos posts do Major vai direto pro pick'em, sem criar manager */}
+          {onMajor && majorPromoOn() && (
+            <div className="lp-notice">
+              <Trophy size={16} aria-hidden />
+              <span><b>{ct('Modo Major')}</b>: {ct('PGL Major Singapore, de 24/11 a 13/12')} · {ct("faça seu pick'em e jogue o Major com o seu time, grátis")}</span>
+              <button type="button" className="lp-notice__go" onClick={onMajor}>{ct('Abrir o Modo Major')} <ArrowRight size={14} aria-hidden /></button>
+            </div>
+          )}
           {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
           {duelInvite && (
             <div className="lp-notice">

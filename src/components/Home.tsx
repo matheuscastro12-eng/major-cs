@@ -25,6 +25,7 @@ import { getManager } from '../state/manager';
 import { ct } from '../state/career-i18n';
 import { readSlot, getActiveSlot } from '../state/careerSaves';
 import { PATCHES } from '../data/patchNotes';
+import { majorPromoOn } from '../data/majorWindow';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { useFounders } from '../state/founders';
@@ -47,6 +48,8 @@ interface Props {
   onRoadToPro?: () => void;
   /** Abre o DIÁRIO (minigames diários — grátis, sem conta) */
   onDaily?: () => void;
+  /** Abre o Modo Major (PGL Major Singapore); o card só aparece na janela do evento */
+  onMajor?: () => void;
   /** Road to Pro sem vitalícia = demo (card continua visível, com atalho de compra) */
   premiumLocked?: boolean;
   /** Trava o card do Ultimate. Ultimate abriu pra todos → passado como false. */
@@ -87,7 +90,7 @@ export function Home(props: Props) {
   const {
     onStart, onDonate, teamCount, onUltimate, onRoadToPro, onDaily, premiumLocked, ultimateLocked, onCareer,
     account, accountReady, onAccount, onCreateAccount, onUpgrade, onLogout, onAdmin, savedCampaign, onResume,
-    onDiscardCampaign, shellNav, onShellNav, viewReq, onAchievements, onOpenRanking, onEditor,
+    onDiscardCampaign, shellNav, onShellNav, viewReq, onAchievements, onOpenRanking, onEditor, onMajor,
   } = props;
   const { t } = useLang();
   const [view, setView] = useState<'menu' | 'draft'>(viewReq?.view ?? 'menu');
@@ -288,6 +291,10 @@ export function Home(props: Props) {
 
         {/* ── coluna 2: modos ── */}
         <Panel icon={<LayoutDashboard size={16} />} title={ct('Modos de jogo')} flush className="home-modes">
+          {/* durante o Major o modo do evento vem primeiro; no celular a sidebar fica atrás do Menu */}
+          {onMajor && majorPromoOn() && (
+            <ModeRow mode="major" icon={<Trophy size={20} />} title={ct('Modo Major')} kicker="PGL Major Singapore" desc={ct("Faça o pick'em dos 32 times, jogue o Major com o seu time e dispute a liga com os amigos.")} meta={ct('24/11 a 13/12 · grátis')} cta={ct('Abrir')} onGo={onMajor} />
+          )}
           {onCareer && (
             <ModeRow mode="carreira" icon={<Trophy size={20} />} title={ct('Carreira')} kicker={ct('Destaque')} desc={ct('Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.')} meta={ct('1 jogador · campanha')} cta={ct('Entrar')} onGo={onCareer} />
           )}

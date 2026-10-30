@@ -1143,7 +1143,7 @@ export default function App() {
   // do pick'em compartilhado tem que abrir direto pra quem não joga ainda
   if (screen === 'majorsg') {
     return withShell(
-      <GameShell mode="inicio" identity={{ title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> }} title={ct('Modo Major')} crumbs={[{ label: ct('Início') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav}>
+      <GameShell mode="inicio" identity={{ title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> }} title={ct('Modo Major')} crumbs={[{ label: ct('Principal') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav}>
         <Suspense fallback={<Loader text="…" />}>
           <MajorSingaporeScreen />
         </Suspense>
@@ -1154,7 +1154,7 @@ export default function App() {
   if (screen === 'landing') {
     return (
       <>
-        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} />
+        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} onMajor={() => setScreen('majorsg')} />
         {!bannerPreview && <AdBanner />}
       </>
     );
@@ -1332,6 +1332,7 @@ export default function App() {
           onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onDaily={() => setScreen('daily')}
+          onMajor={() => setScreen('majorsg')}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
