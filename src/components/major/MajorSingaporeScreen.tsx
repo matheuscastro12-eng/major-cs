@@ -24,6 +24,7 @@ import { MajorLeague } from './MajorLeague';
 import { MajorCrest } from './MajorCrest';
 import { majorT, type MajorKey } from './majorStrings';
 import { downloadDataUrl, drawMajorCard } from './majorShareCard';
+import { ChallengeBanner, ChallengeBar, ChallengeVs, useChallenge } from './MajorChallenge';
 import '../../styles/major.css';
 
 const D = data as unknown as MajorData;
@@ -57,7 +58,7 @@ export function MajorSingaporeScreen() {
   const teams = useMemo(() => new Map(D.teams.map((x) => [x.id, x])), []);
   const sharedCode = useMemo(() => readSharedCode(), []);
   const shared = useMemo(() => (sharedCode ? decodePicks(D, sharedCode) : null), [sharedCode]);
-  const [tab, setTab] = useState<Tab>(shared ? 'pickem' : hasLeagueParam() ? 'league' : 'overview');
+  const [tab, setTab] = useState<Tab>(sharedCode ? 'pickem' : hasLeagueParam() ? 'league' : 'overview');
   const [mine, setMine] = useState<MajorPicks>(loadMine);
   const [viewShared, setViewShared] = useState(!!shared);
   const [sim, setSim] = useState<MajorResult | null>(null);
@@ -72,6 +73,7 @@ export function MajorSingaporeScreen() {
   const picks = viewShared && shared ? shared : mine;
   const readOnly = viewShared && !!shared;
   const update = (p: MajorPicks) => setMine(normalizePicks(D, p));
+  const challenge = useChallenge(mine, shared, t); // link de amigo → desafio (MajorChallenge.tsx)
 
   const toggleExtreme = (kind: 'x30' | 'x03', stage: StageNo, id: string) => {
     if (readOnly) return;
@@ -116,6 +118,8 @@ export function MajorSingaporeScreen() {
   };
 
   const complete = picksComplete(picks);
+  // pick'em fechado (campeão escolhido) no palpite do próprio jogador; 1x por sessão (track.ts)
+  useEffect(() => { if (complete && !readOnly) track('major_pickem_submit', {}); }, [complete, readOnly]);
   const link = complete ? shareUrl(`${MAJOR_PATH}?p=${encodePicks(D, picks)}`, 'major-pickem') : '';
   const champName = teams.get(picks.bracket[6])?.name ?? '';
   const copyLink = async () => {
@@ -127,7 +131,7 @@ export function MajorSingaporeScreen() {
       stage: (n) => `Stage ${n}`, foot: t('cardFoot'),
     });
     downloadDataUrl(url, 'pickem-major-singapore.png');
-    track('major_sg_image', {});
+    trackShare('major-pickem-img', 'copy'); // download da imagem conta como compartilhamento (share_card)
   };
 
   return (
@@ -163,15 +167,8 @@ export function MajorSingaporeScreen() {
         <div className="msg-stack">
           {sharedCode && !shared && <Alert tone="danger">{t('badLink')}</Alert>}
           {shared && (
-            <Alert
-              tone="info"
-              action={viewShared
-                ? <Button size="sm" variant="primary" onClick={() => { setMine(shared); setViewShared(false); }}>{t('useShared')}</Button>
-                : <Button size="sm" onClick={() => setViewShared(true)}>{t('sharedBanner')}</Button>}
-            >
-              {viewShared ? t('sharedBanner') : ''}
-              {viewShared && <> <button className="msg-link" onClick={() => setViewShared(false)}>{t('backToMine')}</button></>}
-            </Alert>
+            <ChallengeBanner ch={challenge} viewing={viewShared} onView={() => setViewShared(true)} onBuild={() => setViewShared(false)}
+              onUse={() => { setMine(shared); setViewShared(false); }} />
           )}
           {!readOnly && (
             <div className="msg-toolbar">
@@ -183,6 +180,7 @@ export function MajorSingaporeScreen() {
             <StagePicker key={st} stage={st} picks={picks} readOnly={readOnly} t={t} onToggle={(id) => toggle(st, id)} onExtreme={(k, id) => toggleExtreme(k, st, id)} />
           ))}
           <BracketPicker picks={picks} readOnly={readOnly} t={t} onPick={pickWinner} />
+          <ChallengeVs ch={challenge} />
           <Panel title={t('share')} accent="gold">
             {complete ? (
               <div className="msg-share">
@@ -195,6 +193,7 @@ export function MajorSingaporeScreen() {
               </div>
             ) : <p className="msg-muted">{t('incomplete')}</p>}
           </Panel>
+          <ChallengeBar ch={challenge} />
         </div>
       )}
 

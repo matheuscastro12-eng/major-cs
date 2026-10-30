@@ -39,6 +39,14 @@ const ALLOWED_TYPES = new Set([
   'rtp_demo',
   // [U02] funil do Ultimate: {step, mode?, won?, product_kind?, src?, method?, orderId?} — marcos por sessão, sem evento por round
   'ult_funnel',
+  // Medição do Modo Major e da ativação (out/2026). Sem dado pessoal: só sid,
+  // ref e modo/superfície. Dedupe no cliente (src/state/track.ts): 1x por
+  // sessão por superfície; first_match_done 1x por navegador.
+  'major_sg_view',          // {shared} — abriu /major-singapore
+  'major_vitrine_click',    // {surface: 'landing'|'home'|'sidebar'|'palette'|'onboarding'} — entrou no Modo Major por um atalho
+  'major_pickem_submit',    // {} — completou o pick'em (campeão escolhido)
+  'major_sg_campaign_done', // {champion: 0|1} — terminou um Major jogado com um time
+  'first_match_done',       // {mode, secs} — 1ª partida concluída e segundos desde a 1ª visita
 ]);
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();

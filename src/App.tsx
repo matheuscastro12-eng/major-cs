@@ -141,7 +141,7 @@ import { ModeErrorBoundary } from './components/ModeErrorBoundary';
 import { SaveHealthBanner } from './components/SaveHealthBanner';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
-import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackPaywallView, trackVisit } from './state/track';
+import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackFirstMatchDone, trackPaywallView, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -877,6 +877,7 @@ export default function App() {
     const clone = structuredClone(tournament) as Tournament;
     const p = clone.pairings.find((x) => x.a === 'user' || x.b === 'user');
     if (p) p.result = series;
+    trackFirstMatchDone('draft'); // ativação: 1ª série concluída (1x por navegador)
     resolveRound(clone, rngRef.current);
     setMatchCtx(null);
     afterResolve(clone);
@@ -1016,7 +1017,7 @@ export default function App() {
     ...(ULTIMATE_ENABLED ? [{ id: 'online' as const, label: 'Online', short: 'Online', icon: Swords, hint: ct('Ranqueada, duelo e Major da Semana'), onSelect: () => openUltimateMode('ranked') }] : []),
   ];
   const shellCommands: ShellCommand[] = [
-    { id: 'major-sg', label: ct('Modo Major: PGL Major Singapore'), group: ct('Ações'), icon: Trophy, keywords: 'major singapore pickem pick em chave bracket pgl', run: () => setScreen('majorsg') },
+    { id: 'major-sg', label: ct('Modo Major: PGL Major Singapore'), group: ct('Ações'), icon: Trophy, keywords: 'major singapore pickem pick em chave bracket pgl', run: () => { track('major_vitrine_click', { surface: 'palette' }); setScreen('majorsg'); } },
     { id: 'new-major', label: ct('Novo Major (draft)'), group: ct('Ações'), icon: Plus, keywords: 'draft major rapido', run: newMajor },
     { id: 'editor', label: ct('Editor de base'), group: ct('Ações'), icon: PencilRuler, keywords: 'editor base database jogadores times fm', run: () => openEditor('home') },
     { id: 'achievements', label: ct('Conquistas'), group: ct('Você'), icon: Medal, run: () => setAchOpen(true) },
@@ -1063,6 +1064,7 @@ export default function App() {
     ] },
   ].map((g) => ({ ...g, items: g.items.map((it) => ({ ...it, alert: it.alert && it.id !== active })) }));
   const onHomeNav = (id: string) => {
+    if (id === 'majorsg') track('major_vitrine_click', { surface: 'sidebar' });
     if (id === 'news') openPatchNotes();
     else if (id === 'achievements') setAchOpen(true);
     else if (id === 'howto') openHowToPlay();
@@ -1143,7 +1145,7 @@ export default function App() {
   // do pick'em compartilhado tem que abrir direto pra quem não joga ainda
   if (screen === 'majorsg') {
     return withShell(
-      <GameShell mode="inicio" identity={{ title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> }} title={ct('Modo Major')} crumbs={[{ label: ct('Início') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav}>
+      <GameShell mode="inicio" identity={{ title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> }} title={ct('Modo Major')} crumbs={[{ label: ct('Principal') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav}>
         <Suspense fallback={<Loader text="…" />}>
           <MajorSingaporeScreen />
         </Suspense>
@@ -1154,7 +1156,7 @@ export default function App() {
   if (screen === 'landing') {
     return (
       <>
-        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} />
+        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} onMajor={() => { track('major_vitrine_click', { surface: 'landing' }); setScreen('majorsg'); }} />
         {!bannerPreview && <AdBanner />}
       </>
     );
@@ -1296,7 +1298,12 @@ export default function App() {
           onGuest={() => { setUtGateOpen(false); enableUtGuest(); setScreen('ultimate'); }}
         />
       )}
-      {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
+      {showOnboarding && screen === 'home' && (
+        <Onboarding
+          onClose={() => setShowOnboarding(false)}
+          onRoute={(route) => { if (route === 'major') { track('major_vitrine_click', { surface: 'onboarding' }); setScreen('majorsg'); } else if (route === 'draft') openDraftMode(); else openCareerMode(); }}
+        />
+      )}
 
       {/* "Não consegui salvar" + avisos da nuvem (413 / restore sem espaço) */}
       <SaveHealthBanner />
@@ -1332,6 +1339,7 @@ export default function App() {
           onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onDaily={() => setScreen('daily')}
+          onMajor={() => { track('major_vitrine_click', { surface: 'home' }); setScreen('majorsg'); }}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}

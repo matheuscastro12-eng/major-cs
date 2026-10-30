@@ -13,7 +13,7 @@ import { randomSeed } from '../../engine/rng';
 import type { Role } from '../../types';
 import type { MomentOutcome } from '../../engine/rtp/moments';
 import type { MapId } from '../../types';
-import { track } from '../../state/track';
+import { track, trackFirstMatchDone, trackShare } from '../../state/track';
 import { RtpRoundRoom } from '../rtp/RtpRoundRoom';
 import { Alert, Button, Panel, Tag } from '../ds';
 import { downloadDataUrl, drawCampaignCard } from './majorShareCard';
@@ -64,6 +64,8 @@ export function MajorPlay({ t }: { t: T }) {
       const c = recordSeries(D, camp, next, outcomes, liveMaps);
       const last = c.played[c.played.length - 1];
       track('major_sg_series', { phase: next.phase, won: last.winner === camp.teamId ? 1 : 0, rating: last.heroRating });
+      trackFirstMatchDone('major'); // ativação: 1ª série concluída (1x por navegador)
+      trackCampaignDone(c);
       setCamp(c);
       setInRoom(false);
     };
@@ -156,7 +158,7 @@ export function MajorPlay({ t }: { t: T }) {
           </p>
           <div className="msg-toolbar">
             <Button variant="primary" icon={<Play size={16} aria-hidden />} onClick={() => setInRoom(true)}>{t('playRoom')}</Button>
-            <Button icon={<Dices size={16} aria-hidden />} onClick={() => setCamp(simulatePending(camp, D, view.next!))}>{t('simThis')}</Button>
+            <Button icon={<Dices size={16} aria-hidden />} onClick={() => { const c = simulatePending(camp, D, view.next!); trackCampaignDone(c); setCamp(c); }}>{t('simThis')}</Button>
           </div>
         </Panel>
       )}
@@ -166,13 +168,19 @@ export function MajorPlay({ t }: { t: T }) {
   );
 }
 
+// a campanha acabou (campeão ou eliminado e o resto simulado): 1 marco por sessão (track.ts)
+function trackCampaignDone(c: MajorCampaign): void {
+  const v = campaignView(D, c);
+  if (!v.next && v.result) track('major_sg_campaign_done', { champion: v.result.playoffs.champion === c.teamId ? 1 : 0 });
+}
+
 function CampaignEnd({ t, camp, result, summary }: { t: T; camp: MajorCampaign; result: MajorResult; summary: ReturnType<typeof campaignSummary> }) {
   const champ = result.playoffs.champion === camp.teamId;
   const saveCard = () => {
     downloadDataUrl(drawCampaignCard(D, camp, result, summary, {
       champion: t('champion'), record: t('record'), maps: t('mapsWL'), rating: t('avgRating'), mvp: t('mvp'), foot: t('cardFoot'),
     }), 'campanha-major-singapore.png');
-    track('major_sg_run_image', {});
+    trackShare('major-campaign-img', 'copy'); // download do card conta como compartilhamento (share_card)
   };
   return (
     <>
