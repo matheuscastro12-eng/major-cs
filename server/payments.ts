@@ -141,6 +141,45 @@ export const accountPriceCents = (): number => {
 /** @deprecated alias de accountPriceCents (o preço não é mais só do Pix). */
 export const pixAccountPriceCents = accountPriceCents;
 
+// ── Pix da conta vitalícia: a MESMA cobrança enquanto ela vale ──────────────
+// Antes cada abertura do modal criava uma cobrança nova no Woovi
+// ("rtm-<email>-<unix de agora>"): com dois QR abertos dava pra pagar a conta
+// 2×. Sem tabela nem coluna nova: o correlationID fica estável por conta e por
+// janela de 24 h ("rtm-<email>-<unix do início da janela>", o mesmo formato que
+// o webhook já lê), a cobrança vale a janela + 5 min, e o servidor pergunta ao
+// Woovi pela cobrança da janela anterior e da atual antes de criar outra. Como
+// nenhuma cobrança vive mais que uma janela + margem, essas duas cobrem todas
+// as que ainda podem estar abertas.
+export const ACCOUNT_PIX_WINDOW_SEC = 86_400;
+// cobrança que expira em menos disso não é devolvida (QR morto na mão do
+// jogador); é também a sobra da validade além da janela
+export const ACCOUNT_PIX_MARGIN_SEC = 300;
+export const ACCOUNT_PIX_EXPIRES_SEC = ACCOUNT_PIX_WINDOW_SEC + ACCOUNT_PIX_MARGIN_SEC;
+
+export function accountPixCorrelations(email: string, nowMs: number): { previous: string; current: string } {
+  const start = Math.floor(nowMs / 1000 / ACCOUNT_PIX_WINDOW_SEC) * ACCOUNT_PIX_WINDOW_SEC;
+  return { previous: `rtm-${email}-${start - ACCOUNT_PIX_WINDOW_SEC}`, current: `rtm-${email}-${start}` };
+}
+
+// O que fazer com uma cobrança que o Woovi devolveu:
+// - reuse: aberta, no preço de agora e com tempo pra pagar → devolve ela;
+// - paid: já paga (o webhook ainda vai creditar) → não cria outra;
+// - stale: expirada, perto de expirar, cancelada ou com preço antigo → precisa de outra;
+// - null: sem dado pra decidir (sem status/validade legível).
+export type AccountPixUse = { use: 'reuse' | 'paid' | 'stale'; expiresIn: number } | null;
+export function accountPixChargeUse(charge: Record<string, unknown> | null | undefined, priceCents: number, nowMs: number): AccountPixUse {
+  if (!charge || !Object.keys(charge).length) return null;
+  if (Math.round(Number(charge.value)) !== priceCents) return { use: 'stale', expiresIn: 0 };
+  const status = String(charge.status ?? '').toUpperCase();
+  if (status === 'COMPLETED') return { use: 'paid', expiresIn: 0 };
+  if (status && status !== 'ACTIVE') return { use: 'stale', expiresIn: 0 };
+  let endMs = Date.parse(String(charge.expiresDate ?? ''));
+  if (!Number.isFinite(endMs)) endMs = Date.parse(String(charge.createdAt ?? '')) + Number(charge.expiresIn) * 1000;
+  if (!Number.isFinite(endMs)) return null;
+  const left = Math.floor((endMs - nowMs) / 1000);
+  return left >= ACCOUNT_PIX_MARGIN_SEC ? { use: 'reuse', expiresIn: left } : { use: 'stale', expiresIn: 0 };
+}
+
 export const ACCOUNT_CHECKOUT_KIND = 'account';
 
 // Checkout de cartão da vitalícia com o preço configurado (price_data em BRL,
