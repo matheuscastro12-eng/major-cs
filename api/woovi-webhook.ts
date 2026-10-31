@@ -6,14 +6,11 @@
 // pedido só com valor igual ao do pedido e idempotência por pagamento.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { createVerify } from 'node:crypto';
-import { logSettleAttention, settleOrder } from '../server/order-settle.js';
+import { expectedOrder, logSettleAttention, settleOrder } from '../server/order-settle.js';
 import {
   accountReference,
   assignFounderNumbers,
   cleanEnv,
-  COIN_TIERS,
-  parsePassTier,
-  PASS_PRICE_CENTS,
   pixAccountPriceCents,
 } from '../server/payments.js';
 import { isPaidEvent, rtmEmailFromCorrelation, wooviCorrelation, wooviPaidCents, wooviPayerEmail, wooviPaymentKey } from '../server/woovi.js';
@@ -73,7 +70,7 @@ async function processPaid(sql: NeonQueryFunction<false, false>, body: Record<st
     // órfão (Pix pago sem pedido gravado): reconstrói pelo tier do correlationID
     // e pelo e-mail da cobrança, com o preço da tabela única de payments.ts.
     const tier = corr.split(':')[1] ?? '';
-    const pack = COIN_TIERS[tier] ?? (parsePassTier(tier) ? { cents: PASS_PRICE_CENTS, coins: 0 } : undefined);
+    const pack = expectedOrder(tier);
     const orphan = pack ? { email: wooviPayerEmail(body), tier, coins: pack.coins, cents: pack.cents } : undefined;
     const r = await settleOrder(sql, corr, paid, 'pix', orphan);
     logSettleAttention('woovi', corr, paid, r);
