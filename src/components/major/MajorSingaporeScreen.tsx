@@ -10,7 +10,7 @@ import { lazy, Suspense } from 'react';
 import data from '../../data/major-singapore-2026.json';
 import {
   EXTREME_PICKS, bracketSides, decodePicks, emptyPicks, encodePicks, normalizePicks, pickPool, picksComplete,
-  phaseOdds, scorePicks, simulateMajor, stageEntrants, titleOdds,
+  phaseOdds, scorePicks, simulateMajor, stageEntrants,
   type MajorData, type MajorPicks, type MajorResult, type MajorTeam, type StageNo,
 } from '../../engine/majorSingapore';
 import { randomSeed } from '../../engine/rng';
@@ -22,10 +22,9 @@ import { markFirstValue } from '../../state/paywallPolicy';
 import { Alert, Button, EmptyState, Panel, Skeleton, Tag } from '../ds';
 import { PlayerAvatar } from '../ui';
 import bo3Teams from '../../data/bo3-2026.json';
-import { MajorResultView } from './MajorResultView';
+import { MAJOR_SG_TITLE_ODDS } from '../../data/majorSgOdds';
 import { PickemBoard } from './PickemBoard';
 import { PickemSubmit } from './PickemSubmit';
-import { MajorLeague } from './MajorLeague';
 import { MajorCalendarButton } from './MajorCalendarButton';
 import { MajorCrest } from './MajorCrest';
 import { majorT, type MajorKey } from './majorStrings';
@@ -42,6 +41,10 @@ type Bo3Team = { id: string; players: { nick: string }[]; coach?: { nick: string
 const ROSTERS = new Map((bo3Teams as unknown as Bo3Team[]).map((x) => [x.id, x]));
 // a Sala (RtpRoundRoom + engine do RtP) só carrega quando a aba Jogar abre
 const MajorPlay = lazy(() => import('./MajorPlay').then((m) => ({ default: m.MajorPlay })));
+// o resultado da simulação (e a liga, que mostra o mesmo resultado) traz a
+// campanha (motor do RtP, base bo3, partida): a aba de abertura não precisa
+const MajorResultView = lazy(() => import('./MajorResultView').then((m) => ({ default: m.MajorResultView })));
+const MajorLeague = lazy(() => import('./MajorLeague').then((m) => ({ default: m.MajorLeague })));
 const STORE = 'rtm-major-sg-picks-v1';
 const MAJOR_PATH = '/major-singapore';
 
@@ -84,7 +87,8 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
   // fecha por um clique do jogador; a barra fixa do desafio some enquanto ele aparece
   const [revealInvite, setRevealInvite] = useState(false);
   const [inviteOnScreen, setInviteOnScreen] = useState(false);
-  const odds = useMemo(() => titleOdds(D, 1000), []);
+  // pré-calculada (data/majorSgOdds.ts): rodar 1.000 Majors aqui travava o 1º render
+  const odds = useMemo(() => new Map(Object.entries(MAJOR_SG_TITLE_ODDS)), []);
 
   useEffect(() => {
     try { localStorage.setItem(STORE, JSON.stringify(mine)); } catch { /* sem storage */ }
@@ -197,7 +201,11 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
         </Suspense>
       )}
 
-      {tab === 'league' && <MajorLeague t={t} picks={mine} onEditPicks={() => setTab('pickem')} />}
+      {tab === 'league' && (
+        <Suspense fallback={<Skeleton height={240} />}>
+          <MajorLeague t={t} picks={mine} onEditPicks={() => setTab('pickem')} />
+        </Suspense>
+      )}
 
       {tab === 'pickem' && (
         <div className="msg-stack">
@@ -510,7 +518,9 @@ function SimView({ t, picks, result, onRun, predictions }: { t: T; picks: MajorP
           </div>
         ) : <p className="msg-muted">{t('noPicks')}</p>}
       </Panel>
-      <MajorResultView t={t} result={result} picks={picks} />
+      <Suspense fallback={<Skeleton height={240} />}>
+        <MajorResultView t={t} result={result} picks={picks} />
+      </Suspense>
     </div>
   );
 }
