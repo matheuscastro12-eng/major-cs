@@ -7,8 +7,9 @@
 // x-admin-key (ou body.password), nunca mais de ?pw= na URL — que ia parar em
 // log de borda e histórico do navegador.
 //
-// Também recebe os relatórios da CSP Report-Only (O1-11, report-uri do
-// vercel.json): viram kind 'csp', deduplicados por instância (server/csp-report.ts).
+// Relatórios da CSP: o report-uri agora é o /api/csp-report (handler Web, lê o
+// corpo application/csp-report, que este handler recebia vazio). O ramo de CSP
+// abaixo fica só pra relatório que chegue como JSON.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { requireAdmin } from '../server/admin-auth.js';
 import { parseJsonBody } from '../server/http.js';
