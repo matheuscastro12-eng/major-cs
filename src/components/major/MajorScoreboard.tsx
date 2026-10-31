@@ -74,10 +74,12 @@ function scopeOf(t: T, th: PlacarThrough): string {
   return t(th === 'qf' ? 'pcScopeQf' : th === 'sf' ? 'pcScopeSf' : 'pcScopeMajor');
 }
 
-export function MajorScoreboard({ t, picks, readOnly, nick = '' }: {
+export function MajorScoreboard({ t, picks, readOnly, nick = '', onRecapChange }: {
   t: T; picks: MajorPicks; readOnly: boolean;
   /** apelido que assina o desafio (o mesmo "Mostrar meu nick" do desafio do pick'em); '' = sem */
   nick?: string;
+  /** avisa quando o recap com "Desafie um amigo / Postar o card" está na tela (a tela tira a barra fixa repetida) */
+  onRecapChange?: (on: boolean) => void;
 }) {
   const { lang } = useLang();
   const demo = useMemo(() => devOutcomes(), []);
@@ -91,6 +93,8 @@ export function MajorScoreboard({ t, picks, readOnly, nick = '' }: {
   const out = !readOnly && view.kind === 'incomplete' && lockedOut(scored, PICKEM_LOCKS, now);
   const starts = fill(t('pcStarts'), { date: fmtDay(STAGE1_END, lang) });
   const lockAt = fmtLock(PICKEM_LOCK_MS, lang);
+  const recapOn = !readOnly && view.kind === 'scored';
+  useEffect(() => { onRecapChange?.(recapOn); }, [recapOn, onRecapChange]);
   // "veja seus pontos" no Início/landing: rola até aqui ao abrir (uma vez)
   // (o pedido é consumido dentro do frame: no StrictMode o 1º efeito é desfeito
   // e cancelaria a rolagem depois de já ter gastado o pedido)

@@ -87,6 +87,9 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
   // fecha por um clique do jogador; a barra fixa do desafio some enquanto ele aparece
   const [revealInvite, setRevealInvite] = useState(false);
   const [inviteOnScreen, setInviteOnScreen] = useState(false);
+  // placar pontuado com o próprio recap de compartilhar: a barra fixa de desafio
+  // (sem amigo guardado) repetiria os mesmos botões
+  const [placarRecapOn, setPlacarRecapOn] = useState(false);
   // pré-calculada (data/majorSgOdds.ts): rodar 1.000 Majors aqui travava o 1º render
   const odds = useMemo(() => new Map(Object.entries(MAJOR_SG_TITLE_ODDS)), []);
 
@@ -216,7 +219,7 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
             <ChallengeBanner ch={challenge} viewing={viewShared} onView={() => setViewShared(true)} onBuild={() => setViewShared(false)}
               onUse={() => { commit(shared); setViewShared(false); }} />
           )}
-          <MajorScoreboard t={t} picks={picks} readOnly={viewingShared} nick={challenge.sign ? challenge.myNick : ''} />
+          <MajorScoreboard t={t} picks={picks} readOnly={viewingShared} nick={challenge.sign ? challenge.myNick : ''} onRecapChange={setPlacarRecapOn} />
           {!readOnly && (
             <div className="msg-toolbar">
               <Button size="sm" icon={<Sparkles size={16} aria-hidden />} onClick={autofill}>{t('auto')}</Button>
@@ -246,7 +249,7 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
               </div>
             ) : <p className="msg-muted">{t('incomplete')}</p>}
           </Panel>}
-          {!inviteOnScreen && <ChallengeBar ch={challenge} />}
+          {!inviteOnScreen && !(placarRecapOn && !(challenge.vs && challenge.rival)) && <ChallengeBar ch={challenge} />}
         </div>
       )}
 
