@@ -537,9 +537,11 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>(WANTS_SIGNUP ? 'signup' : 'login');
   const [utGateOpen, setUtGateOpen] = useState(false); // modal de escolha (convidado × conta)
   // CHECKOUT IN-PLACE: o AccountModal abre POR CIMA da tela atual (trava do Road
-  // to Pro, upsell-card) em vez de trocar pra landing — o jogador, a proposta e o
-  // relógio continuam visíveis na hora da decisão. Mesmo atalho do onSignup do
-  // UltimateGate. `inlineCheckout` segura a tela ao concluir (onPlay não navega);
+  // to Pro, upsell-card, aviso de convidado do Ultimate) em vez de trocar pra
+  // landing — o jogador, a proposta e o relógio continuam visíveis na hora da
+  // decisão. Mesmo atalho do onSignup do UltimateGate. `inlineCheckout` segura a
+  // tela ao concluir (onPlay não navega) e também liga o pixFirst do modal — o QR
+  // substitui o formulário assim que abre, em vez dos dois juntos na tela.
   // `checkoutNick` é o jogador do RtP citado no reforço do Pix.
   const [inlineCheckout, setInlineCheckout] = useState(false);
   const [checkoutNick, setCheckoutNick] = useState('');
@@ -1335,7 +1337,7 @@ export default function App() {
         <AccountModal
           initialMode={authMode}
           payingAccount={account}
-          pixFirst={screen === 'rtp'}
+          pixFirst={screen === 'rtp' || inlineCheckout}
           playerNick={checkoutNick}
           onClose={() => { setAuthOpen(false); setAuthMode('login'); setInlineCheckout(false); }}
           onCheckout={startCheckout}
@@ -1493,11 +1495,19 @@ export default function App() {
                sair de 0% de conversão, mas continuava mandando pra landing inteira
                — 87 paywall_view/28d e 0 checkout_open, mesmo depois do botão existir.
                Convidado vai direto pro cadastro; conta grátis vai direto pro checkout
-               (mesmo atalho do onUpgrade abaixo). */
+               (mesmo atalho do onUpgrade abaixo).
+               Dado real (60d): o aviso de convidado (ut-guest-warn) é a maior
+               exposição do modo convidado do Ultimate (430 paywall_view / 160 sid)
+               e nunca teve um único checkout_open — 0 em 2 meses, mesmo já tendo
+               preço no botão (iter42). O cadastro do convidado abria no modal
+               padrão (form cru, sem o checkout-in-place/pixFirst que já existe pro
+               RtP e pro upsell-card): depois de criar a conta, a tela mostrava o
+               formulário preenchido E o QR Pix juntos, exigindo rolar a tela no
+               celular. openInlineCheckout aplica o mesmo atalho já validado — o
+               QR substitui o formulário assim que abre, sem precisar rolar. */
             onCreateAccount={() => {
-              setCheckoutSrc('ultimate-guest');
-              if (account) startCheckout();
-              else { setAuthMode('signup'); setAuthOpen(true); }
+              if (account) { setCheckoutSrc('ultimate-guest'); startCheckout(); }
+              else openInlineCheckout('ultimate-guest');
             }}
             onUpgrade={() => startCheckout()}
           />
