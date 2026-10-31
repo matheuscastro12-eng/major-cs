@@ -1,7 +1,7 @@
-// Walkable mask derivada do radar PNG. T2.5+ — evita agents atravessando parede.
+// Walkable mask derivada do radar. T2.5+ — evita agents atravessando parede.
 //
 // Como funciona:
-//   1) Carrega a Image do radar
+//   1) Pega o radar: a nossa planta (planRadar.ts) ou, se for outra URL, a Image
 //   2) Desenha em canvas off-screen
 //   3) Pra cada pixel: walkable = (alpha > 100) AND (brilho > LUMA_THRESHOLD)
 //      - alpha 0 = transparente = fora do mapa = parede
@@ -13,9 +13,11 @@
 // Custo: 1024² = 1MB de RAM por mapa. Carregamento ~50-100ms (uma vez por mapa).
 // Cache global pra que trocar de mapa e voltar não re-processe.
 //
-// A escolha do LUMA_THRESHOLD depende da paleta do radar. CS2 atual usa
-// radares com chão ~#aaa-#eee e paredes ~#222-#444. Threshold 90 dá boa
-// separação. Mapas com paleta diferente podem precisar override per-map.
+// A escolha do LUMA_THRESHOLD depende da paleta do radar. A planta pinta o
+// chão com PLAN_FLOOR (brilho ~77) e a parede com PLAN_WALL (~36), então o
+// corte em 70 separa os dois.
+
+import { PLAN_RADAR_SIZE, paintPlanRadar, planMapOfUrl } from '../data/planRadar';
 
 interface WalkableMaskData {
   width: number;
@@ -64,16 +66,20 @@ export function ensureMask(url: string): Promise<WalkableMask> {
 // Carregamento
 
 async function loadMaskFromUrl(url: string): Promise<WalkableMask> {
-  const img = await loadImage(url);
-  const w = img.width;
-  const h = img.height;
+  // Radar nosso (planRadar.ts): desenha os polígonos direto no canvas, sem
+  // decodificar a imagem (mesmo resultado, e o canvas nunca fica "tainted").
+  const plan = planMapOfUrl(url);
+  const img = plan ? null : await loadImage(url);
+  const w = img ? img.width : PLAN_RADAR_SIZE;
+  const h = img ? img.height : PLAN_RADAR_SIZE;
   // canvas offscreen
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('walkableMask: failed to get canvas 2d context');
-  ctx.drawImage(img, 0, 0);
+  if (img) ctx.drawImage(img, 0, 0);
+  else if (plan) paintPlanRadar(ctx, plan, w);
   const pixels = ctx.getImageData(0, 0, w, h).data;
 
   // Primeira passada: brilho + alpha

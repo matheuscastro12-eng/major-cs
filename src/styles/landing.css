@@ -161,6 +161,8 @@
   text-align: center;
 }
 .lp-notice b { color: var(--c-ink); font-weight: 700; }
+/* lugar reservado da faixa do evento enquanto o módulo carrega: mesmo tamanho, sem texto visível */
+.lp-notice--wait > * { visibility: hidden; }
 .lp-notice svg { color: var(--c-brand); flex-shrink: 0; }
 .lp-notice__code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.12em; }
 .lp-notice__go {

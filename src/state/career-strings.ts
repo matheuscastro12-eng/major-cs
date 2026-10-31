@@ -3,11 +3,15 @@
 import { EDITOR_STR } from './career-strings-editor';
 import { LEGADO_STR } from './career-strings-legado';
 import { CHECKOUT_STR } from './career-strings-checkout';
+import { PIX_STR } from './career-strings-pix';
 
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   ...LEGADO_STR, // [SA2 · legado]
   ...EDITOR_STR, // [fase 4 · editor de base] (as entradas abaixo, se repetidas, valem)
   ...CHECKOUT_STR, // [growth · checkout in-place da trava do RtP]
+  ...PIX_STR, // [pix · celular] tela do QR Pix (PixPanel)
+  // [paywall sem repetição] chip do convidado no Início antes da 1ª partida
+  "Você está jogando sem conta: o progresso fica neste navegador. Jogue à vontade; quando quiser, a conta guarda tudo na nuvem.": { en: "You're playing without an account: your progress stays in this browser. Play as much as you like; whenever you want, an account keeps everything in the cloud.", es: "Estás jugando sin cuenta: el progreso se queda en este navegador. Juega todo lo que quieras; cuando quieras, la cuenta guarda todo en la nube." },
   // [fase 4 · frente CIRCUITO] calendário, circuito, VRS, qualificatórios, RMR, LAN, visto e bootcamp
   "sem field nesta etapa": { en: "no field this stage", es: "sin field en esta etapa" },
   "não disputado": { en: "not held", es: "no disputado" },
@@ -1747,6 +1751,7 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Entrar ou criar conta": { en: "Sign in or create an account", es: "Inicia sesión o crea una cuenta" },
   "Veto de mapas": { en: "Map veto", es: "Veto de mapas" },
   "Partida ao vivo": { en: "Live match", es: "Partida en vivo" },
+  "Série encerrada": { en: "Series over", es: "Serie terminada" },
   "Modo Carreira": { en: "Career Mode", es: "Modo Carrera" },
   "Estatísticas": { en: "Statistics", es: "Estadísticas" },
   "Admin": { en: "Admin", es: "Admin" },
@@ -3929,6 +3934,35 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   // [Modo Major] vitrine na landing e no Início (data/majorWindow.ts)
   'Modo Major': { en: 'Major Mode', es: 'Modo Major' },
   'Principal': { en: 'Main', es: 'Principal' },
+  // [menu] trilho de modos + painel do Início + menu Conta (GameShell)
+  'Progresso': { en: 'Progress', es: 'Progreso' },
+  'Mais': { en: 'More', es: 'Más' },
+  'Avisos': { en: 'Alerts', es: 'Avisos' },
+  'Perfil e conta': { en: 'Profile and account', es: 'Perfil y cuenta' },
+  'Como jogar': { en: 'How to play', es: 'Cómo jugar' },
+  'Apoiar o projeto': { en: 'Support the project', es: 'Apoyar el proyecto' },
+  // [resultado da série] topo com resultado + ações, convite do Tático, estilo em campo
+  'Seu melhor': { en: 'Your best', es: 'Tu mejor' },
+  'Vitória sobre': { en: 'Win over', es: 'Victoria sobre' },
+  'Derrota para': { en: 'Loss to', es: 'Derrota ante' },
+  'Copiado!': { en: 'Copied!', es: '¡Copiado!' },
+  'Compartilhado!': { en: 'Shared!', es: '¡Compartido!' },
+  'Ligar o Tático na próxima': { en: 'Turn on Tactical next match', es: 'Activar el Táctico en la próxima' },
+  'Tático ligado para a próxima': { en: 'Tactical on for the next match', es: 'Táctico activado para la próxima' },
+  'Suas chamadas': { en: 'Your calls', es: 'Tus llamadas' },
+  'Estilo em campo': { en: 'Style on the server', es: 'Estilo en el servidor' },
+  'Jogue a sua': { en: 'Play yours', es: 'Juega la tuya' },
+  // [convite pra compartilhar] fim da série (SeriesResult.tsx + ShareInvite.tsx)
+  'Seu amigo faria melhor? Mande o desafio.': { en: 'Would your friend do better? Send the challenge.', es: '¿Tu amigo lo haría mejor? Mándale el desafío.' },
+  'Desafie um amigo': { en: 'Challenge a friend', es: 'Desafía a un amigo' },
+  'Postar o card': { en: 'Post the card', es: 'Publicar la tarjeta' },
+  'Desafio copiado': { en: 'Challenge copied', es: 'Desafío copiado' },
+  '{me} {score} {opp} no Road to Major. Duvido você fazer melhor:': { en: '{me} {score} {opp} on Road to Major. Bet you can’t do better:', es: '{me} {score} {opp} en Road to Major. A que no lo haces mejor:' },
+  '{me} {score} {opp} no Road to Major. Você vence essa?': { en: '{me} {score} {opp} on Road to Major. Can you win this one?', es: '{me} {score} {opp} en Road to Major. ¿Tú ganas esta?' },
+  'Você assistiu esta série no automático. Com o Tático ligado, você comanda round a round: postura, timeouts e chamadas mudam o resultado, e cada golpe mostra a % antes de rolar.': { en: 'You watched this series on autopilot. With Tactical on, you command round by round: stance, timeouts and calls change the result, and every move shows its % before it rolls.', es: 'Viste esta serie en automático. Con el Táctico activado, mandas ronda a ronda: postura, timeouts y llamadas cambian el resultado, y cada jugada muestra su % antes de rodar.' },
+  'Resumo tático': { en: 'Tactical recap', es: 'Resumen táctico' },
+  'suas decisões': { en: 'your decisions', es: 'tus decisiones' },
+  'Maior sequência da série': { en: 'Longest run of the series', es: 'Mayor racha de la serie' },
   'PGL Major Singapore, de 24/11 a 13/12': { en: 'PGL Major Singapore, Nov 24 – Dec 13', es: 'PGL Major Singapore, del 24/11 al 13/12' },
   "faça seu pick'em e jogue o Major com o seu time, grátis": { en: "make your Pick'em and play the Major with your team, for free", es: "haz tu Pick'em y juega el Major con tu equipo, gratis" },
   'Abrir o Modo Major': { en: 'Open Major Mode', es: 'Abrir el Modo Major' },

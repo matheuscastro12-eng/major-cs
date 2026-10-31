@@ -84,6 +84,7 @@ import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { setCheckoutSrc, trackPaywallView, trackShare, trackUltFunnel } from '../../state/track';
+import { markFirstValue } from '../../state/paywallPolicy';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, beginPassPix, beginPassCheckout, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { collectPaidCoins, collectPaidPass } from '../../state/paidClaim'; // [O0-25] coleta única, crédito fora do ciclo de vida da tela
 import { ultFrozenNotice } from '../../state/ultimateShadow'; // [O0-02]
@@ -119,6 +120,7 @@ import { useSectionHistory } from '../../state/app-history';
 import '../../styles/ultimate.css';
 import { priceLabel, usePrice, withPrice } from '../../state/price';
 import { dismissGuestBanner, guestBannerVisible, readGuestBannerDismissed } from '../../state/guestBanner';
+import { planRadarUrl } from '../../data/planRadar';
 
 // [URG-3] deep link do e-mail "rival te passou": /ultimate?tab=ranqueada abre a
 // aba Ranqueada. Lido UMA vez no carregamento do módulo (mesmo motivo do
@@ -1995,6 +1997,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         setPackFromCloud(res.source === 'server');
         if (pack.id === SEASON_PACK.id) trackUltFunnel('season_pack_open', { season: seasonN ?? 0 }); // [URG-1]
         setReveal([...res.cards].sort((a, b) => b.ovr - a.ovr));
+        markFirstValue('pack'); // 1º pacote = 1º valor (a oferta passiva só aparece depois: state/paywallPolicy.ts)
       } finally { setPackBusy(null); }
     })();
   };
@@ -2560,7 +2563,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             const tone = wknd.open ? '#f472b6' : '#8a93a2';
             return (
               <section style={{ borderRadius: '14px', overflow: 'hidden', border: `1px solid ${tone}`, marginBottom: '16px', background: '#0e141b', position: 'relative' }}>
-                <span style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/de_inferno.png)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.14 }} />
+                <span style={{ position: 'absolute', inset: 0, backgroundImage: `url("${planRadarUrl('inferno')}")`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.14 }} />
                 <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(244,114,182,.18), rgba(13,17,22,.94) 62%)' }} />
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 22px', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '30px' }}>🎁</span>

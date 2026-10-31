@@ -80,9 +80,9 @@ export const MAJOR_FAVORITES: {
   status: 'projecao',
   listDate: '2026-11-02',
   teams: [
-    { id: 'team-vitality', tag: 'VIT', name: 'Team Vitality', pct: 31.6 },
-    { id: 'team-spirit', tag: 'TS', name: 'Team Spirit', pct: 24.0 },
-    { id: 'team-falcons', tag: 'FLC', name: 'Team Falcons', pct: 15.4 },
-    { id: 'furia', tag: 'FURIA', name: 'FURIA', pct: 10.0 },
+    { id: 'team-vitality', tag: 'VIT', name: 'Team Vitality', pct: 29.3 },
+    { id: 'team-spirit', tag: 'TS', name: 'Team Spirit', pct: 22.3 },
+    { id: 'team-falcons', tag: 'FLC', name: 'Team Falcons', pct: 16.5 },
+    { id: 'furia', tag: 'FURIA', name: 'FURIA', pct: 10.8 },
   ],
 };

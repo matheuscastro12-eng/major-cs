@@ -35,6 +35,7 @@ import { useFounders } from '../state/founders';
 import { GameShell, Panel, Button, Segmented, Tag, LiveBadge, ProgressBar, type ShellNavGroup, type ShellNext, type ShellPending } from './ds/index';
 import type { Account } from '../state/account';
 import { priceLabel, usePrice, withPrice } from '../state/price';
+import { hasFirstValue } from '../state/paywallPolicy';
 
 interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => void;
@@ -140,17 +141,22 @@ export function Home(props: Props) {
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [name, setName] = useState('');
 
+  // vitrine passiva (preço no card do Road to Pro e no chip do convidado) só
+  // depois do 1º valor (state/paywallPolicy.ts). Quem já tem carreira, campanha
+  // ou Road to Pro salvo neste navegador conta como quem já jogou.
+  const [valueSeen] = useState(() => hasFirstValue() || readSlot(getActiveSlot()).exists || !!rtpBrief() || !!savedCampaign);
+
   // funil: superfícies de venda da vitalícia visíveis no portal (1x/sessão/src)
   useEffect(() => {
     if (view !== 'menu') return;
     // [O0-11] premiumLocked é true enquanto o /me carrega: sem accountReady o
     // 1º frame do pagante contava como paywall_view (dedupe grava esse frame).
     if (!accountReady) return;
-    if (premiumLocked && onRoadToPro) trackPaywallView('home-rtp');       // card RtP com cadeado
+    if (premiumLocked && onRoadToPro && valueSeen) trackPaywallView('home-rtp'); // preço no card RtP com cadeado
     if (ultimateLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
     if (account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
-    if (!account) trackPaywallView('acct-chip-guest'); // chip de conta do convidado no Início
-  }, [view, premiumLocked, ultimateLocked, onRoadToPro, onUltimate, accountReady, account]);
+    if (!account && valueSeen) trackPaywallView('acct-chip-guest'); // chip de conta do convidado no Início
+  }, [view, premiumLocked, ultimateLocked, onRoadToPro, onUltimate, accountReady, account, valueSeen]);
 
   // [URG-4] streak do Diário: "N dias" e, se ainda não jogou hoje, o aviso de perda
   const [dStreak] = useState(() => streakStatus(loadStreakState(), Date.now()));
@@ -337,23 +343,18 @@ export function Home(props: Props) {
       nav={shellNav}
       active="home"
       onNav={onShellNav}
-      mobileNav={['home', 'news', 'achievements', 'leaderboard']}
-      title={ct('Portal')}
+      mobileNav={['home', 'mode:majorsg', 'majorsg', 'news', 'leaderboard']}
+      title={ct('Visão geral')}
       crumbs={[]}
       meta={meta}
       next={next}
       bell={{ label: ct('Novidades'), count: 0, onClick: () => onShellNav('news') }}
+      // o Diário de hoje não repete aqui: o selo do Diário no trilho já conta o que falta
       sideWidget={savedCampaign ? (
         <button type="button" className="gs-widget" onClick={onResume}>
           <span className="gs-widget__kicker"><Swords size={13} aria-hidden /> {ct('Campeonato em andamento')}</span>
           <span className="gs-widget__main">{savedCampaign.name}</span>
           <span className="gs-widget__sub">{savedCampaign.phase}</span>
-        </button>
-      ) : onDaily ? (
-        <button type="button" className="gs-widget" onClick={onDaily}>
-          <span className="gs-widget__kicker"><CalendarDays size={13} aria-hidden /> {ct('Diário de hoje')}</span>
-          <span className="gs-widget__main">#{dayNo} <span className="gs-widget__vs">·</span> {dayStatus.done}/{DAILY_GAMES.length}</span>
-          <span className="gs-widget__sub">{dailyLeft > 0 ? `${dailyLeft} ${ct('desafios esperando')}` : ct('Completo · volte amanhã')}</span>
         </button>
       ) : undefined}
     >
@@ -425,7 +426,7 @@ export function Home(props: Props) {
                 status={rtp?.nick ? `${rtp.nick}${rtp.ovr ? ` · OVR ${rtp.ovr}` : ''}` : undefined}
                 cta={premiumLocked ? ct('Jogar a demo grátis') : undefined}
                 onGo={onRoadToPro}
-                foot={premiumLocked ? (
+                foot={premiumLocked && valueSeen ? (
                   <>
                     <small className="home-tile__price">{`${priceLabel()} · ${ct('pagamento único, acesso vitalício — sem mensalidade')}`}</small>
                     <FounderCounter />
@@ -452,6 +453,12 @@ export function Home(props: Props) {
           <Panel icon={<UserRound size={16} />} title={ct('Sua conta')}>
             {!accountReady ? (
               <p className="ds-dim">{ct('Carregando…')}</p>
+            ) : !account && !valueSeen ? (
+              // antes da 1ª partida: sem oferta, só o aviso e o login
+              <div className="home-acct">
+                <p>{ct('Você está jogando sem conta: o progresso fica neste navegador. Jogue à vontade; quando quiser, a conta guarda tudo na nuvem.')}</p>
+                {onAccount && <button type="button" className="home-link" onClick={onAccount}>{ct('Já tenho conta · entrar')}</button>}
+              </div>
             ) : !account ? (
               <div className="home-acct">
                 <p>{ct('Você está jogando sem conta. Crie a sua pra salvar na nuvem e jogar no PC e no celular.')}</p>

@@ -40,6 +40,10 @@
 .r2d-floor line { stroke: var(--c-surface-2); stroke-linecap: round; }
 .r2d-walls rect { fill: var(--c-line-strong); }
 .r2d-floor rect { fill: var(--c-surface-2); }
+/* planta real (Mirage): parede = contorno grosso por baixo, piso por cima */
+.r2d-plan-walls { fill: none; stroke: var(--c-line-strong); stroke-width: 1.5; stroke-linejoin: round; }
+.r2d-plan-floor { fill: var(--c-surface-2); fill-rule: evenodd; stroke: color-mix(in srgb, var(--c-ink) 18%, transparent); stroke-width: 0.25; stroke-linejoin: round; }
+.r2d-calls text { fill: var(--c-ink-faint); font-family: var(--font-title); font-size: 2.1px; font-weight: 700; letter-spacing: 0.15px; text-anchor: middle; dominant-baseline: middle; text-transform: uppercase; opacity: 0.75; }
 .r2d-site rect { fill: color-mix(in srgb, var(--c-brand) 10%, var(--c-surface-2)); stroke: color-mix(in srgb, var(--c-brand) 55%, transparent); stroke-width: 0.35; }
 .r2d-site text { fill: var(--c-brand); font-family: var(--font-display); font-size: 6.5px; text-anchor: middle; opacity: 0.55; }
 .r2d-spawn { stroke-width: 0.3; }
@@ -142,6 +146,11 @@
   .r2d-bar { padding: var(--sp-2); }
   .r2d-buy { display: none; }
   .r2d-feed { min-height: 0; }
+  .r2d-calls text { font-size: 2.4px; }
+}
+/* celular: o radar tem ~380px; as calls crescem para continuar legíveis */
+@media (max-width: 560px) {
+  .r2d-calls text { font-size: 2.6px; opacity: 0.85; }
 }
 @media (prefers-reduced-motion: reduce) {
   .r2d-bomb-pulse, .r2d-moment, .r2d-fl { animation: none; }

@@ -20,8 +20,11 @@ import './styles/screens.css'
 // por último: a nova interface por cima das telas legadas dentro do shell
 import './styles/skin.css'
 import App from './App.tsx'
+import { getLang } from './state/i18n'
+import { loadCareerStrings } from './state/career-i18n'
 import { installErrorLogging } from './state/errlog'
 import { installPwa } from './state/pwa'
+import { installVercelAnalytics } from './state/vercelAnalytics'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ToastProvider } from './components/ds'
 import { ConfirmDialogHost } from './components/ConfirmDialog'
@@ -41,6 +44,11 @@ import { HostBoundary } from './components/HostBoundary'
 
 installErrorLogging() // captura crash de runtime em producao (fire-and-forget)
 installPwa()          // registra o SW e guarda o convite de instalacao (ver state/pwa.ts)
+installVercelAnalytics() // pageviews no painel da Vercel, URL sem query sensível (ver state/vercelAnalytics.ts)
+
+// idioma salvo em en/es: o dicionário do ct() (sob demanda, state/career-i18n.ts)
+// começa a baixar já, em paralelo com o primeiro render
+if (getLang() !== 'pt') void loadCareerStrings()
 
 // BrowserRouter envolve a app desde T1.2 do roadmap em
 // .claude/plans/faca-um-planejamento-para-piped-quilt.md. Por enquanto fica

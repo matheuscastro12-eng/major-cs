@@ -17,7 +17,6 @@ import { confirm } from './ConfirmDialog';
 import { downloadSaveBackup, type SaveMode } from '../state/saveRecovery';
 import { getActiveSlot } from '../state/careerSaves';
 import { resetSlotLocal } from '../state/gameStore';
-import { resetUltimateLocal } from '../state/ultimate';
 import { resetDailyProgress } from '../state/daily';
 import { CHUNK_RELOAD_KEY, crashStyles as S } from './ErrorBoundary';
 
@@ -113,7 +112,9 @@ export class ModeErrorBoundary extends Component<Props, State> {
     });
     if (!ok) return;
     if (mode === 'career') resetSlotLocal(slot);
-    else if (mode === 'ultimate') resetUltimateLocal();
+    // dinâmico (como o rtpSaves): state/ultimate puxa a base de jogadores e não
+    // pode entrar na carga inicial só por causa deste botão
+    else if (mode === 'ultimate') (await import('../state/ultimate')).resetUltimateLocal();
     else if (mode === 'daily') resetDailyProgress();
     else (await import('../state/rtpSaves')).resetRtpLocal();
     this.exit();

@@ -138,13 +138,18 @@ export function liquipediaTeamUrl(team: Pick<TeamSeason, 'team'>): string {
 }
 
 // ---- fotos de jogadores ----
-// Só bo3.gg (URLs diretas em bo3-photos.json). NÃO usamos fotos da Liquipedia:
-// os arquivos têm licença "permission" (uso restrito à Liquipedia), não livre.
-// Sem foto → PlayerAvatar mostra as iniciais.
+// Só bo3.gg, servidas do NOSSO domínio (public/players/bo3/<slug>.webp, commitadas;
+// sem hotlink pro CDN). bo3-photos.json lista só as que existem em disco; as
+// quebradas ficam em bo3-photos-missing.json. Atualizar: tsx scripts/fetch-bo3-photos.mts.
+// NÃO usamos fotos da Liquipedia (licença "permission", uso restrito à Liquipedia).
+// Sem foto → PlayerAvatar mostra as iniciais. Crédito "Fotos: bo3.gg" é global (GameShell).
 import bo3Photos from './bo3-photos.json';
 
-const BO3_PHOTOS = bo3Photos as Record<string, string>;
+export const photoSlug = (nick: string) => nick.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+const BO3_LOCAL = new Set(Object.keys(bo3Photos as Record<string, string>).map(photoSlug));
 
 export function photoForNick(nick: string): string | undefined {
-  return BO3_PHOTOS[nick.toLowerCase()];
+  const k = photoSlug(nick);
+  return k && BO3_LOCAL.has(k) ? `/players/bo3/${k}.webp` : undefined;
 }
+
