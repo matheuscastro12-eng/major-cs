@@ -83,6 +83,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
+import { UltimateStarterOffer } from './UltimateStarterOffer';
 import { setCheckoutSrc, trackPaywallView, trackShare, trackUltFunnel } from '../../state/track';
 import { markFirstValue } from '../../state/paywallPolicy';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, beginPassPix, beginPassCheckout, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
@@ -3160,6 +3161,14 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             {/* fase 3b: selinho discreto quando o último pack foi rolado no servidor */}
             {packFromCloud && <span style={{ marginLeft: 8, whiteSpace: 'nowrap', opacity: 0.85 }}>☁️ {ct('economia sincronizada')}</span>}
           </p>
+          {/* [U08] oferta inicial: atrás da flag VITE_FF_ULTIMATE_STARTER (OFF),
+              enabled=false e sem preço → não renderiza. Pedidos reais (orders) e
+              checkout entram junto com o tier no servidor. */}
+          <UltimateStarterOffer
+            orders={[]}
+            matchesPlayed={state.profile.w + state.profile.l}
+            onBuy={() => { /* checkout do tier 'starter-v1': pendente (servidor + preço) */ }}
+          />
           {/* coins com dinheiro real (Pix) — acelera, não substitui: os mesmos
               packs continuam compráveis só jogando */}
           <div className="ut-coinshop">

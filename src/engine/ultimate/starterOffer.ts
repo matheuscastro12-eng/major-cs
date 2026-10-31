@@ -46,3 +46,33 @@ export function starterOfferEligible(def: StarterOfferDef, orders: OrderLike[], 
   if (orders.some((o) => o.tier === STARTER_OFFER_TIER && (o.status === 'paid' || o.status === 'claimed'))) return { eligible: false, reason: 'already' };
   return { eligible: true, reason: null };
 }
+
+// ---------------------------------------------------------------------------
+// FEATURE FLAG (OFF). Pra oferta aparecer, TODAS as travas precisam liberar:
+//   1) flag de build VITE_FF_ULTIMATE_STARTER=1 (não está setada em env nenhum);
+//   2) STARTER_OFFER.enabled === true;
+//   3) priceCents definido (> 0);
+//   4) starterOfferEligible() (janela de partidas + sem pedido pago).
+// Mesmo com tudo liberado, o checkout depende do tier STARTER_OFFER_TIER no
+// servidor (api/account.ts COIN_TIERS), que este PR NÃO cria.
+type Env = Record<string, string | boolean | undefined>;
+const viteEnv = (): Env => {
+  try { return ((import.meta as unknown as { env?: Env }).env) ?? {}; } catch { return {}; }
+};
+
+/** Flag de build. Qualquer valor diferente de '1'/'true' = OFF. */
+export function starterFlagOn(env: Env = viteEnv()): boolean {
+  const v = env.VITE_FF_ULTIMATE_STARTER;
+  return v === '1' || v === 'true' || v === true;
+}
+
+export type StarterVisibility = 'flag_off' | 'disabled' | 'no_price' | 'too_early' | 'expired' | 'already' | 'visible';
+
+/** O que a UI usa: flag primeiro, depois a regra de elegibilidade do contrato. */
+export function starterOfferVisibility(def: StarterOfferDef, orders: OrderLike[], matchesPlayed: number, flagOn = starterFlagOn()): StarterVisibility {
+  if (!flagOn) return 'flag_off';
+  const r = starterOfferEligible(def, orders, matchesPlayed);
+  return r.eligible ? 'visible' : (r.reason ?? 'disabled');
+}
+
+export const formatBRL = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace('.', ',').replace(',00', '')}`;
