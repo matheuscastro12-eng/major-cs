@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import errorRoute from '../api/error.js';
-import { __resetCspDedupeForTests, cspReportToError, cspSeenRecently } from './csp-report.js';
+import cspRoute from '../api/csp-report.js';
+import { __resetCspDedupeForTests, cspReportToError, cspReportsFromRaw, cspSeenRecently } from './csp-report.js';
 import { FakeNeonHttp } from './neon-fetch.mock.js';
 
 process.env.DATABASE_URL = 'postgresql://user:pw@fake-neon.test/db';
@@ -46,7 +47,7 @@ test('vercel.json: CSP ainda em Report-Only, estrita e com report-uri', () => {
   assert.ok((dirs.get('style-src') ?? []).includes('https://fonts.googleapis.com'));
   assert.ok((dirs.get('font-src') ?? []).includes('https://fonts.gstatic.com'));
   assert.ok((dirs.get('connect-src') ?? []).includes('data:'), 'share cards fazem fetch de data: URL');
-  assert.deepEqual(dirs.get('report-uri'), ['/api/error?csp=1']);
+  assert.deepEqual(dirs.get('report-uri'), ['/api/csp-report']);
 });
 
 test('cspReportToError: diretiva + origem bloqueada; ignora corpo que não é relatório', () => {
@@ -96,4 +97,51 @@ test('POST /api/error com application/csp-report (Buffer) grava kind csp uma vez
     assert.equal(second.body.dedup, true);
     assert.equal(db.seen.filter((q) => q.text.startsWith('INSERT INTO client_errors')).length, 1);
   } finally { uninstall(); }
+});
+
+// O runtime da Vercel não parseia application/csp-report: o /api/error recebia
+// o corpo vazio e devolvia 400 pra todo relatório. O /api/csp-report lê o cru.
+function cspPost(body: string, contentType = 'application/csp-report', ip = '198.51.100.9'): Request {
+  return new Request('https://roadtomajor.com.br/api/csp-report', {
+    method: 'POST',
+    headers: { 'content-type': contentType, 'x-forwarded-for': ip, 'user-agent': 'UA', 'x-vercel-ip-country': 'BR' },
+    body,
+  });
+}
+
+test('POST /api/csp-report (corpo cru application/csp-report) grava kind csp uma vez', async () => {
+  __resetCspDedupeForTests();
+  const db = new FakeNeonHttp();
+  const uninstall = db.install();
+  try {
+    const body = JSON.stringify({ 'csp-report': { 'document-uri': 'https://roadtomajor.com.br/jogar', 'effective-directive': 'connect-src', 'blocked-uri': 'https://api.exemplo.com/x' } });
+    const first = await cspRoute.fetch(cspPost(body));
+    assert.equal(first.status, 204);
+    const insert = db.seen.find((q) => q.text.startsWith('INSERT INTO client_errors'));
+    assert.ok(insert, 'gravou');
+    assert.equal(insert.params[0], 'CSP connect-src bloquearia https://api.exemplo.com');
+    assert.equal(insert.params[2], 'https://roadtomajor.com.br/jogar');
+    const again = await cspRoute.fetch(cspPost(body));
+    assert.equal(again.status, 204);
+    assert.equal(db.seen.filter((q) => q.text.startsWith('INSERT INTO client_errors')).length, 1, 'dedupe');
+  } finally { uninstall(); }
+});
+
+test('POST /api/csp-report aceita o formato da Reporting API e recusa corpo sem relatório', async () => {
+  __resetCspDedupeForTests();
+  const db = new FakeNeonHttp();
+  const uninstall = db.install();
+  try {
+    const reports = JSON.stringify([{ type: 'csp-violation', body: { documentURL: 'https://roadtomajor.com.br/', effectiveDirective: 'img-src', blockedURL: 'http://inseguro.example/a.png' } }]);
+    assert.equal((await cspRoute.fetch(cspPost(reports, 'application/reports+json', '198.51.100.10'))).status, 204);
+    assert.ok(db.seen.some((q) => q.text.startsWith('INSERT INTO client_errors') && q.params[0] === 'CSP img-src bloquearia http://inseguro.example'));
+    assert.equal((await cspRoute.fetch(cspPost('{}', 'application/csp-report', '198.51.100.11'))).status, 400);
+    assert.equal((await cspRoute.fetch(cspPost('não é json', 'application/csp-report', '198.51.100.12'))).status, 400);
+    assert.equal((await cspRoute.fetch(new Request('https://roadtomajor.com.br/api/csp-report'))).status, 405);
+  } finally { uninstall(); }
+});
+
+test('cspReportsFromRaw: ignora itens que não são violação de CSP', () => {
+  assert.deepEqual(cspReportsFromRaw('[{"type":"deprecation","body":{}}]'), []);
+  assert.equal(cspReportsFromRaw('{"csp-report":{"violated-directive":"style-src-elem","blocked-uri":"inline"}}')[0]?.message, 'CSP style-src-elem bloquearia inline');
 });
