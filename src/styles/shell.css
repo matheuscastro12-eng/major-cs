@@ -1181,6 +1181,7 @@ button.gs-widget:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     font-size: var(--fs-1);
     font-weight: 800;
     line-height: 16px;
+    white-space: nowrap; /* "AO VIVO" no Major: o selo não quebra em duas linhas */
     box-shadow: 0 0 0 2px var(--c-shell);
   }
   .gs-tabbar__badge.is-live { background: var(--c-live-fill); color: var(--c-on-strong); }

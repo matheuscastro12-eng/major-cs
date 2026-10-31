@@ -2,36 +2,44 @@
 // seu, ou o de um link recebido) contra o resultado REAL de cada Stage, que
 // entra por PR de dados (src/data/majorResults.ts). Antes do Stage 1 terminar,
 // diz quando o placar começa; com resultado, mostra o total, os acertos (✓/✗)
-// nos times do próprio palpite, o que ainda está aguardando e o botão de
-// compartilhar. Quem decide a mensagem é placarView (engine/pickemScore.ts).
+// nos times do próprio palpite, o que ainda está aguardando e o RECAP pra
+// compartilhar (ShareInvite: "Desafie um amigo" com o link do palpite e
+// "Postar o card" com o PNG do placar, majorShareCard.ts → drawPlacarCard).
+// Quem decide a mensagem é placarView (engine/pickemScore.ts). Palpite que
+// travou aberto (lockedOut) ouve isso com todas as letras.
+//
+// Medição: share_card com os kinds placar-desafio e placar-card
+// (state/shareInvite.ts). O Início e a landing abrem o Modo Major já aqui e
+// pedem a rolagem até o placar (data/majorLive.ts → requestPlacarFocus).
 //
 // Prévia só em `npm run dev`: ?placar=demo1 … demo6 troca o resultado por um
 // Major simulado (1–3 = até o Stage N, 4 = + quartas, 5 = + semis, 6 = + campeão).
 // Em produção import.meta.env.DEV é false e a prévia não existe.
-import { useMemo, useState } from 'react';
-import { Check, Copy, ExternalLink, Trophy, X } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { Check, ExternalLink, Trophy, X } from 'lucide-react';
 import data from '../../data/major-singapore-2026.json';
 import { MAJOR_RESULTS, PICKEM_LOCK_MS, PICKEM_LOCKS, STAGE1_END, STAGE1_ENDS_MS } from '../../data/majorResults';
+import { demoParam, takePlacarFocus } from '../../data/majorLive';
 import { readPickSnapshots } from '../../state/pickSnapshots';
-import { MAJOR_SG_PATH } from '../../data/majorWindow';
 import { encodePicks, simulateMajor, type MajorData, type MajorPicks } from '../../engine/majorSingapore';
 import {
-  outcomesFromSim, placarView, scoredPicks,
+  lockedOut, outcomesFromSim, placarRecap, placarView, scoredPicks,
   type MajorOutcomes, type Mark, type PlacarThrough, type PlacarView, type PlayoffScore, type StageScore,
 } from '../../engine/pickemScore';
 import { useLang, type Lang } from '../../state/i18n';
-import { shareUrl } from '../../state/shareLink';
-import { postOnX } from '../../state/shareX';
-import { trackShare } from '../../state/track';
-// '../ds/index' = os primitivos novos (Panel com icon/tone, Button secondary);
+import { fillTemplate, inviteKind, inviteMessage, inviteUrl, placarShareText } from '../../state/shareInvite';
+import { shareCard, shareText } from '../../state/shareX';
+// '../ds/index' = os primitivos novos (Panel com icon/tone);
 // '../ds' sozinho resolve pro wrapper legado ds.tsx
-import { Button, Panel, Tag } from '../ds/index';
+import { Panel, Tag } from '../ds/index';
+import { ShareInvite } from '../ShareInvite';
+import { drawPlacarCard } from './majorShareCard';
 import type { MajorKey } from './majorStrings';
 import '../../styles/major-scoreboard.css';
 
 const D = data as unknown as MajorData;
 const TEAMS = new Map(D.teams.map((x) => [x.id, x]));
-const SHARE_KIND = 'major-pickem-placar';
+const PANEL_ID = 'msg-placar';
 type T = (k: MajorKey) => string;
 
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k: string) => String(v[k] ?? ''));
@@ -55,8 +63,8 @@ function fmtLock(ms: number, lang: Lang): { date: string; time: string } {
 function devOutcomes(): MajorOutcomes | null {
   if (!import.meta.env.DEV) return null;
   try {
-    const m = /^demo([1-6])$/.exec(new URLSearchParams(window.location.search).get('placar') ?? '');
-    return m ? outcomesFromSim(simulateMajor(D, 2026), Number(m[1]) as 1 | 2 | 3 | 4 | 5 | 6, '#placar-demo') : null;
+    const n = demoParam(window.location.search);
+    return n ? outcomesFromSim(simulateMajor(D, 2026), n, '#placar-demo') : null;
   } catch { return null; }
 }
 
@@ -66,7 +74,13 @@ function scopeOf(t: T, th: PlacarThrough): string {
   return t(th === 'qf' ? 'pcScopeQf' : th === 'sf' ? 'pcScopeSf' : 'pcScopeMajor');
 }
 
-export function MajorScoreboard({ t, picks, readOnly }: { t: T; picks: MajorPicks; readOnly: boolean }) {
+export function MajorScoreboard({ t, picks, readOnly, nick = '', onRecapChange }: {
+  t: T; picks: MajorPicks; readOnly: boolean;
+  /** apelido que assina o desafio (o mesmo "Mostrar meu nick" do desafio do pick'em); '' = sem */
+  nick?: string;
+  /** avisa quando o recap com "Desafie um amigo / Postar o card" está na tela (a tela tira a barra fixa repetida) */
+  onRecapChange?: (on: boolean) => void;
+}) {
   const { lang } = useLang();
   const demo = useMemo(() => devOutcomes(), []);
   const results = demo ?? MAJOR_RESULTS;
@@ -75,43 +89,49 @@ export function MajorScoreboard({ t, picks, readOnly }: { t: T; picks: MajorPick
   // o palpite de um link recebido, como veio
   const scored = readOnly ? picks : scoredPicks(picks, readPickSnapshots(), PICKEM_LOCKS, now);
   const view = placarView(scored, results, now, STAGE1_ENDS_MS);
+  // travou aberto: não promete que completar agora entra no placar
+  const out = !readOnly && view.kind === 'incomplete' && lockedOut(scored, PICKEM_LOCKS, now);
   const starts = fill(t('pcStarts'), { date: fmtDay(STAGE1_END, lang) });
   const lockAt = fmtLock(PICKEM_LOCK_MS, lang);
+  const recapOn = !readOnly && view.kind === 'scored';
+  useEffect(() => { onRecapChange?.(recapOn); }, [recapOn, onRecapChange]);
+  // "veja seus pontos" no Início/landing: rola até aqui ao abrir (uma vez)
+  // (o pedido é consumido dentro do frame: no StrictMode o 1º efeito é desfeito
+  // e cancelaria a rolagem depois de já ter gastado o pedido)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      if (!takePlacarFocus()) return;
+      const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      document.getElementById(PANEL_ID)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
   return (
     <Panel
+      id={PANEL_ID}
+      className="msg-pc-panel"
       title={t('pcTitle')}
       icon={<Trophy size={16} aria-hidden />}
       tone={view.kind === 'scored' ? 'accent' : 'default'}
       actions={import.meta.env.DEV && demo ? <Tag tone="warn">demo (dev)</Tag> : undefined}
     >
-      {view.kind === 'incomplete' && (
-        <p className="msg-pc__text">{t('pcIncomplete')}{!view.started && <> {starts}</>}</p>
-      )}
-      {!readOnly && <p className="msg-muted">{fill(t(now >= PICKEM_LOCK_MS ? 'pcLocked' : 'pcLockAt'), lockAt)}</p>}
+      {view.kind === 'incomplete' && (out
+        ? <p className="msg-pc__text">{t('pcOut')}</p>
+        : <p className="msg-pc__text">{t('pcIncomplete')}{!view.started && <> {starts}</>}</p>)}
+      {!readOnly && !out && <p className="msg-muted">{fill(t(now >= PICKEM_LOCK_MS ? 'pcLocked' : 'pcLockAt'), lockAt)}</p>}
       {view.kind === 'waiting' && (
         <p className="msg-pc__text">{view.late ? t('pcLate') : starts}{!readOnly && <> {t('pcSaved')}</>}</p>
       )}
-      {view.kind === 'scored' && <Scored t={t} view={view} results={results} picks={scored} readOnly={readOnly} />}
+      {view.kind === 'scored' && <Scored t={t} view={view} results={results} picks={scored} readOnly={readOnly} nick={nick} />}
     </Panel>
   );
 }
 
-function Scored({ t, view, results, picks, readOnly }: {
-  t: T; view: Extract<PlacarView, { kind: 'scored' }>; results: MajorOutcomes; picks: MajorPicks; readOnly: boolean;
+function Scored({ t, view, results, picks, readOnly, nick }: {
+  t: T; view: Extract<PlacarView, { kind: 'scored' }>; results: MajorOutcomes; picks: MajorPicks; readOnly: boolean; nick: string;
 }) {
-  const [copied, setCopied] = useState(false);
   const { score } = view;
   const vars = { pts: score.points, max: score.max, scope: scopeOf(t, view.through) };
-  const link = shareUrl(`${MAJOR_SG_PATH}?p=${encodePicks(D, picks)}`, SHARE_KIND);
-  const text = fill(t('pcShareText'), vars);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(`${text} ${link}`);
-      setCopied(true);
-      trackShare(SHARE_KIND, 'copy');
-      setTimeout(() => setCopied(false), 1800);
-    } catch { /* sem clipboard */ }
-  };
   return (
     <div className="msg-pc">
       <div className="msg-pc__head">
@@ -126,16 +146,59 @@ function Scored({ t, view, results, picks, readOnly }: {
           ? <PlayoffRow t={t} s={score.playoffs} source={results.playoffs?.source ?? ''} />
           : <WaitRow t={t} label="Playoffs" next={view.next === 'playoffs'} />}
       </ol>
-      {!readOnly && (
-        <div className="msg-toolbar">
-          <Button icon={copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />} onClick={copy}>
-            {copied ? t('pcCopied') : t('pcCopy')}
-          </Button>
-          <Button variant="ghost" onClick={() => postOnX(SHARE_KIND, text, link)}>{t('pcPostX')}</Button>
-        </div>
-      )}
+      {!readOnly && <PlacarInvite t={t} view={view} picks={picks} nick={nick} text={fill(t('pcShareText'), vars)} />}
       <p className="msg-muted">{t('scoreRule')}</p>
     </div>
+  );
+}
+
+/**
+ * Recap com card: "Desafie um amigo" manda o link do palpite pontuado (o X já
+ * mostra o card do palpite no preview) e "Postar o card" gera o PNG do placar
+ * (no celular vai pelo share sheet; no PC baixa o PNG e abre o X).
+ */
+function PlacarInvite({ t, view, picks, nick, text }: {
+  t: T; view: Extract<PlacarView, { kind: 'scored' }>; picks: MajorPicks; nick: string; text: string;
+}) {
+  const code = encodePicks(D, picks);
+  const recap = placarRecap(view);
+  const vars = { hits: String(recap.hits), of: String(recap.of) };
+  const dare = async () => {
+    const url = inviteUrl('placar', 'desafio', { code, nick });
+    const r = await shareText(inviteKind('placar', 'desafio'), inviteMessage(text, url));
+    return r === 'copy' ? t('chCopied') : r === 'native' ? t('invShared') : null;
+  };
+  const card = async () => {
+    let dataUrl = '';
+    try {
+      dataUrl = drawPlacarCard(recap, {
+        kicker: t('rcCardKicker'),
+        event: D.event.name,
+        hits: fillTemplate(t(recap.part === 'playoffs' ? 'rcHitsPlayoffs' : 'rcHitsStage'), vars),
+        total: t(recap.final ? 'rcCardTotalFinal' : 'rcCardTotal'),
+        waiting: t('pcWaiting'),
+        foot: 'roadtomajor.com.br',
+      });
+    } catch { /* canvas indisponível: segue só com o texto e o link */ }
+    const r = await shareCard(inviteKind('placar', 'card'), {
+      dataUrl,
+      filename: 'placar-pickem-major-singapore.png',
+      text: placarShareText(recap, {
+        title: t('rcTitle'), hitsStage: t('rcHitsStage'), hitsPlayoffs: t('rcHitsPlayoffs'), total: t('rcTotal'), totalFinal: t('rcTotalFinal'),
+      }),
+      url: inviteUrl('placar', 'card', { code }),
+    });
+    if (r === 'native') return t('invShared');
+    return r === 'x' && dataUrl ? t('invXHint') : null;
+  };
+  return (
+    <ShareInvite
+      lead={t('rcLead')}
+      dareLabel={t('invDare')}
+      cardLabel={t('invCard')}
+      onDare={dare}
+      onCard={card}
+    />
   );
 }
 

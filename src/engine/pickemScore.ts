@@ -291,6 +291,21 @@ export function scoredPicks(current: MajorPicks, snaps: Partial<Record<PickPart,
   };
 }
 
+/**
+ * Alguma parte já travou com o palpite pontuado (scoredPicks) aberto? Então o
+ * palpite nunca entra no placar (placarView pede o palpite inteiro): a tela
+ * diz isso com todas as letras em vez de "complete o seu pick'em".
+ */
+export function lockedOut(scored: MajorPicks, locks: PickLocks, nowMs: number): boolean {
+  const done: Record<PickPart, boolean> = {
+    s1: scored.s1.length === 8,
+    s2: scored.s2.length === 8,
+    s3: scored.s3.length === 8,
+    playoffs: scored.bracket.length === 7 && scored.bracket.every(Boolean),
+  };
+  return PICK_PARTS.some((k) => nowMs >= locks[k] && !done[k]);
+}
+
 // ---------------------------------------------------------------- estado da UI
 
 /** até onde já tem resultado: Stage 1..3, quartas, semis ou final */
@@ -344,4 +359,42 @@ export function outcomesFromSim(r: MajorResult, upTo: 1 | 2 | 3 | 4 | 5 | 6, sou
     }
     : null;
   return { stages: [stage(0), stage(1), stage(2)], playoffs };
+}
+
+// ---------------------------------------------------------------- recap (card e texto)
+
+/** o resumo do placar que vira card e texto: a parte que acabou de sair e o total */
+export interface PlacarRecap {
+  /** a parte mais recente com resultado */
+  part: StageNo | 'playoffs';
+  points: number;
+  max: number;
+  /** acertos nela: classificados certos (Stage) ou vencedores certos nas rodadas com resultado (playoffs) */
+  hits: number;
+  of: number;
+  /** 3-0 e 0-3 certos do Stage (null nos playoffs) */
+  x30: [number, number] | null;
+  x03: [number, number] | null;
+  total: number;
+  totalMax: number;
+  /** o Major acabou (campeão publicado) */
+  final: boolean;
+  /** pontos de cada parte (Stage 1, 2, 3, playoffs); null = aguardando */
+  parts: ({ points: number; max: number } | null)[];
+}
+
+const tally = (m: Mark[] | null): [number, number] => [hitsOf(m), (m ?? []).length];
+
+export function placarRecap(view: Extract<PlacarView, { kind: 'scored' }>): PlacarRecap {
+  const { score } = view;
+  const parts = [...score.stages, score.playoffs].map((x) => (x ? { points: x.points, max: x.max } : null));
+  const base = { total: score.points, totalMax: score.max, final: view.final, parts };
+  const po = score.playoffs;
+  if (po && typeof view.through !== 'number') {
+    const marks = [...(po.qf ?? []), ...(po.sf ?? []), ...(po.final ?? [])];
+    return { ...base, part: 'playoffs', points: po.points, max: po.max, hits: hitsOf(marks), of: marks.length, x30: null, x03: null };
+  }
+  const n = (typeof view.through === 'number' ? view.through : 3) as StageNo;
+  const st = score.stages[n - 1]!;
+  return { ...base, part: n, points: st.points, max: st.max, hits: st.hits, of: st.qualified.length, x30: tally(st.x30), x03: tally(st.x03) };
 }

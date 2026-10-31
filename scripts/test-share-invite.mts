@@ -1,4 +1,5 @@
-// Convite pra compartilhar (pick'em pronto, fim da série, fim da campanha):
+// Convite pra compartilhar (pick'em pronto, fim da série, fim da campanha e o
+// recap do placar do pick'em, este também em scripts/test-major-live.mts):
 // kinds estáveis do share_card, links com atribuição, escolha do texto pronto,
 // dados do card da série e a aba de entrada do desafio da campanha.
 // Roda `tsx --test scripts/test-share-invite.mts`.
@@ -15,9 +16,9 @@ import type { MapResult, SeriesResult } from '../src/types.ts';
 
 const CODE = 'ab12.0123456789abcdefghijklmnopqrstu'; // formato do encodePicks (o conteúdo não importa aqui)
 
-test('kinds: os 6 são estáveis, únicos, kebab-case e cabem nos 40 chars do share_card', () => {
+test('kinds: os 8 são estáveis, únicos, kebab-case e cabem nos 40 chars do share_card', () => {
   const all = INVITE_MOMENTS.flatMap((m) => INVITE_ACTIONS.map((a) => inviteKind(m, a)));
-  assert.deepEqual(all, ['pickem-desafio', 'pickem-card', 'serie-desafio', 'serie-card', 'campanha-desafio', 'campanha-card']);
+  assert.deepEqual(all, ['pickem-desafio', 'pickem-card', 'serie-desafio', 'serie-card', 'campanha-desafio', 'campanha-card', 'placar-desafio', 'placar-card']);
   assert.equal(new Set(all).size, all.length);
   for (const k of all) {
     assert.match(k, /^[a-z0-9-]+$/);
