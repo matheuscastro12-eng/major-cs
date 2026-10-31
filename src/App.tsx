@@ -1243,7 +1243,13 @@ export default function App() {
           account={account}
           onBack={() => setScreen('home')}
           onEdit={() => setScreen('setup')}
-          onUpgrade={() => { setCheckoutSrc('profile'); goToCheckout(); }}
+          /* funil: dado real (90d) — 15 sids únicos viram o paywall_view 'profile'
+             e NENHUM converteu em checkout_open. goToCheckout manda pra Landing
+             com o modal em modo CADASTRO sempre, mesmo pra quem já tem conta
+             grátis logada aqui — o mesmo buraco já corrigido no home-pill/
+             acct-chip (cai num formulário de "criar conta" com o e-mail que já
+             existe). Quem já tem conta pula direto pro pagamento. */
+          onUpgrade={() => { setCheckoutSrc('profile'); if (account) startCheckout(); else goToCheckout(); }}
           onManageSaves={account?.paid ? () => setScreen('careerSaves') : undefined}
           onAccountDeleted={() => {
             logout();
