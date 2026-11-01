@@ -8,6 +8,7 @@
 // Modo Major (titleOdds(D, 1000), seed 1) e o teste recalcula e compara: quem
 // atualizar o JSON (lista oficial em 02/11) vê o teste apontar os números novos.
 import { majorPromoOn } from './majorWindow';
+import type { PickemStanding } from '../state/homeNext';
 
 // 00:00 de Brasília (UTC-3) de cada data do JSON (event.start / playoffsStart / end)
 export const MAJOR_SG_START_MS = Date.UTC(2026, 10, 24, 3, 0, 0);    // 24/11/2026
@@ -46,6 +47,19 @@ export function majorPhase(nowMs: number): MajorPhase {
   if (nowMs < MAJOR_SG_PLAYOFFS_MS) return { kind: 'stages' };
   if (majorPromoOn(nowMs)) return { kind: 'playoffs' };
   return { kind: 'over' };
+}
+
+// ── CTA do Major no ao vivo ────────────────────────────────────────────────
+// Antes da trava do Stage 1 (23/11, 13h de Brasília) o CTA é o pick'em. Depois,
+// "Ver meu placar" pra quem tem palpite no navegador que conta (ou ainda pode
+// contar: falta fechar uma parte que não travou) e "Jogar o Major com um time"
+// pra quem chegou depois: palpite novo não pontua mais (state/homeNext.ts →
+// pickemStanding). A landing nunca promete ponto pra palpite feito agora.
+export type LandingMajorCta = 'pickem' | 'placar' | 'jogar';
+
+export function landingMajorCta(standing: PickemStanding): LandingMajorCta {
+  if (standing === 'open') return 'pickem';
+  return standing === 'out' ? 'jogar' : 'placar';
 }
 
 // ── portas ("Em 1 minuto") e modos (seção compacta) ─────────────────────────

@@ -25,13 +25,7 @@ import { cloudSlot, getActiveSlot, slotKey } from './careerSaves';
 import { captureError } from './errlog';
 import { writeWithQuotaRescue } from './storageQuota';
 import { registerSaveRetry, reportLocalSave } from './saveHealth';
-import {
-  migrateSave,
-  saveVersion,
-  stampVersion,
-  SAVE_VERSION,
-  type VersionedSave,
-} from './saveMigrations';
+import { saveVersion, stampVersion, SAVE_VERSION, type VersionedSave } from './saveVersion';
 
 // Tipagem genérica do save (CareerSave ainda vive em CareerScreen.tsx). Quando
 // T1.4 mover o tipo pra `src/types/career.ts`, trocar `VersionedSave` por `CareerSave`.
@@ -50,6 +44,15 @@ const identityHydrator: Hydrator = (s) => s;
 // Último hidratador recebido no loadFromSlot: o reload "por fora" (nuvem, outra
 // aba) precisa hidratar do mesmo jeito que a tela hidratou.
 let lastHydrator: Hydrator = identityHydrator;
+
+// A cadeia de migrations (saveMigrations.ts) importa os motores da Carreira
+// inteiros e não entra na carga inicial: o App só usa o epoch e o reload. Quem
+// carrega o save (o CareerScreen, lazy) instala a cadeia ao importar o módulo.
+type Migrator = (raw: VersionedSave) => VersionedSave;
+let migrateFn: Migrator | null = null;
+export function installSaveMigrations(fn: Migrator): void {
+  migrateFn = fn;
+}
 
 interface GameStoreState {
   // null = nada carregado ainda (boot / sem save no slot). Diferente de
@@ -210,7 +213,12 @@ export const useGame = create<GameStoreState>((set, get) => ({
       return null;
     }
 
-    const migrated = migrateSave(parsed);
+    // save antigo sem a cadeia instalada: falha alto em vez de hidratar (e
+    // regravar) um save no formato velho
+    if (saveVersion(parsed) < SAVE_VERSION && !migrateFn) {
+      throw new Error('gameStore: installSaveMigrations() não foi chamado antes do loadFromSlot');
+    }
+    const migrated = migrateFn ? migrateFn(parsed) : parsed;
     const hydrated = hydrator(migrated);
 
     // se a migração mudou o save (v antigo → v atual), persiste já no formato novo

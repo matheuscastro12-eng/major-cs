@@ -9,7 +9,7 @@
 // quebra um save existente.
 //
 // Como adicionar uma migration nova (passo a passo):
-//   1. SAVE_VERSION += 1
+//   1. SAVE_VERSION += 1 (em saveVersion.ts)
 //   2. MIGRATIONS[N] = (save) => ({ ...save, /* derivações */, _v: N+1 })
 //   3. Comentar a migration na linha explicando O QUÊ e PORQUÊ
 //   4. Testar abrindo um save criado N versões atrás → todas rodam em cascata
@@ -21,16 +21,12 @@ import { migrateCareerAttrs } from './careerAttrsMigration';
 import { migrateGestao } from '../engine/gestao/gestaoMigration';
 import { migrateClube } from '../engine/clube/clubeMigration';
 import { migrateMundo } from '../engine/mundo/mundoMigration';
+import { SAVE_VERSION, saveVersion, type VersionedSave } from './saveVersion';
 
-export const SAVE_VERSION = 30;
-
-// Save é tipado como objeto genérico aqui pra evitar dependência circular com
-// CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
-// pra `src/types/career.ts` (T1.4), trocar `VersionedSave` pelo tipo real.
-export interface VersionedSave {
-  _v?: number;
-  [key: string]: unknown;
-}
+// SAVE_VERSION, saveVersion e stampVersion vivem em saveVersion.ts (sem
+// dependências): o gameStore usa no boot sem puxar estas migrations, que
+// importam os motores da Carreira inteiros.
+export { SAVE_VERSION, saveVersion, stampVersion, type VersionedSave } from './saveVersion';
 
 type Migration = (save: VersionedSave) => VersionedSave;
 
@@ -279,11 +275,6 @@ const MIGRATIONS: Record<number, Migration> = {
   29: (save) => ({ ...migrateMundo(save), _v: 30 }),
 };
 
-// Versão atual de um save. Save legado (sem `_v`) é tratado como v1.
-export function saveVersion(save: VersionedSave): number {
-  return typeof save._v === 'number' && save._v > 0 ? save._v : 1;
-}
-
 // Aplica migrations em cadeia até SAVE_VERSION. Idempotente: já-migrado vira no-op.
 // Fail-safe contra migration que esquece de bumpar `_v` (força bump pra não loop).
 export function migrateSave(raw: VersionedSave): VersionedSave {
@@ -323,15 +314,4 @@ export function readAndMigrate<T = VersionedSave>(
   } catch {
     return null;
   }
-}
-
-// Marca um save em memória como já-versionado (usado por quem cria save NOVO via
-// emptySave/setup — o save nasce no SAVE_VERSION atual, não precisa migrar).
-export function stampVersion<T extends VersionedSave>(save: T): T {
-  // BUG FIX (caça-bugs): usar >= em vez de ===. Um save de versão FUTURA (ex.:
-  // sincronizado de um device com client mais novo) não pode ter o _v rebaixado
-  // — senão, ao voltar pro client novo, migrateSave re-roda migrations já
-  // aplicadas sobre dados no shape novo (dupla aplicação / corrupção).
-  if (saveVersion(save) >= SAVE_VERSION) return save;
-  return { ...save, _v: SAVE_VERSION };
 }

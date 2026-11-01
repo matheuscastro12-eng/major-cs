@@ -12,6 +12,7 @@ import { titleOdds, type MajorData } from '../src/engine/majorSingapore.ts';
 import { MAJOR_FAVORITES } from '../src/data/majorLanding.ts';
 import { LANDING, OG_IMAGE, SITE_URL, type SeoPage } from '../src/seo/content.ts';
 import { MAJOR_FAV_COUNT, MAJOR_SIM_RUNS } from '../src/seo/major.ts';
+import { MAJOR_SG_TITLE_ODDS_RUNS } from '../src/data/majorSgOdds.ts';
 import { buildSeoPages } from '../src/seo/pages.ts';
 import { absUrl, esc, renderPage, sitemapXml, templateImage } from '../src/seo/render.ts';
 import { APP_SHELL, prerender, rewriteFiles } from './prerender.mts';
@@ -133,7 +134,10 @@ test('Major: os 32 times do JSON, por stage, com a nota de lista provisória', (
 
 test('Major: favoritos = o painel do jogo (titleOdds(D, 1000), seed 1), ditos como simulação', () => {
   const screen = read('src/components/major/MajorSingaporeScreen.tsx');
-  assert.ok(screen.includes(`titleOdds(D, ${MAJOR_SIM_RUNS})`), 'o painel do Modo Major usa o mesmo número de simulações');
+  // o painel usa a tabela pré-calculada (data/majorSgOdds.ts, conferida contra
+  // titleOdds no test-major-odds) com o mesmo número de simulações
+  assert.ok(screen.includes('MAJOR_SG_TITLE_ODDS'), 'o painel do Modo Major usa a tabela de odds pré-calculada');
+  assert.equal(MAJOR_SG_TITLE_ODDS_RUNS, MAJOR_SIM_RUNS, 'o painel do Modo Major usa o mesmo número de simulações');
   const odds = titleOdds(D, MAJOR_SIM_RUNS);
   const top = [...D.teams].sort((a, b) => (odds.get(b.id) ?? 0) - (odds.get(a.id) ?? 0)).slice(0, MAJOR_FAV_COUNT);
   const h = rootHtml(html(page('/major-singapore')));

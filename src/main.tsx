@@ -1,3 +1,5 @@
+// só em dev: ?agora= adianta o relógio (state/devClock.ts); 1º import, antes de qualquer módulo ler Date.now
+import './state/devClock'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

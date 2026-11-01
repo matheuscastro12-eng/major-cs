@@ -31,6 +31,35 @@ export function cspReportToError(body: Record<string, unknown>): CspError | null
   };
 }
 
+// Relatórios do corpo cru: o formato do report-uri ({ "csp-report": {...} },
+// application/csp-report) e o da Reporting API (lista de { type:
+// 'csp-violation', body: {...} }, application/reports+json), convertido pro
+// primeiro. Corpo inválido ou sem relatório devolve [].
+export function cspReportsFromRaw(raw: string): CspError[] {
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { return []; }
+  const items = Array.isArray(parsed) ? parsed.slice(0, 20) : [parsed];
+  const out: CspError[] = [];
+  for (const it of items) {
+    if (!it || typeof it !== 'object') continue;
+    const o = it as Record<string, unknown>;
+    if (o['csp-report']) {
+      const r = cspReportToError(o);
+      if (r) out.push(r);
+      continue;
+    }
+    const b = o.body;
+    if (o.type !== 'csp-violation' || !b || typeof b !== 'object') continue;
+    const v = b as Record<string, unknown>;
+    const r = cspReportToError({ 'csp-report': {
+      'document-uri': v.documentURL, 'effective-directive': v.effectiveDirective, 'blocked-uri': v.blockedURL,
+      'source-file': v.sourceFile, 'line-number': v.lineNumber, 'script-sample': v.sample,
+    } });
+    if (r) out.push(r);
+  }
+  return out;
+}
+
 const CSP_DEDUPE_MS = 6 * 60 * 60_000;
 const CSP_DEDUPE_MAX = 500;
 const seen = new Map<string, number>();

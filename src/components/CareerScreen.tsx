@@ -159,9 +159,9 @@ import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
 import { getManager } from '../state/manager';
 import { getActiveSlot } from '../state/careerSaves';
-import { useGame, type Hydrator } from '../state/gameStore';
+import { useGame, installSaveMigrations, type Hydrator } from '../state/gameStore';
 import { compactCareerSave } from '../state/careerSaveCompact';
-import type { VersionedSave } from '../state/saveMigrations';
+import { migrateSave, type VersionedSave } from '../state/saveMigrations';
 import {
   FILL_ROLES, REGION_CC, prospectIdentity, backfillPlayers, baseAge, playerPhase, regenYouth, aiClock, regenPotOvr, extraClock,
   currentFreeAgents, BASE_PLAYER_IDS, buildAiWorld, applyMoves, nextAiDrift, agedFreeAgents, aiAgeOf, baseOvrOf, aiPotentialOvr, type PlayerPhase,
@@ -190,6 +190,9 @@ import {
   type CareerGamePlan,
 } from '../engine/career/equilibrio';
 import { setStyle, styleOf, STYLE_SHORT } from '../engine/gestao/estilo';
+// o gameStore nasce sem a cadeia de migrations (fora da carga inicial): esta
+// tela é quem carrega o save, então instala antes do primeiro loadFromSlot
+installSaveMigrations(migrateSave);
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // PLANO DE JOGO: atalho da decisão pré-partida. [integração] Sem bônus de força:

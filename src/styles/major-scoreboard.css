@@ -1,7 +1,8 @@
 /* PLACAR DO PICK'EM (src/components/major/MajorScoreboard.tsx), dentro do
    Modo Major (major.css). Tokens de tokens.css; acerto em --c-win e erro em
    --c-loss (significado fixo de resultado). Linhas separadas por divisória,
-   sem card dentro de card. Nada anima. */
+   sem card dentro de card. Nada anima aqui (o convite do recap, ShareInvite,
+   tem a entrada própria em share-invite.css, desligada com movimento reduzido). */
 
 .msg-pc { display: flex; flex-direction: column; gap: var(--sp-4); }
 .msg-pc__text { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-4); line-height: var(--lh-body); text-wrap: pretty; }
@@ -69,3 +70,6 @@
   .msg-pc__src { margin-left: auto; }
   .msg-pc__ext .msg-pc__marks { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* "veja seus pontos" (Início/landing) rola até o placar: não esconder atrás da barra do topo */
+.msg-pc-panel { scroll-margin-top: calc(var(--gs-top-h, var(--shell-top)) + var(--sp-4)); }

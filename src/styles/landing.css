@@ -381,6 +381,8 @@
   text-transform: uppercase;
   clip-path: polygon(0 0, 100% 0, calc(100% - var(--notch)) 100%, 0 100%);
 }
+/* AO VIVO · Stage N: a faixa vermelha de transmissão (par testado em test-design-tokens) */
+.lp-desk__chip[data-live] { background: var(--c-live-fill); color: var(--c-on-strong); }
 .lp-desk__event {
   font-family: var(--font-display);
   font-size: var(--fs-6);

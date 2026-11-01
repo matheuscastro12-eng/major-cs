@@ -1,7 +1,8 @@
 // Início (Portal) — a porta de entrada do Road to Major no shell universal.
 // Uma ação principal no topo (PRÓXIMA AÇÃO, regra pura em state/homeNext.ts,
 // a mesma do CONTINUAR da topbar), o bloco do PGL Major (contagem até 24/11,
-// AO VIVO de 24/11 a 13/12, some depois), os modos numa grade compacta com o
+// AO VIVO de 24/11 a 13/12 com o Stage do dia e o aviso "saiu o resultado"
+// de data/majorLive.ts, some depois), os modos numa grade compacta com o
 // tempo de cada um, a conta, a última novidade e o apoio, nessa ordem. No
 // celular a sidebar fica atrás do Menu: esta tela é o que o jogador vê.
 //
@@ -27,7 +28,9 @@ import { ct } from '../state/career-i18n';
 import { readSlot, getActiveSlot } from '../state/careerSaves';
 import { PATCHES } from '../data/patchNotes';
 import { majorClock, majorPromoOn, type MajorClock } from '../data/majorWindow';
-import { nextAction, readMajorLocal, type HomeAction, type MajorRunBrief, type PickemProgress } from '../state/homeNext';
+import { LIVE_LOCKS, latestResult, livePublished, liveStage, requestPlacarFocus, type LatestResult, type LiveStage } from '../data/majorLive';
+import { nextAction, pickemStanding, readMajorLocal, type HomeAction, type MajorRunBrief, type PickemProgress } from '../state/homeNext';
+import type { MajorTab } from './major/majorTabs';
 import { openPatchNotes } from './PatchNotesModal';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
@@ -51,8 +54,8 @@ interface Props {
   onRoadToPro?: () => void;
   /** Abre o DIÁRIO (minigames diários — grátis, sem conta) */
   onDaily?: () => void;
-  /** Abre o Modo Major (PGL Major Singapore); o card só aparece na janela do evento */
-  onMajor?: () => void;
+  /** Abre o Modo Major (PGL Major Singapore), numa aba se pedir; o card só aparece na janela do evento */
+  onMajor?: (tab?: MajorTab) => void;
   /** Road to Pro sem vitalícia = demo (card continua visível, com atalho de compra) */
   premiumLocked?: boolean;
   /** Trava o card do Ultimate. Ultimate abriu pra todos → passado como false. */
@@ -101,6 +104,8 @@ function useNow(active: boolean): number {
 }
 
 const majorPhaseLabel = (r: MajorRunBrief) => (r.phase === 4 ? 'Playoffs' : `Stage ${r.phase}`);
+/** a parte com resultado novo, curta: "Stage 1", "Quartas", "Semis", "Final" */
+const resultName = (r: LatestResult) => (r.kind === 'stage' ? `Stage ${r.n}` : r.kind === 'qf' ? ct('Quartas') : r.kind === 'sf' ? ct('Semis') : ct('Final'));
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -173,7 +178,12 @@ export function Home(props: Props) {
   const rtp = useMemo(() => rtpBrief(), []);
   // pick'em e campanha do Modo Major, lidos crus do navegador (sem o JSON dos 32 times)
   const majorLocal = useMemo(() => readMajorLocal(), []);
+  // resultado oficial já publicado (JSON do repo; em dev, ?placar=demoN)
+  const published = useMemo(() => livePublished(), []);
   const now = useNow(view === 'menu');
+  // o onMajor do App aceita a aba: nunca repassar o evento do clique
+  const openMajor = () => onMajor?.();
+  const openPlacar = () => { requestPlacarFocus(); onMajor?.('pickem'); };
 
   const start = () => onStart(mode, name.trim() || 'DREAM FIVE', pool, difficulty);
 
@@ -248,12 +258,17 @@ export function Home(props: Props) {
   const majorWindow = majorPromoOn(now);
   const clock = majorClock(now);
   const { pickem, run } = majorLocal;
+  // depois da trava do Stage 1: o palpite ainda conta? e já saiu resultado?
+  const standing = pickemStanding(majorLocal.parts, majorLocal.snaps, LIVE_LOCKS, now);
+  const latest = latestResult(published);
   const plan = nextAction({
     majorRun: run,
     draftRun: savedCampaign ?? null,
     streak: { atRisk: dStreak.atRisk, current: dStreak.current },
     majorWindow,
     pickem,
+    standing,
+    resultOut: latest !== null,
     daily: { done: dayStatus.done, total: dailyTotal },
     can: { major: !!onMajor, resume: !!onResume, daily: !!onDaily, career: !!onCareer },
   });
@@ -268,7 +283,7 @@ export function Home(props: Props) {
         return {
           icon: Award, kicker: ct('Modo Major · sua campanha'), title: ct('Continuar o Major'),
           detail: r.wins + r.losses > 0 ? `${majorPhaseLabel(r)} · ${r.wins}–${r.losses} ${ct('em séries')}. ${ct('A próxima série está esperando o seu time.')}` : ct('Time escolhido. A 1ª série está esperando o seu time.'),
-          cta: ct('Continuar'), short: ct('Continuar o Major'), sub, verb: ct('Continuar'), shellDetail: `${ct('Modo Major')} · ${sub}`, onGo: onMajor!,
+          cta: ct('Continuar'), short: ct('Continuar o Major'), sub, verb: ct('Continuar'), shellDetail: `${ct('Modo Major')} · ${sub}`, onGo: openMajor,
         };
       }
       case 'draft-run': {
@@ -294,7 +309,18 @@ export function Home(props: Props) {
             ? `${pickem.steps} ${ct('de')} ${pickem.total} ${ct('etapas feitas. Falta fechar o resto até o campeão.')}`
             : ct("Escolha quem avança em cada Stage e monte a chave até o campeão. Grátis, sem conta."),
           cta: ct("Fazer meu pick'em"), short: ct("Fazer meu pick'em"), sub: `${pickem.steps}/${pickem.total} ${ct('etapas')}`,
-          verb: ct('Jogar'), shellDetail: ct("Pick'em do Major"), onGo: onMajor!,
+          verb: ct('Jogar'), shellDetail: ct("Pick'em do Major"), onGo: openMajor,
+        };
+      case 'placar':
+        // depois da trava do Stage 1, com palpite que conta (pickemStanding 'in')
+        return {
+          icon: Award, kicker: 'PGL Major Singapore', title: ct('Conferir meu placar'),
+          detail: latest
+            ? ct('O resultado oficial entrou no placar: veja quantos pontos o seu palpite fez.')
+            : ct('Seu palpite está valendo: os pontos entram quando sair o resultado oficial de cada Stage.'),
+          cta: ct('Conferir meu placar'), short: ct('Conferir meu placar'),
+          sub: latest ? `${resultName(latest)} · ${ct('resultado oficial')}` : ct('aguardando o resultado'),
+          verb: ct('Ver'), shellDetail: ct("Placar do pick'em"), onGo: openPlacar,
         };
       case 'daily':
         return {
@@ -399,7 +425,12 @@ export function Home(props: Props) {
         </section>
 
         {/* ── 2. PGL Major Singapore ── */}
-        {showMajor && <MajorBlock clock={clock} pickem={pickem} onMajor={onMajor!} />}
+        {showMajor && (
+          <MajorBlock
+            clock={clock} live={liveStage(now, published)} pickem={pickem}
+            news={standing === 'in' ? latest : null} onMajor={openMajor} onPlacar={openPlacar}
+          />
+        )}
 
         {/* ── 3. modos ── */}
         <section className="home-modes2" aria-labelledby="home-modes-title">
@@ -408,7 +439,7 @@ export function Home(props: Props) {
             {onMajor && majorWindow && (
               <Tile mode="major" icon={Award} title={ct('Modo Major')} time={ct('~1 min')}
                 status={pickem.complete ? ct("pick'em feito") : pickem.steps > 0 ? `pick'em ${pickem.steps}/${pickem.total}` : ct('grátis')}
-                onGo={onMajor} />
+                onGo={openMajor} />
             )}
             {onDaily && (
               <Tile mode="diario" icon={CalendarDays} title={ct('Diário')} time={ct('2 min')}
@@ -518,8 +549,30 @@ export function Home(props: Props) {
   );
 }
 
-/** PGL Major Singapore: contagem até 24/11, AO VIVO até 13/12 (depois o bloco nem renderiza) */
-function MajorBlock({ clock, pickem, onMajor }: { clock: MajorClock; pickem: PickemProgress; onMajor: () => void }) {
+/** título do AO VIVO: o Stage do dia pelas travas do pick'em (data/majorLive.ts) */
+function liveTitle(s: LiveStage): string {
+  if (s.kind === 'stage') return ct('Stage {n} hoje').replace('{n}', String(s.n));
+  if (s.kind === 'gap') return ct('Playoffs em 10/12');
+  if (s.kind === 'final') return ct('Hoje é a final');
+  return ct('Playoffs');
+}
+
+/** o aviso que leva ao placar quando sai resultado oficial */
+function newsLine(r: LatestResult): string {
+  if (r.kind === 'stage') return ct('Saiu o resultado do Stage {n}: veja seus pontos').replace('{n}', String(r.n));
+  if (r.kind === 'qf') return ct('Saiu o resultado das quartas: veja seus pontos');
+  if (r.kind === 'sf') return ct('Saiu o resultado das semis: veja seus pontos');
+  return ct('Saiu o resultado da final: veja seus pontos');
+}
+
+/**
+ * PGL Major Singapore: contagem até 24/11, AO VIVO até 13/12 (depois o bloco
+ * nem renderiza). No ao vivo o título é o Stage do dia; com resultado oficial
+ * publicado e palpite que conta (`news`), um aviso leva direto ao placar.
+ */
+function MajorBlock({ clock, live: today, pickem, news, onMajor, onPlacar }: {
+  clock: MajorClock; live: LiveStage; pickem: PickemProgress; news: LatestResult | null; onMajor: () => void; onPlacar: () => void;
+}) {
   if (clock.phase === 'after') return null;
   const live = clock.phase === 'live';
   return (
@@ -543,12 +596,17 @@ function MajorBlock({ clock, pickem, onMajor }: { clock: MajorClock; pickem: Pic
         </>
       ) : (
         <>
-          <h2 id="home-major-title" className="home-major__title">
-            {clock.finalDay ? ct('Hoje é a final') : clock.playoffs ? ct('Playoffs') : ct('Fase suíça')}
-          </h2>
+          <h2 id="home-major-title" className="home-major__title">{liveTitle(today)}</h2>
           <p className="home-major__day"><b>{ct('Dia')} {clock.day}</b> {ct('de')} {clock.of}</p>
           <p className="home-major__meta">{clock.playoffs ? ct('Singapura · final em 13/12') : ct('Singapura · playoffs de 10 a 13/12')}</p>
         </>
+      )}
+      {news && (
+        <button type="button" className="home-major__news" onClick={onPlacar}>
+          <Trophy size={16} aria-hidden className="home-major__news-ic" />
+          <span className="home-major__news-txt">{newsLine(news)}</span>
+          <ChevronRight size={16} aria-hidden className="home-major__news-go" />
+        </button>
       )}
       <ProgressBar
         className="home-major__pick" value={pickem.steps} max={pickem.total} label={ct("Seu pick'em")}
