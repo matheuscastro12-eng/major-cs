@@ -1,0 +1,789 @@
+{
+ "event": {
+  "name": "PGL Major Singapore 2026",
+  "city": "Singapura",
+  "start": "2026-11-24",
+  "end": "2026-12-13",
+  "playoffsStart": "2026-12-10",
+  "listDate": "2026-11-02",
+  "status": "oficial",
+  "updatedAt": "2026-11-02",
+  "sources": [
+   "https://www.hltv.org/news/45879/pgl-major-singapore-invites-set",
+   "https://www.hotspawn.com/counter-strike/news/pgl-major-singapore-2026-invites-set",
+   "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/standings_global_2026_10_05.md",
+   "https://cs2major.com/"
+  ],
+  "note": "OFICIAL (02/11/2026): os 32 convidados e o Stage de cada um vêm do anúncio de 02/11 (HLTV e Hotspawn, que batem). A ordem dos seeds DENTRO de cada Stage segue a VRS global oficial da Valve de 05/10/2026 (rankRef), a mais recente publicada no repositório da Valve; a de 02/11 ainda não saiu lá — quando sair, reordenar os seeds de cada Stage por ela. Elencos (roster) = VRS da Valve de 05/10 (rosterSource = página do time). rating dos times novos = 19,884 × média de mira/consistência/clutch dos 5 melhores do bo3-2026.json + 4,989 × teamwork − 479,9 (regressão nos 31 times da projeção, erro médio 0,3); os que já estavam mantêm o rating."
+ },
+ "teams": [
+  {
+   "id": "team-spirit",
+   "name": "Team Spirit",
+   "tag": "TS",
+   "country": "ru",
+   "seed": 1,
+   "rating": 1683,
+   "colors": [
+    "#4d511f",
+    "#93e25a"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 1,
+   "bo3Id": "bo3_team_654",
+   "roster": [
+    "donk",
+    "magixx",
+    "sh1ro",
+    "tN1R",
+    "zont1x"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0001--spirit--donk-magixx-sh1ro-tn1r-zont1x.md"
+  },
+  {
+   "id": "legacy",
+   "name": "Legacy",
+   "tag": "LGC",
+   "country": "br",
+   "seed": 2,
+   "rating": 1580,
+   "colors": [
+    "#514f1f",
+    "#a5e25a"
+   ],
+   "confirmed": true,
+   "region": "am",
+   "rankRef": 2,
+   "bo3Id": "bo3_team_8118",
+   "roster": [
+    "arT",
+    "dumau",
+    "latto",
+    "n1ssim",
+    "try"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0002--legacy--art-dumau-latto-n1ssim-try.md"
+  },
+  {
+   "id": "team-vitality",
+   "name": "Team Vitality",
+   "tag": "VIT",
+   "country": "fr",
+   "seed": 3,
+   "rating": 1700,
+   "colors": [
+    "#1f5135",
+    "#5ae2d9"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 3,
+   "bo3Id": "bo3_team_667",
+   "roster": [
+    "apEX",
+    "flameZ",
+    "mezii",
+    "ropz",
+    "ZywOo"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0003--vitality--apex-flamez-mezii-ropz-zywoo.md"
+  },
+  {
+   "id": "mouz",
+   "name": "MOUZ",
+   "tag": "MOUZ",
+   "country": "de",
+   "seed": 4,
+   "rating": 1596,
+   "colors": [
+    "#1f5139",
+    "#5ae0e2"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 4,
+   "bo3Id": "bo3_team_765",
+   "roster": [
+    "PR",
+    "Spinx",
+    "torzsi",
+    "xelex",
+    "xertioN"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0004--mouz--pr-spinx-torzsi-xelex-xertion.md"
+  },
+  {
+   "id": "team-falcons",
+   "name": "Team Falcons",
+   "tag": "FLC",
+   "country": "sa",
+   "seed": 5,
+   "rating": 1665,
+   "colors": [
+    "#51491f",
+    "#b5e25a"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 6,
+   "bo3Id": "bo3_team_2713",
+   "roster": [
+    "karrigan",
+    "kyousuke",
+    "m0NESY",
+    "NiKo",
+    "TeSeS"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0006--falcons--karrigan-kyousuke-m0nesy-niko-teses.md"
+  },
+  {
+   "id": "furia",
+   "name": "FURIA",
+   "tag": "FURIA",
+   "country": "br",
+   "seed": 6,
+   "rating": 1650,
+   "colors": [
+    "#511f45",
+    "#e25a7c"
+   ],
+   "confirmed": true,
+   "region": "am",
+   "rankRef": 7,
+   "bo3Id": "bo3_team_648",
+   "roster": [
+    "FalleN",
+    "KSCERATO",
+    "molodoy",
+    "YEKINDAR",
+    "yuurih"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0007--furia--fallen-kscerato-molodoy-yekindar-yuurih.md"
+  },
+  {
+   "id": "aurora-gaming",
+   "name": "Aurora Gaming",
+   "tag": "AUR",
+   "country": "ru",
+   "seed": 7,
+   "rating": 1574,
+   "colors": [
+    "#471f51",
+    "#e25ab9"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 9,
+   "bo3Id": "bo3_team_3598",
+   "roster": [
+    "Jimpphat",
+    "kyxsan",
+    "Wicadia",
+    "woxic",
+    "XANTARES"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0009--aurora--jimpphat-kyxsan-wicadia-woxic-xantares.md"
+  },
+  {
+   "id": "betboom",
+   "name": "BetBoom",
+   "tag": "BB",
+   "country": "ru",
+   "seed": 8,
+   "rating": 1535,
+   "colors": [
+    "#1f513d",
+    "#5ad4e2"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 11,
+   "bo3Id": "bo3_team_7498",
+   "roster": [
+    "Boombl4",
+    "d1Ledez",
+    "Magnojez",
+    "S1ren",
+    "zorte"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0011--betboom--boombl4-d1ledez-magnojez-s1ren-zorte.md"
+  },
+  {
+   "id": "g2-esports",
+   "name": "G2 Esports",
+   "tag": "G2",
+   "country": "de",
+   "seed": 9,
+   "rating": 1559,
+   "colors": [
+    "#37511f",
+    "#5ae25d"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 5,
+   "bo3Id": "bo3_team_793",
+   "roster": [
+    "HeavyGod",
+    "huNter-",
+    "MATYS",
+    "NertZ",
+    "r1nkle"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0005--g2--heavygod-hunter--matys-nertz-r1nkle.md"
+  },
+  {
+   "id": "fut-esports",
+   "name": "FUT Esports",
+   "tag": "FUT",
+   "country": "tr",
+   "seed": 10,
+   "rating": 1543,
+   "colors": [
+    "#1f5137",
+    "#5ae2e0"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 8,
+   "bo3Id": "bo3_team_20832",
+   "roster": [
+    "cmtry",
+    "dem0n",
+    "dziugss",
+    "Krabeni",
+    "xfl0ud"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0008--fut--cmtry-dem0n-dziugss-krabeni-xfl0ud.md"
+  },
+  {
+   "id": "astralis",
+   "name": "Astralis",
+   "tag": "AST",
+   "country": "dk",
+   "seed": 11,
+   "rating": 1500,
+   "colors": [
+    "#231f51",
+    "#a95ae2"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 10,
+   "bo3Id": "bo3_team_794",
+   "roster": [
+    "HooXi",
+    "jabbi",
+    "phzy",
+    "ryu",
+    "Staehr"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0010--astralis--hooxi-jabbi-phzy-ryu-staehr.md"
+  },
+  {
+   "id": "mibr",
+   "name": "MIBR",
+   "tag": "MIBR",
+   "country": "br",
+   "seed": 12,
+   "rating": 1518,
+   "colors": [
+    "#361f51",
+    "#dd5ae2"
+   ],
+   "confirmed": true,
+   "region": "am",
+   "rankRef": 12,
+   "bo3Id": "bo3_team_755",
+   "roster": [
+    "insani",
+    "LNZ",
+    "nqz",
+    "tomaszin",
+    "venomzera"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0012--mibr--insani-lnz-nqz-tomaszin-venomzera.md"
+  },
+  {
+   "id": "nemiga",
+   "name": "Nemiga",
+   "tag": "NEMI",
+   "country": "by",
+   "seed": 13,
+   "rating": 1456,
+   "colors": [
+    "#514b1f",
+    "#aee25a"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 14,
+   "bo3Id": "bo3_team_655",
+   "roster": [
+    "KaiR0N-",
+    "khaN",
+    "robo",
+    "syph0",
+    "Xant3r"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0014--nemiga--kair0n--khan-robo-syph0-xant3r.md"
+  },
+  {
+   "id": "natus-vincere",
+   "name": "Natus Vincere",
+   "tag": "NAVI",
+   "country": "ua",
+   "seed": 14,
+   "rating": 1599,
+   "colors": [
+    "#2d511f",
+    "#5ae278"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 34,
+   "bo3Id": "bo3_team_787",
+   "roster": [
+    "Aleksib",
+    "b1t",
+    "iM",
+    "makazze",
+    "w0nderful"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0034--natus_vincere--aleksib-b1t-im-makazze-w0nderful.md"
+  },
+  {
+   "id": "1win",
+   "name": "1win",
+   "tag": "1WIN",
+   "country": "ru",
+   "seed": 15,
+   "rating": 1466,
+   "colors": [
+    "#511f3e",
+    "#e25a6a"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 38,
+   "bo3Id": "bo3_team_238",
+   "roster": [
+    "ArtFr0st",
+    "Ax1Le",
+    "BELCHONOKK",
+    "fame",
+    "nafany"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0038--1win--artfr0st-ax1le-belchonokk-fame-nafany.md"
+  },
+  {
+   "id": "the-mongolz",
+   "name": "The MongolZ",
+   "tag": "MGLZ",
+   "country": "mn",
+   "seed": 16,
+   "rating": 1555,
+   "colors": [
+    "#1f5151",
+    "#5aa0e2"
+   ],
+   "confirmed": true,
+   "region": "as",
+   "rankRef": 49,
+   "bo3Id": "bo3_team_736",
+   "roster": [
+    "910",
+    "bLitz",
+    "DarkMeister",
+    "Techno",
+    "tikuak"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0049--the_mongolz--910-blitz-darkmeister-techno-tikuak.md"
+  },
+  {
+   "id": "heroic",
+   "name": "HEROIC",
+   "tag": "HERO",
+   "country": "dk",
+   "seed": 17,
+   "rating": 1470,
+   "colors": [
+    "#1f514b",
+    "#5ab0e2"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 15,
+   "bo3Id": "bo3_team_759",
+   "roster": [
+    "Brollan",
+    "Chr1zN",
+    "MartinezSa",
+    "nilo",
+    "susp"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0015--heroic--brollan-chr1zn-martinezsa-nilo-susp.md"
+  },
+  {
+   "id": "9z",
+   "name": "9z",
+   "tag": "9Z",
+   "country": "ar",
+   "seed": 18,
+   "rating": 1559,
+   "colors": [
+    "#39511f",
+    "#5de25a"
+   ],
+   "confirmed": true,
+   "region": "am",
+   "rankRef": 17,
+   "bo3Id": "bo3_team_324",
+   "roster": [
+    "dgt",
+    "HUASOPEEK",
+    "luchov",
+    "max",
+    "meyern"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0017--9z--dgt-huasopeek-luchov-max-meyern.md"
+  },
+  {
+   "id": "ninjas-in-pyjamas",
+   "name": "Ninjas in Pyjamas",
+   "tag": "NIP",
+   "country": "se",
+   "seed": 19,
+   "rating": 1529,
+   "colors": [
+    "#511f31",
+    "#e26f5a"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 18,
+   "bo3Id": "bo3_team_785",
+   "roster": [
+    "adamb",
+    "Krimbo",
+    "sjuush",
+    "stavn",
+    "xKacpersky"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0018--ninjas_in_pyjamas--adamb-krimbo-sjuush-stavn-xkacpersky.md"
+  },
+  {
+   "id": "team-liquid",
+   "name": "Team Liquid",
+   "tag": "TL",
+   "country": "us",
+   "seed": 20,
+   "rating": 1511,
+   "colors": [
+    "#511f44",
+    "#e25a7a"
+   ],
+   "confirmed": true,
+   "region": "am",
+   "rankRef": 19,
+   "bo3Id": "bo3_team_790",
+   "roster": [
+    "EliGE",
+    "Jorko",
+    "JT",
+    "malbsMd",
+    "NAF"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0019--liquid--elige-jorko-jt-malbsmd-naf.md"
+  },
+  {
+   "id": "m80",
+   "name": "M80",
+   "tag": "M80",
+   "country": "us",
+   "seed": 21,
+   "rating": 1484,
+   "colors": [
+    "#1f5151",
+    "#5a9ce2"
+   ],
+   "confirmed": true,
+   "region": "am",
+   "rankRef": 22,
+   "bo3Id": "bo3_team_7430",
+   "roster": [
+    "JBa",
+    "Lake",
+    "s1n",
+    "slaxz-",
+    "Swisher"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0022--m80--jba-lake-s1n-slaxz--swisher.md"
+  },
+  {
+   "id": "faze-clan",
+   "name": "FaZe Clan",
+   "tag": "FAZE",
+   "country": "us",
+   "seed": 22,
+   "rating": 1550,
+   "colors": [
+    "#1f2151",
+    "#9a5ae2"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 26,
+   "bo3Id": "bo3_team_791",
+   "roster": [
+    "frozen",
+    "JBOEN",
+    "jcobbb",
+    "Neityu",
+    "Twistzz"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0026--faze--frozen-jboen-jcobbb-neityu-twistzz.md"
+  },
+  {
+   "id": "100-thieves",
+   "name": "100 Thieves",
+   "tag": "100T",
+   "country": "us",
+   "seed": 23,
+   "rating": 1481,
+   "colors": [
+    "#451f51",
+    "#e25ac0"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 28,
+   "bo3Id": "bo3_team_464",
+   "roster": [
+    "device",
+    "Gizmy",
+    "poiii",
+    "rain",
+    "sirah"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0028--100_thieves--device-gizmy-poiii-rain-sirah.md"
+  },
+  {
+   "id": "eternal-fire",
+   "name": "Eternal Fire",
+   "tag": "EF",
+   "country": "tr",
+   "seed": 24,
+   "rating": 1424,
+   "colors": [
+    "#1f4051",
+    "#5a6fe2"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 33,
+   "bo3Id": "bo3_team_1527",
+   "roster": [
+    "jottAAA",
+    "Kvem",
+    "MisteM",
+    "regali",
+    "soulfly"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0033--eternal_fire--jottaaa-kvem-mistem-regali-soulfly.md"
+  },
+  {
+   "id": "parivision",
+   "name": "PARIVISION",
+   "tag": "PRV",
+   "country": "ru",
+   "seed": 25,
+   "rating": 1547,
+   "colors": [
+    "#471f51",
+    "#e25ab9"
+   ],
+   "confirmed": true,
+   "region": "eu",
+   "rankRef": 36,
+   "bo3Id": "bo3_team_8171",
+   "roster": [
+    "FL1T",
+    "Jame",
+    "slaxejezzz",
+    "xiELO",
+    "zweih"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0036--parivision--fl1t-jame-slaxejezzz-xielo-zweih.md"
+  },
+  {
+   "id": "dendele",
+   "name": "DENDELE",
+   "tag": "DEN",
+   "country": "br",
+   "seed": 26,
+   "rating": 1451,
+   "colors": [
+    "#1f2a44",
+    "#f2b632"
+   ],
+   "confirmed": true,
+   "region": "am",
+   "rankRef": 39,
+   "bo3Id": "xls_team_den",
+   "roster": [
+    "doc",
+    "gafolo",
+    "koala",
+    "maxxkor",
+    "rdnzao"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0039--dendele--doc-gafolo-koala-maxxkor-rdnzao.md"
+  },
+  {
+   "id": "bc-game",
+   "name": "BC.Game",
+   "tag": "BC",
+   "country": "eu",
+   "seed": 27,
+   "rating": 1401,
+   "colors": [
+    "#441f2c",
+    "#f27ea9"
+   ],
+   "confirmed": true,
+   "region": "as",
+   "rankRef": 50,
+   "bo3Id": "xls_team_bc",
+   "roster": [
+    "asap",
+    "Magisk",
+    "mzinho",
+    "s1mple",
+    "Senzu"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0050--bc_game--asap-magisk-mzinho-s1mple-senzu.md"
+  },
+  {
+   "id": "imperial",
+   "name": "Imperial",
+   "tag": "IMP",
+   "country": "br",
+   "seed": 28,
+   "rating": 1423,
+   "colors": [
+    "#511f51",
+    "#e25aa0"
+   ],
+   "confirmed": true,
+   "region": "am",
+   "rankRef": 52,
+   "bo3Id": "bo3_team_1430",
+   "roster": [
+    "chelo",
+    "decenty",
+    "noway",
+    "saadzin",
+    "VINI"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0052--imperial--chelo-decenty-noway-saadzin-vini.md"
+  },
+  {
+   "id": "wildcard",
+   "name": "Wildcard",
+   "tag": "WC",
+   "country": "us",
+   "seed": 29,
+   "rating": 1497,
+   "colors": [
+    "#1f4c51",
+    "#5a91e2"
+   ],
+   "confirmed": true,
+   "region": "am",
+   "rankRef": 58,
+   "bo3Id": "bo3_team_6062",
+   "roster": [
+    "Cxzi",
+    "fr3nd",
+    "HexT",
+    "nEMANHA",
+    "reck"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0058--wildcard--cxzi-fr3nd-hext-nemanha-reck.md"
+  },
+  {
+   "id": "lynn-vision",
+   "name": "Lynn Vision",
+   "tag": "LVG",
+   "country": "cn",
+   "seed": 30,
+   "rating": 1513,
+   "colors": [
+    "#511f2a",
+    "#e2815a"
+   ],
+   "confirmed": true,
+   "region": "as",
+   "rankRef": 64,
+   "bo3Id": "bo3_team_476",
+   "roster": [
+    "C4LLM3SU3",
+    "EmiliaQAQ",
+    "Starry",
+    "Westmelon",
+    "z4KR"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0064--lynn_vision--c4llm3su3-emiliaqaq-starry-westmelon-z4kr.md"
+  },
+  {
+   "id": "flyquest",
+   "name": "FlyQuest",
+   "tag": "FLY",
+   "country": "au",
+   "seed": 31,
+   "rating": 1488,
+   "colors": [
+    "#2d511f",
+    "#5ae278"
+   ],
+   "confirmed": true,
+   "region": "as",
+   "rankRef": 86,
+   "bo3Id": "bo3_team_10398",
+   "roster": [
+    "aliStair",
+    "INS",
+    "jks",
+    "nettik",
+    "Vexite"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0086--flyquest--alistair-ins-jks-nettik-vexite.md"
+  },
+  {
+   "id": "chinggis-warriors",
+   "name": "Chinggis Warriors",
+   "tag": "CW",
+   "country": "mn",
+   "seed": 32,
+   "rating": 1331,
+   "colors": [
+    "#1f2851",
+    "#855ae2"
+   ],
+   "confirmed": true,
+   "region": "as",
+   "rankRef": 87,
+   "bo3Id": "bo3_team_9974",
+   "roster": [
+    "cool4st",
+    "fury5k",
+    "ROUX",
+    "sk0R",
+    "yAmi"
+   ],
+   "rosterSource": "https://github.com/ValveSoftware/counter-strike_regional_standings/blob/main/live/2026/details/2026_10_05/0087--chinggis_warriors--cool4st-fury5k-roux-sk0r-yami.md"
+  }
+ ]
+}

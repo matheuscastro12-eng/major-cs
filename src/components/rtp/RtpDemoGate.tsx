@@ -22,6 +22,7 @@ import { FounderCounter } from '../FounderCounter';
 import { RtpCliffOfferCard } from './RtpDemoCliff';
 import { goUpgradeFromCliff, useNow } from './demoCliffUi';
 import { RtpFrame } from './RtpFrame';
+import { priceLabel, usePrice } from '../../state/price';
 
 export { DEMO_WEEKS }; // semanas jogáveis na demo (a trava fecha na 4ª) — vive no engine (demoCliff.ts)
 
@@ -33,6 +34,7 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate }: {
   onBack?: () => void;
   onUpdate?: (next: RoadToProSave) => void;   // grava openedAt/expiração do cliffhanger
 }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const now = useNow();
   const cliff = activeDemoCliff(save, now);
   // 1x por montagem: telemetria da trava + relógio do cliffhanger (ou expiração).
@@ -133,7 +135,7 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate }: {
         <FounderCounter style={{ marginBottom: '2px' }} />
 
         <button type="button" className="rtp-cta rtp-demogate-cta" onClick={goUpgrade}>
-          {cliff ? ct('GARANTIR A VITALÍCIA E RESPONDER') : ct('GARANTIR A VITALÍCIA')} · R$ 20 <span>{ct('pagamento único, pra sempre')}</span>
+          {cliff ? ct('GARANTIR A VITALÍCIA E RESPONDER') : ct('GARANTIR A VITALÍCIA')} · {priceLabel()} <span>{ct('pagamento único, pra sempre')}</span>
         </button>
         <button type="button" className="rtp-btn-ghost" onClick={onExit}>{ct('Voltar pro menu')}</button>
         <span className="rtp-demogate-keep">💾 {ct('Seu save fica guardado neste navegador — o')} {p.nick} {ct('espera você voltar.')}</span>

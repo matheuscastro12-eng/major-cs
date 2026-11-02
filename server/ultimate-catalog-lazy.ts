@@ -64,3 +64,9 @@ export async function loadQuicksellValuer(now: Date): Promise<UltQuicksellValuer
     return null;
   }
 }
+
+// [CSM-1] catálogo do drop de escolha — null se a cadeia não carregar (503).
+export async function loadDropCatalog(): Promise<import('./ultimate-drops.js').DropCatalog | null> {
+  const mod = await loadPackModule();
+  return mod ? mod.serverDropCatalog() : null;
+}

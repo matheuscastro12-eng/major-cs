@@ -10,7 +10,7 @@
 // carrega ou entrega a partida (boost no skill efetivo na simulação do time).
 
 import type { Rng } from '../rng';
-import { ATTR_LABEL, type AttrKey } from '../attributes';
+import { ATTR_LABEL, type AttrKey } from '../attributes.js';
 import type { Role } from '../../types';
 
 export type MomentStyle = 'aggro' | 'safe' | 'smart';

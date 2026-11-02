@@ -103,9 +103,11 @@ export function packById(id: string): PackDef | undefined {
 function groupByRarity(catalog: UltCard[]): Map<UltRarity, UltCard[]> {
   const m = new Map<UltRarity, UltCard[]>();
   for (const c of catalog) {
-    const arr = m.get(c.rarity);
+    // [CSM-2] versão de evento ocupa a vaga da raridade base que ela substitui
+    const r = c.poolRarity ?? c.rarity;
+    const arr = m.get(r);
     if (arr) arr.push(c);
-    else m.set(c.rarity, [c]);
+    else m.set(r, [c]);
   }
   return m;
 }

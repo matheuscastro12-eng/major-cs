@@ -31,7 +31,7 @@ import type { LogoConfig } from '../lib/logoBuilder';
 import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
 import { monthIndex, promoForMonth, promoThemeById, PROMO_SIZE, type MonthlyPromo } from '../engine/ultimate/promos';
 import { totwForWeek, weekIndex, type WeeklyTotw } from '../engine/ultimate/totw';
-import { weeklyPackPool } from '../engine/ultimate/packPool';
+import { openingPool } from '../engine/ultimate/packPool';
 import { isSeasonPack, SEASON_PACK, stampPackEditions } from '../engine/ultimate/seasonEdition'; // [URG-1]
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
@@ -367,6 +367,7 @@ interface UltimateStore {
   marketCardSold: (listingId: number, credits: number) => boolean;               // venda vista no mktMine: credita proceeds 1×
   marketCardReturned: (listingId: number, cardId: string, cardKey: string) => boolean; // cancelou/expirou: carta volta 1×
   marketBuyApply: (cardId: string, cardKey: string, price: number) => void; // comprou: debita + adiciona
+  serverCardGrant: (cardId: string, cardKey: string) => boolean; // [CSM-1] carta que o SERVIDOR já entregou (drop)
   // Passe de Temporada (fase A — engine/estado; a tela vem na fase B)
   // [O0-46] absorve no save os créditos PAGOS que o servidor já gravou no
   // ledger (coins:<corr> → coins; pass:<season> → premium). Cada voucher 1×
@@ -445,9 +446,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     const rng = makeRng(((seed * 2654435761) >>> 0) || 1);
     // Pacote Promo puxa SÓ as promos do mês corrente (o catálogo guarda as de
     // meses passados pra resolver inventário antigo — não podem sair do pack).
-    const cat = pack.id === PROMO_PACK.id
+    // [CSM-2] openingPool: TOTW semanal + versões de evento (mesma função do servidor)
+    const cat = openingPool(pack.id === PROMO_PACK.id
       ? ultimateCatalog().filter((c) => c.rarity !== 'promo' || ultimatePromo().playerIds.includes(c.playerId))
-      : pack.id === 'totw' ? weeklyPackPool(ultimateCatalog(), new Date()) : ultimateCatalog();
+      : ultimateCatalog(), pack.id, new Date());
     if (!cat) return { ok: false, cards: [], reason: 'unavailable' };
     const cards = rollPack(cat, pack, rng);
     // [URG-1] carimbo de edição: mesmo rng do pack (depois do roll) → reproduzível pelo seed
@@ -1096,6 +1098,16 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // SEM mirror: o 'trade' do servidor já debitou + moveu a carta no ledger.
       return { state: s };
     }),
+  serverCardGrant: (cardId, cardKey) => {
+    // [CSM-1] a cópia entra com o MESMO uuid do servidor; replay não duplica.
+    // SEM mirror: o 'grant' (op_id drop:<id>) já está no ledger.
+    const prev = get().state;
+    if (!cardId || !cardKey || prev.inventory.some((o) => o.id === cardId)) return false;
+    const s = _grantCard(prev, cardKey, 'reward', { id: cardId });
+    persist(s);
+    set({ state: s });
+    return true;
+  },
   absorbPaidVouchers: (vouchers, freshOrderIds = []) => {
     // [O0-46] O servidor JÁ creditou (coinsClaim/passClaim gravam coins:<corr>
     // e pass:<season> no ledger). Aqui só entra no save o que ele ainda não

@@ -70,7 +70,7 @@ export function LiveCanvasGame({
   useEffect(() => {
     // getMask: a sim consulta a cada tick. Walkable mask carrega async no
     // LiveMinimap; enquanto null, agents andam em linha reta (fallback).
-    // Quando carrega, agents passam a respeitar paredes do radar PNG.
+    // Quando carrega, agents passam a respeitar as paredes da planta do radar.
     const radarUrl = geometryFor(mapResult.map).radarImage;
     const getMask = radarUrl ? () => getMaskSync(radarUrl) : undefined;
     simRef.current = createLiveCanvasSim({ mapResult, teams, userIdx, getMask });
