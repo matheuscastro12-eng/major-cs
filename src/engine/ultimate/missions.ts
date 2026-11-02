@@ -2,7 +2,7 @@
 // (mesmo padrão seeded do bazar). Progresso = contadores do perfil MENOS o
 // baseline capturado na abertura do dia (profile.missions.base). Puro.
 // Sorteio/hash/progresso vivem no núcleo compartilhado (missionCore.ts).
-import { drawMissions, goalProgress } from './missionCore';
+import { drawMissions, goalProgress } from './missionCore.js';
 
 export type MissionMetric = 'winsToday' | 'matchesToday' | 'packsToday' | 'sbcToday';
 

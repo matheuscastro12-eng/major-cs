@@ -4,7 +4,7 @@
 // store, que tem catálogo). Progresso = contadores do perfil MENOS o baseline
 // capturado na abertura da semana (profile.weekly.base). Puro.
 // Sorteio/hash/progresso vivem no núcleo compartilhado (missionCore.ts).
-import { drawMissions, goalProgress } from './missionCore';
+import { drawMissions, goalProgress } from './missionCore.js';
 import type { UltimateProfile } from './state';
 
 export type WeeklyMetric = 'winsWeek' | 'matchesWeek' | 'packsWeek' | 'sbcWeek' | 'bazaarWeek';

@@ -2,7 +2,7 @@
 // (missions.ts) e as semanais (weeklyMissions.ts): hash estável de uma chave
 // string (dateKey/weekKey) → seed, sorteio de N metas do pool sem reposição e
 // checagem de progresso contra a meta. Puro.
-import { makeRng } from '../rng';
+import { makeRng } from '../rng.js';
 
 // hash simples e estável da chave do período → seed do sorteio.
 export function seedHash(key: string): number {

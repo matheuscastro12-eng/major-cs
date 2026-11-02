@@ -37,6 +37,8 @@ import { dropOpen, dropPick, dropStatus, sqlDropStore, ultDropSchemaQueries } fr
 import { readCardStats } from '../server/ultimate-card-stats.js'; // [CSM-3]
 import { importLocalCollection } from '../server/ultimate-import.js';
 import { claimObjectiveServer, healSbcCards, submitSbcServer, type RewardDeps } from '../server/ultimate-rewards.js'; // [UT-REW]
+import { activeLiveops, type LiveopsSbcPayload } from '../server/liveops.js';
+import type { SbcDef } from '../src/engine/ultimate/sbc.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -115,7 +117,7 @@ export default async function handler(
   // [O0-02] carteira congelada pelo admin (varredura do ledger): mercado e
   // packs pausados até a contestação. 423 + mensagem padrão pro jogador.
   const frozenReply = () => res.status(423).json({ error: 'wallet_frozen', message: ultFrozenMessage(clean(process.env.SUPPORT_EMAIL)) });
-  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen' || action === 'ultImport' || action === 'sbcSubmit' || action === 'objectiveClaim' || action === 'ultHeal' || action === 'dropOpen' || action === 'dropPick';
+  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen' || action === 'ultImport' || action === 'sbcSubmit' || action === 'objectiveClaim' || action === 'ultHeal' || action === 'rewardClaim' || action === 'dropOpen' || action === 'dropPick';
   const frozen = action === 'state' || guardedAction ? await isUltWalletFrozen(sql, email) : false;
   if (frozen && guardedAction) { frozenReply(); return; }
 
@@ -145,6 +147,28 @@ export default async function handler(
     return;
   }
 
+  // [UT-REW2] fase 2: prêmios que nasciam só no aparelho (ver server/ultimate-claims.ts)
+  if (action === 'rewardClaim') {
+    const packMod = await loadPackModule();
+    if (!packMod) { res.status(503).json({ error: 'catalog_unavailable' }); return; }
+    const now = new Date();
+    const prevMonth = new Date(now.getTime() - 31 * 86400_000);
+    const promoCost = await activeLiveops(sql, now)
+      .then((rows) => { const lo = rows.find((r) => r.kind === 'promo'); const c = lo ? Number((lo.payload as { packCost?: unknown }).packCost) : NaN; return Number.isSafeInteger(c) && c > 0 ? c : null; })
+      .catch(() => null);
+    // cadeia do engine (missões/passe/temporada) carregada LAZY: se não subir no runtime, 503 → o cliente guarda na fila
+    const claimsMod = await import('../server/ultimate-claims.js').catch(() => null);
+    if (!claimsMod) { res.status(503).json({ error: 'catalog_unavailable' }); return; }
+    const r = await claimsMod.claimRewardServer(sql, email, body.claim, {
+      now, promoCost,
+      lookup: (key) => packMod.serverCardByKeyAnyMonth(key) ?? null,
+      catalogs: [packMod.buildServerCatalog(now), packMod.buildServerCatalog(prevMonth)],
+    });
+    if (!r.ok) { res.status(r.error === 'op_conflict' || r.error === 'insufficient_credits' ? 409 : r.error === 'rate_limited' ? 409 : 400).json({ error: r.error }); return; }
+    res.status(200).json(r);
+    return;
+  }
+
   // [UT-REW] prêmios de carta autoritativos + cura da ranqueada
   if (action === 'sbcSubmit' || action === 'objectiveClaim' || action === 'ultHeal') {
     const packMod = await loadPackModule();
@@ -153,6 +177,13 @@ export default async function handler(
     const deps: RewardDeps = {
       lookup: (key) => packMod.serverCardByKeyAnyMonth(key) ?? null,
       pool: (rarity) => packMod.buildServerCatalog(now).filter((c) => c.rarity === rarity),
+      // [UT-REW2] SBC agendada: def do item 'sbc' ATIVO no rtm_liveops (mesma forma do cliente)
+      liveSbc: async (sbcId) => {
+        const it = (await activeLiveops(sql, now).catch(() => [])).find((x) => x.kind === 'sbc' && `lo-${x.id}` === sbcId);
+        if (!it) return undefined;
+        const pl = it.payload as LiveopsSbcPayload;
+        return { id: sbcId, name: pl.name, desc: pl.desc, req: pl.req, reward: pl.reward } as SbcDef;
+      },
     };
     if (action === 'sbcSubmit') {
       const r = await submitSbcServer(sql, email, { opId: body.op_id ?? body.opId, sbcId: body.sbcId, cardIds: body.cardIds }, deps);
