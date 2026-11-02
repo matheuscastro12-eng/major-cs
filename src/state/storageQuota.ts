@@ -44,7 +44,15 @@ function disposableKeys(exceptKey: string): string[] {
   } catch {
     return [];
   }
-  return [...corrupt, ...otherBak, ...ownBak];
+  // [SAVE-QUOTA] cache da base de times: refeito do build no próximo load —
+  // descartável ANTES de qualquer backup (salvo base do admin com edição suja).
+  const cache: string[] = [];
+  try {
+    if (localStorage.getItem(DATASET_DIRTY_KEY) !== '1') {
+      for (const k of DATASET_CACHE_KEYS) if (k !== exceptKey && localStorage.getItem(k) != null) cache.push(k);
+    }
+  } catch { /* segue sem o cache */ }
+  return [...corrupt, ...cache, ...otherBak, ...ownBak];
 }
 
 export interface QuotaWriteResult {

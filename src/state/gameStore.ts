@@ -26,6 +26,16 @@ import { captureError } from './errlog';
 import { writeWithQuotaRescue } from './storageQuota';
 import { registerSaveRetry, reportLocalSave } from './saveHealth';
 import { saveVersion, stampVersion, SAVE_VERSION, type VersionedSave } from './saveVersion';
+import { compactCareerSave } from './careerSaveCompact';
+
+// [SAVE-QUOTA] o que vai pro DISCO (e pra nuvem) é sempre a versão enxuta: o
+// killFeed de cada mapa (~75% do peso) só é lido ao vivo. Antes só o setSave do
+// CareerScreen compactava — update()/persistNow()/re-persist gravavam o feed e
+// saves de 2 MB estouravam a cota (o erro nº 1 do client_errors). A memória
+// segue intacta (a tela da partida recém-jogada ainda lê o feed).
+export function serializeForDisk(s: VersionedSave): string {
+  return JSON.stringify(compactCareerSave(s as unknown as Record<string, unknown>));
+}
 
 // Tipagem genérica do save (CareerSave ainda vive em CareerScreen.tsx). Quando
 // T1.4 mover o tipo pra `src/types/career.ts`, trocar `VersionedSave` por `CareerSave`.
@@ -222,9 +232,12 @@ export const useGame = create<GameStoreState>((set, get) => ({
     const hydrated = hydrator(migrated);
 
     // se a migração mudou o save (v antigo → v atual), persiste já no formato novo
-    if (saveVersion(parsed) < SAVE_VERSION) {
+    // [SAVE-QUOTA] save antigo com killFeed gravado também é regravado enxuto
+    // (migração silenciosa: só remove o feed; nada de progresso muda).
+    const disk = serializeForDisk(hydrated as VersionedSave);
+    if (saveVersion(parsed) < SAVE_VERSION || disk.length < raw.length) {
       try {
-        writeRawSlot(slot, JSON.stringify(hydrated));
+        writeRawSlot(slot, disk);
       } catch {
         /* re-persist post-migrate é best-effort */
       }
@@ -241,7 +254,7 @@ export const useGame = create<GameStoreState>((set, get) => ({
       return;
     }
     const stamped = stampVersion(s);
-    const res = writeRawSlot(slot, JSON.stringify(stamped));
+    const res = writeRawSlot(slot, serializeForDisk(stamped));
     set({
       save: stamped,
       loadedSlot: slot,
@@ -256,7 +269,7 @@ export const useGame = create<GameStoreState>((set, get) => ({
     const next = { ...cur, ...delta } as GameSave;
     const stamped = stampVersion(next);
     const slot = get().loadedSlot >= 1 ? get().loadedSlot : getActiveSlot();
-    const res = writeRawSlot(slot, JSON.stringify(stamped));
+    const res = writeRawSlot(slot, serializeForDisk(stamped));
     set({
       save: stamped,
       lastPersistError: res.ok ? null : (res.error ?? 'persist failed'),
@@ -274,7 +287,7 @@ export const useGame = create<GameStoreState>((set, get) => ({
     if (!cur) return;
     const slot = get().loadedSlot >= 1 ? get().loadedSlot : getActiveSlot();
     const stamped = stampVersion(cur);
-    const res = writeRawSlot(slot, JSON.stringify(stamped));
+    const res = writeRawSlot(slot, serializeForDisk(stamped));
     set({
       save: stamped,
       lastPersistError: res.ok ? null : (res.error ?? 'persist failed'),
@@ -304,7 +317,7 @@ if (typeof window !== 'undefined') {
     if (slot < 1 || e.key !== slotKey(slot)) return;
     // mesma coisa que já está na memória (migração re-gravada, save idêntico):
     // não remonta a tela à toa no meio de uma partida.
-    if (save && e.newValue != null && e.newValue === JSON.stringify(save)) return;
+    if (save && e.newValue != null && (e.newValue === JSON.stringify(save) || e.newValue === serializeForDisk(save))) return;
     useGame.getState().reloadFromDisk();
   });
 }
