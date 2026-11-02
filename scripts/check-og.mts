@@ -1,7 +1,11 @@
-// Confere as meta tags de compartilhamento no HTML do BUILD (dist/index.html).
+// Confere as meta tags de compartilhamento da casca do jogo (dist/app.html,
+// rotas /jogar, /carreira, /jogo/...). As páginas públicas (/, /major-singapore,
+// /ultimate...) ganham OG/Twitter próprios do prerender de SEO (src/seo/render.ts
+// headTags), que reaproveita o og:image absoluto do index.html — por isso a capa
+// nova vale para elas também.
 // Uso: npm run build && npm run check:og [caminho-do-html]
 import { readFileSync, statSync } from 'node:fs';
-const file = process.argv[2] ?? 'dist/index.html';
+const file = process.argv[2] ?? 'dist/app.html';
 const html = readFileSync(file, 'utf8');
 const meta = {};
 for (const m of html.matchAll(/<meta\s+([^>]+?)\/?>/g)) {
@@ -23,7 +27,7 @@ if ((one('og:description') ?? '').length > 200) errs.push('og:description > 200 
 // a imagem tem que existir no build, ser PNG/JPG, < 300 KB e 1200x630 de verdade
 const img = one('og:image');
 if (img) {
-  const rel = new URL(img).pathname; const path = file.replace(/index\.html$/, '') + rel.replace(/^\//, '');
+  const rel = new URL(img).pathname; const path = file.replace(/[^/]+\.html$/, '') + rel.replace(/^\//, '');
   try {
     const buf = readFileSync(path); const kb = statSync(path).size / 1024;
     if (kb >= 300) errs.push(`imagem com ${kb.toFixed(0)} KB (>= 300)`);
