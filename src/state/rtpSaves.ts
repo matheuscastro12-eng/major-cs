@@ -7,7 +7,8 @@
 // RTP1: 1 slot local pra todo mundo (sem paywall). Cloud sync se logado.
 
 import { getToken } from './account';
-import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave, cloudOnLocalSave, syncSlot, localSavedAt, markSavedAt } from './cloud';
+import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave, cloudOnLocalSave, syncSlot, localSavedAt, markSavedAt, writeCloudRestore, setCloudHold, type SyncResult } from './cloud';
+import { clearCloudBlock } from './saveHealth';
 import { captureError } from './errlog';
 import { writeWithQuotaRescue } from './storageQuota';
 import { RTP_SAVE_VERSION, ACTIONS_PER_WEEK, rebuildRealWorld, STARTER_SETUP, STARTER_LIFESTYLE } from '../engine/rtp/createSave';
@@ -16,16 +17,19 @@ import { buildCircuit, computeObjective } from '../engine/rtp/circuit';
 import { computeWorldRank } from '../engine/rtp/standing';
 import { deriveRecords } from '../engine/rtp/records';
 import { ALL_ATTRS } from '../engine/attributes';
+import { heroHidden } from '../engine/rtp/coreStats';
+import { attrsOf, type AttrsSource } from '../engine/attrs/model';
 import type { RoadToProSave, RtpSlotSummary, Tier, CareerLog } from '../engine/rtp/types';
 
-const KEY = 'rtm-rtp-v1';
+export const RTP_KEY = 'rtm-rtp-v1';
+const KEY = RTP_KEY;
 const CLOUD_SLOT = 'rtp';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Migrations (registry próprio do RTP). Mesma política da Carreira: backfill,
 // nunca quebra save antigo. MIGRATIONS[N] leva de vN para vN+1.
 
-type RtpMigration = (save: Record<string, unknown>) => Record<string, unknown>;
+export type RtpMigration = (save: Record<string, unknown>) => Record<string, unknown>;
 
 const RTP_MIGRATIONS: Record<number, RtpMigration> = {
   // v1 → v2 (RTP2 treino): inicializa trainingXp (progresso fracionário por
@@ -176,17 +180,61 @@ const RTP_MIGRATIONS: Record<number, RtpMigration> = {
     lifestyle: save.lifestyle ?? STARTER_LIFESTYLE(),
     _v: 16,
   }),
+  // v16 → v17 (realismo FM, atributos como fonte da verdade): grava os OCULTOS
+  // do protagonista (pressão, temperamento, profissionalismo… — plausíveis pelos
+  // atributos + personalidade) e os `attrs` dos 4 colegas de time (snapshots do
+  // elenco real). Os 28 atributos treinados já eram a verdade do herói; os 5
+  // números dele passam a sair da ponte do contrato (diferença medida < 0,4 OVR).
+  // Idempotente: só preenche o que falta.
+  16: (save) => {
+    const player = save.player as Record<string, unknown> | undefined;
+    const hasAttrs = !!player && !!player.attrs && typeof player.attrs === 'object';
+    const nextPlayer = hasAttrs && !player!.hidden
+      ? { ...player, hidden: heroHidden(player as unknown as Parameters<typeof heroHidden>[0]) }
+      : player;
+    const team = save.team as Record<string, unknown> | undefined;
+    const mates = Array.isArray(team?.teammates) ? (team!.teammates as Record<string, unknown>[]) : null;
+    const nextTeam = mates
+      ? {
+        ...team,
+        teammates: mates.map((m) => (m && typeof m === 'object' && !(m.attrs as { v?: number } | undefined)?.v && typeof m.aim === 'number'
+          ? { ...m, attrs: attrsOf(m as unknown as AttrsSource) }
+          : m)),
+      }
+      : team;
+    return { ...save, player: nextPlayer, team: nextTeam, _v: 17 };
+  },
 };
 
-function migrateRtp(raw: Record<string, unknown>): RoadToProSave {
+// Save gravado por um client MAIS NOVO (ex.: nuvem sincronizada de outro
+// aparelho, aba antiga com bundle em cache). Abre SOMENTE LEITURA: o _v nunca é
+// rebaixado e nada é gravado até a página atualizar — senão o client novo
+// re-rodaria migrações já aplicadas sobre dados no shape novo (várias NÃO são
+// idempotentes: a 2 reconstrói a liga, a 4 o mundo real). Mesma política do
+// stampVersion da Carreira (saveMigrations.ts).
+export function isRtpFromFuture(save: { _v?: unknown } | null | undefined): boolean {
+  return !!save && typeof save._v === 'number' && save._v > RTP_SAVE_VERSION;
+}
+
+// Percorre a cadeia INTEIRA até `target`; uma lacuna no registro é bug de código
+// e LANÇA (antes o laço parava na lacuna e carimbava a versão final mesmo assim,
+// pulando a migração em silêncio). `registry`/`target` parametrizados pros testes.
+export function migrateRtpWith(
+  raw: Record<string, unknown>, registry: Record<number, RtpMigration>, target: number,
+): Record<string, unknown> {
+  const v0 = typeof raw._v === 'number' ? raw._v : 1;
+  if (v0 > target) return raw;                     // futuro: intocado (_v preservado)
   let save = raw;
-  let v = typeof save._v === 'number' ? save._v : 1;
-  while (v < RTP_SAVE_VERSION && RTP_MIGRATIONS[v]) {
-    save = RTP_MIGRATIONS[v](save);
-    v += 1;
+  for (let v = v0; v < target; v++) {
+    const step = registry[v];
+    if (!step) throw new Error(`rtp: migração v${v}→v${v + 1} ausente no registro`);
+    save = step(save);
   }
-  save._v = RTP_SAVE_VERSION;
-  return save as unknown as RoadToProSave;
+  return { ...save, _v: target };
+}
+
+export function migrateRtp(raw: Record<string, unknown>): RoadToProSave {
+  return migrateRtpWith(raw, RTP_MIGRATIONS, RTP_SAVE_VERSION) as unknown as RoadToProSave;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,6 +266,12 @@ export function loadRtp(): RoadToProSave | null {
 // Devolve false quando o localStorage recusou a escrita (quota/indisponível) —
 // o consumidor avisa o jogador em vez de perder a sessão em silêncio.
 export function saveRtp(save: RoadToProSave): boolean {
+  // SOMENTE LEITURA: save de versão futura não é regravado (nem local nem nuvem)
+  // — a UI avisa pra atualizar a página (isRtpFromFuture).
+  if (isRtpFromFuture(save)) {
+    captureError(new Error(`rtp: save v${(save as { _v?: number })._v} > v${RTP_SAVE_VERSION} — gravação bloqueada`), 'rtp-future-version');
+    return false;
+  }
   const stamped: RoadToProSave = {
     ...save,
     _v: RTP_SAVE_VERSION,
@@ -230,6 +284,9 @@ export function saveRtp(save: RoadToProSave): boolean {
   const w = writeWithQuotaRescue(KEY, data);
   if (!w.ok) {
     captureError(w.error ?? new Error('quota'), 'rtp-persist');
+    // [O0-26] falhou o LOCAL: o pagante ainda fica protegido pela nuvem (o
+    // hub mostra o saveError). Antes o return vinha antes do push.
+    if (getToken()) cloudOnLocalSave(CLOUD_SLOT, KEY, () => data);
     return false;
   }
   if (w.rescued) captureError(new Error(`quota rescue: ${w.freed} artefato(s) descartado(s) pra salvar ${KEY}`), 'rtp-quota-rescue');
@@ -254,10 +311,25 @@ export function deleteRtp(): void {
     localStorage.removeItem(KEY + '.corrupt');
     localStorage.removeItem(KEY + '.cloudts');
   } catch { /* sem storage */ }
+  setCloudHold(KEY, null);
+  clearCloudBlock(CLOUD_SLOT);
   if (getToken()) {
     cancelCloudSave(CLOUD_SLOT);
     void pushCloud(CLOUD_SLOT, '', Date.now()); // tombstone
   }
+}
+
+// [O0-12] "Recomeçar o Road to Pro" pela tela de erro: tira o save DESTE
+// aparelho (o principal vai pra `.corrupt`) sem lápide na nuvem. A trava
+// 'reset' impede o sync de trazer de volta o save que quebrou; o primeiro save
+// novo (peneira) destrava e é ele que substitui a cópia da nuvem.
+export function resetRtpLocal(): void {
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(KEY); } catch { /* sem storage */ }
+  if (raw) { try { localStorage.setItem(KEY + '.corrupt', raw); } catch { /* sem espaço pro diagnóstico */ } }
+  for (const k of [KEY, KEY + '.bak']) { try { localStorage.removeItem(k); } catch { /* sem storage */ } }
+  cancelCloudSave(CLOUD_SLOT);
+  setCloudHold(KEY, 'reset');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -265,7 +337,7 @@ export function deleteRtp(): void {
 // re-sobe ou apaga por tombstone — igual à carreira). 'restored'/'deleted'
 // pedem re-render do consumidor.
 
-export async function syncRtpFromCloud(): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
+export async function syncRtpFromCloud(): Promise<SyncResult> {
   if (!cloudEnabled()) return 'none';
   // Legado: saves gravados antes do `.cloudts` não têm timestamp local — o
   // last-write-wins escolheria às cegas. Desempata por progresso (temporada/
@@ -277,11 +349,9 @@ export async function syncRtpFromCloud(): Promise<'restored' | 'pushed' | 'none'
       try {
         const cloudSave = migrateRtp(JSON.parse(c.data) as Record<string, unknown>);
         const prog = (s: RoadToProSave) => (s.world?.season ?? 0) * 1000 + (s.world?.week ?? 0);
-        if (prog(cloudSave) > prog(local)) {
-          localStorage.setItem(KEY, c.data);
-          markSavedAt(KEY, c.updatedAt);
-          return 'restored';
-        }
+        // [O0-27] restore com resgate de cota: se nem assim couber, trava o
+        // slot ('quota') em vez de seguir no save velho e sobrescrever a nuvem.
+        if (prog(cloudSave) > prog(local)) return writeCloudRestore(CLOUD_SLOT, KEY, c.data, c.updatedAt);
       } catch { /* nuvem ilegível → mantém o local */ }
     }
     // local venceu (ou nuvem vazia): estampa agora pro syncSlot re-subir o local.

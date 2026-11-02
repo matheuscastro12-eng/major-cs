@@ -12,6 +12,9 @@
 //     por seed (split + prospectId), 35% chance pra prospect com OVR >= 72.
 //     Aceitar adiciona caixa + remove prospect. Recusar mantém na Academia.
 
+import { SQUAD_MAX } from '../../engine/clube/vestiario';
+import { academyGrowthMul, projectAcademyOvr } from '../../engine/career/academyGrowth';
+import { FACILITY_MAX_LEVEL } from '../../engine/career/facilities';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashCard } from '../../components/ds';
 import { CareerIcon } from '../../components/career/CareerIcon';
@@ -140,18 +143,17 @@ function prospectOffer(prospectId: string, split: number, ovr: number): Prospect
 }
 
 // ─── Evolução de prospect ────────────────────────────────────────────────────
-// Espelha a lógica de evolveAcademy() em CareerScreen.tsx:
-//   - Roll 0-99 determinístico por (id, split): 35% +3, 40% +2, 25% +1 → média 2.1
-//   - +1 fixo se em foco (academyFocus)
-//   - +trainingLv/3 esperado da facility de treino (0% / 33% / 67% / 100% chance de +1)
-//   - Capped pelo potencial
-// Usado pra mostrar "próx esperado: +X" e "~Y splits até potencial" na UI.
-function expectedEvoPerSplit(focused: boolean, trainingLv: number): number {
-  // média do roll base
-  const base = 0.35 * 3 + 0.40 * 2 + 0.25 * 1; // = 2.1
-  const focusBonus = focused ? 1 : 0;
-  const trainingBonus = trainingLv / 3; // chance de +1 (0..1)
-  return base + focusBonus + trainingBonus;
+// [evolução · curva única] a academia evolui pela MESMA evolveAttrs do elenco
+// (CareerScreen#evolveAcademyEntries). A projeção roda a curva de verdade
+// (determinística) nos próximos splits: OVR médio por split e quando chega
+// perto do potencial. Não conta a formação de jovens da comissão.
+const PROJ_SPLITS = 16;
+function projectAcademy(p: AcademyEntry, focused: boolean, trainingLv: number, split: number): { perSplit: number; splitsToMax: number | null } {
+  const ovr0 = playerOvr(p);
+  if (ovr0 >= p.potential - 1) return { perSplit: 0, splitsToMax: 0 };
+  const o = projectAcademyOvr(p, split, PROJ_SPLITS, academyGrowthMul(trainingLv), focused);
+  const i = o.findIndex((v) => v >= p.potential - 1);
+  return { perSplit: Math.max(0, (o[3] - ovr0) / 4), splitsToMax: i < 0 ? null : i + 1 };
 }
 
 // ─── Simulação ao vivo de match academy (RNG não-determinístico) ─────────────
@@ -195,7 +197,6 @@ export function AcademyTab({
       window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'academy-rename', force: true } }));
       return;
     }
-    // eslint-disable-next-line no-alert
     const next = window.prompt(ct('Novo nick (max 12 chars):'), currentNick)?.trim();
     if (!next || next === currentNick) return;
     const nick = next.slice(0, 12);
@@ -207,7 +208,7 @@ export function AcademyTab({
     update({ academy, academyTeam, ...(youth ? { youth } : {}) });
   };
   const full = aca.length >= ACADEMY_MAX;
-  const squadFull = save.squad.length >= 5;
+  const squadFull = save.squad.length >= SQUAD_MAX; // [fase 3] elenco de até 7 (5 + banco)
   // Nível atual da facility de treino (0-3) — influencia evolução esperada.
   const trainingLv = Math.max(0, Math.min(3, Math.floor(save.facilities?.training ?? 0)));
   const acaTeam = save.academyTeam ?? [];
@@ -313,6 +314,9 @@ export function AcademyTab({
   // ─── FULL MATCH: veto + MatchScreen real ───────────────────────────────────
   // stage 'veto' → 'match' → null. Quando termina, persiste override do match.
   const [fullStage, setFullStage] = useState<null | 'veto' | 'match'>(null);
+  // a série já foi decidida (o MatchScreen mostra o resultado e espera o Continuar):
+  // o cabeçalho deixa de dizer "Partida ao vivo"
+  const [fullDecided, setFullDecided] = useState(false);
   const [fullCtx, setFullCtx] = useState<null | {
     oppId: string;
     teams: [TTeam, TTeam];
@@ -350,6 +354,7 @@ export function AcademyTab({
   const onVetoDone = (maps: { map: MapId; pickedBy: 0 | 1 | -1 }[]) => {
     if (!fullCtx) return;
     setFullCtx({ ...fullCtx, maps });
+    setFullDecided(false);
     setFullStage('match');
   };
 
@@ -412,7 +417,8 @@ export function AcademyTab({
       : slot === 'semi1' ? next.semis[1]
       : next.final;
     if (!m) return;
-    m.result = autoPlayoffResult(m.a, m.b);
+    // rng semeado pelo save + confronto: o placar do auto-sim é reproduzível
+    m.result = autoPlayoffResult(m.a, m.b, makeRng(hashStr(`acapo:${save.org?.tag ?? 'org'}:${po.split}:${slot}:${m.a.id}:${m.b.id}`)));
     if (slot === 'final' && next.final?.result) {
       next.champion = next.final.result.winnerId === next.final.a.id ? next.final.a : next.final.b;
     }
@@ -630,7 +636,7 @@ export function AcademyTab({
                       >
                         ✏️
                       </span>
-                      <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>{ovr}</b>
+                      <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>{ovr}</b>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', color: 'var(--em-muted)' }}>
                       <span className={`role-pill ${p.role}`}>{p.role}</span>
@@ -771,7 +777,7 @@ export function AcademyTab({
                 </button>
               </span>
             ) : (
-              <span style={{ fontSize: '0.72rem', color: '#5ed88a', fontWeight: 700 }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--c-win)', fontWeight: 700 }}>
                 ✓ {ct('Todos jogados')}
               </span>
             )
@@ -803,7 +809,7 @@ export function AcademyTab({
                           borderTop: '1px solid var(--em-border)',
                         }}
                       >
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace', color: i === 0 ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>{i + 1}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)', color: i === 0 ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>{i + 1}</td>
                         <td style={{ ...td, textAlign: 'left' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                             {r.isUser ? (
@@ -828,12 +834,12 @@ export function AcademyTab({
                             </span>
                           </span>
                         </td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{r.w}</td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{r.l}</td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace', color: r.diff > 0 ? '#5ed88a' : r.diff < 0 ? '#e58a8a' : 'var(--em-muted)' }}>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)' }}>{r.w}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)' }}>{r.l}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)', color: r.diff > 0 ? 'var(--c-win)' : r.diff < 0 ? 'var(--c-loss)' : 'var(--em-muted)' }}>
                           {r.diff > 0 ? '+' : ''}{r.diff}
                         </td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace', fontWeight: 800 }}>{r.pts}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)', fontWeight: 800 }}>{r.pts}</td>
                       </tr>
                     );
                   })}
@@ -859,7 +865,7 @@ export function AcademyTab({
                       gap: 8,
                       padding: '7px 10px',
                       background: 'var(--em-panel-2)',
-                      border: `1px solid ${m.won ? 'rgba(94,216,138,0.4)' : 'rgba(229,138,138,0.35)'}`,
+                      border: `1px solid ${m.won ? 'color-mix(in srgb, var(--c-win) 40%, transparent)' : 'color-mix(in srgb, var(--c-loss) 35%, transparent)'}`,
                       borderLeftWidth: 3,
                       borderRadius: 4,
                     }}
@@ -880,7 +886,7 @@ export function AcademyTab({
                         ▸
                       </span>
                     )}
-                    <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: m.won ? '#5ed88a' : '#e58a8a' }}>
+                    <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.86rem', fontWeight: 800, color: m.won ? 'var(--c-win)' : 'var(--c-loss)' }}>
                       {m.userScore}–{m.oppScore}
                     </span>
                   </div>
@@ -995,8 +1001,9 @@ export function AcademyTab({
               const potPct = Math.max(6, Math.min(100, ((p.potential - 60) / 33) * 100));
               const offer = offersByProspect.get(p.id);
               const atMax = ovr >= p.potential;
-              const expEvo = atMax ? 0 : expectedEvoPerSplit(focused, trainingLv);
-              const splitsToMax = atMax ? 0 : Math.ceil((p.potential - ovr) / Math.max(0.1, expEvo));
+              const proj = atMax ? { perSplit: 0, splitsToMax: 0 } : projectAcademy(p, focused, trainingLv, save.split);
+              const expEvo = proj.perSplit;
+              const splitsToMax = proj.splitsToMax ?? PROJ_SPLITS + 1;
               return (
                 <div
                   key={p.id}
@@ -1089,21 +1096,21 @@ export function AcademyTab({
                         alignItems: 'center',
                         gap: 6,
                         padding: '5px 8px',
-                        background: focused ? 'rgba(94,216,138,0.10)' : 'rgba(255,255,255,0.03)',
-                        border: `1px solid ${focused ? 'rgba(94,216,138,0.35)' : 'var(--em-border)'}`,
+                        background: focused ? 'color-mix(in srgb, var(--c-win) 10%, transparent)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${focused ? 'color-mix(in srgb, var(--c-win) 35%, transparent)' : 'var(--em-border)'}`,
                         borderRadius: 3,
                         fontSize: '0.68rem',
                       }}
-                      title={`${ct('Base 2.1 + foco')} ${focused ? '+1' : '+0'} + ${ct('treino')} +${(trainingLv / 3).toFixed(2)} = +${expEvo.toFixed(1)} ${ct('por split (média)')}`}
+                      title={`${ct('Projeção da curva de evolução (próximos 4 splits)')}: +${expEvo.toFixed(1)} ${ct('por split (média)')}`}
                     >
                       <span style={{ color: 'var(--em-muted)' }}>
                         {ct('Próx split')}
                       </span>
-                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, color: focused ? '#5ed88a' : 'var(--em-text)' }}>
+                      <span style={{ fontFamily: 'var(--font-num)', fontWeight: 800, color: focused ? 'var(--c-win)' : 'var(--em-text)' }}>
                         +{expEvo.toFixed(1)} OVR
                       </span>
                       <span style={{ color: 'var(--em-muted)' }}>
-                        ~{splitsToMax}s {ct('p/ pot')}
+                        {splitsToMax > PROJ_SPLITS ? `${PROJ_SPLITS}+s` : `~${splitsToMax}s`} {ct('p/ pot')}
                       </span>
                     </div>
                   )}
@@ -1129,7 +1136,7 @@ export function AcademyTab({
                         <span style={{ color: 'var(--em-muted)', fontWeight: 600 }}>{ct('quer comprar')}</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '0.86rem' }}>
+                        <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)', fontSize: '0.86rem' }}>
                           {formatMoney(offer.fee)}
                         </b>
                         <button
@@ -1365,7 +1372,7 @@ export function AcademyTab({
           >
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
               <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
-                {fullStage === 'veto' ? ct('Veto de mapas') : ct('Partida ao vivo')}
+                {fullStage === 'veto' ? ct('Veto de mapas') : fullDecided ? ct('Série encerrada') : ct('Partida ao vivo')}
               </span>
               <b style={{ fontSize: '0.92rem', color: 'var(--em-text)' }}>{fullCtx.phaseLabel}</b>
             </div>
@@ -1408,6 +1415,7 @@ export function AcademyTab({
                 phaseLabel={fullCtx.phaseLabel}
                 bestOf={3}
                 onFinish={onFullMatchFinish}
+                onDecided={() => setFullDecided(true)}
               />
             )}
           </div>
@@ -1465,7 +1473,7 @@ function PlayoffCard({
                 {po.champion.name}
               </b>
               {po.champion.isUser && (
-                <span style={{ fontSize: '0.7rem', color: '#5ed88a', fontWeight: 800, letterSpacing: '0.5px' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--c-win)', fontWeight: 800, letterSpacing: '0.5px' }}>
                   ★ {ct('Você venceu o split!')}
                 </span>
               )}
@@ -1587,7 +1595,7 @@ function PlayoffMatchRow({
 }
 
 function PlayoffSide({ seed, winner, score }: { seed: AcademyPlayoffSeed; winner: boolean; score?: number }) {
-  const accent = winner ? '#5ed88a' : seed.isUser ? '#e8c170' : 'var(--em-text)';
+  const accent = winner ? 'var(--c-win)' : seed.isUser ? '#e8c170' : 'var(--em-text)';
   const club = ACADEMY_CLUBS.find((c) => c.id === seed.id);
   const parentLogo = club ? academyParentLogoUrl(club) : undefined;
   return (
@@ -1608,7 +1616,7 @@ function PlayoffSide({ seed, winner, score }: { seed: AcademyPlayoffSeed; winner
         {seed.name}
       </span>
       {typeof score === 'number' && (
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', color: accent, fontWeight: 800 }}>
+        <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.86rem', color: accent, fontWeight: 800 }}>
           {score}
         </b>
       )}
@@ -1620,7 +1628,7 @@ function PlayoffSide({ seed, winner, score }: { seed: AcademyPlayoffSeed; winner
 function HudPill({ label, value, tone }: { label: string; value: string; tone: 'gold' | 'green' | 'neutral' }) {
   const colors: Record<typeof tone, { fg: string; bg: string; border: string }> = {
     gold:    { fg: '#e8c170', bg: 'rgba(232,193,112,0.14)', border: 'rgba(232,193,112,0.45)' },
-    green:   { fg: '#5ed88a', bg: 'rgba(94,216,138,0.12)',  border: 'rgba(94,216,138,0.4)' },
+    green:   { fg: 'var(--c-win)', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];
@@ -1640,7 +1648,7 @@ function HudPill({ label, value, tone }: { label: string; value: string; tone: '
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <b style={{ color: c.fg, fontSize: '0.84rem', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace' }}>
+      <b style={{ color: c.fg, fontSize: '0.84rem', fontWeight: 800, fontFamily: 'var(--font-num)' }}>
         {value}
       </b>
     </div>
@@ -1653,9 +1661,8 @@ const td: React.CSSProperties = { padding: '8px', textAlign: 'center' };
 // Banner explicativo no DashCard Academia — explica como a evolução funciona.
 // Mostra o que cada bônus contribui em OVR/split, e o estado atual da facility.
 function EvoExplainer({ trainingLv }: { trainingLv: number }) {
-  const trainingBonus = (trainingLv / 3).toFixed(2);
-  const base = 2.1;
-  const focusedMax = base + 1 + trainingLv / 3;
+  const trainingPct = Math.round(35 * (trainingLv / FACILITY_MAX_LEVEL));
+  const baseMul = academyGrowthMul(0).toFixed(1);
   return (
     <div
       style={{
@@ -1677,29 +1684,27 @@ function EvoExplainer({ trainingLv }: { trainingLv: number }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
         <EvoLine
           icon="📊"
-          label={ct('Base por split')}
-          value={`+${base.toFixed(1)} OVR`}
-          hint={ct('média (35% +3, 40% +2, 25% +1)')}
+          label={ct('Treino de base intenso')}
+          value={`×${baseMul}`}
+          hint={ct('reflexo e mecânica crescem cedo; leitura de jogo até os 25')}
         />
         <EvoLine
           icon="★"
           label={ct('Em foco (★)')}
-          value="+1 OVR"
+          value="+35%"
           hint={ct('1 prospect por vez')}
-          accent="#5ed88a"
+          accent="var(--c-win)"
         />
         <EvoLine
           icon="🏋️"
           label={`${ct('Centro de treino')} nv ${trainingLv}`}
-          value={trainingLv === 0 ? '+0.00' : `+${trainingBonus} OVR`}
-          hint={trainingLv === 0
-            ? ct('Invista pra acelerar tudo')
-            : trainingLv === 3 ? ct('MAX — sempre +1') : `${Math.round((trainingLv / 3) * 100)}% ${ct('chance de +1')}`}
+          value={`+${trainingPct}%`}
+          hint={trainingLv === 0 ? ct('Invista pra acelerar tudo') : ct('no crescimento de todos')}
           accent={trainingLv > 0 ? '#e8c170' : undefined}
         />
       </div>
       <div style={{ fontSize: '0.7rem', color: 'var(--em-muted)', borderTop: '1px solid rgba(95,164,232,0.18)', paddingTop: 6, marginTop: 2 }}>
-        <b style={{ color: 'var(--em-text)' }}>{ct('Máximo possível')}</b>: {ct('foco + treino max')} = <b style={{ color: '#5ed88a' }}>+{focusedMax.toFixed(1)} OVR/split</b> · {ct('cresce até o')} <b style={{ color: 'var(--em-gold)' }}>{ct('potencial')}</b> {ct('individual e para.')} {ct('Envelhecem 1 ano a cada 3 splits.')}
+        {ct('Desaceleram perto do')} <b style={{ color: 'var(--em-gold)' }}>{ct('potencial')}</b> {ct('e não passam dele.')} {ct('Promovidos, voltam à curva normal do elenco.')} {ct('Envelhecem 1 ano por temporada (4 splits).')}
       </div>
     </div>
   );
@@ -1713,7 +1718,7 @@ function EvoLine({ icon, label, value, hint, accent }: { icon: string; label: st
         <span style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
           {label}
         </span>
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.84rem', color: accent ?? 'var(--em-text)', fontWeight: 800 }}>
+        <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.84rem', color: accent ?? 'var(--em-text)', fontWeight: 800 }}>
           {value}
         </b>
         {hint && (

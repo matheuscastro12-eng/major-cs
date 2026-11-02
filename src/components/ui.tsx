@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { MAP_IMAGES, photoForNick } from '../data/media';
+import { MAP_IMAGES, isLiquipediaLogo, photoForNick } from '../data/media';
 import { loadMapImages } from '../state/crm';
 import { hashStr } from '../state/hash';
 import { MAP_LABELS, type MapId, type TTeam } from '../types';
+import { readableInk } from '../state/contrast';
 
 // ─── T7.1: paleta procedural pro fallback de avatar ────────────────────────
 // Players têm 8 paletas dark/saturated rotacionadas por hash(nick); coaches
@@ -13,7 +14,7 @@ const PLAYER_PALETTES: { from: string; to: string; fg: string; accent: string }[
   { from: '#3d1e5f', to: '#1d0d2e', fg: '#b389e8', accent: '#9b6fe8' }, // roxo claro
   { from: '#5f1e3a', to: '#2e0d1b', fg: '#e89bc7', accent: '#e8709f' }, // rosa profundo
   { from: '#5f3a1e', to: '#2e1b0d', fg: '#e8c170', accent: '#d8a93b' }, // âmbar
-  { from: '#1e5f3a', to: '#0d2e1b', fg: '#7ce8a3', accent: '#5ed88a' }, // verde
+  { from: '#1e5f3a', to: '#0d2e1b', fg: '#7ce8a3', accent: 'var(--c-win)' }, // verde
   { from: '#3a5f1e', to: '#1b2e0d', fg: '#bce870', accent: '#a3d83b' }, // verde-amarelado
   { from: '#5f1e1e', to: '#2e0d0d', fg: '#e89b9b', accent: '#e87070' }, // vermelho
   { from: '#1e5f5f', to: '#0d2e2e', fg: '#7ce8e8', accent: '#5ed8d8' }, // teal
@@ -37,13 +38,13 @@ function initialsFromNick(nick: string): string {
   return clean.slice(0, clean.length <= 2 ? 3 : 2);
 }
 
-// Avatar do jogador: foto real da Liquipedia (via proxy) com fallback procedural.
+// Avatar do jogador: foto do bo3.gg (quando existe) com fallback procedural (iniciais).
 // Quando não tem foto, gera um gradient único + iniciais (mesmo seed = mesmo
 // avatar sempre, então o reconhecimento visual fica estável entre re-renders).
 export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string; size?: number; coach?: boolean }) {
   const [failedUrl, setFailedUrl] = useState('');
   const safeNick = nick || '?'; // protege contra nick indefinido (não quebra o render)
-  const url = photoForNick(safeNick, Math.max(120, size * 2));
+  const url = photoForNick(safeNick);
   if (url && failedUrl !== url) {
     return (
       <span className="pavatar" style={{ width: size, height: size }}>
@@ -103,7 +104,7 @@ export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string;
           fontWeight: 800,
           letterSpacing: '0.04em',
           textShadow: '0 1px 2px rgba(0,0,0,0.35)',
-          fontFamily: '"JetBrains Mono", monospace',
+          fontFamily: 'var(--font-num)',
         }}
       >
         {initials}
@@ -173,16 +174,23 @@ export function TeamBadge({
   tag,
   colors,
   size = 26,
-  logoUrl,
+  logoUrl: logoUrlProp,
 }: {
   tag: string;
   colors: [string, string];
   size?: number;
   logoUrl?: string;
 }) {
+  // logo vinda da Liquipedia (save antigo) é ignorada → sigla do time
+  const logoUrl = isLiquipediaLogo(logoUrlProp) ? undefined : logoUrlProp;
   const [err, setErr] = useState(false);
+  // logo de outro domínio vai com crossOrigin (pra ler o tom no canvas); se o
+  // CDN não mandar o cabeçalho de CORS, tenta de novo sem ele em vez de sumir
+  // com a logo (o tom fica 'mid': a cor do time)
+  const [noCors, setNoCors] = useState(false);
   const [tone, setTone] = useState<LogoTone | undefined>(logoUrl ? toneCache.get(logoUrl) : undefined);
   if (logoUrl && !err) {
+    const cors = logoUrl.startsWith('http') && !noCors;
     return (
       <span
         className="tbadge logo"
@@ -198,9 +206,10 @@ export function TeamBadge({
           title={tag}
           loading="lazy"
           decoding="async"
-          crossOrigin={logoUrl.startsWith('http') ? 'anonymous' : undefined}
-          onLoad={(e) => setTone(detectTone(e.currentTarget, logoUrl))}
-          onError={() => setErr(true)}
+          key={cors ? 'cors' : 'plain'}
+          crossOrigin={cors ? 'anonymous' : undefined}
+          onLoad={(e) => setTone(cors ? detectTone(e.currentTarget, logoUrl) : 'mid')}
+          onError={() => (cors ? setNoCors(true) : setErr(true))}
         />
       </span>
     );
@@ -210,7 +219,7 @@ export function TeamBadge({
       className="tbadge"
       style={{
         background: colors[0],
-        color: colors[1],
+        color: readableInk(colors[0], colors[1]),
         width: size,
         height: size,
         fontSize: size * 0.38,

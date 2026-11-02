@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 11/09/2026 (U00–U06 casual concluídos).
+Última atualização: 12/09/2026 — **U00–U12 concluídos (primeira versão de cada lote)**; pendentes de decisão: U06 PvP, oferta inicial (U08), preço/valores do passe (U09).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -21,16 +21,23 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U04 Pós-jogo | Implementado e verificado (11/09) | Branch `ult/u04-pos-jogo`; comparação do reforço fica para U07 |
 | U05 Primeira sessão | Implementado e verificado (11/09) | Branch `ult/u05-primeira-sessao`; mobile pendente |
 | U06 Timeout real | **Casual implementado e verificado (11/09)**; PvP pendente | Branch `ult/u06-timeout-casual`; Rivals/Gauntlet/Draft seguem pré-calculados |
-| U07 Alvo e estreia | Pendente — **próximo** | U03/U05 feitos |
-| U08 Compra/oferta inicial | Pendente | U01/U02/U07 |
-| U09 Passe | Pendente | U02/U08; U10 para cosméticos novos |
-| U10 Identidade/coleções | Pendente | U07/U08 para produtos pagos |
-| U11 Rivalidades | Pendente | Contrato de partidas estabilizado |
-| U12 Eventos | Pendente | U03/U11 e economia validada |
+| U07 Alvo e estreia | Implementado e verificado (12/09) | Branch `ult/u07-alvo-estreia` |
+| U08 Compra/oferta inicial | Parcial: retomada + saldo implementados; oferta inicial ESPECIFICADA e desligada (12/09) | Branch `ult/u08-compra-contextual`; ativar exige preço + tier + sandbox |
+| U09 Passe | Implementado e verificado (12/09) — preço/valores novos pendentes de decisão | Branch `ult/u09-passe`; economia documentada abaixo |
+| U10 Identidade/coleções | Implementado e verificado (12/09) | Branch `ult/u10-identidade-colecoes`; escudo via LogoBuilder da Carreira |
+| U11 Rivalidades | Implementado e verificado (12/09) | Branch `ult/u11-rivalidades`; pequenos campeonatos ficam para depois |
+| U12 Eventos | Implementado e verificado (12/09) | Branch `ult/u12-eventos`; operação via CRM de live-ops |
 
 ## Próxima ação exata
 
-Executar U07 (jogador dos sonhos e estreia do reforço): alvo persistente no save (campo opcional em `UltimateProfile`, default no `migrateUltimate`), caminhos reais de obtenção (mercado P2P por `cardKey`, packs cujo `weights` contém a raridade, promo/TOTW quando em circulação — sem inventar chance individual), saldo faltante e alternativas, troca de alvo sem perda; comparação titular × reforço com `squadProfile`/`computeChemistry` (preview sem consumir), e "escalar e estrear" ao adquirir (sem substituir carta travada/listada). A etapa `goal` da jornada (U05) passa a apontar para selecionar o alvo.
+**O backlog U00–U12 está executado em primeira versão.** O que falta é decisão do proprietário e validação em ambiente real, nesta ordem:
+1. **Deploy do master** e leitura do funil do Ultimate (U02) por alguns dias antes de comparar qualquer coisa (baseline).
+2. **Decisões comerciais**: ativar (ou não) a oferta inicial (U08: preço, tier, sandbox), mudar (ou não) preço/valores do passe (U09: proposta documentada), ligar o primeiro evento no CRM (U12: uma configuração pequena, ex. "Copa 82" por 4 dias).
+3. **U06 PvP** (checkpoint autoritativo) só se o custo/complexidade justificar depois de medir o casual incremental.
+4. **Verificação visual mobile** de todos os lotes (pendência recorrente: nenhuma rodada exercitou o browser em mobile) e sandbox de pagamentos (webhooks sem checagem de valor — item aberto desde U00).
+5. Dívidas técnicas registradas por lote (dupla contagem de força, evolução no PvP, caster incremental, rival no histórico local, pequenos campeonatos).
+
+**Oferta inicial (U08) fica PENDENTE DE DECISÃO DO PROPRIETÁRIO**: `starterOffer.ts` fixa o contrato (2 opções de conteúdo conhecido, janela de partidas, elegibilidade única por conta via `tier` + `status`), com `enabled=false` e `priceCents=null`. Ativar = definir preço, criar o tier em `COIN_TIERS` (e no mirror do webhook Woovi), fulfillment com escolha registrada no pedido, e sandbox de sucesso/falhas. **Webhooks não foram alterados** (sem sandbox nesta rodada): continua sem checagem de valor pago vs `cents` no caminho de coins/passe — item aberto de U00.
 
 **PvP do U06 fica registrado como PENDENTE** (não concluído): exige checkpoint autoritativo no servidor, decisões ordenadas com prazo comum e escolha padrão neutra por ausência, tratamento de desconexão/abandono/expiração da sala e protocolo habilitado só para pares compatíveis. Hoje o PvP é reexecução idêntica com seed canônico e sem estado de partida no servidor (`lobbies`/`lobby_players` não têm round/placar).
 
@@ -182,6 +189,111 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Pendências: **PvP** (checkpoint autoritativo, decisões ordenadas no servidor, prazo/ausência, desconexão/abandono, pares compatíveis, orçamento de tráfego); Gauntlet/Draft incrementais; caster incremental; expiração de sessão abandonada; medição de custo por partida (não há servidor envolvido no casual — custo zero de rede).
 - Próxima ação exata: U07.
 
+## U07 — jogador dos sonhos e estreia do reforço — 12/09/2026
+
+- Estado: **implementado e verificado**.
+- Branch/commit: `ult/u07-alvo-estreia` (a partir de `075cc92`).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/dreamTarget.ts` (novo, puro): `targetPaths(card, ctx)` — circulação (`sempre` para base; `agora`/`fora` para TOTW da semana e Promo do mês; nota para TOTS/Major/Ícone), packs cujo `weights` contém a raridade **e** cuja pool contém a carta, cada um com **P(≥1 carta da raridade)** do `packOdds` e o **tamanho do pool da raridade** — dois números, nunca multiplicados como "chance da carta" (regra do plano); recompensas por raridade (SBCs) marcadas "não específica"; `missingCredits`; `slotSwapPreview`/`bestSlotFor` (preview de química e função via `computeChemistry`/`roleFitsSlot`, sem consumir nada).
+  - Save: `UltimateProfile.target?: { cardKey, setAt } | null` (opcional, default `null` no `migrateUltimate`); store `setTarget`. Sobrevive a reload; sincroniza com o save (cloud/espelho não tratam como economia).
+  - `UltimateSquadScreen.tsx`: painel "⭐ JOGADOR DOS SONHOS" no hub — escolher/trocar/remover alvo (modal com busca por nick sobre o catálogo completo, até 60 por OVR, com contador de cópias), circulação, packs com custo/P/pool, recompensas por raridade, mercado (listagens e menor preço via `mktBrowse` só com conta vitalícia; convidado vê "conta necessária"), "faltam N coins pro caminho mais barato" (mín. entre pack e mercado) com atalhos Loja/Mercado; quando possui cópia livre: **"Escalar e estrear"** com preview do melhor slot (função ✔/✖, química antes→depois, OVR antes→depois, quem sai) — não substitui carta travada no squad (usa cópia `locked !== 'squad'`) nem lista. Etapa `goal` da jornada (U05) agora abre o seletor de alvo; evento de funil `target_selected` (U02).
+  - `scripts/test-ultimate-dream-target.mts` (4 testes): base sempre em circulação e packs só com a raridade; TOTW da semana `agora` vs fora `fora` (sem pack); preview bate com `computeChemistry` e escolhe slot que aceita a função; `normalizeTarget`.
+- Decisões tomadas e motivo: chance por carta NÃO é exibida (o roll sorteia a raridade e depois uma carta uniformemente na pool — exibir P×1/N seria coerente com o motor, mas o plano proíbe "chance individual" sem garantia; mostramos os dois fatores separados); alvo indisponível continua visível com o status correto; troca de alvo não mexe em patrimônio; comparação de desempenho do reforço em partida (U04 pendência) segue pendente — só o preview de escalação.
+- Comandos/testes e resultados reais: `npm run build` verde · `npm test` 131/131 · `npm run test:sim` **345/345** (+4) · `npm run lint` 189 = baseline.
+- Verificação visual e ambiente: não exercitada (painel e modal cobertos por typecheck); mercado só testável com conta paga e backend.
+- Compatibilidade/migração/flag: campo opcional no save com default; sem schema no servidor.
+- Pendências: comparação de desempenho do reforço após a estreia (cruzar `matchEvidence` com o alvo); alvo em rotação pode ficar sem caminho de pack — mostrado como "só mercado".
+- Próxima ação exata: U08.
+
+## U08 — compra contextual e oferta inicial com escolha — 12/09/2026
+
+- Estado: **retomada de intenção e saldo insuficiente implementados e verificados; oferta inicial especificada e DESLIGADA**.
+- Branch/commit: `ult/u08-compra-contextual` (a partir de `df87c47`).
+- Mudanças e arquivos:
+  - `src/state/purchaseIntent.ts` (novo): intenção `{product_kind, tier, method, tab, src, at}` em `rtm-ult-intent-v1`, TTL 24h, `normalizeIntent` tolerante. Sem e-mail. Nunca cobra sozinho.
+  - `UltimateSquadScreen.tsx`: convidado que clica em comprar coins (Pix/cartão) deixa de ver só um toast "vá à tela inicial": a intenção é guardada e a conta é aberta (`onCreateAccount`); ao voltar logado, a Loja **reabre na aba e no produto** (modal do Pix ou checkout do cartão) — o usuário ainda confirma. `ShortfallLine` sob cada pack bloqueado: "faltam N" + "ganhar jogando" (Amistoso) + "comprar coins" (rola até a coinshop).
+  - `src/App.tsx`: depois de login/cadastro (`onPlay`) e no retorno do checkout da vitalícia (`?conta=ok`), se há intenção viva volta para a tela do Ultimate em vez do hub.
+  - `src/engine/ultimate/starterOffer.ts` (novo, puro): contrato da oferta inicial — `STARTER_OFFER` v1 com 2 opções de conteúdo conhecido ("Dois reforços pro seu esquema": 2 Ouro Raro com função dos slots mais fracos; "Identidade do clube": moldura + escudo, sem força), janela após a 1ª e até a 10ª partida, `starterOfferEligible(def, orders, matches)` reusando a regra do dup-check do passe (`tier` + `status IN ('paid','claimed')`). `enabled=false`, `priceCents=null`.
+  - `scripts/test-ultimate-purchase-intent.mts` (2 testes): TTL/forma da intenção; oferta desligada por padrão, só com preço, única por conta, janela.
+- Decisões tomadas e motivo: retomada por localStorage (intenção não é patrimônio); intenção reabre a tela de compra mas exige o clique final (regra "não gerar cobrança antes da confirmação"); oferta inicial sem preço nem tier no servidor até decisão comercial; catálogo de coins intacto.
+- Matriz de falhas (definida, a validar em sandbox quando a oferta ligar): webhook repetido → no-op pelo `UPDATE … status='pending'` + `ON CONFLICT DO NOTHING`; pagamento atrasado → pedido `pending` vira `paid` quando o webhook chegar e o claim no mount credita; sessão expirada → `pending` órfão apagado no rollback existente; duas abas → claim atômico (`UPDATE … RETURNING`) e listener de `storage`; troca de aparelho → `coinsRestore` (1× por coin); estorno → **sem tratamento hoje** (não há reversão de `claimed`), item aberto.
+- Comandos/testes e resultados reais: `npm run build` verde · `npm test` 131/131 · `npm run test:sim` **347/347** (+2) · `npm run lint` 189 = baseline.
+- Verificação visual e ambiente: não exercitada (fluxo de conta exige backend); retomada coberta por typecheck e teste da intenção.
+- Compatibilidade/migração/flag: sem save/schema; `STARTER_OFFER.enabled` é a flag.
+- Pendências: sandbox de pagamentos; checagem de valor nos webhooks; estorno; ativar a oferta inicial (decisão do proprietário).
+- Próxima ação exata: U10.
+
+## U10 — identidade do clube e coleções temáticas — 12/09/2026
+
+- Estado: **implementado e verificado**.
+- Branch/commit: `ult/u10-identidade-colecoes` (a partir de `b7828c1`).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/cosmetics.ts` (novo, puro): catálogo `FRAMES` (5 molduras: Rookie grátis; Verde-amarelo, Sniper elite e Lenda de era por coleção; Fundador S1 reservada à oferta inicial, ainda não ativa), `mergeFrames`, `frameById`; `ClubIdentity {name, logo: LogoConfig|null}` + `normalizeClub`; `COLLECTIONS` (5 coleções: Seleção Brasileira 5 BR → 8k + moldura; Trio de AWPs 85+ → 6k + moldura; Conselho de IGLs → 6k; Núcleo europeu → 8k; Padrão Ouro 11 Ouro Raro+ → 12k — régua dos objetivos existentes) e `evaluateCollections` por **posse atual de playerId distinto**, prêmio idempotente pela chave `col:<id>` em `objectivesClaimed` (precedente do card LEGADO).
+  - Save: `UltimateProfile.club?`, `frames?`, `equippedFrame?` (opcionais, normalizados no `migrateUltimate`; molduras desconhecidas descartadas). `claimStarter` concede a moldura Rookie. Store: `setClub`, `equipFrame` (só moldura possuída), `claimCollection` (revalida posse no clique, marca a chave, credita, concede moldura e equipa se nenhuma).
+  - `UltCardView`: moldura equipada aplicada por cima da pele de raridade (borda + borda interna + faixa curta) — cosmético; o LEGADO mantém a própria moldura. Vale para todos os cards que o jogador vê no seu cliente; o adversário do PvP não recebe nada (snapshot inalterado).
+  - Hub: painel "IDENTIDADE DO CLUBE" — escudo pelo **LogoBuilder da Carreira** (`openLogoBuilder`, config JSON serializável, preview no próprio builder), nome do clube (24 chars) com preview no título do hub, seletor de moldura (bloqueadas mostram como obter); grade de coleções com progresso, barra, "Resgatar" e "resgatada". Share card ganha `clubName` na assinatura.
+  - `scripts/test-ultimate-cosmetics.mts` (3 testes): catálogo íntegro (molduras de coleção existem), progresso por playerId distinto e claimed por chave, campos do perfil opcionais com default e sobrevivendo ao migrate.
+- Decisões tomadas e motivo: coleção = posse atual (regra declarada na UI: "vender ou listar reduz; prêmio resgatado não volta") — sem consumo implícito de cartas; escudo reaproveita asset próprio (sem asset novo); moldura equipada é preferência do clube, não da carta (evita tocar em `OwnedCard`/espelho); PvP não transporta cosméticos nesta versão (protocolo v2 intacto).
+- Comandos/testes e resultados reais: `npm run build` verde · `npm test` 131/131 · `npm run test:sim` **350/350** (+3) · `npm run lint` 189 = baseline.
+- Verificação visual e ambiente: não exercitada (moldura, painel e builder cobertos por typecheck; layout mobile pendente).
+- Compatibilidade/migração/flag: campos opcionais com default; sem schema no servidor; cosméticos fora do ledger (só save/cloud).
+- Pendências: escudo no pré-jogo/PvP (requer campo no snapshot v3); coleções por "descoberta histórica" (não existe registro de "já teve"); moldura `founder-s1` só via oferta inicial (U08, desligada).
+- Próxima ação exata: U09.
+
+## U09 — passe com identidade e valor imediato — 12/09/2026
+
+- Estado: **implementado e verificado** (sem mudança de preço nem de valores de trilha — decisão pendente do proprietário, com a simulação abaixo).
+- Branch/commit: `ult/u09-passe` (a partir de `0b782b8`).
+- **Simulação da economia atual (código, não estimativa):** temporada 30 dias; 35 níveis; XP por nível `25+(n−1)·5`; total 3.850 XP. XP: ranqueada 40/15, amistoso 20/8, gauntlet 25/estágio, daily 30, missão 20, semanal 80, objetivo 60, SBC 50, pack 10 (cap 5/dia). **Casual** (1 ranqueada/dia + daily = 57,5 XP/dia) chega ao **nível 22** em 30 dias e precisaria de 67 dias para maxar; **ativo** (5 ranqueadas + daily + 3 missões + semanais ≈ 274 XP/dia) maxa no **dia 14** e fica 16 dias sem progressão. Valor free: 10.900 credits + Prata (6k) + Ouro (14k) + Ouro Raro ≈ 30.900; premium extra: 17.500 + Promo (25k) + Elite + TOTS + título ≈ 42.500 (52.500 com cartas a quicksell). R$30 em coins = 120.000 (4.000/R$); passe premium ≈ 1.417/R$ e só se realiza subindo. Renda/dia: casual ≈ 4.700 coins, ativo ≈ 11.000–23.000. **Compra tardia hoje não perde nem ganha nada** (XP independe do premium); **nível atingido e não resgatado era perdido no rollover**.
+- Mudanças e arquivos:
+  - `seasonPass.ts`: `PASS_TRACK_VERSION = 2` gravado em `PassState.trackVersion` (versionamento das trilhas para preservar direitos em mudanças futuras); `premiumPreview(pass)` — o que vem NA HORA ao comprar (níveis premium já alcançados: credits, packs, cartas, título) e o que ainda depende de subir (níveis/XP); `pickRewardCard(catalog, rarity, preferRole, pick)` — **escolha no marco**: a carta de recompensa pode preferir uma função (sorteio dentro da raridade restrito à função; sem pool cai no funil antigo).
+  - `cosmetics.ts`: moldura **Premium** (`pass-premium`), **benefício imediato e permanente** concedido no `unlockPremiumPaid` (equipa se não houver outra).
+  - `src/state/ultimate.ts`: `claimPassLevel(level, track, preferRole)`; `tickSeason` **auto-resgata** todos os níveis alcançados e não resgatados (free e premium) ANTES do rollover apagar o passe — direito preservado; `unlockPremiumPaid` concede a moldura.
+  - `UltimateSquadScreen.tsx`: modal de compra mostra "Na hora: moldura Premium + N níveis = X coins + packs/cartas/título", "ainda depende de subir: N níveis (XP)", prazo da temporada e aviso vermelho a ≤5 dias; aba Passe ganha seletor "Cartas do passe: função" usado nos resgates.
+  - `scripts/test-ultimate-pass-v2.mts` (3 testes): preview em 0/25/35 com resgates parciais; preferência de função e fallback; versão da trilha, moldura e XP inalterado.
+- Decisões tomadas e motivo: preço permanece R$30 (`PASS_PRICE_CENTS`) e a tabela de recompensas não mudou — mudar valores exige a decisão documentada do proprietário; o benefício imediato é cosmético (moldura permanente) e não econômico, para não inflar a comparação com os coins; compra tardia continua permitida, mas transparente; auto-resgate no rollover em vez de "perder" (o plano exige que rollover não apague direitos).
+- **Proposta para decisão (não implementada):** (a) XP do casual: subir daily para 45 e casual win/loss para 30/12 fecha o nível 35 em ~30 dias para 1 partida/dia (hoje nível 22); (b) valor premium: adicionar a moldura Premium + um pack Ouro no nível 5 (14k) aproxima 56.500 e antecipa valor sem tocar no preço; (c) regra de compra tardia: manter compra até o último dia, com o preview já implementado; (d) recompensa nos 16 dias ociosos do ativo: "níveis prestígio" cosméticos após o 35.
+- Comandos/testes e resultados reais: `npm run build` verde (2×) · `npm test` 131/131 · `npm run test:sim` **353/353** (+3) · `npm run lint` **189 = baseline** (um `impure function during render` foi eliminado antes do commit).
+- Verificação visual e ambiente: não exercitada (modal e seletor cobertos por typecheck).
+- Compatibilidade/migração/flag: `trackVersion` opcional (ausente = 1); moldura e preview não mudam economia; auto-resgate roda no mesmo `tickSeason` já existente.
+- Pendências: decisão de preço/valores; níveis prestígio; migração de trilha quando `PASS_TRACK_VERSION` mudar (honrar `claimedPremium` da versão antiga).
+- Próxima ação exata: U11.
+
+## U11 — rivalidades e convites — 12/09/2026
+
+- Estado: **implementado e verificado** (pequenos campeonatos: não iniciados — dependem de mapear capacidade e regras de abandono, como pede o plano).
+- Branch/commit: `ult/u11-rivalidades` (a partir de `4edac7e`).
+- Descobertas confirmadas: o lobby é 100% anônimo por `nick` (sem e-mail/token em `lobbies`/`lobby_players`); só a ranqueada escreve `rtm_match_reports` (uma linha por jogador, sem oponente); duelo privado não deixava rastro; não existia link de convite (só código copiado); `MatchRecord` local não guarda o rival.
+- Mudanças e arquivos:
+  - `src/engine/ultimate/duelInvite.ts` (puro): `parseDuelInvite` (5 chars do alfabeto do lobby, sem 0/O/1/I/L), `duelInviteUrl` (`/ultimate?duelo=CODE`), `duelInviteText`, `h2hText`. `src/state/duelInvite.ts`: captura no boot (limpa a URL), TTL 6h (vida máxima da sala), `loadDuelInvite`/`clearDuelInvite`. Precedente: `?desafio=` da Série do Dia.
+  - `server/rivalry.ts` (puro) + `server/rivalry.test.ts`: par canônico por **e-mail** (case-insensitive) — identidade é a conta, não o apelido; `applyRivalry`, `rivalryFor`. `api/ranking.ts`: tabelas `rtm_rivalries` (pair PK, wins_a/wins_b/games/last_at/last_code/nicks "último visto"), `rtm_rivalry_matches` (cada partida conta UMA vez — o primeiro INSERT vence) e `rtm_duel_reports` (report do duelo privado, PK code+email); `bumpRivalry` chamado no pareamento da ranqueada (dentro do fluxo existente `decidePair`/`applyRanked`) e na nova ação `duelReport` (exige lobby `ultimate`, participante não-espectador; **não mexe em RP**); ação `rivals` (20 mais recentes, visão do próprio lado).
+  - Cliente: `src/state/rivals.ts` (`fetchRivals`, `reportDuel`); `startPvpMatch` reporta o duelo privado (conta paga) ao lado do report ranqueado; `UltimateDuel` ganha `initialJoinCode` (auto-join uma vez por convite; sala expirada cai na mensagem existente "A sala expirou") e botão "🔗 link" na sala (Web Share ou clipboard, texto com código + URL); aba Duelo ganha painel "RIVAIS" (W–L por conta, nº de duelos, data, "Compartilhar confronto"); `App.tsx` captura o convite no carregamento e, com conta ou convidado, abre o Ultimate (a aba Duelo abre com o código); sem conta abre o gate conta × convidado; `Landing.tsx` mostra o banner do convite com "Entrar e aceitar".
+  - Testes: `scripts/test-ultimate-duel-invite.mts` (2) e `server/rivalry.test.ts` (2).
+- Decisões tomadas e motivo: histórico por conta gravado no **servidor** no pareamento (não depende da sala temporária nem do apelido); duelo privado só alimenta o head-to-head (sem RP); **nenhum bônus por convite**; convidado sem conta pode entrar pelo gate (histórico exige conta); compartilhar é ação explícita (Web Share/clipboard), sem mensagem automática a terceiros.
+- Comandos/testes e resultados reais: `npm run build` verde (2×) · `npm test` **133/133** (+2) · `npm run test:sim` **355/355** (+2) · `npm run lint` 189 = baseline (uma dependência de efeito e um acesso a ref em render foram corrigidos antes do commit).
+- Verificação visual e ambiente: não exercitada (fluxo com dois clientes e servidor); auto-join e banner cobertos por typecheck.
+- Compatibilidade/migração/flag: tabelas novas via `CREATE TABLE IF NOT EXISTS` (aditivas); nenhum campo em save.
+- Pendências: pequenos campeonatos (bracket com regras de abandono/avanço); rival no `MatchRecord` local; revanche direta a partir do painel (hoje: criar sala + link).
+- Próxima ação exata: U12.
+
+## U12 — eventos com elencos variados e operação — 12/09/2026
+
+- Estado: **implementado e verificado** (primeira versão; nenhum evento publicado — publicar é operação do CRM).
+- Branch/commit: `ult/u12-eventos` (a partir de `d92a544`).
+- Descobertas confirmadas: o Major da Semana é o único "evento" (janela quarta→sábado com UTC-3 hardcoded, pareamento por espelho da ranqueada, prêmio idempotente `wl:<windowId>`); live-ops só tinha `promo|sbc|notice` sem versão; a fila (`mm_queue`) pareia só por elo; `ruleset` do lobby é validado só no `create` e o `pick` não valida regra nenhuma; o snapshot do catálogo do servidor tem `role/region/country` por carta (índice só por key).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/events.ts` (puro): regras `ovrcap | region | country | roles | rarity-max`, `eventEligibility(cards, rule)` com motivo legível, `describeRule`, `eventRewardFor` (a maior faixa alcançada paga — padrão do Major da Semana). Teste `scripts/test-ultimate-events.mts`.
+  - **Configuração versionada** como item de live-ops kind `event` (`server/liveops.ts`: `validateEventPayload` — `version`, nome, descrição, regra por allowlist com limites, `winTiers` ≤ 60k por faixa, `maxMatches` 1..200; janela do item em **UTC** com o `validateLiveopsWindow` existente). CRM (`LiveopsCRM.tsx`) ganha o tipo Evento com formulário, preview e o mesmo fluxo agendar/publicar/encerrar/desligar (`enabled` + janela). Cliente: `scheduledEvents()` em `state/liveops.ts`. Teste no `server/liveops.test.ts`.
+  - **Servidor valida ao entrar e trava o elenco** (`api/lobby.ts`): coluna `lobbies.event_id`; sala privada de evento (`create` com `eventId`, só se o evento estiver ativo); fila segmentada por `mm_queue.bucket` (`ev:<id>` × `open`, `tryMatchUltimate` só pareia no mesmo bucket e cria a sala com `ruleset 'event'`); no `pick`, se a sala é de evento, a regra é validada com `role/region/country/tier` do catálogo do servidor (índice pid → atributos, tier = maior raridade do pid) e o OVR declarado no snapshot (clamp 1..99) — `400 ineligible` com motivo; elenco fica travado porque o pick só é aceito em `drafting` e o snapshot não muda depois.
+  - **Recompensa idempotente** (`api/ranking.ts`): `rtm_event_entries` (event_id, email, wins, losses, version, claimed_at) alimentada no pareamento do report ranqueado quando a sala tem `event_id` (cap `maxMatches`, 1× por lado via `status='applied'`); ações `eventStatus` e `eventClaim` (só com janela fechada ou cap atingido; **pay-first** em `applyUltTransaction` com `opId ev:<id>:<version>` e depois `claimed_at` — replay nunca paga duas vezes).
+  - Cliente: `state/events.ts` (`fetchEventStatus`, `claimEvent`); aba Ranqueada mostra os eventos ativos (nome, versão, regra, janela em UTC, faixas de prêmio, meu placar), **elegibilidade local com motivo** (região pelo país, tier pela raridade), "Entrar no evento" (fila com `eventId`) e "Resgatar"; `UltimateDuel` recebe `eventId` (queueJoin) e avisa **fila vazia** após 20s com a alternativa identificada ("Amistoso vs IA neste formato — não vale o evento"), sem simular humano.
+- Decisões tomadas e motivo: evento = item de live-ops (reuso de agendamento, cache e CRM; nada de painel novo); 1 bucket por evento na fila (poucos eventos rotativos para não fragmentar — regra do plano); OVR validado pelo snapshot declarado (o dataset por pid tem várias raridades) e atributos pelo servidor; prêmio só ao fechar (janela ou cap) para o orçamento ser conhecido; timezone explícito (UTC) no item e na UI.
+- Comandos/testes e resultados reais: `npm run build` verde (2×) · `npm test` **134/134** (+1) · `npm run test:sim` **357/357** (+2) · `npm run lint` **189 = baseline** (um "refs during render" novo foi eliminado antes do commit).
+- Verificação visual e ambiente: não exercitada (exige dois clientes + servidor + evento publicado no CRM).
+- Compatibilidade/migração/flag: colunas aditivas (`lobbies.event_id`, `mm_queue.bucket`), tabela nova, kind novo em live-ops (itens antigos intocados); `enabled`/janela do item é a flag de publicação; runs iniciadas: `activeEventById` só bloqueia **novas** entradas/picks depois do fim — reports de salas já criadas continuam contando até o cap.
+- Pendências: publicar o 1º evento e observar custo/participação/tempo de espera; alternativa vs IA aplicando a regra ao adversário da IA (hoje só orienta); `era` como regra (ícones não estão no snapshot do servidor); painel de operação com métricas do evento.
+- Próxima ação exata: ver "Próxima ação exata" (decisões e validação real).
+
 ## Modelo de atualização por lote
 
 ### UXX — título — data
@@ -197,3 +309,98 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Próxima ação exata:
 
 Nunca preencher teste como aprovado sem executar. Se interrompido, registrar alterações não commitadas e processos/servidores iniciados para o próximo agente retomar com segurança.
+
+## Lint zero (2026-09-12)
+
+- Baseline de lint caiu de 189 problemas para **0**. O gate dos próximos lotes passa a ser `npm run lint` sem nenhum item (não mais "== 189, sem novos").
+- Corrigidos no código: 6 `no-useless-assignment`, 1 `prefer-const`, 4 diretivas `eslint-disable` sobrando, 6 avisos `exhaustive-deps` (3 incluindo `setSave` — é `useCallback` estável; `App.tsx` depende de `account`; 2 efeitos da Carreira com lista de deps intencional receberam disable comentado).
+- Decisão de configuração em `eslint.config.js`: desligadas as regras do React Compiler (`react-hooks/refs`, `set-state-in-effect`, `purity`, `preserve-manual-memoization`, `immutability`, `static-components`) porque o build Vite não usa o React Compiler; desligada `react-refresh/only-export-components` (só afeta HMR em dev); `no-unused-vars` ignora prefixo `_`. `rules-of-hooks` e `exhaustive-deps` continuam ligadas.
+- Verificação: build ok, `npm test` 134/134, `npm run test:sim` 357/357.
+
+## URG-4 Streak do Diário (data 2026-09-14)
+
+- Estado: implementado (PR aberto, não mergeado).
+- Branch: `urg/streak-diario`.
+- Mudanças e arquivos:
+  - `src/engine/daily/streak.ts` (novo, puro): `dayKey(nowMs)` no calendário de São Paulo (UTC-3 fixo), `recordDailyPlay` (mesmo dia no-op / dia seguinte +1 / pulou reinicia em 1 / best), `streakStatus` (`current`, `atRisk`, `hoursLeft`, `lost`, `previous`), `mergeStreak` (local × servidor: dia mais recente vence, best nunca regride), marcos 3/7/14/30/60/100 e prêmios (`STREAK_REWARDS`, chave `streak:<n>`).
+  - `src/state/dailyStreak.ts` (novo): localStorage `rtm-daily-streak` pra todo mundo; conta logada sincroniza com `dailyStreak` em `api/ranking.ts` e guarda o MAIOR.
+  - `api/ranking.ts`: colunas aditivas `streak_current/streak_best/streak_last_day` em `rtm_accounts` (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` no bootstrap); action `dailyStreak` (token, sem exigir conta paga); `dailyReport` da Série do Dia também registra o dia; `me` devolve `streak`.
+  - `src/engine/ultimate/cosmetics.ts`: molduras `streak-7` (Sete dias), `streak-30` (Um mês sem falhar), `streak-100` (Centurião).
+  - `src/state/ultimate.ts`: `claimStreakMilestone(days)` — coins (3d 1.000 / 7d 3.000 / 30d 15.000) + moldura, idempotente por `streak:<n>` em `objectivesClaimed`, espelhado no ledger (`reward`, src `streak`).
+  - UI: `DailyScreen.tsx` (chip + barra até o próximo marco no cabeçalho, aviso vermelho no hub, toast do marco, "streak mantida: N dias" no fim de cada jogo); `Home.tsx` (card Diário com "🔥 N dias" e "você perde N dias em Xh" em vermelho + funil `streak_at_risk_seen`); `UltimateSquadScreen.tsx` (linha discreta perto das molduras se N ≥ 3). Landing deslogada: nada.
+  - `src/state/track.ts`: degrau `streak_at_risk_seen` em `UltFunnelStep`.
+  - Testes: `scripts/test-daily-streak.mts` (dayKey na virada UTC-3, ramos do record, status, merge, marcos idempotentes).
+- Decisões tomadas e motivo: streak conta DIA JOGADO (qualquer jogo fechado), não vitória — o loop é "voltar todo dia"; as streaks por jogo de `state/daily.ts` seguem intactas. Fuso fixo UTC-3 sem `Intl` (determinístico e testável; o Brasil não tem horário de verão desde 2019). O prêmio é resgatado no cliente ao atingir o marco (padrão coinsClaim/coleções), nunca creditado direto pelo servidor.
+- Comandos/testes e resultados reais: ver PR (build, `npm test`, `npm run test:sim`, `npm run lint` = 0).
+- Compatibilidade/migração/flag: colunas novas com default; save antigo do Ultimate abre sem mudanças (`frames`/`objectivesClaimed` já existiam); cliente sem conta funciona só com o local.
+- Pendências: chip do streak no card só recalcula ao montar a Home; `hoursLeft` arredonda pra cima (mínimo 1h).
+
+## URG-1 Temporada com fim (data 2026-09-14)
+
+- Estado: **implementado e verificado** (engine + store + UI + espelho; sem verificação visual).
+- Branch: `urg/temporada`.
+- O que foi feito:
+  - **Edição da temporada** ("em forma"): campo aditivo `OwnedCard.ed?: number`. Enquanto `season.n === ed` a cópia vale **+2 OVR** (e +2 nos 6 atributos, mesmo contrato do `boostCard` da evolução) e mostra o selo laranja `S3`; na virada o bônus some e o selo vira `LEGADO S3` (cinza) com OVR base — a carta continua jogável. Nada é reescrito no inventário: o estado "em forma/legado" é DERIVADO de `season.n`.
+  - **Pacote da Temporada** (`SEASON_PACK`, id `season`, 20.000 credits, 7 cartas, 2 Ouro+ garantidas, pesos entre o Ouro e o Premium): TODAS as cartas saem com `ed = season.n`. Só aparece na Loja enquanto a temporada está ativa, com o contador "Some em Xd Yh". Fica fora de `PACK_DEFS`/`packById` de propósito (roll sempre LOCAL — o servidor não carimba `ed`).
+  - **10% por carta em pacote comum** (`SEASON_EDITION_CHANCE`): `stampPackEditions` consome 1 `rng()` por carta DEPOIS do `rollPack`, no mesmo rng do seed anti-reroll → reproduzível por seed. No roll do servidor (conta paga) o carimbo usa `makeRng(seed do ledger)`.
+  - **Fim de temporada com consequência**: bloco "A TEMPORADA ACABA EM Xd Yh" no Hub e na Loja com quantas cópias vão perder o +2 e o aviso de que o pacote some (vermelho a ≤7 dias); anda com o tick de 60s do relógio. `applySeasonRollover` devolve `legacyCount/prevN/newN` e o modal "Nova temporada!" mostra "N cartas suas viraram Legado S{n-1}" e "Edição S{n} disponível na Loja".
+  - **Migração**: `migrateUltimate` e `grantCard` saneiam `ed` (inteiro ≥ 1; qualquer outra coisa é descartada). Save antigo sem `ed` fica idêntico.
+  - **Servidor**: `rtm_ult_cards.meta` é JSONB livre — o espelho (`mirrorUltimateChange`, migração one-time e o caminho de replay em `ultimateShadow.ts`) passou a incluir `ed` no meta. Sem coluna nova, sem migration.
+  - **Funil**: step `season_pack_open` em `ult_funnel` (`{season}`) quando o Pacote da Temporada abre.
+  - PvP: `slotCard` passa por `viewCard` (evolução + edição) → o snapshot `UltimatePvpSquad.cards[].ovr` já viaja com o +2; o servidor só clampa 1..99 (sem mudança de protocolo).
+- Arquivos: `src/engine/ultimate/seasonEdition.ts` (novo, puro), `src/engine/ultimate/state.ts`, `src/state/ultimate.ts`, `src/state/ultimateShadow.ts`, `src/state/track.ts`, `src/components/ultimate/UltimateSquadScreen.tsx`, `server/ultimate-economy.ts` (comentário), `scripts/test-ultimate-season-edition.mts` (novo).
+- Decisões e motivo: bônus derivado (não gravado) para a virada ser instantânea e reversível por `season.n`; pacote fora do `packById` para o roll do servidor nunca aceitar `season` sem carimbar; carimbo depois do `rollPack` para não alterar nenhuma sequência de cartas existente (mesmo seed ⇒ mesmas cartas de antes); custo 20k = entre Ouro (14k) e Promo (25k), paga-se pelo carimbo.
+- Testes: `scripts/test-ultimate-season-edition.mts` (6 testes: boost só com `ed === season.n`; rollover conta legados; pacote da temporada carimba 7/7; 10% determinístico por seed e ~10% no agregado; normalize aceita/ignora lixo; `seasonEnding`).
+- Pendências:
+  - Roll no SERVIDOR (conta paga): a tx do `packOpen` já foi gravada pelo servidor sem `ed` — o carimbo dos 10% fica só no save local/cloud-save; `rtm_ult_cards.meta` dessas cópias não tem `ed`. Para fechar: o servidor carimbar no `openPack` (mesma regra, mesmo seed) e devolver `ed` em `ServerPackCard`.
+  - Mercado entre jogadores: cancelar/expirar devolve a cópia COM `ed` (stash de escrow local, como boost/style). O comprador recebe a cópia sem `ed` — mesmo comportamento já existente para boost/style (o `marketBuyApply` só recebe `cardId/cardKey`). Fechar quando o servidor devolver `meta` na compra.
+  - Verificação visual (selo sobre moldura equipada + LEGADO do W2; contador no mobile) não foi feita.
+## URG-3 Aviso de rival (data 2026-09-14)
+
+- Estado: implementado (PR aberto, não mergeado).
+- Branch/commit: `urg/rival-aviso`.
+- Mudanças e arquivos:
+  - `server/rivalNotify.ts` (puro): `detectOvertakes(reporter, ladderAfter, rivalEmails, top=100)` — dado o MMR de quem reportou antes/depois e o ladder DEPOIS (top 100), devolve quem foi ultrapassado, restrito a rivais declarados (`rtm_rivalries` envolvendo quem subiu) e ao vizinho imediato (quem ficou logo abaixo); `canMailRival(lastAt, now)` (1 e-mail/24h); `buildRivalMail(...)` (assunto "{nick} te passou no ranking do Road to Major", texto + HTML mínimo, link `https://roadtomajor.com.br/ultimate?tab=ranqueada`, rodapé "Não quer mais esses avisos? Desligue em Conta"). Testes em `server/rivalNotify.test.ts` (7).
+  - `server/mail.ts`: `sendMail`/`mailConfigured` extraídos de `api/account.ts` (Resend → Gmail SMTP); o reset de senha passou a usar o helper.
+  - `api/ranking.ts`: tabelas `rtm_overtakes` (victim_email, by_email, by_nick, old_pos, new_pos, created_at + índice por vítima) e `rtm_rival_mails` (email PK, sent_at, by_email); `ALTER TABLE IF EXISTS rtm_accounts ADD COLUMN IF NOT EXISTS notify_rival`. No fim do `report`, pra cada conta que SUBIU de RP nesta invocação (reporter ou oponente no `apply-both`): 1 SELECT do top 100 + 1 SELECT de rivalidades → `detectOvertakes` → INSERT em `rtm_overtakes` → e-mail só pra conta paga com `notify_rival` ≠ false e sem e-mail nas últimas 24h (claim atômico via upsert em `rtm_rival_mails` antes de enviar; `Promise.allSettled`; tudo em try/catch — o report nunca falha por e-mail). `me` aceita `since` (ms) e devolve `overtakenBy: [{nick, pos, at}]` (até 5).
+  - `api/account.ts`: `me` devolve `notifyRival`; action `setNotifyRival {value}`.
+  - Cliente: `state/account.ts` (`Account.notifyRival`, `setNotifyRival`), `state/ranking.ts` (`fetchMyRank(nick, since)`, `OvertakenBy`), `state/track.ts` (step `rival_overtaken_seen {count}`), `ManagerProfile.tsx` (checkbox "Me avisar por e-mail quando um rival me passar no ranking" no painel Conta), `UltimateSquadScreen.tsx` (bloco no Hub "⚠️ {nick} te passou. Você caiu pra {pos}º" + "Jogar ranqueada"; `rtm-ult-last-seen` em localStorage; `?tab=ranqueada` abre a aba Ranqueada, lido 1x no boot).
+- Decisões tomadas e motivo: detecção com UMA consulta ao ladder (depois) + MMR antes/depois do reportante, em vez de dois snapshots — a posição antiga da vítima é a atual menos 1 (todas foram passadas de uma vez). "E-mail verificado" não existe no modelo de contas: o filtro é `paid = true` (só conta vitalícia tem ranking salvo e passou por checkout com esse e-mail). Retenção de `rtm_overtakes` (30 dias) em DELETE SEPARADO, amostrado (`Math.random() < 0.02` por report com subida) — nunca no caminho do INSERT (lição do CTE de 41 bi de tuplas).
+- Comandos/testes e resultados reais: ver PR (build, `npm test`, `npm run test:sim`, `npm run lint` = 0).
+- Verificação visual e ambiente: não exercitada (exige dois clientes + servidor + provedor de e-mail).
+- Compatibilidade/migração/flag: tudo aditivo (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`); sem provedor de e-mail configurado (`RESEND_API_KEY` ou `GMAIL_USER`+`GMAIL_APP_PASSWORD`) só o bloco no Hub funciona; opt-out por conta.
+- Pendências: ligar o provedor de e-mail em produção e observar a taxa de retorno via `rival_overtaken_seen`; painel de operação (quantos e-mails/dia); considerar avisar também no Major da Semana.
+- Próxima ação exata: mergear o PR, confirmar as variáveis de ambiente na Vercel e acompanhar `ult_funnel.rival_overtaken_seen` no CRM por 7 dias.
+
+## URG-5 Meta comunitária (data 2026-09-14)
+
+- Estado: **implementado e verificado** (primeira versão; a tabela nasce no primeiro report/leitura da semana).
+- Branch/commit: `urg/meta-comunitaria`.
+- O que é: "se a comunidade somar N partidas online até domingo, quem participou ganha X". Semana ISO em UTC (segunda 00:00 → domingo 23:59:59), id `cg-YYYY-WW`. Alvo escala sozinho: 300 na primeira semana; depois `clamp(round(totalAnterior × 1,15 / 50) × 50, 200, 5000)`. Prêmio: 5.000 coins pra quem contribuiu com 3+ partidas e um Pacote Ouro pra quem contribuiu com 10+. Resgate só depois da semana FECHAR ou da meta ser BATIDA.
+- Mudanças e arquivos:
+  - `src/engine/ultimate/communityGoal.ts` (puro): `communityGoalFor(now, prevWeekTotal?)`, `communityWeekId`, `isoWeekOf`, `resolveWeekTarget`, `progressPct`, `communityRewardFor`, `communityRemaining`, `describeCommunityGoal`, `describeTimeLeft`, `communityShareText`. Teste `scripts/test-ultimate-community-goal.mts` (id/janela ISO incl. virada de ano, escala com clamp e arredondamento, progresso, prêmio por contribuição, textos).
+  - `server/communityGoal.ts`: DDL idempotente (`rtm_community_goal (week_id PK, target, total, created_at)` e `rtm_community_contrib (week_id, account_id, matches, claimed, PK week+conta)`), `claimEligibility` (puro), `ensureCommunityWeek` (grava o alvo da semana na 1ª leitura/escrita lendo o total da semana anterior; `INSERT … ON CONFLICT DO NOTHING` resolve corrida), `bumpCommunityContrib` (+1 total, +1 conta; try/catch — NUNCA falha o report), `communityGoalStatus` (semana corrente + minha contribuição + semana passada com prêmio pendente), `communityGoalClaim` (idempotente: só o UPDATE `claimed=false→true` paga; replay devolve `ok` sem prêmio; aceita só a semana corrente ou a anterior). Teste `server/communityGoal.test.ts` (elegibilidade, visões, fluxo completo com SQL falso em memória, bump com SQL quebrado não rejeita).
+  - `api/ranking.ts`: schema no `ensureSchema`; action pública `communityGoal` (GET cacheado no edge 30s; POST com token traz `mine`/`lastWeek`); action `communityGoalClaim` (token; ANTES do gate de conta paga, porque o Major da Semana aceita conta grátis); bump em todo report ranqueado ACEITO (inclui salas de evento — `rtm_event_entries` é alimentada no mesmo caminho) e em todo `duelReport` aceito (INSERT ganhou `RETURNING`).
+  - `api/weekend-league.ts`: schema + bump em todo `report` do Major da Semana com `outcome !== 'duplicate'`.
+  - Contagem = 1 por jogador por partida reportada (dedupe herdado das PKs de cada tabela de report). Um duelo entre dois humanos vale 2 no total — a régua do alvo já nasce nessa escala.
+  - Cliente `src/state/communityGoal.ts`: `fetchCommunityGoal` (GET público / POST com token), `claimCommunityGoal`, hook SWR `useCommunityGoalPublic` (cache 2 min em memória + localStorage; sem dado → não renderiza). Reducer `useUltimate.claimCommunityGoal(weekId, credits, packTier)` credita os coins e abre o Pacote Ouro NA HORA (mesmo esquema anti-reroll do `claimWeeklyBonus`), espelhado no shadow com `src 'community-goal'`.
+  - UI: card "Meta da comunidade" no Hub do Ultimate (barra grande, `{total}/{target} partidas · termina em Xd Yh`, "você contribuiu com N", recompensa, "Compartilhar" via share sheet/clipboard com texto pronto, "✅ Meta batida!" + "Resgatar" quando elegível, e "Resgatar semana passada" quando há prêmio pendente); barra fina no topo do Hero da landing (deslogado, número real do servidor, link que leva pro jogo); `MetricsPanel`/`api/metrics.ts` com card "Meta da comunidade (semana)" (total/alvo, contribuintes, resgates — query separada em try/catch pra não quebrar o painel antes da tabela existir) e dois degraus novos no funil do Ultimate.
+  - Funil: `trackUltFunnel('community_goal_share' | 'community_goal_claim')` em `src/state/track.ts`.
+- Decisões tomadas e motivo: padrão coinsClaim (o servidor só marca `claimed`; o save local é a verdade dos coins — creditar no ledger seria desfeito pela reconciliação local-vence); claim liberado pra conta grátis (contribui via Major da Semana); pacote abre na hora (não existe conceito de "pacote pendente" na base); item de live-ops NÃO é necessário — a meta é independente e automática; quem jogou 3+ ganha mesmo se a meta não for batida ao fechar a semana (a régua pune só quem não jogou, não a comunidade inteira — decisão de produto reversível em `claimEligibility`).
+- Comandos/testes e resultados reais: ver commit (build, `npm test`, `npm run test:sim`, `npm run lint` = 0).
+- Verificação visual e ambiente: não exercitada (exige servidor com Neon).
+- Compatibilidade/migração/flag: só tabelas novas (aditivo); sem flag — o card só aparece quando a API responde.
+- Pendências: observar o alvo nas primeiras semanas (300 pode estar alto ou baixo pra base atual); anunciar a meta no Discord/X quando bater; considerar `notice` de live-ops automático no fechamento.
+- Próxima ação exata: deploy, abrir o Hub e conferir o card com a semana corrente; reportar uma ranqueada e ver o total subir.
+
+## URG-2 Evento de fim de semana (data 2026-09-14)
+
+- Estado: implementado (branch `urg/evento-fds`, PR aberto sem merge).
+- O que foi feito: toda semana ISO, de **sexta 00:00 UTC a domingo 23:59:59 UTC**, existe um evento automático `wknd-YYYY-WW` sem ninguém agendar nada. Regra rotativa num ciclo fixo de 4 por `semana % 4` (teto 82 OVR → só BR → precisa IGL+AWP → raridade até Ouro Raro), faixas 3V→3.000 · 6V→8.000 · 10V→15.000 coins, `maxMatches` 20. Uma **carta exclusiva** Elite/Lendário (Ícone excluído) é sorteada com `makeRng(seed da semana)` no catálogo ordenado por key — determinística, nunca repete a semana. Quem bate `cardAtWins` (10, ou o valor do payload) recebe a cópia no `eventClaim` com `acquiredVia: 'reward'` e `ev: 'wknd-…'`, que vira selo "EVENTO 2026-38" + moldura rosa no card (coleção, squad, tabuleiro). Hub do Ultimate ganhou o card "Evento de fim de semana" (estilo do Major da Semana: nome, regra, contador termina/começa em, carta exclusiva com arte/OVR, Entrar → fila do evento). Landing pública ganhou banner discreto acima da dobra com contador (deslogado também; fora da janela "Próximo evento em Xd"). Funil: `ult_funnel` step `weekend_event_enter` ao entrar na fila.
+- Arquivos: `src/engine/ultimate/weekendEvent.ts` (puro: janela ISO/UTC, id, rotação, carta, `nextWeekendEvent`, `weekendEventById`, contador), `server/weekendEvent.ts` (`mergeWeekendEvent`, `weekendEventDef`, `activeWeekendEventDef`), `server/liveops.ts` (payload `exclusiveCardKey`/`cardAtWins` opcionais validados), `server/ultimate-pack.ts` (`serverCatalogAt` sem tocar o cache mensal), `api/liveops.ts` (mescla no `active`), `api/ranking.ts` (`eventDef` com fallback pelo id mesmo com janela fechada; `eventClaim` grava a carta na MESMA tx do ledger e devolve `exclusiveCardKey`; `eventStatus` devolve carta/threshold), `api/lobby.ts` (`activeEventById` com fallback só na janela — fila e pick funcionam sem nada agendado), `src/engine/ultimate/state.ts` (`OwnedCard.ev`, `grantCard` opts `ev`, normalize aceita string ≤64), `src/state/ultimate.ts` (`grantEventCard`, id determinístico `ev_<evento>`), `src/state/ultimateShadow.ts` (meta `ev` espelhada em `rtm_ult_cards.meta`), `src/state/events.ts`, `src/state/liveops.ts`, `src/state/weekendEvent.ts` (leitura única servidor > local), `src/state/track.ts`, `src/components/ultimate/UltimateSquadScreen.tsx`, `src/components/Landing.tsx`, `src/components/LiveopsCRM.tsx` (campos opcionais da carta), testes `scripts/test-ultimate-weekend-event.mts` e `server/weekend-event.test.ts`.
+- Decisões: (1) o engine NÃO importa o catálogo (o servidor usa o snapshot mensal, o cliente o catálogo vivo) — recebe candidatos `{key, rarity}` e sorteia por lista ordenada, então cliente e servidor batem; a fonte autoritativa é o payload mesclado pelo servidor (`exclusiveCardKey`), o cálculo local é só fallback de exibição. (2) A carta é sorteada no snapshot do mês da SEXTA do evento (fim de semana que vira o mês não troca de carta). (3) Item manual no `rtm_liveops` com o mesmo id `wknd-YYYY-WW` sobrescreve o automático — é o jeito do dono customizar pelo CRM. (4) Carta concedida na mesma tx do ledger (`ev:<id>:<version>`): uma cópia por conta, replay do claim não duplica; o espelho do cliente usa o mesmo `card_id` (`ev_wknd202638`) e cai no `ON CONFLICT DO NOTHING`. (5) `rtm_ult_cards` já tem `meta JSONB` — `ev` é persistido lá, sem migração.
+- Comandos/testes: `npm test` 142/142 (+8), `npm run test:sim` 363/363 (+6), `npm run build` verde, `npm run lint` 0 problemas (ver commit).
+- Pendências: (a) validar em produção no primeiro fim de semana (sexta 18/09 00:00 UTC → `wknd-2026-38`, regra IGL+AWP) — observar fila e resgates; (b) a reconciliação 3b do cliente reconstrói cartas por `{cardId, cardKey}` e não reaplica `meta.ev` num save novo (o selo some se o save local for recriado do zero; a carta continua) — trazer `meta` na reconciliação é um lote curto; (c) `rtm_event_entries.claimed_at` continua sendo a marca de resgate; não há coluna própria "carta concedida" (o ledger é a fonte: `meta.cardKey`); (d) verificação visual não exercitada (exige deploy + fim de semana).
+
+### URG-3 revisão (2026-09-14): sem e-mail
+Decisão do dono: o aviso de rival fica só dentro do jogo (bloco no Hub via `rtm_overtakes` + `me.overtakenBy`). Removidos: envio de e-mail no `report`, tabela `rtm_rival_mails`, coluna `notify_rival`, action `setNotifyRival`, checkbox em Conta, `canMailRival`/`buildRivalMail`. `server/mail.ts` continua (usado pelo reset de senha). Sem variável de ambiente nova.

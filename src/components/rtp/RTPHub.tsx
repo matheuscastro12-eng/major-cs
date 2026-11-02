@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { ct } from '../../state/career-i18n';
-import { RtpIcon } from './RtpIcon';
-import { RtpShell, type RtpTab } from './RtpShell';
+import { useSectionHistory } from '../../state/app-history';
+import { RtpShell } from './RtpShell';
+import { circuitOpponent } from '../../engine/rtp/circuit';
+import { Avatar } from '../ds/Bits';
+import type { ShellNavGroup, ShellPending } from '../ds/shell/types';
+import { Calendar, Crosshair, House, Target, Trophy, Users, ArrowLeftRight, Zap, Wallet, Swords, Play, HeartPulse } from 'lucide-react';
 import { RtpOverview, type RtpNotice } from './RtpOverview';
 import { RtpTraining } from './RtpTraining';
 import { RtpLeague } from './RtpLeague';
@@ -14,6 +18,7 @@ import { eraOf } from '../../engine/rtp/era';
 import type { RoadToProSave, EraStamp } from '../../engine/rtp/types';
 
 type RtpTabId = 'overview' | 'training' | 'league' | 'team' | 'market' | 'profile';
+const RTP_TABS: RtpTabId[] = ['overview', 'training', 'league', 'team', 'market', 'profile'];
 const money = (v: number) => `R$ ${v.toLocaleString('pt-BR')}`;
 
 // Hub do Road to Pro — dispatcher de abas (estilo dashboard da carreira). Cada
@@ -32,30 +37,73 @@ export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch,
   notice: RtpNotice | null;
   onDismissNotice: () => void;
 }) {
-  const { life, world } = save;
+  const { life, world, team } = save;
   const [tab, setTab] = useState<RtpTabId>('overview');
   const [eraView, setEraView] = useState<EraStamp | null>(null);   // [W6] carimbo aberto pra leitura
+  // Voltar/Avançar (shell, Alt+←/→ e navegador) passam pelas abas do hub
+  useSectionHistory('rtp', tab, (v) => { if (RTP_TABS.includes(v as RtpTabId)) setTab(v as RtpTabId); }, (path) => path === '/road-to-pro');
   const pendingEvent = save.inbox.find((e) => !e.resolved);
   const era = eraOf(save);
 
   if (eraView) return <RtpEraClose stamp={eraView} nick={save.player.nick} past onContinue={() => setEraView(null)} />;
 
-  const tabs: RtpTab[] = [
-    { id: 'overview', label: ct('Visão geral'), icon: 'grid', alert: !!life.flags.injured },
-    { id: 'training', label: ct('Treino'), icon: 'gym', alert: world.actionsLeft > 0 },
-    { id: 'league', label: ct('Liga'), icon: 'trophy' },
-    { id: 'team', label: ct('Time'), icon: 'team' },
-    { id: 'market', label: ct('Mercado'), icon: 'trade', alert: (world.pendingOffers ?? []).length > 0 },
-    { id: 'profile', label: ct('Perfil'), icon: 'users', alert: (save.player.progression?.perkPoints ?? 0) > 0 },
+  const next = circuitOpponent(save);
+  const offers = (world.pendingOffers ?? []).length;
+  const perks = save.player.progression?.perkPoints ?? 0;
+  const nav: ShellNavGroup[] = [
+    { id: 'principal', label: ct('Principal'), items: [
+      { id: 'overview', label: ct('Visão geral'), icon: House, alert: !!life.flags.injured },
+      ...(onDaily ? [{ id: 'daily', label: ct('Série do Dia'), icon: Zap }] : []),
+    ] },
+    { id: 'jogador', label: ct('Jogador'), items: [
+      { id: 'training', label: ct('Treino'), icon: Crosshair, badge: world.actionsLeft > 0 ? world.actionsLeft : undefined },
+      { id: 'profile', label: ct('Perfil e atributos'), short: ct('Perfil'), icon: Target, badge: perks > 0 ? perks : undefined },
+    ] },
+    { id: 'carreira', label: ct('Carreira'), items: [
+      { id: 'league', label: ct('Liga'), icon: Trophy },
+      { id: 'team', label: ct('Time'), icon: Users },
+      { id: 'market', label: ct('Mercado'), icon: ArrowLeftRight, badge: offers || undefined },
+    ] },
+  ];
+  const onNav = (id: string) => { if (id === 'daily') onDaily?.(); else setTab(id as RtpTabId); };
+  const pending: ShellPending[] = [
+    ...(pendingEvent ? [{ id: 'life', label: pendingEvent.title ?? ct('Evento de vida pendente'), icon: HeartPulse, tone: 'warn' as const, blocking: true, onGo: () => setTab('overview') }] : []),
+    ...(world.actionsLeft > 0 ? [{ id: 'train', label: `${world.actionsLeft} ${ct('ação(ões) de treino nesta semana')}`, icon: Crosshair, tone: 'info' as const, onGo: () => setTab('training') }] : []),
+    ...(offers > 0 ? [{ id: 'offers', label: `${offers} ${ct('proposta(s) de clube')}`, icon: ArrowLeftRight, tone: 'info' as const, onGo: () => setTab('market') }] : []),
   ];
 
   return (
     <RtpShell
+      identity={{ title: save.player.nick, subtitle: `${save.player.role} · ${team.teamName} · Era ${era.year}`, badge: <Avatar name={save.player.nick} role={save.player.role} size={38} />, colors: team.colors }}
+      nav={nav}
       active={tab}
+      onNav={onNav}
+      tabs={nav.flatMap((g) => g.items).filter((it) => it.id !== 'daily').map((it) => ({ id: it.id, label: it.label, icon: it.icon, badge: it.badge, alert: it.alert }))}
+      activeTab={tab}
       onTab={(id) => setTab(id as RtpTabId)}
-      tabs={tabs}
-      onExit={onExit}
-      right={<><span className="rtp-erachip" title={era.majorName}><RtpIcon name="calendar" size={12} /> ERA {era.year}</span><span className="rtp-moneychip"><RtpIcon name="money" size={13} /> {money(life.money)}</span></>}
+      mobileNav={['overview', 'training', 'league', 'profile']}
+      meta={(
+        <>
+          <span className="gs-chip gs-chip--win"><Wallet size={15} aria-hidden /> {money(life.money)}</span>
+          <span className="gs-when"><b>{ct('Semana')} {world.week}</b><small>Era {era.year}</small></span>
+        </>
+      )}
+      next={next
+        ? { label: ct('Continuar'), detail: `${ct('Série vs')} ${next.team.tag || next.team.name} · MD${next.bestOf}`, icon: Play, onGo: onPlayMatch, pending }
+        : { label: ct('Continuar'), detail: ct('Sem série agendada'), disabled: true, pending }}
+      sideWidget={next ? (
+        <button type="button" className="gs-widget" onClick={onPlayMatch}>
+          <span className="gs-widget__kicker"><Swords size={13} aria-hidden /> {ct('Próxima série')}</span>
+          <span className="gs-widget__main">{team.tag} <span className="gs-widget__vs">vs</span> {next.team.tag || next.team.name}</span>
+          <span className="gs-widget__sub">{next.stage} · MD{next.bestOf}</span>
+        </button>
+      ) : (
+        <div className="gs-widget">
+          <span className="gs-widget__kicker"><Calendar size={13} aria-hidden /> {ct('Temporada')}</span>
+          <span className="gs-widget__main">Era {era.year}</span>
+          <span className="gs-widget__sub">{ct('Semana')} {world.week}</span>
+        </div>
+      )}
     >
       {tab === 'overview' && (
         <RtpOverview save={save} notice={notice} onDismissNotice={onDismissNotice} onPlayMatch={onPlayMatch} onDaily={onDaily} onAutoSim={onAutoSim} onGoTab={(id) => setTab(id)} onOpenEra={setEraView} />

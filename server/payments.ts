@@ -1,5 +1,7 @@
+import type { NeonQueryFunction } from '@neondatabase/serverless';
 import { createHmac } from 'node:crypto';
 import Stripe from 'stripe';
+import { appSecret } from './auth.js';
 
 const DEFAULT_PAYMENT_LINK = 'https://buy.stripe.com/4gM3cv4zGa2Vfcx5jQ1RC01';
 export const DEFAULT_PRICE_ID = 'price_1Tkp7NEHvCNyCbcUcYzHFZvK';
@@ -9,42 +11,45 @@ export const cleanEnv = (value?: string): string => value?.replace(/^\uFEFF/, ''
 // teto do selo de Fundador (numerados; o resto paga e joga, s\u00F3 n\u00E3o ganha n\u00FAmero).
 export const founderLimit = (): number => Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
 
-// cliente sql do neon usado como template tag (basta a forma de tagged template).
-type SqlTag = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<Record<string, unknown>[]>;
+// cliente sql do neon (template tag + transaction), o mesmo das rotas.
+type FounderSql = NeonQueryFunction<false, false>;
 
-// Numera\u00E7\u00E3o de FUNDADOR por ORDEM DE PAGAMENTO: #001 = primeiro a pagar no Stripe.
-// Ordena pelo momento em que o e-mail virou pago (rtm_paid_emails.created_at, com
-// fallback no created_at da conta). Determin\u00EDstico e idempotente: s\u00F3 atualiza as
-// linhas que mudam, ent\u00E3o \u00E9 barato rodar a cada pagamento E como backfill do que
-// j\u00E1 existe. Antes os pagantes do webhook n\u00E3o recebiam n\u00FAmero nenhum.
-export async function renumberFounders(sql: SqlTag, limit = founderLimit()): Promise<void> {
-  await sql`
-    WITH ordered AS (
-      SELECT a.email,
-             row_number() OVER (
-               ORDER BY COALESCE(pe.created_at, a.created_at), a.created_at, a.email
-             ) AS rn
-      FROM rtm_accounts a
-      LEFT JOIN rtm_paid_emails pe ON pe.email = a.email
-      WHERE a.paid
-    )
-    UPDATE rtm_accounts a
-    SET is_founder = (o.rn <= ${limit}),
-        founder_no = CASE WHEN o.rn <= ${limit} THEN o.rn::int ELSE NULL END
-    FROM ordered o
-    WHERE a.email = o.email
-      AND (a.founder_no IS DISTINCT FROM (CASE WHEN o.rn <= ${limit} THEN o.rn::int ELSE NULL END)
-           OR a.is_founder IS DISTINCT FROM (o.rn <= ${limit}))`;
-}
-
-export function appSecret(): string {
-  return cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEnv(process.env.DATABASE_URL) || 'dev'}`;
+// Numeração de FUNDADOR estável (O0-42/ECON-13). Antes o renumber reordenava
+// TODOS os pagos a cada pagamento, revogação ou grant: um revoke deslocava todo
+// mundo depois dele e podia tirar o selo do #500, que é o que foi vendido.
+// Agora:
+// - founder_no é atribuído UMA vez (MAX+1 sob advisory lock), na ordem do
+//   pagamento, só pra quem ainda não tem número; número dado nunca muda;
+// - o teto vale pro MAIOR número emitido: número de conta revogada fica
+//   aposentado (não volta pra fila) e o #500 é o último pra sempre;
+// - conta concedida pelo admin (payment_method 'admin') não consome vaga;
+// - quem tem número e voltou a ser pago recupera o selo (is_founder).
+// Idempotente e barato quando não há ninguém sem número (UPDATE de 0 linhas).
+export async function assignFounderNumbers(sql: FounderSql, limit = founderLimit()): Promise<void> {
+  await sql.transaction([
+    sql`SELECT pg_advisory_xact_lock(hashtext('rtm_founder_no'))`,
+    sql`
+      WITH base AS (SELECT COALESCE(MAX(founder_no), 0) AS top FROM rtm_accounts),
+      queue AS (
+        SELECT a.email,
+               row_number() OVER (ORDER BY COALESCE(pe.created_at, a.created_at), a.created_at, a.email) AS rn
+        FROM rtm_accounts a
+        LEFT JOIN rtm_paid_emails pe ON pe.email = a.email
+        WHERE a.paid AND a.founder_no IS NULL AND COALESCE(a.payment_method, '') <> 'admin'
+      )
+      UPDATE rtm_accounts a
+      SET founder_no = (base.top + q.rn)::int, is_founder = true
+      FROM queue q, base
+      WHERE a.email = q.email AND base.top + q.rn <= ${limit}`,
+    sql`UPDATE rtm_accounts SET is_founder = true WHERE paid AND founder_no IS NOT NULL AND NOT COALESCE(is_founder, false)`,
+  ]);
 }
 
 export function normalizeEmail(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().slice(0, 200);
 }
 
+// assinado com o segredo de server/auth.ts (falha fechada: sem APP_SECRET, lança).
 export function accountReference(email: string): string {
   const digest = createHmac('sha256', appSecret()).update(normalizeEmail(email)).digest('hex');
   return `acct_${digest}`;
@@ -78,9 +83,15 @@ export function checkoutIsPaid(session: Stripe.Checkout.Session): boolean {
     && (session.payment_status === 'paid' || session.payment_status === 'no_payment_required');
 }
 
+// Conta vitalícia: aceita (a) o Payment Link legado (price id fixo do dashboard)
+// ou (b) a Checkout Session dinâmica criada por accountCheckoutSession, marcada
+// com metadata.kind='account' e paga com pelo menos o preço configurado.
 export function checkoutHasExpectedPrice(session: Stripe.Checkout.Session): boolean {
   const expectedPrice = cleanEnv(process.env.STRIPE_ACCOUNT_PRICE_ID) || DEFAULT_PRICE_ID;
-  return session.line_items?.data.some((item) => item.price?.id === expectedPrice) ?? false;
+  if (session.line_items?.data.some((item) => item.price?.id === expectedPrice)) return true;
+  return session.metadata?.kind === ACCOUNT_CHECKOUT_KIND
+    && session.currency === 'brl'
+    && Number(session.amount_total ?? 0) >= accountPriceCents();
 }
 
 export async function retrieveCheckout(stripe: Stripe, sessionId: string): Promise<Stripe.Checkout.Session> {
@@ -107,6 +118,118 @@ export function parsePassTier(tier: string): number | null {
   if (!m) return null;
   const n = Number(m[1]);
   return Number.isInteger(n) && n >= 1 ? n : null;
+}
+
+// Tiers de coins do Ultimate (Pix via Woovi ou cartão via Stripe). Valor cresce
+// por real gasto pra recompensar o tier maior: R$10 → 30k, R$15 → 50k (+11%),
+// R$30 → 120k (+33%). Fonte única: api/account.ts cobra e o woovi-webhook
+// reconstrói pedido órfão com os MESMOS valores (antes era uma cópia à mão).
+export const COIN_TIERS: Record<string, { cents: number; coins: number; label: string }> = {
+  p10: { cents: 1000, coins: 30000, label: 'Pacote Arsenal' },
+  p15: { cents: 1500, coins: 50000, label: 'Pacote Elite' },
+  p30: { cents: 3000, coins: 120000, label: 'Pacote Lendário' },
+};
+
+// Preço da conta vitalícia em CENTAVOS — FONTE ÚNICA (Pix, Stripe, receita do
+// admin e o texto do front via GET /api/account → priceCents). Env
+// PIX_PRICE_CENTS (nome legado; vale pra todos os meios). Padrão R$ 20,00.
+export const DEFAULT_ACCOUNT_PRICE_CENTS = 2000;
+export const accountPriceCents = (): number => {
+  const n = Math.round(Number(cleanEnv(process.env.PIX_PRICE_CENTS)));
+  return Number.isFinite(n) && n >= 100 ? n : DEFAULT_ACCOUNT_PRICE_CENTS;
+};
+/** @deprecated alias de accountPriceCents (o preço não é mais só do Pix). */
+export const pixAccountPriceCents = accountPriceCents;
+
+// ── Pix da conta vitalícia: a MESMA cobrança enquanto ela vale ──────────────
+// Antes cada abertura do modal criava uma cobrança nova no Woovi
+// ("rtm-<email>-<unix de agora>"): com dois QR abertos dava pra pagar a conta
+// 2×. Sem tabela nem coluna nova: o correlationID fica estável por conta e por
+// janela de 24 h ("rtm-<email>-<unix do início da janela>", o mesmo formato que
+// o webhook já lê), a cobrança vale a janela + 5 min, e o servidor pergunta ao
+// Woovi pela cobrança da janela anterior e da atual antes de criar outra. Como
+// nenhuma cobrança vive mais que uma janela + margem, essas duas cobrem todas
+// as que ainda podem estar abertas.
+export const ACCOUNT_PIX_WINDOW_SEC = 86_400;
+// cobrança que expira em menos disso não é devolvida (QR morto na mão do
+// jogador); é também a sobra da validade além da janela
+export const ACCOUNT_PIX_MARGIN_SEC = 300;
+export const ACCOUNT_PIX_EXPIRES_SEC = ACCOUNT_PIX_WINDOW_SEC + ACCOUNT_PIX_MARGIN_SEC;
+
+export function accountPixCorrelations(email: string, nowMs: number): { previous: string; current: string } {
+  const start = Math.floor(nowMs / 1000 / ACCOUNT_PIX_WINDOW_SEC) * ACCOUNT_PIX_WINDOW_SEC;
+  return { previous: `rtm-${email}-${start - ACCOUNT_PIX_WINDOW_SEC}`, current: `rtm-${email}-${start}` };
+}
+
+// O que fazer com uma cobrança que o Woovi devolveu:
+// - reuse: aberta, no preço de agora e com tempo pra pagar → devolve ela;
+// - paid: já paga (o webhook ainda vai creditar) → não cria outra;
+// - stale: expirada, perto de expirar, cancelada ou com preço antigo → precisa de outra;
+// - null: sem dado pra decidir (sem status/validade legível).
+export type AccountPixUse = { use: 'reuse' | 'paid' | 'stale'; expiresIn: number } | null;
+export function accountPixChargeUse(charge: Record<string, unknown> | null | undefined, priceCents: number, nowMs: number): AccountPixUse {
+  if (!charge || !Object.keys(charge).length) return null;
+  if (Math.round(Number(charge.value)) !== priceCents) return { use: 'stale', expiresIn: 0 };
+  const status = String(charge.status ?? '').toUpperCase();
+  if (status === 'COMPLETED') return { use: 'paid', expiresIn: 0 };
+  if (status && status !== 'ACTIVE') return { use: 'stale', expiresIn: 0 };
+  let endMs = Date.parse(String(charge.expiresDate ?? ''));
+  if (!Number.isFinite(endMs)) endMs = Date.parse(String(charge.createdAt ?? '')) + Number(charge.expiresIn) * 1000;
+  if (!Number.isFinite(endMs)) return null;
+  const left = Math.floor((endMs - nowMs) / 1000);
+  return left >= ACCOUNT_PIX_MARGIN_SEC ? { use: 'reuse', expiresIn: left } : { use: 'stale', expiresIn: 0 };
+}
+
+export const ACCOUNT_CHECKOUT_KIND = 'account';
+
+// Checkout de cartão da vitalícia com o preço configurado (price_data em BRL,
+// igual coins/passe). Sem chave do Stripe, cai no Payment Link legado.
+export async function accountCheckoutUrl(email: string, origin?: unknown): Promise<string> {
+  let stripe: Stripe;
+  try { stripe = stripeClient(); } catch { return checkoutUrl(email); }
+  const em = normalizeEmail(email);
+  const base = checkoutBase(origin);
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    customer_email: em,
+    client_reference_id: accountReference(em),
+    line_items: [{
+      quantity: 1,
+      price_data: {
+        currency: 'brl',
+        unit_amount: accountPriceCents(),
+        product_data: { name: 'Road to Major · Conta vitalícia', description: 'Save na nuvem + ranking, pagamento único' },
+      },
+    }],
+    metadata: { kind: ACCOUNT_CHECKOUT_KIND, email: em },
+    success_url: `${base}/jogar?conta=ok&cs={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${base}/jogar`,
+  });
+  return session.url || checkoutUrl(email);
+}
+
+// Base do success_url/cancel_url do checkout (O0-40/ECON-11). Antes qualquer
+// origin https do body servia: um link de golpe criava um checkout legítimo da
+// Stripe que, depois do pagamento, mandava a vítima pro domínio do golpista.
+// Agora só o domínio oficial, o próprio deploy (VERCEL_URL/VERCEL_BRANCH_URL,
+// que a Vercel injeta — cobre os previews), os de APP_ORIGINS (lista separada
+// por vírgula) e localhost fora de produção; o resto cai no oficial.
+export const OFFICIAL_ORIGIN = 'https://roadtomajor.com.br';
+export function checkoutBase(origin: unknown): string {
+  const raw = String(origin ?? '').trim().replace(/\/+$/, '');
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { return OFFICIAL_ORIGIN; }
+  // só a origem (sem path, query, user:senha@) — e comparada por igualdade exata
+  const clean = parsed.origin;
+  const allowed = new Set([
+    OFFICIAL_ORIGIN,
+    'https://www.roadtomajor.com.br',
+    ...[process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL].map(cleanEnv).filter(Boolean).map((h) => `https://${h}`),
+    ...cleanEnv(process.env.APP_ORIGINS).split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean),
+  ]);
+  if (allowed.has(clean)) return clean;
+  if (process.env.VERCEL_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(clean)) return clean;
+  return OFFICIAL_ORIGIN;
 }
 
 export async function findPaidCheckoutForEmail(

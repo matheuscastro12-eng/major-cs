@@ -71,7 +71,7 @@
 
 .tp-identity h1 {
   margin: 0;
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 1.75rem;
   font-weight: 800;
   letter-spacing: 0.3px;
@@ -83,9 +83,9 @@
   font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.5px;
-  background: rgba(52, 152, 219, 0.15);
+  background: color-mix(in srgb, var(--c-accent) 15%, transparent);
   color: #5dade2;
-  border: 1px solid rgba(52, 152, 219, 0.3);
+  border: 1px solid color-mix(in srgb, var(--c-accent) 30%, transparent);
 }
 
 .tp-meta {
@@ -155,7 +155,7 @@
 }
 
 .tp-metric b {
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 800;
   line-height: 1;
@@ -185,7 +185,7 @@
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--em-muted);
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.35px;
@@ -290,9 +290,9 @@
 
 .tp-role.AWP { background: rgba(241, 196, 15, 0.15); color: #f1c40f; }
 .tp-role.IGL { background: rgba(155, 89, 182, 0.15); color: #bb8fce; }
-.tp-role.Entry { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
-.tp-role.Rifler { background: rgba(52, 152, 219, 0.15); color: #5dade2; }
-.tp-role.Support { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+.tp-role.Entry { background: color-mix(in srgb, var(--c-loss) 15%, transparent); color: #e74c3c; }
+.tp-role.Rifler { background: color-mix(in srgb, var(--c-accent) 15%, transparent); color: #5dade2; }
+.tp-role.Support { background: color-mix(in srgb, var(--c-win) 15%, transparent); color: #2ecc71; }
 .tp-role.Lurker { background: rgba(149, 165, 166, 0.15); color: #bdc3c7; }
 
 .tp-ovr {
@@ -317,8 +317,8 @@
 }
 
 .tp-pot.pot-s { background: rgba(241, 196, 15, 0.2); color: #f1c40f; }
-.tp-pot.pot-a { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
-.tp-pot.pot-b { background: rgba(52, 152, 219, 0.2); color: #5dade2; }
+.tp-pot.pot-a { background: color-mix(in srgb, var(--c-win) 20%, transparent); color: #2ecc71; }
+.tp-pot.pot-b { background: color-mix(in srgb, var(--c-accent) 20%, transparent); color: #5dade2; }
 .tp-pot.pot-c { background: rgba(230, 126, 34, 0.2); color: #e67e22; }
 .tp-pot.pot-d { background: rgba(149, 165, 166, 0.2); color: #95a5a6; }
 
@@ -398,7 +398,7 @@
 
 .tp-trophy-card b {
   display: block;
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 1.8rem;
   font-weight: 800;
   color: #f1c40f;

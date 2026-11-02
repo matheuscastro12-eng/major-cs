@@ -69,7 +69,7 @@ export function PlayerRetirementModal({ data, onClose }: Props) {
           }}
         >
           <StatCell label="Pico OVR" value={data.peakOvr?.toString() ?? '—'} accent="#e8c170" />
-          <StatCell label="Títulos" value={data.titles?.toString() ?? '0'} accent="#5ed88a" />
+          <StatCell label="Títulos" value={data.titles?.toString() ?? '0'} accent="var(--c-win)" />
           <StatCell label="MVPs" value={data.mvpAwards?.toString() ?? '0'} accent="#9b6fe8" />
           <StatCell label="Splits" value={data.splitsPlayed?.toString() ?? '—'} accent="#5fa4e8" />
         </div>
@@ -114,7 +114,7 @@ function StatCell({ label, value, accent }: { label: string; value: string; acce
     >
       <span
         style={{
-          fontFamily: '"JetBrains Mono", monospace',
+          fontFamily: 'var(--font-num)',
           fontSize: '1.3rem',
           fontWeight: 800,
           color: accent,

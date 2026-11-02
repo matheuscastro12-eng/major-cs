@@ -1,85 +1,56 @@
-// Primitivos legados <Panel> e <Button> — reescritos pra usar tokens --em-*
-// na Fase 2 do rollout. Mesma API e mesmas props: qualquer consumidor que
-// importava de './ds' (Landing, Hall, Leaderboard, ManagerProfile, OnlineScreen
-// etc.) recebe o visual em-* automaticamente, sem alterar markup.
+// Entrada estável do design system: `import { Button, Panel } from './ds'`.
 //
-// O barrel ./ds/ (DashCard, AppShell, Modal, ToastProvider, useToast, etc.)
-// é re-exportado abaixo, mantendo a entrada estável.
-export { DashCard, AppShell, AppFrame, appDashClass, useAppTheme, Modal, ToastProvider, useToast } from './ds/index';
-export type { ModalSize, ToastVariant, ToastItem } from './ds/index';
-import { useState, type CSSProperties, type ReactNode } from 'react';
+// <Panel> e <Button> mantêm a API antiga (Landing, Hall, Leaderboard,
+// ManagerProfile, OnlineScreen etc. não mudam uma linha) mas agora renderizam
+// os primitivos "Broadcast Desk" em CSS (src/styles/primitives.css): hover e
+// foco em CSS em vez de useState (UX-10), alvo de 44px no toque, e o `gold`
+// virou a variante de conquista — contorno dourado, não um clone do primary
+// (UX-03). O resto do barrel ./ds/ é re-exportado abaixo.
+import type { CSSProperties, ReactNode } from 'react';
+import { Button as DsButton, type ButtonProps, type ButtonSize, type ButtonVariant } from './ds/Button';
+import { Panel as DsPanel } from './ds/Panel';
 
-type BtnVariant = 'primary' | 'gold' | 'danger' | 'ghost';
-type BtnSize = 'sm' | 'md' | 'big';
+export {
+  DashCard, AppShell, AppFrame, appDashClass, useAppTheme, Modal, ToastProvider, useToast,
+  Card, CardButton, Tag, Badge, LiveBadge, Tabs, TabPanel, Table, Stat, Alert, EmptyState, Sheet,
+  InfoTip, Skeleton, ProgressBar, Scoreboard, LowerThird, LiveRegion, announce, cx,
+  GameShell, ShellProvider, useShellGlobal, useDensity, setDensity, openPalette, PeekLayer, PeekCard,
+  usePeekResolver, peekFromPlayer, CommandPalette, MODE_DATA, AttrValue, AttrLegend, attrBand,
+  Segmented, Ovr, Bar, RoleChip, Chip, Avatar, roleColor,
+} from './ds/index';
+export type {
+  ModalSize, ToastVariant, ToastItem, TagTone, TabItem, Column, AlertTone, ScoreTeam, ScoreStatus,
+  GameShellProps, PeekData, ModeId, ShellMode, ShellCommand, ShellUser, ShellGlobal, ShellNavItem, ShellNavGroup,
+  ShellIdentity, ShellPending, ShellNext, ShellTab, ShellCrumb, ShellTool, PaletteItem, BadgeTone,
+} from './ds/index';
 
-const VARIANTS: Record<BtnVariant, { base: CSSProperties; hover: CSSProperties }> = {
-  // primary = ação dominante: usa o accent dourado do em-* (alinhado com
-  // .em-btn-primary do CSS e .btn.primary dos overrides do body).
-  primary: { base: { background: 'var(--em-gold)', color: '#1a1205', border: '1px solid var(--em-gold)' }, hover: { filter: 'brightness(1.06)' } },
-  gold:    { base: { background: 'var(--em-gold)', color: '#1a1205', border: '1px solid var(--em-gold)' }, hover: { filter: 'brightness(1.06)' } },
-  danger:  { base: { background: 'var(--em-red, #c0392b)', color: '#fff', border: '1px solid var(--em-red, #c0392b)' }, hover: { filter: 'brightness(1.06)' } },
-  ghost:   { base: { background: 'transparent', color: 'var(--em-muted)', border: '1px solid var(--em-border)' }, hover: { color: 'var(--em-text)', borderColor: 'var(--em-gold)', background: 'var(--em-panel-2)' } },
-};
-const SIZES: Record<BtnSize, CSSProperties> = {
-  sm:  { padding: '6px 12px', fontSize: '0.76rem' },
-  md:  { padding: '9px 18px', fontSize: '0.86rem' },
-  big: { padding: '12px 26px', fontSize: '0.96rem' },
-};
+type LegacyVariant = ButtonVariant | 'gold';
+type LegacySize = ButtonSize | 'big';
 
-// Painel: agora um wrapper fino em torno do DashCard estético — superfície
-// .em-panel, header com label muted (sem caps forçado), accent dourado quando
-// destacado.
-export function Panel({ title, actions = null, accent = 'blue', flush = false, children, style = {}, dash = false, className = '' }: {
-  title?: ReactNode; actions?: ReactNode; accent?: 'blue' | 'gold' | 'none'; flush?: boolean; children?: ReactNode; style?: CSSProperties; dash?: boolean; className?: string;
-}) {
-  const accentColor = accent === 'gold' ? 'var(--em-gold)' : accent === 'none' ? 'transparent' : 'var(--em-border-strong)';
-  // dash mantém a classe pra compatibilidade com CSS legado que tem .dash-panel
-  const cls = `${dash ? 'dash-panel' : ''} ${className}`.trim();
-  return (
-    <section className={cls} style={{ background: 'var(--em-panel)', border: '1px solid var(--em-border)', borderRadius: '6px', overflow: 'hidden', boxShadow: 'none', color: 'var(--em-text)', ...style }}>
-      {title != null && (
-        <header style={{
-          display: 'flex', alignItems: 'center', gap: '10px',
-          background: 'var(--em-panel-2)', padding: '10px 14px',
-          borderBottom: '1px solid var(--em-border)',
-          boxShadow: `inset 3px 0 0 ${accentColor}`,
-          fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700,
-          letterSpacing: '0.6px', textTransform: 'uppercase', color: 'var(--em-muted)',
-        }}>
-          <span style={{ whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--em-text)' }}>{title}</span>
-          <span style={{ flex: 1 }} />
-          {actions}
-        </header>
-      )}
-      <div style={{ padding: flush ? 0 : '14px' }}>{children}</div>
-    </section>
-  );
+// Nomes antigos → primitivos: gold = conquista, big = lg. Padrão continua
+// 'primary' (era o padrão do Button antigo).
+export function Button({ variant = 'primary', size = 'md', ...rest }: Omit<ButtonProps, 'variant' | 'size'> & { variant?: LegacyVariant; size?: LegacySize }) {
+  const v: ButtonVariant = variant === 'gold' ? 'achievement' : variant;
+  const s: ButtonSize = size === 'big' ? 'lg' : size;
+  return <DsButton variant={v} size={s} {...rest} />;
 }
 
-export function Button({ variant = 'primary', size = 'md', disabled = false, icon = null, children, style = {}, onClick, title }: {
-  variant?: BtnVariant; size?: BtnSize; disabled?: boolean; icon?: ReactNode; children?: ReactNode; style?: CSSProperties; onClick?: () => void; title?: string;
+// Painel: wrapper do .ds-panel. accent 'gold' = painel em foco (acento do
+// modo); 'blue'/'none' = neutro. `dash` mantém a classe .dash-panel que o CSS
+// legado ainda estiliza em alguns lugares.
+export function Panel({ title, actions = null, accent = 'blue', flush = false, children, style, dash = false, className = '' }: {
+  title?: ReactNode; actions?: ReactNode; accent?: 'blue' | 'gold' | 'none'; flush?: boolean; children?: ReactNode; style?: CSSProperties; dash?: boolean; className?: string;
 }) {
-  const [hover, setHover] = useState(false);
-  const v = VARIANTS[variant] || VARIANTS.primary;
-  const s = SIZES[size] || SIZES.md;
   return (
-    <button
-      type="button"
-      disabled={disabled}
+    <DsPanel
       title={title}
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-        fontFamily: 'inherit', fontWeight: 600, letterSpacing: 0, textTransform: 'none',
-        borderRadius: '5px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1,
-        transition: 'background .12s, filter .12s, transform .05s, color .12s, border-color .12s',
-        boxShadow: 'none',
-        ...v.base, ...s, ...(hover && !disabled ? v.hover : null), ...style,
-      }}
+      actions={actions ?? undefined}
+      tone={accent === 'gold' ? 'accent' : 'default'}
+      flush={flush}
+      style={style}
+      className={`${dash ? 'dash-panel ' : ''}${className}`.trim() || undefined}
     >
-      {icon}{children}
-    </button>
+      {children}
+    </DsPanel>
   );
 }

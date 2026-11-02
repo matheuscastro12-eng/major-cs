@@ -51,26 +51,26 @@ export function drawDecisionShareCard(d: DecisionShareData): string {
   ctx.strokeRect(10, 10, W - 20, H - 20);
 
   // lockup
-  ctx.font = '700 34px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 34px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = INK;
   ctx.textAlign = 'left';
-  ctx.fillText('MAJOR//CS', 40, 64);
+  ctx.fillText('ROAD TO MAJOR', 40, 64);
   ctx.fillStyle = GOLD;
-  ctx.font = '700 22px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 22px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillText(d.mode === 'rtp' ? 'ROAD TO PRO · A SALA' : 'CARREIRA · A CHAMADA', 40, 94);
 
   // quem + placar
   ctx.textAlign = 'right';
-  ctx.font = '800 30px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '800 30px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = INK;
   ctx.fillText(d.nick, W - 40, 70);
-  ctx.font = '500 16px Inter, Arial, sans-serif';
+  ctx.font = '500 16px Barlow, Arial, sans-serif';
   ctx.fillStyle = DIM;
   ctx.fillText('minhas chamadas em 1 print', W - 40, 96);
 
   // placar + veredito
   ctx.textAlign = 'left';
-  ctx.font = '800 54px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '800 54px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = d.won == null ? INK : accent;
   ctx.fillText(d.won == null ? d.scoreLabel : `${d.won ? 'VITÓRIA' : 'DERROTA'}  ${d.scoreLabel}`, 40, 170);
 
@@ -85,17 +85,17 @@ export function drawDecisionShareCard(d: DecisionShareData): string {
   stats.forEach(([v, label, color], i) => {
     const cx = 40 + colW * i + colW / 2;
     ctx.textAlign = 'center';
-    ctx.font = '800 44px Oswald, Arial Narrow, sans-serif';
+    ctx.font = '800 44px "Barlow Condensed", "Arial Narrow", sans-serif';
     ctx.fillStyle = color;
     ctx.fillText(v, cx, 250, colW - 16);
-    ctx.font = '600 14px Inter, Arial, sans-serif';
+    ctx.font = '600 14px Barlow, Arial, sans-serif';
     ctx.fillStyle = DIM;
     ctx.fillText(label, cx, 278, colW - 10);
   });
 
   // a FITA DAS CHAMADAS — um quadrado por decisão, com a % que você viu
   ctx.textAlign = 'left';
-  ctx.font = '600 15px Inter, Arial, sans-serif';
+  ctx.font = '600 15px Barlow, Arial, sans-serif';
   ctx.fillStyle = DIM;
   ctx.fillText('A FITA DAS CHAMADAS — um quadrado por decisão · o número é a % que você viu antes de rolar', 40, 328);
   const PER_ROW = 14;
@@ -112,7 +112,7 @@ export function drawDecisionShareCard(d: DecisionShareData): string {
     ctx.beginPath();
     ctx.roundRect(x, y, CELL, CELL, 6);
     ctx.fill();
-    ctx.font = '800 18px Inter, Arial, sans-serif';
+    ctx.font = '800 18px Barlow, Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#141821';
     ctx.fillText(`${Math.round(e.pWin * 100)}%`, x + CELL / 2, y + CELL / 2 + 6);
@@ -120,7 +120,7 @@ export function drawDecisionShareCard(d: DecisionShareData): string {
   });
   if (!shown.length) {
     ctx.fillStyle = GRAY;
-    ctx.font = '600 16px Inter, Arial, sans-serif';
+    ctx.font = '600 16px Barlow, Arial, sans-serif';
     ctx.fillText('sem chamadas nesta série', 40, startY + 30);
   }
 
@@ -129,14 +129,14 @@ export function drawDecisionShareCard(d: DecisionShareData): string {
   const bestY = startY + rows * (CELL + GAP) + 26;
   const best = bestCall(d.events);
   if (best) {
-    ctx.font = '600 16px Inter, Arial, sans-serif';
+    ctx.font = '600 16px Barlow, Arial, sans-serif';
     ctx.fillStyle = GREEN;
     ctx.fillText(`★ maior aposta que pegou: ${best.label} · tinha ${Math.round(best.pWin * 100)}%`, 40, bestY, W - 80);
   }
 
   // rodapé
   ctx.textAlign = 'center';
-  ctx.font = '600 17px Inter, Arial, sans-serif';
+  ctx.font = '600 17px Barlow, Arial, sans-serif';
   ctx.fillStyle = GOLD;
   ctx.fillText(`roadtomajor.com.br · ${luckLine(luck)} · nota ${grade.grade}`, W / 2, H - 38);
 
@@ -149,7 +149,7 @@ export async function shareDecisionCard(d: DecisionShareData): Promise<'shared' 
   const luck = luckAdjusted(d.events);
   const grade = decisionGrade(d.events);
   const text = [
-    `${d.nick} no MAJOR//CS: ${luck.actual}/${luck.n} chamadas deram — ${luckLine(luck)} · nota de decisão ${grade.grade}`,
+    `${d.nick} no Road to Major: ${luck.actual}/${luck.n} chamadas deram — ${luckLine(luck)} · nota de decisão ${grade.grade}`,
     d.won == null ? d.scoreLabel : `${d.won ? 'Vitória' : 'Derrota'} ${d.scoreLabel}`,
     'Jogue a sua: https://roadtomajor.com.br',
   ].join('\n');

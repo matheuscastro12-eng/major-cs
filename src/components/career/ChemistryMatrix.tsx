@@ -44,7 +44,7 @@ export function ChemistryMatrix({ state, players, title = 'Química do elenco' }
         <h3 style={titleStyle}>{title}</h3>
         <span style={avgChipStyle(chemColor(avg))}>
           <span style={{ color: 'var(--em-muted)', fontWeight: 600, fontSize: '0.7rem', letterSpacing: '0.4px' }}>MÉDIA</span>
-          <b style={{ color: chemColor(avg), fontFamily: '"JetBrains Mono", monospace' }}>{avgRounded}</b>
+          <b style={{ color: chemColor(avg), fontFamily: 'var(--font-num)' }}>{avgRounded}</b>
           <span style={{ fontSize: '0.74rem', color: 'var(--em-text)' }}>{chemLabel(avg)}</span>
         </span>
       </header>
@@ -182,7 +182,7 @@ const cellStyle = (v: number): React.CSSProperties => {
     background: `${color}22`,
     color,
     textAlign: 'center',
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'var(--font-num)',
     fontWeight: 700,
     fontSize: '0.84rem',
     padding: '12px 6px',

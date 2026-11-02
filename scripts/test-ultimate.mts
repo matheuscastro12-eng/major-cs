@@ -332,7 +332,7 @@ test('mergeTitles faz união + auto-equipa o 1º; equipTitle só se possui', () 
 // ---------- starter ----------
 test('pickStarterCards devolve 5 jogadores distintos', () => {
   const cat = buildCatalog(CS2_REAL_2026);
-  const cards = pickStarterCards(cat, slotRoles('standard'), 76);
+  const cards = pickStarterCards(cat, slotRoles('standard'), 76, makeRng(76));
   assert.equal(cards.length, 5);
   assert.equal(new Set(cards.map((c) => c.playerId)).size, 5);
 });

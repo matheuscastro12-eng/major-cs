@@ -69,7 +69,7 @@ export function LivePostRoundFeed({ mapResult, teams, state, limit = 8 }: Props)
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ color: tagColor, fontSize: '0.74rem', fontWeight: 700 }}>{winnerTeam.tag.toUpperCase()} WIN</span>
-                  <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: '"JetBrains Mono", monospace', fontSize: '0.74rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-num)', fontSize: '0.74rem' }}>
                     {it.cumulativeScore[0]}-{it.cumulativeScore[1]}
                   </span>
                 </span>

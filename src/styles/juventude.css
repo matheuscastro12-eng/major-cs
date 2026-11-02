@@ -1,0 +1,107 @@
+/* [fase 4 · frente JUVENTUDE] Mercado › Juventude.
+   Só tokens (var(--c-*), --sp-*, --fs-*, --rad-*); primitivos em primitives.css. */
+
+.juv-tab { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.juv-tab .ds-panel { min-width: 0; }
+
+.juv-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+@media (max-width: 720px) {
+  .juv-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.juv-note { margin: var(--sp-3) 0 0; color: var(--c-ink-faint); font-size: var(--fs-2); line-height: 1.5; max-width: 72ch; }
+.juv-dim { color: var(--c-ink-faint); }
+
+.juv-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .juv-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* sua geração: cartões do relatório */
+.juv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-3); }
+.juv-card {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line-soft);
+  border-radius: var(--rad-3);
+  min-width: 0;
+}
+.juv-card--done { border-style: dashed; }
+.juv-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.juv-card__name {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+  padding: 0; border: 0; background: none; color: var(--c-ink); cursor: pointer;
+  font: inherit; font-size: var(--fs-4); text-align: left;
+}
+.juv-card__name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.juv-card__name:hover b, .juv-card__name:focus-visible b { color: var(--c-brand); }
+.juv-card__meta { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-2); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.juv-card__note { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-2); line-height: 1.45; }
+.juv-card__note .ds-tag { margin-right: 4px; }
+.juv-card__foot { display: flex; justify-content: flex-end; margin-top: auto; }
+.juv-card .capa { margin-top: 0; }
+
+/* distribuição do potencial */
+.juv-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.juv-bar { display: grid; grid-template-columns: 64px minmax(0, 1fr) 28px; align-items: center; gap: var(--sp-2); font-size: var(--fs-2); }
+.juv-bar__label { color: var(--c-ink-dim); font-variant-numeric: tabular-nums; }
+.juv-bar__track { height: 10px; background: var(--c-surface-2); border-radius: var(--rad-2); overflow: hidden; }
+.juv-bar__fill { display: block; height: 100%; background: var(--c-ink-faint); border-radius: var(--rad-2); }
+.juv-bar__fill[data-band='good'] { background: var(--c-brand); }
+.juv-bar__fill[data-band='top'] { background: var(--c-epic); }
+.juv-bar__n { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+.juv-regions { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: flex; flex-direction: column; }
+.juv-regions li {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3);
+  padding: 6px 0; border-bottom: 1px solid var(--c-line-soft); font-size: var(--fs-3);
+}
+.juv-regions li:last-child { border-bottom: 0; }
+.juv-regions small { color: var(--c-ink-faint); font-size: var(--fs-2); text-align: right; }
+
+/* tabela das promessas */
+.juv-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: flex-end; }
+.juv-world .ds-panel__actions, .juv-retirees .ds-panel__actions { flex-wrap: wrap; justify-content: flex-end; }
+.juv-who { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.juv-who .flag { width: 18px; height: auto; flex: none; }
+.juv-who__txt { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.juv-who__txt b { font-size: var(--fs-3); white-space: nowrap; }
+.juv-who__txt small { font-size: var(--fs-2); color: var(--c-ink-faint); white-space: nowrap; }
+.juv-origin { font-size: var(--fs-2); white-space: nowrap; }
+.juv-club { font-size: var(--fs-3); }
+.juv-note-cell { display: inline-block; min-width: 200px; color: var(--c-ink-dim); font-size: var(--fs-2); line-height: 1.35; }
+
+.juv-pa { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.juv-pa small { color: var(--c-ink-dim); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+.juv-pa__stars { display: inline-flex; gap: 1px; font-size: var(--fs-3); line-height: 1; }
+.juv-pa__star {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    var(--c-brand) 0 var(--solid),
+    color-mix(in srgb, var(--c-brand) 38%, transparent) var(--solid) var(--range),
+    var(--c-line-strong) var(--range) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@media (max-width: 1100px) {
+  .juv-world .ds-panel__head { flex-wrap: wrap; padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
+  .juv-world .ds-panel__actions { flex-basis: 100%; justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  .juv-filters { justify-content: flex-start; }
+  .juv-cards { grid-template-columns: minmax(0, 1fr); }
+  .juv-note-cell { min-width: 160px; }
+}

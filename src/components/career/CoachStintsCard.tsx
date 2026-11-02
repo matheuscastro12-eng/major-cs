@@ -37,7 +37,7 @@ export function CoachStintsCard({ stints, coachNick, scars, split }: Props) {
         </div>
         <div style={repChipStyle(repColor)}>
           <span style={{ color: 'var(--em-muted)', fontSize: '0.66rem', fontWeight: 700, letterSpacing: '0.4px' }}>REPUTAÇÃO</span>
-          <b style={{ color: repColor, fontFamily: '"JetBrains Mono", monospace', fontSize: '1.6rem', lineHeight: 1 }}>
+          <b style={{ color: repColor, fontFamily: 'var(--font-num)', fontSize: '1.6rem', lineHeight: 1 }}>
             {summary.reputation}
           </b>
           <span style={{ color: 'var(--em-text)', fontSize: '0.72rem', fontWeight: 600 }}>{repLabel}</span>
@@ -69,7 +69,7 @@ export function CoachStintsCard({ stints, coachNick, scars, split }: Props) {
                 <span style={{ fontWeight: 700, color: 'var(--em-text)' }}>
                   {s.orgTag ? `${s.orgTag} · ` : ''}{s.orgName}
                 </span>
-                <span style={{ color: 'var(--em-muted)', fontSize: '0.74rem', fontFamily: '"JetBrains Mono", monospace' }}>
+                <span style={{ color: 'var(--em-muted)', fontSize: '0.74rem', fontFamily: 'var(--font-num)' }}>
                   Split {s.startSplit} → {s.endSplit ?? 'agora'}
                 </span>
               </div>
@@ -100,7 +100,7 @@ function StatChip({ label, value, tone = 'neutral' }: { label: string; value: nu
       <span style={{ color: 'var(--em-muted)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
         {label}
       </span>
-      <b style={{ color, fontFamily: '"JetBrains Mono", monospace', fontSize: '0.96rem' }}>
+      <b style={{ color, fontFamily: 'var(--font-num)', fontSize: '0.96rem' }}>
         {value}
       </b>
     </div>
@@ -208,7 +208,7 @@ const stintMetaStyle: React.CSSProperties = {
   gap: 8,
   color: 'var(--em-muted)',
   fontSize: '0.78rem',
-  fontFamily: '"JetBrains Mono", monospace',
+  fontFamily: 'var(--font-num)',
 };
 
 const trophyRowStyle: React.CSSProperties = {

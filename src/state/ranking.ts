@@ -4,7 +4,9 @@ import { getToken } from './account';
 
 export interface SeasonInfo { season: number; endsAt: string; startsAt: string; }
 export interface RankRow { rank: number; nick: string; mmr: number; division: string; wins: number; losses: number; placing?: boolean; }
-export interface MyRank extends SeasonInfo { mmr: number; wins: number; losses: number; peak: number; division: string; rank: number; games: number; placing: boolean; placementLeft: number; }
+// [URG-3] quem me passou no ladder desde a última visita (só vem quando `since` é enviado)
+export interface OvertakenBy { nick: string; pos: number; at: number }
+export interface MyRank extends SeasonInfo { mmr: number; wins: number; losses: number; peak: number; division: string; rank: number; games: number; placing: boolean; placementLeft: number; overtakenBy?: OvertakenBy[] }
 export interface ReportResult {
   delta: number; before: number; after: number; division: string; divisionBefore: string;
   promoted: boolean; demoted: boolean; placing: boolean; placementLeft: number; placedNow: boolean; me: MyRank | null;
@@ -39,9 +41,10 @@ export async function getChampions(): Promise<{ season: number; champions: Champ
   try { const d = await getPublic('champions'); return { season: Number(d.season ?? 0), champions: (d.champions as Champion[]) ?? [] }; }
   catch { return { season: 0, champions: [] }; }
 }
-export async function fetchMyRank(nick?: string): Promise<MyRank | null> {
+// `since` (ms) [URG-3]: pede também as ultrapassagens desde essa data (bloco do Hub).
+export async function fetchMyRank(nick?: string, since?: number): Promise<MyRank | null> {
   if (!getToken()) return null;
-  try { return (await post({ action: 'me', token: getToken(), nick })) as unknown as MyRank; } catch { return null; }
+  try { return (await post({ action: 'me', token: getToken(), nick, ...(since ? { since } : {}) })) as unknown as MyRank; } catch { return null; }
 }
 // `code` = lobby da partida: o servidor agora só pontua reports POR PARTIDA
 // (1 por jogador) e aplica o MMR quando os dois lados batem (anti-fraude).

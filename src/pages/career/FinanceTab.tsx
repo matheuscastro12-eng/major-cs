@@ -1,23 +1,21 @@
 // Aba Finance — T1.4. Saiu de IIFE inline no CareerScreen (hubTab === 'finance').
-// Mostra caixa, sponsors, folha, contratos e infraestrutura/staff.
+// Mostra caixa, sponsors, folha e infraestrutura/staff. [fase 3] A folha vem
+// dos CONTRATOS (clube.contracts); a aba Contratos mora em ContractsTab.tsx.
 
 import { DashCard } from '../../components/ds';
 import { CareerIcon, type CareerIconName } from '../../components/career/CareerIcon';
-import { Flag } from '../../components/ui';
 import {
   effSponsorIncome,
   careerFans,
   formatFans,
-  CONTRACT_TERM,
-  effectiveAge,
-  playerPotentialOvr,
-  potentialTier,
   type Signing,
 } from '../../components/CareerScreen';
 import type { YouthDebut } from '../../engine/career/playerAge';
 import { ct } from '../../state/career-i18n';
 import { DIFFICULTY_ECON, DIFFICULTY_LABELS, type Difficulty } from '../../types';
-import { formatMoney, playerWage, playerOvr } from '../../engine/ratings';
+import { formatMoney, playerWage } from '../../engine/ratings';
+import { contractPayroll } from '../../engine/clube/contratos';
+import type { ClubeState } from '../../engine/clube/model';
 import {
   facilityUpgradeCost,
   facilityUpkeep,
@@ -27,16 +25,19 @@ import {
 } from '../../engine/career/facilities';
 import type { Player } from '../../types';
 import { scoutById } from '../../engine/scouting';
+import { staffPayroll } from '../../engine/gestao/staff';
+import type { GestaoState } from '../../engine/gestao/model';
 
 interface FinanceTabSave {
   org?: { name?: string } | null;
   squad: Signing[];
-  contracts?: Record<string, number>;
+  clube?: ClubeState; // [fase 3] folha real (clube.contracts)
   budget: number;
   facilities?: Record<string, number>;
   split: number;
   difficulty?: Difficulty;
   hiredScoutId?: string | null;
+  gestao?: GestaoState; // [fase 2 · STAFF] folha da comissão técnica
   youthAge?: Record<string, number>;
   youthDebut?: Record<string, YouthDebut>;
   // pass-through pros helpers effSponsorIncome/careerFans (que esperam CareerSave)
@@ -49,21 +50,19 @@ interface ResolvedSigning {
 }
 
 interface Props {
+  /** money = caixa, patrocínio e infraestrutura (contratos: ContractsTab) */
+  section?: 'money';
   save: FinanceTabSave;
   findSigning: (s: Signing) => ResolvedSigning | null;
   update: (patch: Record<string, unknown>) => void;
 }
 
-export function FinanceTab({ save, findSigning, update }: Props) {
+export function FinanceTab({ section = 'money', save, findSigning, update }: Props) {
   const picks = save.squad
     .map((s) => ({ sig: s, f: findSigning(s) }))
     .filter((x) => x.f) as { sig: Signing; f: ResolvedSigning }[];
-  const wages = picks.map((x) => ({
-    ...x,
-    wage: playerWage(x.f.player),
-    until: save.contracts?.[x.sig.playerId],
-  }));
-  const folha = wages.reduce((a, w) => a + w.wage, 0);
+  // [fase 3] folha REAL: salário do contrato (sem contrato: o de mercado)
+  const folha = contractPayroll(save, picks.map((x) => ({ id: x.sig.playerId, marketWage: playerWage(x.f.player) })));
   // dificuldade de gestão: hard/legend cobram encargos por cima da folha base
   // (a folha-base bate com a soma das linhas de contrato; os encargos são uma
   // linha à parte, e folha+encargos = a folha REAL paga na virada de split).
@@ -77,7 +76,9 @@ export function FinanceTab({ save, findSigning, update }: Props) {
   // salário do scout: DEBITADO de verdade na virada de split (CareerScreen), mas
   // ficava fora do "Saldo fixo" — o caixa "sumia" sem linha justificando.
   const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
-  const net = sponsorInc - folha - encargos - upkeep - scoutSalary;
+  // [fase 2 · STAFF] comissão técnica: debitada na virada de split
+  const staffSalary = staffPayroll(save.gestao?.staff);
+  const net = sponsorInc - folha - encargos - upkeep - scoutSalary - staffSalary;
 
   const facilityCards: { key: FacilityKey; icon: CareerIconName; name: string; effect: string }[] = [
     { key: 'training', icon: 'dumbbell', name: ct('Centro de treino'), effect: ct('Acelera a evolução do elenco e da academia.') },
@@ -96,11 +97,12 @@ export function FinanceTab({ save, findSigning, update }: Props) {
     <DashCard
       title={`${ct('Finanças')} · ${save.org?.name ?? ''}`}
       actions={diff !== 'normal' ? (
-        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 10px', borderRadius: 12, border: `1px solid ${diff === 'hard' ? '#e8c170' : '#e58a8a'}`, color: diff === 'hard' ? '#e8c170' : '#e58a8a' }}>
+        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 10px', borderRadius: 12, border: `1px solid ${diff === 'hard' ? '#e8c170' : 'var(--c-loss)'}`, color: diff === 'hard' ? '#e8c170' : 'var(--c-loss)' }}>
           🎚️ {ct(DIFFICULTY_LABELS[diff])}
         </span>
       ) : undefined}
     >
+      {section === 'money' && (<>
       <div className="fin-cards">
         <div className="fin-card"><span className="fin-k">{ct('Caixa')}</span><b>{formatMoney(save.budget)}</b></div>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -113,6 +115,9 @@ export function FinanceTab({ save, findSigning, update }: Props) {
         <div className="fin-card"><span className="fin-k">{ct('Infraestrutura / split')}</span><b className="neg">-{formatMoney(upkeep)}</b></div>
         {scoutSalary > 0 && (
           <div className="fin-card"><span className="fin-k">{ct('Scout / split')}</span><b className="neg">-{formatMoney(scoutSalary)}</b></div>
+        )}
+        {staffSalary > 0 && (
+          <div className="fin-card"><span className="fin-k">{ct('Comissão técnica / split')}</span><b className="neg">-{formatMoney(staffSalary)}</b></div>
         )}
         <div className="fin-card"><span className="fin-k">{ct('Saldo fixo / split')}</span><b className={net >= 0 ? 'pos' : 'neg'}>{net >= 0 ? '+' : ''}{formatMoney(net)}</b></div>
       </div>
@@ -145,61 +150,7 @@ export function FinanceTab({ save, findSigning, update }: Props) {
         })}
       </div>
 
-      <div className="muted small section-label">{ct('Contratos do elenco')}</div>
-      <div className="fin-table-wrap">
-        <table className="stats fin-contracts">
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left' }}>{ct('Jogador')}</th>
-              <th>{ct('Idade')}</th>
-              <th>OVR</th>
-              <th>POT</th>
-              <th>{ct('Salário/split')}</th>
-              <th>{ct('Contrato')}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {wages.map((w) => {
-              const left = w.until != null ? w.until - save.split + 1 : 0;
-              const expiring = left <= 1;
-              const age = effectiveAge(w.f.player, save.split, save.youthAge, save.youthDebut);
-              const pot = potentialTier(playerPotentialOvr(w.f.player, age));
-              return (
-                <tr key={w.sig.playerId} className={expiring ? 'fin-expiring' : ''}>
-                  <td style={{ textAlign: 'left' }}><Flag cc={w.f.player.country} /> {w.f.player.nick}</td>
-                  <td>{age}</td>
-                  <td>{playerOvr(w.f.player)}</td>
-                  <td><span className={`pot-badge pot-${pot}`}>{pot}</span></td>
-                  <td className="neg">{formatMoney(w.wage)}</td>
-                  <td>{left <= 0 ? 'vencido' : `${left} split${left > 1 ? 's' : ''}`}{expiring && left > 0 ? ' ⚠️' : ''}</td>
-                  <td>
-                    {expiring && (
-                      <button
-                        className="btn small"
-                        disabled={save.budget < w.wage}
-                        onClick={() =>
-                          update({
-                            budget: save.budget - w.wage,
-                            contracts: { ...(save.contracts ?? {}), [w.sig.playerId]: save.split + CONTRACT_TERM - 1 },
-                          })
-                        }
-                      >
-                        🔁 Renovar
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="muted small">
-        Contratos vencem no fim do prazo: <b>{ct('renove (custa 1 salário)')}</b>{' '}
-        {ct('ou o jogador sai')} <b>{ct('de graça')}</b>{' '}
-        {ct('no próximo split.')}
-      </p>
+      </>)}
     </DashCard>
   );
 }

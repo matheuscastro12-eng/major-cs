@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 import { Modal, Button } from './ds';
 import { Flag, PlayerAvatar } from './ui';
+import { formatMoney as fmt } from '../engine/ratings';
 
 export interface MvpInfo {
   nick: string;
@@ -50,18 +51,11 @@ interface Props {
   onClose: () => void;
 }
 
-const fmt = (n: number) => {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 2)}M`;
-  if (abs >= 1_000) return `$${Math.round(n / 1_000)}k`;
-  return `$${n}`;
-};
-
 const OUTCOME_ACCENT: Record<SeasonRecapData['outcome'], { fg: string; label: string }> = {
   champion: { fg: '#e8c170', label: '🏆 CAMPEÃO' },
   top4: { fg: '#9bd35c', label: '🥇 TOP 4' },
   mid: { fg: '#5fa4e8', label: '⏺ MEIO DA TABELA' },
-  bottom: { fg: '#e58a8a', label: '⏬ ZONA DE BAIXO' },
+  bottom: { fg: 'var(--c-loss)', label: '⏬ ZONA DE BAIXO' },
 };
 
 export function SeasonRecapModal({ data, onClose }: Props) {
@@ -107,8 +101,8 @@ export function SeasonRecapModal({ data, onClose }: Props) {
         <div
           style={{
             padding: '14px 28px',
-            background: `linear-gradient(180deg, ${outcomeData.fg}24 0%, transparent 100%)`,
-            border: `2px solid ${outcomeData.fg}80`,
+            background: `linear-gradient(180deg, color-mix(in srgb, ${outcomeData.fg} 14%, transparent) 0%, transparent 100%)`,
+            border: `2px solid color-mix(in srgb, ${outcomeData.fg} 50%, transparent)`,
             borderRadius: 8,
             textAlign: 'center',
           }}
@@ -143,7 +137,7 @@ export function SeasonRecapModal({ data, onClose }: Props) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <span style={{ padding: '4px 14px', background: 'rgba(232,193,112,0.16)', border: '1px solid rgba(232,193,112,0.5)', borderRadius: 4, fontFamily: '"JetBrains Mono", monospace', color: 'var(--em-gold)', fontWeight: 900, fontSize: '1.4rem' }}>
+          <span style={{ padding: '4px 14px', background: 'rgba(232,193,112,0.16)', border: '1px solid rgba(232,193,112,0.5)', borderRadius: 4, fontFamily: 'var(--font-num)', color: 'var(--em-gold)', fontWeight: 900, fontSize: '1.4rem' }}>
             {data.mvp!.ovr}
           </span>
           <span className={`role-pill ${data.mvp!.role}`} style={{ alignSelf: 'center' }}>{data.mvp!.role}</span>
@@ -173,8 +167,8 @@ export function SeasonRecapModal({ data, onClose }: Props) {
         <div
           style={{
             padding: '14px 18px',
-            background: data.finance.net >= 0 ? 'rgba(94,216,138,0.12)' : 'rgba(229,138,138,0.12)',
-            border: `1px solid ${data.finance.net >= 0 ? 'rgba(94,216,138,0.45)' : 'rgba(229,138,138,0.45)'}`,
+            background: data.finance.net >= 0 ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : 'color-mix(in srgb, var(--c-loss) 12%, transparent)',
+            border: `1px solid ${data.finance.net >= 0 ? 'color-mix(in srgb, var(--c-win) 45%, transparent)' : 'color-mix(in srgb, var(--c-loss) 45%, transparent)'}`,
             borderRadius: 6,
             textAlign: 'center',
           }}
@@ -182,11 +176,11 @@ export function SeasonRecapModal({ data, onClose }: Props) {
           <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Saldo do split
           </div>
-          <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.6rem', fontWeight: 900, color: data.finance.net >= 0 ? '#5ed88a' : '#e58a8a', marginTop: 4 }}>
+          <div style={{ fontFamily: 'var(--font-num)', fontSize: '1.6rem', fontWeight: 900, color: data.finance.net >= 0 ? 'var(--c-win)' : 'var(--c-loss)', marginTop: 4 }}>
             {data.finance.net >= 0 ? '+' : ''}{fmt(data.finance.net)}
           </div>
           <div style={{ fontSize: '0.76rem', color: 'var(--em-muted)', marginTop: 6 }}>
-            Caixa atual: <b style={{ color: 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>{fmt(data.finance.cashAfter)}</b>
+            Caixa atual: <b style={{ color: 'var(--em-text)', fontFamily: 'var(--font-num)' }}>{fmt(data.finance.cashAfter)}</b>
           </div>
         </div>
       </div>
@@ -259,7 +253,7 @@ export function SeasonRecapModal({ data, onClose }: Props) {
 
 function FinanceRow({ label, value, positive }: { label: string; value: number; positive?: boolean }) {
   const isPositive = positive ?? value >= 0;
-  const fg = isPositive ? '#5ed88a' : '#e58a8a';
+  const fg = isPositive ? 'var(--c-win)' : 'var(--c-loss)';
   return (
     <div
       style={{
@@ -275,7 +269,7 @@ function FinanceRow({ label, value, positive }: { label: string; value: number; 
       <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
         {label}
       </span>
-      <b style={{ fontFamily: '"JetBrains Mono", monospace', color: fg, fontSize: '1.05rem', fontWeight: 800 }}>
+      <b style={{ fontFamily: 'var(--font-num)', color: fg, fontSize: '1.05rem', fontWeight: 800 }}>
         {value >= 0 ? '+' : ''}{fmt(value)}
       </b>
     </div>

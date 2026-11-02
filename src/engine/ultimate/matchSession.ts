@@ -8,16 +8,17 @@
 // (≤ 30 rounds) e determinístico: mesma seed + mesmas decisões ⇒ mesmos rounds.
 //
 // Timeout REAL: uma decisão {round, team} entra como boostTeam (+2.0 de força,
-// match.ts) nos TIMEOUT_ROUNDS rounds seguintes. Só pode ser chamado ENTRE
-// rounds, para o round atual em diante — os rounds já resolvidos ficam iguais
-// (mesmos sorteios, mesmas entradas). Máximo 1 por lado por mapa.
+// match.ts; no motor v2 vira viés de duelo) nos TIMEOUT_ROUNDS rounds
+// seguintes. Só pode ser chamado ENTRE rounds, para o round atual em diante —
+// os rounds já resolvidos ficam iguais (mesmos sorteios, mesmas entradas).
+// Máximo 1 por lado por mapa.
 //
 // Término idempotente: `finishSession` só monta o resultado; quem grava a
 // recompensa usa `matchId` num ledger local (a UI) — F5, retry e reabrir nunca
 // pagam duas vezes. Recarregar não re-rola a seed nem apaga decisões.
 import type { MapId, MapResult, SeriesResult, TTeam } from '../../types';
 import { makeRng } from '../rng';
-import { createMapSim } from '../match';
+import { createMapSim, getMatchEngine, type MatchEngine } from '../match';
 
 export const SESSION_VERSION = 1 as const;
 export const TIMEOUT_ROUNDS = 3;          // rounds afetados por um timeout (igual à Carreira)
@@ -37,6 +38,10 @@ export interface MatchSession {
   decisions: TimeoutDecision[];
   status: 'live' | 'done';
   createdAt: number;
+  // motor em que a sessão NASCEU (realismo FM): o replay reexecuta do zero, então
+  // trocar de motor no meio mudaria rounds já exibidos. Sessão antiga (sem o
+  // campo) nasceu no v1.
+  engine?: MatchEngine;
 }
 
 export interface SessionView {
@@ -53,7 +58,7 @@ export interface SessionView {
 // Sorteia o mapa com o mesmo autoVeto que o playMatch usava — mas aqui recebido
 // pronto pelo chamador (a UI já tem autoVeto); a sessão guarda map/pickedBy.
 export function createSession(input: { matchId: string; seed: number; teams: [TTeam, TTeam]; map: MapId; pickedBy: 0 | 1 | -1; now: number }): MatchSession {
-  return { v: SESSION_VERSION, matchId: input.matchId, mode: 'casual', seed: input.seed >>> 0, teams: input.teams, map: input.map, pickedBy: input.pickedBy, cursor: 0, decisions: [], status: 'live', createdAt: input.now };
+  return { v: SESSION_VERSION, matchId: input.matchId, mode: 'casual', seed: input.seed >>> 0, teams: input.teams, map: input.map, pickedBy: input.pickedBy, cursor: 0, decisions: [], status: 'live', createdAt: input.now, engine: getMatchEngine() };
 }
 
 function boostFor(decisions: TimeoutDecision[], round: number): 0 | 1 | null {
@@ -69,7 +74,7 @@ function boostFor(decisions: TimeoutDecision[], round: number): 0 | 1 | null {
 // Reexecuta do zero até `upto` rounds (ou até o fim se upto ≥ total).
 function replay(s: MatchSession, upto: number) {
   const rng = makeRng(s.seed);
-  const sim = createMapSim(rng, s.teams[0], s.teams[1], s.map, s.pickedBy);
+  const sim = createMapSim(rng, s.teams[0], s.teams[1], s.map, s.pickedBy, { engine: s.engine ?? 'v1' });
   let r = 0;
   while (!sim.done() && r < upto) { sim.step(boostFor(s.decisions, r)); r++; }
   return sim;
@@ -138,5 +143,5 @@ export function normalizeSession(v: unknown): MatchSession | null {
   const o = v as Partial<MatchSession>;
   if (o.v !== SESSION_VERSION || typeof o.matchId !== 'string' || typeof o.seed !== 'number' || !Array.isArray(o.teams) || o.teams.length !== 2 || typeof o.map !== 'string') return null;
   const decisions = Array.isArray(o.decisions) ? o.decisions.filter((d): d is TimeoutDecision => !!d && typeof d.round === 'number' && (d.team === 0 || d.team === 1)) : [];
-  return { v: SESSION_VERSION, matchId: o.matchId, mode: 'casual', seed: o.seed >>> 0, teams: o.teams as [TTeam, TTeam], map: o.map as MapId, pickedBy: (o.pickedBy === 0 || o.pickedBy === 1 || o.pickedBy === -1) ? o.pickedBy : -1, cursor: Math.max(0, Math.floor(Number(o.cursor) || 0)), decisions, status: o.status === 'done' ? 'done' : 'live', createdAt: Number(o.createdAt) || 0 };
+  return { v: SESSION_VERSION, matchId: o.matchId, mode: 'casual', seed: o.seed >>> 0, teams: o.teams as [TTeam, TTeam], map: o.map as MapId, pickedBy: (o.pickedBy === 0 || o.pickedBy === 1 || o.pickedBy === -1) ? o.pickedBy : -1, cursor: Math.max(0, Math.floor(Number(o.cursor) || 0)), decisions, status: o.status === 'done' ? 'done' : 'live', createdAt: Number(o.createdAt) || 0, engine: o.engine === 'v2' ? 'v2' : 'v1' };
 }

@@ -13,6 +13,7 @@
 import type { Role, Playstyle, TPlayer, Tournament } from '../../types';
 import type { League as CareerLeagueGSL } from '../league';
 import type { AttrKey } from '../attributes';
+import type { HiddenKey } from '../attrs/model';
 import type { PlayerPersonality } from '../career/personality';
 import type { MacroRegion } from '../../data/regions';
 import type { RtpIconName } from './icons';
@@ -38,6 +39,9 @@ export interface ProPlayer {
   form: number;               // 0.85..1.15 — fase recente
   ovr: number;                // cache derivado de attrs+role
   progression: PlayerProgression; // RTP v8 — nível/XP, perks e traits (identidade RPG)
+  // [realismo FM] atributos OCULTOS (pressão, temperamento, profissionalismo…):
+  // nunca aparecem como número; gravados no save (v17) pra serem estáveis.
+  hidden?: Record<HiddenKey, number>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -534,6 +538,8 @@ export interface DemoCliff {
   status: 'teaser' | 'delivered' | 'expired';   // teaser = só visível; delivered = na mesa (pendingOffers)
   openedAt?: number;              // epoch ms — quando a trava abriu com a proposta (UI grava)
   expiresAt?: number;             // epoch ms — openedAt + 48h
+  round?: number;                 // rodada da proposta (1 = original; 2 = revisada, a "segunda chance"). Ausente = 1
+  expiredAt?: number;             // epoch ms — quando o prazo venceu (base do re-arm da 2ª rodada)
 }
 
 // Selo do pódio semanal da Série do Dia (1º = campeão; 2º/3º = pódio). Vem do

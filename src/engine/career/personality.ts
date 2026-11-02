@@ -1,12 +1,134 @@
 import { hashStr } from '../../state/hash';
+import { attrsOf, type AttrsSource } from '../attrs/model';
 
 export type PlayerPersonality = 'leader' | 'mercenary' | 'prodigy' | 'hothead' | 'resilient';
 
 const PERSONALITIES: PlayerPersonality[] = ['leader', 'mercenary', 'prodigy', 'hothead', 'resilient'];
 
-export function playerPersonality(playerId: string): PlayerPersonality {
+// ─────────────────────────────────────────────────────────────────────────────
+// [fase 3 · vestiário] PERSONALIDADE DERIVADA DOS OCULTOS (estilo FM).
+//
+// Antes: um dos 5 tipos sorteado por hash do id. Agora a personalidade SAI dos
+// atributos ocultos do jogador (profissionalismo, ambição, lealdade,
+// temperamento) e da liderança visível, com rótulos estilo FM (Profissional
+// modelo, Líder nato, Ambicioso, Leal, Temperamental, Mercenário…). O tipo
+// antigo (`PlayerPersonality`, 5 valores) continua existindo como a VISÃO que
+// os sistemas antigos leem (moral, fadiga, química, conversas, propostas): cada
+// rótulo FM mapeia para um tipo antigo. Quem chama `playerPersonality(id)` sem
+// fonte registrada (testes, scripts, Road to Pro) recebe o tipo por hash de
+// sempre — compatibilidade total.
+
+export type FmPersonality =
+  | 'bornLeader' | 'modelPro' | 'professional' | 'resolute' | 'ambitious'
+  | 'loyal' | 'temperamental' | 'mercenary' | 'unambitious' | 'balanced';
+
+export interface PersonalityProfile {
+  fm: FmPersonality;
+  legacy: PlayerPersonality;
+  professionalism: number; // 1–20 (oculto)
+  ambition: number;        // 1–20 (oculto)
+  loyalty: number;         // 1–20 (oculto)
+  temperament: number;     // 1–20 (oculto)
+  leadership: number;      // 1–20 (visível)
+}
+
+/** Tipo antigo por hash (o sorteio de sempre). */
+export function hashPersonality(playerId: string): PlayerPersonality {
   return PERSONALITIES[hashStr(`personality:${playerId}`) % PERSONALITIES.length];
 }
+
+/** Rótulo FM a partir dos ocultos (ordem de prioridade: o traço mais marcante vence). */
+export function fmPersonalityOf(h: { professionalism: number; ambition: number; loyalty: number; temperament: number }, leadership: number): FmPersonality {
+  if (leadership >= 15 && h.temperament >= 11) return 'bornLeader';
+  if (h.professionalism >= 13 && h.temperament >= 13) return 'modelPro';
+  if (h.temperament <= 7) return 'temperamental';
+  if (h.loyalty <= 7 && h.ambition >= 12) return 'mercenary';
+  if (h.ambition >= 15) return 'ambitious';
+  if (h.loyalty >= 13) return 'loyal';
+  if (h.temperament >= 15) return 'resolute';
+  if (h.professionalism >= 13) return 'professional';
+  if (h.ambition <= 9) return 'unambitious';
+  return 'balanced';
+}
+
+// rótulo FM → tipo antigo (o que moral/fadiga/química/conversas/propostas leem).
+// 'balanced' (sem traço marcante) cai no tipo por hash: mantém a variedade antiga.
+const LEGACY_OF: Record<Exclude<FmPersonality, 'balanced'>, PlayerPersonality> = {
+  bornLeader: 'leader',
+  modelPro: 'resilient',
+  professional: 'resilient',
+  resolute: 'resilient',
+  unambitious: 'resilient',
+  loyal: 'leader',
+  ambitious: 'prodigy',
+  temperamental: 'hothead',
+  mercenary: 'mercenary',
+};
+
+/** Perfil completo derivado dos ocultos do jogador. */
+export function derivePersonality(p: AttrsSource): PersonalityProfile {
+  const x = attrsOf(p);
+  const h = x.h;
+  const leadership = x.a.leadership;
+  const fm = fmPersonalityOf(h, leadership);
+  const legacy = fm === 'balanced' ? hashPersonality(p.sourcePlayerId ?? p.id) : LEGACY_OF[fm];
+  return { fm, legacy, professionalism: h.professionalism, ambition: h.ambition, loyalty: h.loyalty, temperament: h.temperament, leadership };
+}
+
+// Fonte dos jogadores para quem só tem o id (moral, fadiga, conversas…). A
+// Carreira registra a sua (elenco + base); sem fonte, vale o hash de sempre.
+type PersonalitySource = (playerId: string) => AttrsSource | null | undefined;
+let source: PersonalitySource | null = null;
+const cache = new Map<string, { key: string; profile: PersonalityProfile }>();
+export function setPersonalitySource(fn: PersonalitySource | null): void {
+  source = fn;
+  // o cache é por id + números do jogador: trocar a função-fonte (a cada render
+  // da Carreira) não o invalida; desligar a fonte, sim.
+  if (!fn) cache.clear();
+}
+
+/** Perfil do jogador pelo id (null sem fonte ou jogador desconhecido). */
+export function personalityProfileOf(playerId: string): PersonalityProfile | null {
+  const p = source?.(playerId);
+  if (!p) return null;
+  const key = `${p.aim}|${p.awp}|${p.igl}|${p.clutch}|${p.consistency}|${p.role}|${p.age ?? ''}|${p.attrs ? 'a' : ''}`;
+  const hit = cache.get(playerId);
+  if (hit && hit.key === key) return hit.profile;
+  const profile = derivePersonality({ ...p, id: playerId });
+  if (cache.size > 5000) cache.clear();
+  cache.set(playerId, { key, profile });
+  return profile;
+}
+
+export function playerPersonality(playerId: string): PlayerPersonality {
+  return personalityProfileOf(playerId)?.legacy ?? hashPersonality(playerId);
+}
+
+export const FM_PERSONALITY_LABEL: Record<FmPersonality, string> = {
+  bornLeader: 'Líder nato',
+  modelPro: 'Profissional modelo',
+  professional: 'Profissional',
+  resolute: 'Determinado',
+  ambitious: 'Ambicioso',
+  loyal: 'Leal',
+  temperamental: 'Temperamental',
+  mercenary: 'Mercenário',
+  unambitious: 'Acomodado',
+  balanced: 'Equilibrado',
+};
+
+export const FM_PERSONALITY_DESC: Record<FmPersonality, string> = {
+  bornLeader: 'Liderança alta e cabeça no lugar: puxa o vestiário e arrasta a moral do grupo.',
+  modelPro: 'Profissionalismo e temperamento exemplares: treina bem, aceita cobrança e raramente cria atrito.',
+  professional: 'Leva o trabalho a sério e responde bem a cobranças justas.',
+  resolute: 'Temperamento de aço: segura a pressão e não se abala com fase ruim.',
+  ambitious: 'Quer títulos e um clube maior. Cobra projeto e fica inquieto em time pequeno.',
+  loyal: 'Apegado ao clube: aceita menos para ficar e resiste a propostas.',
+  temperamental: 'Pavio curto: reage forte a cobrança, a banco e a derrota, e entra em atrito fácil.',
+  mercenary: 'Pouca lealdade e muita ambição: o dinheiro e a próxima proposta mandam.',
+  unambitious: 'Sem grande ambição: aceita papel menor sem reclamar muito.',
+  balanced: 'Sem traço marcante: reage de forma previsível.',
+};
 
 export function personalityDevelopmentBonus(playerId: string, split: number, age: number): number {
   if (playerPersonality(playerId) !== 'prodigy' || age > 23) return 0;

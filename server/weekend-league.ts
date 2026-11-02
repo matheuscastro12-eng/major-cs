@@ -1,8 +1,9 @@
 // "Major da Semana" — Weekend League do Ultimate (estilo FUT, adaptado).
 // Lógica PURA do lado do servidor: janela de fim de semana, registro, reports
 // pareados (mesma filosofia anti-fraude da ranqueada: resultado só conta quando
-// os DOIS lados batem; conflito não conta pra ninguém) e claim de recompensa
-// por faixa de vitórias pago via applyUltTransaction (ledger auditável).
+// os DOIS lados batem; conflito não conta pra ninguém) e prêmio por COLOCAÇÃO
+// pago no settle via applyUltTransaction (ledger auditável). [O0-08] o claim
+// por faixa de vitórias saiu.
 //
 // JANELA: toda quarta 00:00 → sábado 23:59:59 em America/Sao_Paulo. O Brasil
 // aboliu o horário de verão em 2019, então São Paulo é UTC-3 FIXO — a conta é
@@ -276,38 +277,12 @@ export async function wlReport(sql: SqlTag, email: string, p: WlReportParams, no
 
 // --------------------------------------------------------------------- claim
 
-export type WlClaimResult =
-  | { ok: true; replayed: boolean; tier: WlRewardTier; wins: number; credits: number }
-  | { ok: false; error: 'bad_window' | 'not_registered' | 'window_still_open' | 'no_reward' | 'already_claimed' };
-
-// Claim da recompensa da janela: só após fechar OU run completo. Paga a maior
-// faixa atingida via applyUltTransaction, op_id `wl:<windowId>` — UMA vez por
-// janela pra sempre (replay devolve o resultado gravado, nada re-aplica).
-export async function wlClaim(sql: SqlTag, email: string, windowId: string, now: Date): Promise<WlClaimResult> {
-  const bounds = parseWindowId(windowId);
-  if (!bounds) return { ok: false, error: 'bad_window' };
-  const rows = await sql`SELECT division, elo, wins, losses, rounds_for, rounds_against, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${windowId}`;
-  if (!rows.length) return { ok: false, error: 'not_registered' };
-  const entry = entryFromRow(windowId, rows[0]);
-  if (entry.claimed) return { ok: false, error: 'already_claimed' };
-  const windowClosed = now.getTime() >= bounds.endsAt.getTime();
-  if (!windowClosed && !entry.runComplete) return { ok: false, error: 'window_still_open' };
-  const tier = rewardForWins(entry.wins);
-  if (!tier) return { ok: false, error: 'no_reward' };
-
-  // pay-first: o ledger é a fonte de verdade da idempotência; claimed_at é só
-  // marcador de UI. Crash entre pagar e marcar → retry replaya o op e marca.
-  const pay = await applyUltTransaction(sql, email, {
-    opId: `wl:${windowId}`,
-    kind: 'reward',
-    creditsDelta: tier.credits,
-    cards: [],
-    meta: { source: 'weekend-league', windowId, wins: entry.wins, tierName: tier.name, ...(tier.card ? { card: tier.card } : {}) },
-  });
-  if (!pay.ok) return { ok: false, error: 'no_reward' }; // inatingível com delta positivo; defensivo
-  await sql`UPDATE rtm_wl_entries SET claimed_at=now() WHERE email=${email} AND window_id=${windowId} AND claimed_at IS NULL`;
-  return { ok: true, replayed: pay.replayed, tier, wins: entry.wins, credits: pay.credits };
-}
+// [O0-08] O claim LEGADO por faixa de vitórias (wlClaim, action 'claim') saiu:
+// a UI só promete prêmio por COLOCAÇÃO no top 10 (wlSettle) e o claim usava o
+// MESMO op_id `wl:<windowId>` — quem chamava a API direto levava 3k–37,5k fora
+// do top 10, ou fazia o settle voltar replayed e anulava o prêmio de colocação
+// (ENGA-02/ONLI-12). As faixas (WL_REWARD_TIERS) seguem só como informação no
+// status; não pagam nada.
 
 // -------------------------------------------------------------------- status
 
@@ -385,13 +360,19 @@ export async function wlBoard(sql: SqlTag, windowId: string): Promise<WlBoardRow
   }));
 }
 
+// [O0-08] priorPrize: quando o op_id já existia (replay), quanto foi pago de
+// fato naquela vez — o CRM destaca se difere do prêmio de colocação (ex.:
+// claim legado de faixa pago antes do settle).
+export interface WlSettlePaid { rank: number; email: string; nick: string; prize: number; replayed: boolean; priorPrize?: number }
+
 export type WlSettleResult =
-  | { ok: true; windowId: string; paid: { rank: number; email: string; nick: string; prize: number; replayed: boolean }[] }
+  | { ok: true; windowId: string; paid: WlSettlePaid[] }
   | { ok: false; error: 'bad_window' | 'window_still_open' | 'empty' };
 
 // Fecha a janela e PAGA o top 10 por colocação. Idempotente em dois níveis:
-// op_id `wl:<windowId>` por e-mail no ledger (o MESMO do claim legado — rodar o
-// settle duas vezes, ou settle depois de um claim antigo, nunca paga em dobro)
+// op_id `wl:<windowId>` por e-mail no ledger (o MESMO do claim legado, já
+// removido — rodar o settle duas vezes, ou settle depois de um claim antigo,
+// nunca paga em dobro; a divergência de valor volta em priorPrize)
 // + claimed_at na entry como marcador de UI. `force` permite fechar antes do
 // fim da janela (decisão do dono no CRM).
 export async function wlSettle(sql: SqlTag, windowId: string, now: Date, force = false): Promise<WlSettleResult> {
@@ -400,11 +381,12 @@ export async function wlSettle(sql: SqlTag, windowId: string, now: Date, force =
   if (!force && now.getTime() < bounds.endsAt.getTime()) return { ok: false, error: 'window_still_open' };
   const board = await wlBoard(sql, windowId);
   if (!board.length) return { ok: false, error: 'empty' };
-  const paid: { rank: number; email: string; nick: string; prize: number; replayed: boolean }[] = [];
+  const paid: WlSettlePaid[] = [];
   for (const row of board.slice(0, WL_PLACEMENT_PRIZES.length)) {
     if (row.prize <= 0) continue;
+    const opId = `wl:${windowId}`;
     const pay = await applyUltTransaction(sql, row.email, {
-      opId: `wl:${windowId}`,
+      opId,
       kind: 'reward',
       creditsDelta: row.prize,
       cards: [],
@@ -412,7 +394,13 @@ export async function wlSettle(sql: SqlTag, windowId: string, now: Date, force =
     });
     if (!pay.ok) continue; // defensivo — delta positivo não falha
     await sql`UPDATE rtm_wl_entries SET claimed_at=now() WHERE email=${row.email} AND window_id=${windowId} AND claimed_at IS NULL`;
-    paid.push({ rank: row.rank, email: row.email, nick: row.nick, prize: row.prize, replayed: pay.replayed });
+    let priorPrize: number | undefined;
+    if (pay.replayed) {
+      const prior = await sql`SELECT kind, cards, meta, credits_delta FROM rtm_ult_ledger WHERE email=${row.email} AND op_id=${opId}`;
+      const was = Number(prior[0]?.credits_delta ?? row.prize);
+      if (was !== row.prize) priorPrize = was;
+    }
+    paid.push({ rank: row.rank, email: row.email, nick: row.nick, prize: row.prize, replayed: pay.replayed, ...(priorPrize != null ? { priorPrize } : {}) });
   }
   return { ok: true, windowId, paid };
 }

@@ -9,7 +9,7 @@
 // quebra um save existente.
 //
 // Como adicionar uma migration nova (passo a passo):
-//   1. SAVE_VERSION += 1
+//   1. SAVE_VERSION += 1 (em saveVersion.ts)
 //   2. MIGRATIONS[N] = (save) => ({ ...save, /* derivações */, _v: N+1 })
 //   3. Comentar a migration na linha explicando O QUÊ e PORQUÊ
 //   4. Testar abrindo um save criado N versões atrás → todas rodam em cascata
@@ -17,15 +17,16 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 26;
+import { migrateCareerAttrs } from './careerAttrsMigration';
+import { migrateGestao } from '../engine/gestao/gestaoMigration';
+import { migrateClube } from '../engine/clube/clubeMigration';
+import { migrateMundo } from '../engine/mundo/mundoMigration';
+import { SAVE_VERSION, saveVersion, type VersionedSave } from './saveVersion';
 
-// Save é tipado como objeto genérico aqui pra evitar dependência circular com
-// CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
-// pra `src/types/career.ts` (T1.4), trocar `VersionedSave` pelo tipo real.
-export interface VersionedSave {
-  _v?: number;
-  [key: string]: unknown;
-}
+// SAVE_VERSION, saveVersion e stampVersion vivem em saveVersion.ts (sem
+// dependências): o gameStore usa no boot sem puxar estas migrations, que
+// importam os motores da Carreira inteiros.
+export { SAVE_VERSION, saveVersion, stampVersion, type VersionedSave } from './saveVersion';
 
 type Migration = (save: VersionedSave) => VersionedSave;
 
@@ -258,12 +259,21 @@ const MIGRATIONS: Record<number, Migration> = {
     }
     return { ...save, stints, _v: 26 };
   },
+  // v26 → v27 (realismo FM, atributos como fonte da verdade): grava `attrs` em
+  // todo jogador guardado no save (snapshots do elenco, youth, customPlayers,
+  // extraOnTeam) e converte a evolução escalar (`evo` + viés do foco) em
+  // evolução POR ATRIBUTO (`attrEvo`) — mesmos 5 números, mesmo OVR.
+  26: (save) => ({ ...migrateCareerAttrs(save), _v: 27 }),
+  // v27 → v28 (realismo FM fase 2): bloco `gestao` — treino semanal, tática por
+  // mapa, comissão técnica e condição por jogador, com os padrões de cada frente.
+  27: (save) => ({ ...migrateGestao(save), _v: 28 }),
+  // v28 → v29 (realismo FM fase 3): bloco `clube` — vestiário (status, banco,
+  // escalação), contratos completos, negociações em rodadas e mercado da IA.
+  28: (save) => ({ ...migrateClube(save), _v: 29 }),
+  // v29 → v30 (realismo FM fase 4): bloco `mundo` — calendário do circuito,
+  // resultados das outras cenas, VRS, jovens gerados e a base de dados usada.
+  29: (save) => ({ ...migrateMundo(save), _v: 30 }),
 };
-
-// Versão atual de um save. Save legado (sem `_v`) é tratado como v1.
-export function saveVersion(save: VersionedSave): number {
-  return typeof save._v === 'number' && save._v > 0 ? save._v : 1;
-}
 
 // Aplica migrations em cadeia até SAVE_VERSION. Idempotente: já-migrado vira no-op.
 // Fail-safe contra migration que esquece de bumpar `_v` (força bump pra não loop).
@@ -304,15 +314,4 @@ export function readAndMigrate<T = VersionedSave>(
   } catch {
     return null;
   }
-}
-
-// Marca um save em memória como já-versionado (usado por quem cria save NOVO via
-// emptySave/setup — o save nasce no SAVE_VERSION atual, não precisa migrar).
-export function stampVersion<T extends VersionedSave>(save: T): T {
-  // BUG FIX (caça-bugs): usar >= em vez de ===. Um save de versão FUTURA (ex.:
-  // sincronizado de um device com client mais novo) não pode ter o _v rebaixado
-  // — senão, ao voltar pro client novo, migrateSave re-roda migrations já
-  // aplicadas sobre dados no shape novo (dupla aplicação / corrupção).
-  if (saveVersion(save) >= SAVE_VERSION) return save;
-  return { ...save, _v: SAVE_VERSION };
 }

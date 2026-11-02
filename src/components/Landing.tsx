@@ -1,26 +1,67 @@
-// Landing page de marketing — porta fiel do ui_kits/road-to-major/landing.html do
-// design system. Hero, modos, planos (grátis x R$20 vitalício), como funciona,
-// FAQ, CTA e o modal de conta (que dispara o checkout real via Stripe).
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+// Landing page de marketing (rota /). Mesma identidade da interface nova do
+// jogo: marinho + dourado da marca, escudo, Oswald/Barlow.
+// Enquanto a vitrine do PGL Major Singapore estiver no ar (data/majorWindow.ts),
+// o hero é do Modo Major: pick'em em ~1 min, sem conta, com a régua do evento
+// e os favoritos da simulação. No AO VIVO (24/11 a 13/12) a etiqueta diz o
+// Stage do dia (data/majorLive.ts) e, depois da trava do Stage 1, o CTA vira
+// "Ver meu placar" (tem palpite no navegador) ou "Jogar o Major com um time"
+// (chegou depois: palpite novo não pontua). Depois da janela volta o hero geral. Em seguida:
+// "Em 1 minuto" (3 portas com tempo honesto), os outros modos numa seção
+// compacta, planos (preço via state/price.ts), FAQ, CTA final e o modal de
+// conta (checkout real: Pix/Stripe).
+// Qual hero, quais portas e os favoritos: data/majorLanding.ts (puro e sem o
+// JSON dos 32 times, que não pode entrar no chunk inicial).
+// Estilos em src/styles/landing.css (só tokens).
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ArrowRight, ArrowUpRight, Check, ChevronDown, Crosshair, Gift, Globe, Play, Star, Swords, Target, Trophy } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
+import {
+  MAJOR_FAVORITES, MAJOR_SG_MILESTONES, landingDoors, landingHero, landingMajorCta, landingModes, majorPhase, milestonesReached,
+  type LandingDoor, type LandingDoorId, type LandingHero, type LandingMajorCta, type LandingModeId, type MajorPhase,
+} from '../data/majorLanding';
+import { LIVE_LOCKS, livePublished, liveStage, requestPlacarFocus, type LiveStage } from '../data/majorLive';
+import { pickemStanding, readMajorLocal } from '../state/homeNext';
+import type { MajorTab } from './major/majorTabs';
+import { MajorCalendarButton } from './major/MajorCalendarButton';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
-import { AnnouncementTweet, TwitterLink } from './social';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
-import { login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, type PixCharge } from '../state/account';
-import { ct } from '../state/career-i18n';
+import { AccountError, login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, useAccount, type PixCharge } from '../state/account';
+import { pixErrorKind, type PixErrorKind } from '../state/pixView';
+import { PixPanel } from './PixPanel';
+import { careerLang, ct } from '../state/career-i18n';
 import { loadGhost } from '../state/ghost';
+import { loadDuelInvite } from '../state/duelInvite';
 import { dateKeyOf, dayNumberOf } from '../engine/daily/lines';
+// [URG-2] evento de fim de semana: banner público (deslogado também) com contador e a carta exclusiva
+import { fetchActiveLiveops } from '../state/liveops';
+import type { WeekendEventView } from '../state/weekendEvent';
+import type { UltCard } from '../engine/ultimate/cards';
+import { formatCountdown } from '../engine/ultimate/weekendEvent';
+import { useCommunityGoalPublic } from '../state/communityGoal'; // [URG-5]
+import '../styles/landing.css';
+import { priceLabel, usePrice, withPrice } from '../state/price';
 
-const M = '/maps/';
+// capturas reais da interface do jogo (public/landing/, WebP)
+const SHOT = '/landing/';
+// bastidores e avisos saem primeiro no X (a seção de Novidades saiu da landing)
+const X_PROFILE = 'https://x.com/castroomath';
 
+// número no formato do idioma da interface (31,6 · 31.6)
+const numLocale = () => (careerLang() === 'en' ? 'en-US' : careerLang() === 'es' ? 'es-ES' : 'pt-BR');
+const fmtPct = (n: number) => `${n.toLocaleString(numLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+// Revela as seções abaixo da dobra ao entrar na tela. Quem já está visível no
+// carregamento nunca some; a trava de segurança (1,6s) garante que nada fica
+// escondido se o IntersectionObserver não disparar. Sem movimento liberado, o
+// CSS ignora a classe (landing.css: prefers-reduced-motion).
 function useReveal() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current) return;
-    const els = Array.from(ref.current.querySelectorAll<HTMLElement>('.rtm-reveal'));
+    const els = Array.from(ref.current.querySelectorAll<HTMLElement>('.lp-reveal'));
     els.forEach((el) => { if (el.getBoundingClientRect().top > window.innerHeight * 0.9) el.classList.add('anim'); });
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) e.target.classList.add('in'); }), { threshold: 0.08, rootMargin: '0px 0px -8% 0px' });
     els.forEach((el) => io.observe(el));
@@ -30,124 +71,327 @@ function useReveal() {
   return ref;
 }
 
-function SectionHead({ kicker, title, sub }: { kicker: string; title: string; sub?: string }) {
+function SectionHead({ kicker, title, sub, center = false, id }: { kicker?: string; title: ReactNode; sub?: string; center?: boolean; id?: string }) {
   return (
-    <div className="rtm-reveal" style={{ textAlign: 'center', marginBottom: '34px' }}>
-      <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>{kicker}</span>
-      <h2 style={{ fontFamily: 'var(--font-cond)', fontSize: '38px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-text-strong)', margin: '8px 0 0' }}>{title}</h2>
-      {sub && <p style={{ color: 'var(--rtm-dim)', fontSize: '15px', maxWidth: '560px', margin: '12px auto 0' }}>{sub}</p>}
+    <div className={`lp-head lp-reveal${center ? ' lp-head--center' : ''}`}>
+      {kicker && <span className="lp-kicker">{kicker}</span>}
+      <h2 className="lp-h2" id={id}>{title}</h2>
+      {sub && <p className="lp-lead">{sub}</p>}
     </div>
   );
 }
 
+function Wordmark() {
+  return <span className="lp-wordmark">Road to <b>Major</b></span>;
+}
+
+// Nav fixa: fica sólida quando o topo sai da tela (sentinela observada, sem
+// listener de scroll). "Criar conta · {preço}" é o único CTA de cadastro com preço
+// no próprio texto (src landing-nav); some no celular pra caber o essencial.
 function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: () => void; onPlay: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const [solid, setSolid] = useState(false);
+  const sentinel = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    const h = () => setSolid(window.scrollY > 40);
-    window.addEventListener('scroll', h); return () => window.removeEventListener('scroll', h);
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setSolid(!e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
-  const links: [string, string][] = [['modos', 'Modos'], ['conta', 'Conta'], ['como', 'Como funciona'], ['faq', 'Perguntas']];
+  const links: [string, string][] = [['comecar', 'Em 1 minuto'], ['modos', 'Modos'], ['conta', 'Conta'], ['faq', 'Perguntas']];
   return (
-    <header style={{ position: 'sticky', top: 0, zIndex: 60, background: solid ? 'rgba(24,29,35,.92)' : 'transparent', backdropFilter: solid ? 'blur(10px)' : 'none', borderBottom: `1px solid ${solid ? 'var(--rtm-border-soft)' : 'transparent'}`, transition: 'background .25s, border-color .25s' }}>
-      <div className="lp-wrap" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 22px' }}>
-        <a href="#topo" style={{ display: 'inline-flex', alignItems: 'center', gap: '9px' }}>
-          <BrandMark size={30} />
-          <span style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Road to <span style={{ color: 'var(--em-gold)' }}>Major</span></span>
-        </a>
-        <nav className="l-nav-links" style={{ display: 'flex', gap: '6px', flex: 1, justifyContent: 'center' }}>
-          {links.map(([id, lbl]) => <a key={id} href={'#' + id} style={{ color: 'var(--rtm-dim)', fontSize: '13px', fontWeight: 600, padding: '8px 12px' }}>{ct(lbl)}</a>)}
-        </nav>
-        <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: '10px' }}>
-          <Button variant="ghost" size="sm" onClick={onLogin}>{ct('Entrar')}</Button>
-          {/* funil: único CTA de cadastro da página sem preço em lugar nenhum por
-              perto (o Hero, logo abaixo, só aparece depois de rolar/carregar) —
-              mesmo padrão que já ajudou o clique em outras superfícies do jogo
-              (acct-chip-guest, UltimateSquadScreen: preço no próprio texto do
-              botão, não só num elemento vizinho). */}
-          <Button variant="ghost" size="sm" onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
-          <Button size="sm" onClick={onPlay}>{ct('Jogar agora')}</Button>
-        </span>
-      </div>
-    </header>
+    <>
+      <span ref={sentinel} aria-hidden style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 24 }} />
+      <header className="lp-nav" data-solid={solid}>
+        <div className="lp-wrap lp-nav__bar">
+          <a href="#topo" className="lp-brand" aria-label="Road to Major, início">
+            <BrandMark size={30} />
+            <Wordmark />
+          </a>
+          <nav className="lp-nav__links" aria-label={ct('Seções')}>
+            {links.map(([id, lbl]) => <a key={id} href={'#' + id}>{ct(lbl)}</a>)}
+          </nav>
+          <span className="lp-nav__actions">
+            <Button variant="ghost" size="sm" onClick={onLogin}>{ct('Entrar')}</Button>
+            <Button variant="gold" size="sm" className="lp-nav__acct" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>
+            <Button size="sm" onClick={onPlay}>{ct('Jogar agora')}</Button>
+          </span>
+        </div>
+      </header>
+    </>
   );
 }
 
-function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+// [URG-5] META DA COMUNIDADE: faixa fina acima da dobra, visível deslogado.
+// Número REAL do servidor (GET público cacheado no edge); sem dado, não renderiza.
+function CommunityGoalBar({ onPlay }: { onPlay: () => void }) {
+  const week = useCommunityGoalPublic();
+  if (!week) return null;
+  const done = week.reached;
   return (
-    <section id="topo" style={{ position: 'relative', overflow: 'hidden', marginTop: '-66px', paddingTop: '66px' }}>
-      <img src={M + 'mirage.jpg'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3 }} />
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(900px 500px at 50% 0, rgba(67,130,182,.25), transparent 70%), linear-gradient(180deg, rgba(13,17,22,.7) 0%, rgba(24,29,35,.96) 78%, var(--rtm-bg) 100%)' }} />
-      <div className="lp-wrap" style={{ position: 'relative', textAlign: 'center', padding: '56px 22px 44px' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '999px', background: 'rgba(216,169,67,.12)', border: '1px solid var(--rtm-gold-soft)', color: 'var(--rtm-gold)', fontSize: '12px', fontWeight: 700, letterSpacing: '.5px' }}>
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--rtm-green-bright)' }} /> {ct('Beta aberto, joga de graça no navegador')}
-        </span>
-        <h1 className="l-hero-h1" style={{ fontFamily: 'var(--font-cond)', fontSize: '74px', fontWeight: 700, letterSpacing: '4px', margin: '18px 0 0', textTransform: 'uppercase', color: 'var(--rtm-text-strong)', lineHeight: 0.98, textShadow: '0 0 40px rgba(97,168,221,.35)' }}>
-          {ct('Monte o time dos sonhos')}<br /><span style={{ color: 'var(--em-gold)' }}>{ct('de todas as eras do CS')}</span>
-        </h1>
-        <p style={{ color: 'var(--rtm-dim)', fontSize: '17px', maxWidth: '620px', margin: '18px auto 0', lineHeight: 1.55 }}>
-          {ct('Sorteie lendas de 1.6, Source, CS:GO e CS2. Escolha cinco, contrate o coach e leve o seu elenco até o título do Major. Fase suíça, playoffs, veto de mapa e scoreboard no estilo HLTV.')}
+    <button type="button" className="lp-notice lp-notice--goal" data-done={done} onClick={onPlay}>
+      <Globe size={16} aria-hidden />
+      <span><b>{ct('Meta da comunidade')}:</b> {week.total.toLocaleString('pt-BR')}/{week.target.toLocaleString('pt-BR')} {ct('partidas esta semana')}{done ? ` · ${ct('batida!')}` : ''}</span>
+      <span className="lp-notice__meter" aria-hidden><span style={{ width: `${week.pct}%` }} /></span>
+      <span className="lp-notice__cta">{ct('Jogar no Ultimate')} <ArrowRight size={14} aria-hidden /></span>
+    </button>
+  );
+}
+
+// "Criar conta · {preço}" do hero: link, não disputa com o jogar (src landing-hero).
+// Preço + "pagamento único" no próprio texto, a reassurance que já ajudou nas
+// outras superfícies.
+function HeroOffer({ onAccount }: { onAccount: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
+  return (
+    <div className="lp-offer">
+      <button type="button" className="lp-textlink" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</button>
+      <span>{ct('Pagamento único · sem mensalidade')}</span>
+    </div>
+  );
+}
+
+// ── hero do Major (enquanto majorPromoOn) ────────────────────────────────────
+function phaseLabel(p: MajorPhase): string {
+  if (p.kind === 'pre') return p.days === 1 ? ct('Começa amanhã') : `${ct('Começa em')} ${p.days} ${ct('dias')}`;
+  if (p.kind === 'stages') return ct('Stages suíços em andamento');
+  return ct('Playoffs de 10 a 13/12');
+}
+
+/** etiqueta do painel: contagem até 24/11; no ar, "AO VIVO · Stage 2" (o Stage do dia pelas travas do pick'em) */
+function deskChip(now: number, stage: LiveStage): { label: string; live: boolean } {
+  const p = majorPhase(now);
+  if (p.kind === 'pre') return { label: phaseLabel(p), live: false };
+  if (stage.kind === 'stage') return { label: `${ct('AO VIVO')} · Stage ${stage.n}`, live: true };
+  if (stage.kind === 'gap') return { label: ct('Playoffs em 10/12'), live: false };
+  if (stage.kind === 'playoffs') return { label: `${ct('AO VIVO')} · Playoffs`, live: true };
+  if (stage.kind === 'final') return { label: `${ct('AO VIVO')} · ${ct('Final')}`, live: true };
+  return { label: phaseLabel(p), live: false };
+}
+
+/** o botão do Major em cada lugar da landing (hero/final usam o longo; a porta, o curto) */
+function majorCtaLabel(cta: LandingMajorCta, short = false): string {
+  if (cta === 'placar') return ct('Ver meu placar');
+  if (cta === 'jogar') return ct('Jogar o Major com um time');
+  return short ? ct("Fazer meu pick'em") : ct("Fazer meu pick'em do Major");
+}
+
+// O visual do hero: não há captura do Modo Major em public/landing/, então é
+// HTML com dado real e pequeno (data/majorLanding.ts): a régua do evento e os 4
+// favoritos ao título do painel do Modo Major, sem o JSON dos 32 times.
+function MajorDesk({ now, stage }: { now: number; stage: LiveStage }) {
+  const F = MAJOR_FAVORITES;
+  const top = F.teams[0]?.pct || 1;
+  const reached = milestonesReached(now);
+  const chip = deskChip(now, stage);
+  return (
+    <aside className="lp-desk" aria-label={ct('PGL Major Singapore: datas e favoritos na simulação')}>
+      <div className="lp-desk__head">
+        <span className="lp-desk__chip" data-live={chip.live || undefined}>{chip.label}</span>
+        <p className="lp-desk__event">PGL Major Singapore</p>
+        <p className="lp-desk__where">{ct('Singapura · 32 times')}</p>
+      </div>
+      <ol className="lp-desk__line">
+        {MAJOR_SG_MILESTONES.map((m, i) => (
+          <li key={m.date} data-on={i < reached || undefined}>
+            <b>{m.date}</b>
+            <span>{ct(m.label)}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="lp-desk__body">
+        <p className="lp-desk__label" id="lp-desk-favs">{ct('Favoritos ao título na simulação')}</p>
+        <ol className="lp-favs" aria-labelledby="lp-desk-favs">
+          {F.teams.map((t, i) => (
+            <li key={t.id}>
+              <span className="lp-favs__rank" aria-hidden>{i + 1}</span>
+              <span className="lp-favs__team"><b>{t.tag}</b>{t.name !== t.tag && <> <span>{t.name}</span></>}</span>
+              <span className="lp-favs__bar" aria-hidden><span style={{ transform: `scaleX(${Math.min(1, t.pct / top)})` }} /></span>
+              <span className="lp-favs__pct">{fmtPct(t.pct)}</span>
+            </li>
+          ))}
+        </ol>
+        <p className="lp-desk__note">
+          {F.runs.toLocaleString(numLocale())} {ct('Majors simulados no jogo')} · {F.status === 'projecao' ? ct('lista provisória até 02/11') : ct('lista oficial')}
         </p>
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '28px', flexWrap: 'wrap' }}>
-          <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')}</Button>
-          <Button size="big" variant="gold" onClick={onAccount}>{ct('Save na nuvem por R$20')}</Button>
+      </div>
+      <p className="lp-desk__foot">{ct('3 stages suíços · playoffs em MD3 · final em MD5')}</p>
+      <div className="lp-desk__cal">
+        <MajorCalendarButton className="lp-notice__go" label={ct('Lembrar no calendário')} doneLabel={ct('Arquivo baixado: abra para salvar')} surface="landing" />
+      </div>
+    </aside>
+  );
+}
+
+function HeroMajor({ now, stage, cta, onMajor, onPlay, onAccount }: {
+  now: number; stage: LiveStage; cta: LandingMajorCta; onMajor: () => void; onPlay: () => void; onAccount: () => void;
+}) {
+  return (
+    <section id="topo" className="lp-hero lp-hero--major" aria-labelledby="lp-hero-title">
+      <div className="lp-wrap lp-hero__grid">
+        <div className="lp-hero__copy">
+          <span className="lp-kicker"><Trophy size={14} aria-hidden /> {ct('PGL Major Singapore, de 24/11 a 13/12')}</span>
+          {/* depois da trava do Stage 1 o hero não promete ponto pra palpite novo */}
+          <h1 className="lp-h1" id="lp-hero-title">
+            {cta === 'placar' ? <>{ct("Acompanhe o seu pick'em")} <span>{ct('do Major de Singapura')}</span></>
+              : cta === 'jogar' ? <>{ct('Jogue o Major')} <span>{ct('de Singapura com um time')}</span></>
+              : <>{ct("Faça seu pick'em")} <span>{ct('do Major de Singapura')}</span></>}
+          </h1>
+          <p className="lp-hero__sub">
+            {cta === 'placar'
+              ? ct('Os pontos de cada Stage entram quando sai o resultado oficial. Enquanto isso, jogue as séries do Major com um time ou chame os amigos pra uma liga.')
+              : cta === 'jogar'
+                ? ct('Palpite feito agora não entra no placar, que travou no início do Stage 1. Mas dá para escolher um time e jogar as séries do Major, chamar os amigos pra uma liga ou simular o campeonato inteiro.')
+                : ct('Escolha quem passa em cada stage, monte a chave dos playoffs e simule o Major inteiro. Depois, jogue as séries com um time ou chame os amigos pra uma liga.')}
+          </p>
+          <div className="lp-hero__cta">
+            {/* o clique no Major é medido no App (major_vitrine_click, surface landing) */}
+            <div className="lp-hero__btns">
+              <Button size="big" onClick={onMajor}>{majorCtaLabel(cta)} <ArrowRight size={18} aria-hidden /></Button>
+              <Button size="big" variant="secondary" onClick={onPlay}>{ct('Jogar grátis')}</Button>
+            </div>
+            <p className="lp-hero__assure"><Check size={16} aria-hidden /> {ct('Grátis, sem cadastro, no navegador e no celular.')}</p>
+            <HeroOffer onAccount={onAccount} />
+          </div>
         </div>
-        {/* funil (28d): o CTA do Hero é a maior exposição do funil inteiro
-            (paywall_view src=landing, ~2,5 mil sids/28d — ~23% de tudo), mas o
-            botão só diz "R$20", sem deixar claro que é pagamento único — a
-            mesma lacuna que o acct-chip-guest e o home-rtp tinham antes de
-            ganhar essa reassurance (dado real já mostrou que ela ajuda nas
-            outras superfícies). Texto abaixo do botão, sem mexer no CTA em si. */}
-        <p style={{ color: 'var(--rtm-faint)', fontSize: '12px', margin: '10px 0 0' }}>
-          {ct('Pagamento único · sem mensalidade')}
-        </p>
-        {/* funil: dado real (rtm_accounts) mostra a vaga de Fundador quase no fim,
-            mas o contador só aparecia depois de rolar até o Plano ou abrir o modal
-            — nunca no CTA de maior exposição do funil (Hero da landing, ~25% de
-            todo o paywall_view). Mesmo componente, mesma prova social real. */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
-          <FounderCounter />
-        </div>
-        <div style={{ display: 'flex', gap: '22px', justifyContent: 'center', marginTop: '24px', flexWrap: 'wrap', color: 'var(--rtm-faint)', fontSize: '13px' }}>
-          <span><b style={{ color: 'var(--rtm-text-strong)' }}>16</b> {ct('times')}</span>
-          <span><b style={{ color: 'var(--rtm-text-strong)' }}>5</b> {ct('eras de CS')}</span>
-          <span><b style={{ color: 'var(--rtm-text-strong)' }}>3</b> {ct('modos de jogo')}</span>
-          <span>{ct('Dados de HLTV e Liquipedia')}</span>
+        <div className="lp-hero__stage lp-hero__stage--desk">
+          <MajorDesk now={now} stage={stage} />
         </div>
       </div>
     </section>
   );
 }
 
-function Modes({ onPlay }: { onPlay: () => void }) {
-  const [tab, setTab] = useState(0);
-  const MODES = [
-    { id: 'career', tone: 'var(--rtm-gold)', kicker: 'Campanha longa', title: 'Carreira', img: M + 'nuke.jpg', desc: 'Funde a sua organização, monte o elenco, gerencie transferências e dispute uma temporada inteira rumo ao título.', bullets: ['Hub da organização com química do time', 'Mercado de transferências com orçamento', 'Perfis de jogador e de time clicáveis', 'Killfeed ao vivo na partida'] },
-    { id: 'ultimate', tone: 'var(--rtm-green-bright)', kicker: 'Competitivo · Online', title: 'Ultimate', img: M + 'ancient.jpg', desc: 'Abra pacotes, monte seu elenco dos jogadores reais de 2026 e dispute a ranqueada online contra outros managers. Suba de divisão e prove o seu time.', bullets: ['Duelos 1v1 online de verdade', 'Fila ranqueada com divisões (Bronze → Elite)', 'Coleção, evolução de cartas e mercado', 'Temporadas, missões e recompensas'] },
-    { id: 'draft', tone: 'var(--em-gold)', kicker: 'Partida rápida', title: 'Draft', img: M + 'mirage.jpg', desc: 'Gire a roleta, pegue uma lenda de cada elenco histórico e jogue um Major de uma sentada só. Rápido e diferente toda vez.', bullets: ['Roleta de sorteio estilo abertura de caixa', 'Cinco escolhas mais o coach', 'Pick Em nas outras partidas da chave', 'Fase suíça completa com playoffs'] },
-  ];
-  const m = MODES[tab];
+// ── hero geral (depois da janela do Major) ───────────────────────────────────
+function HeroGeneral({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
   return (
-    <section id="modos" className="lp-wrap" style={{ padding: '70px 22px' }}>
-      <SectionHead kicker={ct('Três jeitos de jogar')} title={ct('Escolha o seu modo')} />
-      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '22px', flexWrap: 'wrap' }}>
-        {MODES.map((x, i) => (
-          <button key={x.id} type="button" onClick={() => setTab(i)} style={{ cursor: 'pointer', borderRadius: '999px', padding: '9px 22px', fontFamily: 'var(--font-cond)', fontSize: '15px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', border: `1px solid ${i === tab ? x.tone : 'var(--rtm-border)'}`, background: i === tab ? x.tone : 'transparent', color: i === tab ? '#06121d' : 'var(--rtm-dim)', transition: 'all .15s' }}>{ct(x.title)}</button>
-        ))}
-      </div>
-      <div className="rtm-reveal in l-grid2" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '20px', alignItems: 'stretch', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', overflow: 'hidden' }}>
-        <div style={{ position: 'relative', minHeight: '300px', overflow: 'hidden' }}>
-          <img key={m.img} src={m.img} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-          <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(13,17,22,.2), rgba(13,17,22,.85))' }} />
-          <span style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: m.tone }} />
-          <span style={{ position: 'absolute', bottom: '20px', left: '22px', fontFamily: 'var(--font-cond)', fontSize: '40px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct(m.title)}</span>
-        </div>
-        <div style={{ padding: '26px 26px 26px 6px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1.4px', textTransform: 'uppercase', color: m.tone }}>{ct(m.kicker)}</span>
-          <p style={{ color: 'var(--rtm-text)', fontSize: '15px', lineHeight: 1.55, margin: '10px 0 16px' }}>{ct(m.desc)}</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
-            {m.bullets.map((b, i) => <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: 'var(--rtm-dim)' }}><span style={{ color: m.tone, fontWeight: 800 }}>✓</span> {ct(b)}</span>)}
+    <section id="topo" className="lp-hero" aria-labelledby="lp-hero-title">
+      <div className="lp-wrap lp-hero__grid">
+        <div className="lp-hero__copy">
+          <span className="lp-badge"><span className="lp-badge__live" aria-hidden /> {ct('Beta aberto, joga de graça no navegador')}</span>
+          <h1 className="lp-h1" id="lp-hero-title">
+            {ct('Seu time de CS')} <span>{ct('rumo ao Major')}</span>
+          </h1>
+          <p className="lp-hero__sub">
+            {ct('Manager e simulador de Counter-Strike no navegador. Comande uma org, viva a carreira de pro ou dispute a ranqueada online, no PC e no celular.')}
+          </p>
+          <div className="lp-hero__cta">
+            <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
+            <HeroOffer onAccount={onAccount} />
+            {/* prova social REAL: contador de Fundadores do servidor (falhou? não mostra nada) */}
+            <FounderCounter />
           </div>
-          <Button style={{ marginTop: '22px', alignSelf: 'flex-start' }} onClick={onPlay}>{ct('Abrir o jogo')}</Button>
+        </div>
+        <div className="lp-hero__stage">
+          <div className="lp-screen">
+            <img
+              src={SHOT + 'hero-carreira-1440.webp'}
+              srcSet={`${SHOT}hero-carreira-800.webp 800w, ${SHOT}hero-carreira-1440.webp 1440w`}
+              sizes="(min-width: 1180px) 640px, (min-width: 960px) 52vw, calc(100vw - 32px)"
+              width={1440}
+              height={900}
+              fetchPriority="high"
+              decoding="async"
+              alt={ct('Tela da Carreira no Road to Major: próximo jogo, relatório do adversário, finanças e ranking mundial')}
+            />
+          </div>
+          <div className="lp-phone">
+            <img src={SHOT + 'rtp-celular.webp'} width={390} height={565} decoding="async" alt={ct('Road to Pro no celular: a próxima série e o botão de jogar')} />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── "Em 1 minuto": 3 portas, cada uma com o tempo honesto ───────────────────
+// Tempos iguais aos do onboarding (onboard.*Meta) e dos cards do Início. O card
+// inteiro é clicável pelo botão (o ::after cobre o card); o título continua h3.
+type DoorCard = { time: string; title: string; desc: string; meta: string; cta: string };
+const DOORS: Record<LandingDoorId, DoorCard> = {
+  major: { time: '~1 min', title: 'Modo Major', desc: "Faça o pick'em dos 32 times, jogue o Major com um time ou simule o campeonato inteiro.", meta: 'sem conta · grátis', cta: "Fazer meu pick'em" },
+  diario: { time: '2 min', title: 'Diário', desc: 'Quatro desafios por dia, os mesmos pra todo mundo.', meta: 'todo dia · grátis', cta: 'Jogar o de hoje' },
+  draft: { time: '~15 min', title: 'Draft', desc: 'Monte um cinco com lendas de cada era e dispute um Major avulso.', meta: 'partida rápida · rejogável', cta: 'Montar meu cinco' },
+  carreira: { time: 'Campanha', title: 'Carreira', desc: 'Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.', meta: 'campanha longa · save neste navegador', cta: 'Fundar minha org' },
+};
+
+function QuickStart({ hero, cta, onMajor, onDoor }: { hero: LandingHero; cta: LandingMajorCta; onMajor: () => void; onDoor: (door: LandingDoor) => void }) {
+  const doors = landingDoors(hero);
+  const lateDesc = ct('Jogue o Major com um time, chame os amigos pra uma liga ou simule o campeonato inteiro.');
+  return (
+    <section id="comecar" className="lp-section lp-section--first" aria-labelledby="lp-comecar-title">
+      <div className="lp-wrap">
+        <SectionHead
+          id="lp-comecar-title"
+          kicker={ct('Em 1 minuto')}
+          title={ct('Escolha por onde começar')}
+          sub={hero === 'major'
+            ? ct('O Modo Major abre na hora. Nos outros, você cria um manager em segundos, sem e-mail.')
+            : ct('Você cria um manager em segundos, sem e-mail, e já entra jogando.')}
+        />
+        <ul className="lp-doors">
+          {doors.map((id) => {
+            const d = DOORS[id];
+            const live = id === 'major' && cta !== 'pickem';
+            return (
+              <li key={id} className="lp-door lp-reveal" data-lead={id === 'major' || undefined}>
+                <span className="lp-door__time">{ct(d.time)}</span>
+                <h3 id={`lp-door-${id}`}>{ct(d.title)}</h3>
+                <p>{live ? lateDesc : ct(d.desc)}</p>
+                <span className="lp-door__meta">{ct(d.meta)}</span>
+                <button type="button" className="lp-door__go" aria-describedby={`lp-door-${id}`} onClick={() => (id === 'major' ? onMajor() : onDoor(id))}>
+                  {id === 'major' ? majorCtaLabel(cta, true) : ct(d.cta)} <ArrowRight size={16} aria-hidden />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+// ── os outros modos, compactos (capturas reais do jogo) ──────────────────────
+type ModeCard = { icon: ReactNode; title: string; desc: string; meta: ReactNode; img: string; h?: number; alt: string };
+
+function Modes({ hero, onPlay }: { hero: LandingHero; onPlay: () => void }) {
+  const MODES: Record<LandingModeId, ModeCard> = {
+    carreira: { icon: <Trophy size={16} />, title: 'Carreira', desc: 'Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.', meta: ct('1 jogador · campanha'), img: 'modo-carreira.webp', alt: 'Elenco da Carreira com os titulares, atributos, OVR e valor de mercado' },
+    rtp: { icon: <Crosshair size={16} />, title: 'Road to Pro', desc: 'Você é o jogador. Nos momentos-chave, a chance de cada jogada fica na tela: o % que você vê é o % que rola.', meta: <><b>{ct('Demo grátis')}</b> · {ct('carreira completa na conta vitalícia')}</>, img: 'modo-rtp-sala.webp', h: 800, alt: 'Momento-chave do Road to Pro: round de pistola com três jogadas, cada uma com a sua chance em porcentagem e os modificadores que a formam' },
+    ultimate: { icon: <Star size={16} />, title: 'Ultimate', desc: 'Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.', meta: ct('Online · ranqueada'), img: 'modo-ultimate.webp', alt: 'Squad do Ultimate com as cartas dos jogadores e a química do time' },
+    online: { icon: <Globe size={16} />, title: 'Online', desc: 'Ranqueada contra outros managers, duelo privado com amigos e o Major da Semana.', meta: ct('Com o seu squad do Ultimate'), img: 'modo-online.webp', alt: 'Ranqueada online com as divisões do Bronze ao Elite' },
+  };
+  const ids = landingModes(hero);
+  return (
+    <section id="modos" className="lp-section" aria-labelledby="lp-modos-title">
+      <div className="lp-wrap">
+        <SectionHead id="lp-modos-title" kicker={ct('Mais modos')} title={ct('Quando quiser ir mais fundo')} sub={ct('Estas são telas reais do jogo. Tudo na mesma interface, no PC e no celular.')} />
+        <ul className="lp-modes" data-count={ids.length}>
+          {ids.map((id) => {
+            const m = MODES[id];
+            return (
+              <li key={id} className="lp-mode lp-reveal">
+                <div className="lp-mode__shot">
+                  {/* 112px no celular e no tablet, a largura do card só a partir de 1100px: a versão de 320px
+                      evita baixar a de 960px para uma miniatura (Lighthouse, 30/10) */}
+                  <img
+                    src={SHOT + m.img} srcSet={`${SHOT}${m.img.replace('.webp', '-320.webp')} 320w, ${SHOT}${m.img} 960w`}
+                    sizes="(min-width: 1100px) 360px, 112px"
+                    width={960} height={m.h ?? 600} loading="lazy" decoding="async" alt={ct(m.alt)}
+                  />
+                </div>
+                <div className="lp-mode__body">
+                  <h3><span aria-hidden>{m.icon}</span>{ct(m.title)}</h3>
+                  <p>{ct(m.desc)}</p>
+                  <span className="lp-mode__meta">{m.meta}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="lp-modes__cta lp-reveal">
+          <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
         </div>
       </div>
     </section>
@@ -155,122 +399,122 @@ function Modes({ onPlay }: { onPlay: () => void }) {
 }
 
 function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
-  const FREE = ['Todos os modos liberados', 'Save no navegador (localStorage)', 'Ranqueada online do Ultimate', 'Roleta, draft e Major completos'];
-  const PAID = ['Todo o gameplay continua gratuito', 'Save na nuvem, joga de qualquer lugar', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil', 'Pagamento único, sem mensalidade'];
+  usePrice(); // re-renderiza quando o preço do servidor chega
+  const FREE = ['Carreira, Ultimate, Draft, Diário e Online completos', 'Ranqueada online do Ultimate', 'Road to Pro: demo com a peneira e 3 semanas', 'Save neste navegador'];
+  const PAID = ['Road to Pro completo, com a Série do Dia', 'Save na nuvem: joga no PC e no celular', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil'];
   return (
-    <section id="conta" className="lp-wrap" style={{ padding: '60px 22px' }}>
-      <SectionHead kicker={ct('Conta e save')} title={ct('Grátis pra jogar, conta pra ir além')} sub={ct('Você joga tudo de graça com save no navegador — incluindo a ranqueada online do Ultimate. A conta guarda o seu progresso na nuvem, libera a compra de coins e mais.')} />
-      <div className="rtm-reveal l-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.05fr', gap: '18px', alignItems: 'stretch', maxWidth: '880px', margin: '0 auto' }}>
-        <div style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', padding: '26px 24px', display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-dim)' }}>{ct('Sem conta')}</span>
-          <div style={{ fontFamily: 'var(--font-cond)', fontSize: '44px', fontWeight: 800, color: 'var(--rtm-text-strong)', margin: '6px 0 2px' }}>R$0</div>
-          <span style={{ fontSize: '13px', color: 'var(--rtm-faint)', marginBottom: '18px' }}>{ct('Joga agora, save só neste navegador')}</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
-            {FREE.map((f, i) => <span key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--rtm-dim)' }}><span style={{ color: 'var(--em-gold)', fontWeight: 800 }}>✓</span>{ct(f)}</span>)}
-          </div>
-          <Button variant="ghost" style={{ marginTop: '22px', width: '100%' }} onClick={onPlay}>{ct('Jogar de graça')}</Button>
+    <section id="conta" className="lp-section" aria-labelledby="lp-conta-title">
+      <div className="lp-wrap">
+        <SectionHead id="lp-conta-title" center kicker={ct('Conta e save')} title={ct('Grátis pra jogar, conta pra ir além')} sub={ct('Sem conta você joga de graça com save no navegador, incluindo a ranqueada online. A conta vitalícia guarda tudo na nuvem e libera o Road to Pro completo.')} />
+        <div className="lp-plans lp-reveal">
+          <article className="lp-plan" aria-labelledby="lp-plan-free">
+            <h3 className="lp-plan__name" id="lp-plan-free">{ct('Sem conta')}</h3>
+            <div className="lp-plan__price"><strong>R$0</strong><span>{ct('pra sempre')}</span></div>
+            <p className="lp-plan__note">{ct('Joga agora, save só neste navegador')}</p>
+            <ul className="lp-checks">
+              {FREE.map((f) => <li key={f}><Check size={16} aria-hidden />{ct(f)}</li>)}
+            </ul>
+            <Button variant="secondary" block onClick={onPlay}>{ct('Jogar agora, de graça')}</Button>
+          </article>
+          <article className="lp-plan lp-plan--paid" aria-labelledby="lp-plan-paid">
+            <h3 className="lp-plan__name" id="lp-plan-paid">{ct('Conta vitalícia')}</h3>
+            <div className="lp-plan__price"><strong>{priceLabel()}</strong><span>{ct('uma vez, sem assinatura')}</span></div>
+            <p className="lp-plan__note">{ct('Pix ou cartão · acesso imediato')}</p>
+            {/* prova social REAL: contagem de Fundadores do servidor (falhou? não mostra nada) */}
+            <FounderCounter />
+            <ul className="lp-checks">
+              {PAID.map((f) => <li key={f}><Check size={16} aria-hidden /><b>{ct(f)}</b></li>)}
+            </ul>
+            <Button variant="gold" block onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>
+          </article>
         </div>
-        <div style={{ position: 'relative', background: 'linear-gradient(160deg, rgba(216,169,67,.12), var(--rtm-panel))', border: '1px solid var(--rtm-gold-soft)', borderRadius: '12px', padding: '26px 24px', display: 'flex', flexDirection: 'column', boxShadow: '0 0 0 1px rgba(216,169,67,.18), 0 12px 36px rgba(0,0,0,.4)' }}>
-          <span style={{ position: 'absolute', top: '18px', right: '20px', fontSize: '10px', fontWeight: 800, letterSpacing: '.8px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '4px 10px', borderRadius: '999px' }}>{ct('Recomendado')}</span>
-          <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>{ct('Conta com save na nuvem')}</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '6px 0 2px' }}>
-            <span style={{ fontFamily: 'var(--font-cond)', fontSize: '44px', fontWeight: 800, color: 'var(--rtm-gold)' }}>R$20</span>
-            <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('uma vez, sem assinatura')}</span>
-          </div>
-          <span style={{ fontSize: '13px', color: 'var(--rtm-faint)', marginBottom: '10px' }}>{ct('Persistência enquanto o serviço estiver em operação')}</span>
-          {/* prova social REAL: contagem de Fundadores do servidor (falhou? não mostra nada) */}
-          <FounderCounter style={{ marginBottom: '14px' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
-            {PAID.map((f, i) => <span key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: i === 0 ? 'var(--rtm-dim)' : 'var(--rtm-text)' }}><span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>✓</span>{ct(f)}</span>)}
-          </div>
-          <Button variant="gold" style={{ marginTop: '22px', width: '100%' }} onClick={onAccount}>{ct('Ativar conta com save')}</Button>
-        </div>
-      </div>
-      <p className="rtm-reveal" style={{ textAlign: 'center', color: 'var(--rtm-faint)', fontSize: '12.5px', marginTop: '18px' }}>
-        {ct('O jogo completo é gratuito. Os R$20 cobrem conta, banco de dados e persistência em nuvem, sem mensalidade.')}
-      </p>
-    </section>
-  );
-}
-
-function How() {
-  const STEPS: [string, string, string][] = [
-    ['01', 'Crie o seu manager', 'Nick, idade, país e a cor da sua organização. Leva dez segundos.'],
-    ['02', 'Monte o elenco', 'Sorteie elencos históricos e escolha uma lenda de cada era, mais o coach.'],
-    ['03', 'Dispute o Major', 'Veto de mapa, killfeed ao vivo e scoreboard. Vença a suíça e os playoffs.'],
-    ['04', 'Dispute a ranqueada', 'No Ultimate você joga online contra outros managers e sobe de divisão, do Bronze ao Elite.'],
-  ];
-  return (
-    <section id="como" className="lp-wrap" style={{ padding: '60px 22px' }}>
-      <SectionHead kicker={ct('Começar é simples')} title={ct('Como funciona')} />
-      <div className="rtm-reveal l-grid3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
-        {STEPS.map(([n, t, d]) => (
-          <div key={n} style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', padding: '22px 18px' }}>
-            <div style={{ fontFamily: 'var(--font-cond)', fontSize: '36px', fontWeight: 800, color: 'var(--em-gold)', lineHeight: 1 }}>{n}</div>
-            <h3 style={{ fontFamily: 'var(--font-cond)', fontSize: '19px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', margin: '12px 0 6px' }}>{ct(t)}</h3>
-            <p style={{ color: 'var(--rtm-dim)', fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>{ct(d)}</p>
-          </div>
-        ))}
+        <p className="lp-plans__foot lp-reveal">
+          {withPrice(ct('Os {preço} cobrem conta, banco de dados e persistência em nuvem enquanto o serviço estiver em operação, sem mensalidade.'))}
+        </p>
       </div>
     </section>
   );
 }
 
-function Faq() {
+function Faq({ hero }: { hero: LandingHero }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
+  // durante o Major, a pergunta de quem chega pelos posts do Major vem primeiro (e aberta)
+  const MAJOR_Q: [string, string] = ['O Modo Major é de graça?', "É. Pick'em dos 32 times, jogar o Major com um time, liga com os amigos e a simulação do campeonato inteiro, sem conta e sem criar manager. O palpite fica salvo neste navegador."];
   const Q: [string, string][] = [
-    ['Preciso pagar pra jogar?', 'Não. Todos os modos estão liberados de graça — incluindo a ranqueada online do Ultimate — e o save fica no seu navegador. A conta de R$20 serve pra guardar o progresso na nuvem e liberar recursos extras.'],
-    ['O que a conta me dá?', 'Save na nuvem pra jogar de qualquer aparelho, a compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. Nenhum modo é vendido: todo o gameplay é gratuito.'],
-    ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça — a conta só entra pra salvar na nuvem e comprar coins.'],
+    ...(hero === 'major' ? [MAJOR_Q] : []),
+    ['Preciso pagar pra jogar?', 'Não. Carreira, Ultimate, Draft, Diário e Online são de graça, incluindo a ranqueada online, e o Road to Pro tem demo grátis. O save fica no seu navegador. A conta de {preço} guarda o progresso na nuvem e libera o Road to Pro completo.'],
+    ['O que a conta vitalícia me dá?', 'O Road to Pro completo com a Série do Dia, save na nuvem pra jogar no PC e no celular, compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. É um pagamento único, sem mensalidade.'],
+    ['Funciona no celular?', 'Sim. O jogo roda no navegador do celular com a mesma interface do PC, e dá pra instalar na tela inicial como um app.'],
+    ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça: a conta só entra pra salvar na nuvem e comprar coins.'],
     ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
-    ['Como pago os R$20?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
-    ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, cobrindo as cinco eras do Counter-Strike.'],
+    ['Como pago os {preço}?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
+    ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, do CS 1.6 ao CS2.'],
   ];
   const [open, setOpen] = useState(0);
   return (
-    <section id="faq" className="lp-wrap" style={{ padding: '60px 22px', maxWidth: '820px' }}>
-      <SectionHead kicker={ct('Tirando dúvidas')} title={ct('Perguntas frequentes')} />
-      <div className="rtm-reveal" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {Q.map(([q, a], i) => {
-          const on = open === i;
-          return (
-            <div key={i} style={{ background: 'var(--rtm-panel)', border: `1px solid ${on ? 'var(--em-gold)' : 'var(--rtm-border-soft)'}`, borderRadius: 'var(--rtm-radius)', overflow: 'hidden' }}>
-              <button type="button" onClick={() => setOpen(on ? -1 : i)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', background: 'none', border: 'none', cursor: 'pointer', padding: '16px 18px', textAlign: 'left' }}>
-                <span style={{ fontFamily: 'var(--font-cond)', fontSize: '17px', fontWeight: 700, color: 'var(--rtm-text-strong)' }}>{ct(q)}</span>
-                <span style={{ color: 'var(--em-gold)', fontSize: '20px', fontWeight: 700, transform: on ? 'rotate(45deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>+</span>
-              </button>
-              {on && <div style={{ padding: '0 18px 16px', color: 'var(--rtm-dim)', fontSize: '14px', lineHeight: 1.6 }}>{ct(a)}</div>}
-            </div>
-          );
-        })}
+    <section id="faq" className="lp-section" aria-labelledby="lp-faq-title">
+      <div className="lp-wrap lp-faq">
+        <div className="lp-faq__intro lp-reveal">
+          <h2 className="lp-h2" id="lp-faq-title">{ct('Perguntas frequentes')}</h2>
+          <p className="lp-lead">{ct('O essencial sobre modos, conta e pagamento. Ainda com dúvida? Chama no X: @castroomath.')}</p>
+        </div>
+        <div className="lp-faq__list lp-reveal">
+          {Q.map(([q, a], i) => {
+            const on = open === i;
+            return (
+              <div key={q} className="lp-qa" data-open={on}>
+                <h3>
+                  <button type="button" className="lp-qa__btn" id={`lp-q-${i}`} aria-expanded={on} aria-controls={`lp-a-${i}`} onClick={() => setOpen(on ? -1 : i)}>
+                    <span>{withPrice(ct(q))}</span>
+                    <ChevronDown size={20} aria-hidden />
+                  </button>
+                </h3>
+                <div className="lp-qa__panel" id={`lp-a-${i}`} role="region" aria-labelledby={`lp-q-${i}`} hidden={!on}>{withPrice(ct(a))}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
 }
 
-function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+function FinalCta({ hero, cta, onMajor, onAccount, onPlay }: { hero: LandingHero; cta: LandingMajorCta; onMajor: () => void; onAccount: () => void; onPlay: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
+  const major = hero === 'major';
   return (
-    <section className="lp-wrap" style={{ padding: '40px 22px 70px' }}>
-      <div className="rtm-reveal" style={{ position: 'relative', overflow: 'hidden', borderRadius: '14px', border: '1px solid var(--rtm-gold-soft)', textAlign: 'center', padding: '46px 26px' }}>
-        <img src={M + 'nuke.jpg'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.22 }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(700px 300px at 50% 0, rgba(216,169,67,.18), transparent 70%), rgba(13,17,22,.7)' }} />
-        <div style={{ position: 'relative' }}>
+    <section className="lp-section lp-section--last" aria-labelledby="lp-final-title">
+      <div className="lp-wrap">
+        <div className="lp-final lp-reveal">
+          <img src="/maps/nuke.jpg" alt="" loading="lazy" decoding="async" width={300} height={168} />
           <BrandMark size={56} />
-          <h2 style={{ fontFamily: 'var(--font-cond)', fontSize: '44px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)', margin: '14px 0 8px', lineHeight: 1 }}>{ct('O título não é dado, é conquistado')}</h2>
-          <p style={{ color: 'var(--rtm-dim)', fontSize: '16px', maxWidth: '520px', margin: '0 auto 24px' }}>{ct('Comece de graça agora. Quando quiser salvar tudo e disputar o ranking, é só criar a sua conta.')}</p>
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Button size="big" onClick={onPlay}>{ct('Jogar agora')}</Button>
-            {/* funil: CTA final da página (depois de Modos/Como funciona/FAQ) —
-                mesmo padrão do Nav acima: preço no texto do botão, não só na
-                seção de Planos que já ficou pra trás na rolagem. */}
-            <Button size="big" variant="gold" onClick={onAccount}>{ct('Ativar save na nuvem')} · R$20</Button>
+          <h2 className="lp-h2" id="lp-final-title">{ct('O título não é dado, é conquistado')}</h2>
+          <p className="lp-lead">
+            {major && cta === 'pickem'
+              ? ct("Faça seu pick'em agora, de graça. Quando quiser guardar tudo na nuvem, é só criar a sua conta.")
+              : major
+                ? ct('Jogue o Major agora, de graça. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')
+                : ct('Comece de graça agora. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')}
+          </p>
+          <div className="lp-final__cta">
+            {major
+              ? <Button size="big" onClick={onMajor}>{majorCtaLabel(cta)} <ArrowRight size={18} aria-hidden /></Button>
+              : <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>}
+            {/* funil: CTA final da página, com o preço no texto do botão (a seção de
+                planos já ficou pra trás na rolagem). src landing-final. */}
+            <Button size="big" variant="gold" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>
           </div>
+          {major && <button type="button" className="lp-textlink" onClick={onPlay}>{ct('Ou jogue os outros modos, de graça')}</button>}
         </div>
+        <footer className="lp-footer">
+          <span className="lp-footer__brand"><BrandMark size={22} /> Road to Major</span>
+          <p>{ct('Produto comercial independente, não afiliado ou endossado pela Valve, HLTV, Liquipedia, equipes ou jogadores.')}</p>
+          <span className="lp-footer__links">
+            <a className="lp-footer__x" href={X_PROFILE} target="_blank" rel="noreferrer">{ct('Siga @castroomath no X')} <ArrowUpRight size={14} aria-hidden /></a>
+            <LegalLinks />
+          </span>
+        </footer>
       </div>
-      <footer className="landing-legal-footer">
-        <span className="landing-footer-brand"><BrandMark size={22} /> Road to Major</span>
-        <span>{ct('Produto comercial independente, não afiliado ou endossado pela Valve, HLTV, Liquipedia, equipes ou jogadores.')}</span>
-        <LegalLinks />
-      </footer>
     </section>
   );
 }
@@ -279,8 +523,23 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
 // módulo). Honesto e descartável — sem timer fake, sem segunda modal.
 const nudgeShownThisSession = new Set<string>();
 
-export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup' }: { onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
-  const [mode, setMode] = useState<'signup' | 'login' | 'reset'>(initialMode);
+export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup', pixFirst = false, payingAccount = null, playerNick = '' }: {
+  onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login';
+  /** Checkout aberto por cima da trava do Road to Pro: o QR Pix é o passo
+   *  seguinte automático e, com ele na tela, o formulário sai do caminho (o QR
+   *  e a troca pro cartão cabem sem rolar no celular). O cartão continua. */
+  pixFirst?: boolean;
+  /** Conta grátis já logada (sem pagar): pula o cadastro e vai direto pro pagamento. */
+  payingAccount?: { email: string; nick: string } | null;
+  /** Nick do jogador do RtP, citado no reforço do Pix. */
+  playerNick?: string;
+}) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
+  // 'pay': conta grátis existente — só o passo de pagamento. Lido 1x (useState):
+  // o signup/login de dentro do modal também grava a conta, e o modal NÃO pode
+  // trocar de passo no meio do fluxo por causa disso.
+  const [mode, setMode] = useState<'signup' | 'login' | 'reset' | 'pay'>(() => (payingAccount ? 'pay' : initialMode));
+  const [payAcct] = useState(payingAccount);
   // reset de senha em 2 passos: pedir o código por e-mail → código + senha nova.
   const [resetStep, setResetStep] = useState<'ask' | 'code'>('ask');
   const [code, setCode] = useState('');
@@ -294,9 +553,16 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [accepted, setAccepted] = useState(false);
-  // Pix Woovi (merge origin/master) + visual em-* (HEAD)
-  const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  // Pix Woovi: a cobrança na tela, o e-mail da conta e quando ela chegou (base do
+  // prazo do Woovi). A tela do QR é o PixPanel (igual ao do UpsellCard).
+  const [pix, setPix] = useState<{ charge: PixCharge; email: string; at: number } | null>(null);
+  // conta que já passou pelo cadastro/login nesta tela: daqui pra frente o modal
+  // é só o Pix, e gerar de novo (código expirou, deu erro) não refaz o cadastro.
+  const [pixEmail, setPixEmail] = useState('');
+  const [pixGenerating, setPixGenerating] = useState(false);
+  const [pixErr, setPixErr] = useState<PixErrorKind | null>(null);
+  // o polling automático bateu no teto de 15 min: a tela pede o "verificar agora"
+  const [pollPaused, setPollPaused] = useState(false);
   const [nudge, setNudge] = useState(false);
   // funil: refinando o achado anterior — de 60 checkout_abandon (pix) nos últimos
   // 28 dias, 18 (30%) fecham em menos de 60s, e 11 desses entre 15s–60s, ou seja,
@@ -311,6 +577,25 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   useEffect(() => {
     if (pixWaitLong) trackPaywallView('pix-wait-longo'); // funil: reassurance de espera longa exibida (evento existente, novo src)
   }, [pixWaitLong]);
+  // funil: a reassurance dos 25s não é o fim da história — nos checkout_abandon
+  // (pix, 28d), 4 dos 6 abandonos do gancho 'rtp-demo-cliff' (o público mais
+  // engajado do funil) passam de 160s esperando, alguns perto de 400s, e MESMO
+  // ASSIM desistem. Essa galera já viu a reassurance e a saída pro cartão —
+  // só sobra o polling automático e mudo a cada 6s. O botão chama o MESMO
+  // /api/account do polling (nenhuma lógica de pagamento nova), só na hora que
+  // a pessoa pede: devolve a sensação de controle pra quem decidiu pagar e só
+  // está esperando a confirmação cair.
+  const [checkingNow, setCheckingNow] = useState(false);
+  const checkPixNow = async () => {
+    if (!pix || checkingNow) return;
+    setCheckingNow(true);
+    trackPaywallView('pix-check-manual'); // funil: usou o "verificar agora" (src próprio)
+    try {
+      const me = await fetchMe();
+      if (me?.paid) { pixConfirmed.current = true; setPix(null); onPlay(); return; }
+    } catch { /* ignora: a tela segue esperando o polling automático */ }
+    setCheckingNow(false);
+  };
   // funil: a troca pro cartão só aparecia junto da reassurance, aos 25s — mas o
   // dado real (28d) mostra 16 dos 55 abandonos de Pix (29%) desistindo em MENOS
   // de 30s, rápido demais pra terem saído da aba pro app do banco e voltado.
@@ -343,11 +628,12 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     let alive = true;
     const startedAt = Date.now();
     const CAP_MS = 15 * 60_000;
+    setPollPaused(false);
     const check = async () => {
       try { const me = await fetchMe(); if (alive && me?.paid) { pixConfirmed.current = true; setPix(null); onPlay(); } } catch { /* ignora */ }
     };
     const t = setInterval(() => {
-      if (Date.now() - startedAt > CAP_MS) { clearInterval(t); return; } // Pix expirou
+      if (Date.now() - startedAt > CAP_MS) { clearInterval(t); if (alive) setPollPaused(true); return; } // Pix expirou: a tela oferece o "verificar agora"
       if (document.hidden) return;                                       // aba oculta: webhook cobre
       void check();
     }, 6000);
@@ -360,51 +646,82 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const input: CSSProperties = { width: '100%' };
   const lbl: CSSProperties = { fontSize: '0.72rem', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: 'var(--em-muted)', display: 'block', marginBottom: '6px' };
   const pwMismatch = mode === 'signup' && pw2.length > 0 && pw !== pw2;
-  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6
-    && (mode === 'login' || (accepted && pw === pw2));
+  const valid = mode === 'pay' || (/\S+@\S+\.\S+/.test(email) && pw.length >= 6
+    && (mode === 'login' || (accepted && pw === pw2)));
+  // conta (nova, login ou a grátis já logada) que vai pagar
+  const resolveAccount = async () => {
+    if (mode === 'pay' && payAcct) return { ...payAcct, paid: false };
+    if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
+    const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
+    if (mode === 'signup') trackSignup('done');  // funil: cadastro criado com sucesso
+    return acct;
+  };
   const go = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
     try {
-      if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
-      const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
-      if (mode === 'signup') trackSignup('done');  // funil: cadastro criado com sucesso
+      const acct = await resolveAccount();
       if (acct.paid) { onPlay(); return; }           // já tem conta vitalícia: entra direto
       await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento (checkout_open é do App.startCheckout)
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
   };
-  // Pix via Woovi (merged de origin/master): cria/entra na conta, gera a cobrança
-  // e mostra QR + copia-e-cola INLINE. O webhook (/api/woovi-webhook) marca a conta
-  // como paga e o polling acima detecta na mesma tela e libera o acesso.
+  // Pix via Woovi: cria/entra na conta, gera a cobrança e mostra QR + copia-e-cola
+  // INLINE. O webhook (/api/woovi-webhook) marca a conta como paga e o polling
+  // acima detecta na mesma tela e libera o acesso.
+  // Gera a cobrança da conta já resolvida. Também é o "Gerar novo código" /
+  // "Tentar de novo": o checkout_open conta só a 1ª vez que um QR aparece neste
+  // modal, e o pixOpenedAt (base do abandono) fica nessa 1ª abertura.
+  const requestPix = async (acctEmail: string) => {
+    setPixErr(null); setPixGenerating(true);
+    try {
+      const charge = await beginPix();
+      if (!charge) { pixConfirmed.current = true; setPix(null); onPlay(); return; } // já estava paga
+      setPix({ charge, email: acctEmail, at: Date.now() });
+      if (!pixOpenedAt.current) {
+        pixOpenedAt.current = Date.now();
+        trackCheckoutOpen('pix'); // funil: QR Pix da vitalícia na tela
+      }
+    } catch (e) {
+      // sem token o beginPix nem chega no servidor: é sessão (como o 401)
+      setPixErr(pixErrorKind(e instanceof AccountError ? e.status : 401));
+    }
+    setPixGenerating(false);
+  };
   const goPix = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
     try {
-      if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
-      const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
-      if (mode === 'signup') trackSignup('done');  // funil: cadastro criado com sucesso
+      const acct = pixEmail ? { email: pixEmail, paid: false } : await resolveAccount();
       if (acct.paid) { onPlay(); return; }
-      const charge = await beginPix();
-      if (!charge) { onPlay(); return; } // já estava paga
-      setPix({ charge, email: acct.email });
-      pixOpenedAt.current = Date.now();
-      trackCheckoutOpen('pix'); // funil: QR Pix da vitalícia na tela
-      setBusy(false);
-    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
+      setPixEmail(acct.email);
+      await requestPix(acct.email);
+    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); }
+    setBusy(false);
   };
-  const copyBr = async () => {
-    if (!pix?.charge.brCode) return;
-    try { await navigator.clipboard.writeText(pix.charge.brCode); setCopied(true); setTimeout(() => setCopied(false), 2200); } catch { /* sem permissão */ }
-  };
+  const regenPix = () => { if (pixEmail && !pixGenerating) void requestPix(pixEmail); };
   // troca pro cartão sem perder o cadastro: a conta já foi criada no goPix, então
   // só dispara o checkout do Stripe (mesmo onCheckout do botão "Ativar com
   // cartão" acima) — não é um segundo cadastro.
   const switchToCard = async () => {
-    if (!pix || cardSwitching) return;
+    if (!pixEmail || cardSwitching) return;
     setCardSwitching(true);
     pixSwitchedMethod.current = true;
-    await onCheckout(pix.email, nick.trim());
+    await onCheckout(pixEmail, nick.trim() || payAcct?.nick || '');
   };
+  // pixFirst + conta grátis já logada: não há o que cadastrar — o QR Pix abre
+  // sozinho (1x). Quem prefere cartão tem o botão logo abaixo do QR.
+  const autoPix = useRef(false);
+  useEffect(() => {
+    if (!pixFirst || mode !== 'pay' || autoPix.current) return;
+    autoPix.current = true;
+    void goPix();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pixFirst, mode]);
+  // Passo do Pix: com a conta resolvida e o Pix gerando, na tela ou com erro, o
+  // modal vira só o PixPanel. Antes o formulário (e o preço) ficava em cima e, no
+  // celular, o QR e o "Copiar" caíam abaixo da dobra. pixFirst + conta grátis já
+  // abre direto no passo (sem piscar o preço antes do auto-Pix).
+  const pixStep = !!pix || pixGenerating || (!!pixErr && !!pixEmail) || (pixFirst && mode === 'pay');
   // fechar com o QR Pix aberto e sem pagamento confirmado: UM nudge leve inline
   // (1x por sessão), honesto e descartável. Depois disso, fechar fecha mesmo.
   const requestClose = () => {
@@ -419,7 +736,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const title = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
       <BrandMark size={22} />
-      <span>{mode === 'signup' ? ct('Criar conta') : mode === 'reset' ? ct('Recuperar senha') : ct('Entrar')}</span>
+      <span>{pixStep || mode === 'pay' ? ct('Ativar a vitalícia') : mode === 'signup' ? ct('Criar conta') : mode === 'reset' ? ct('Recuperar senha') : ct('Entrar')}</span>
     </span>
   );
 
@@ -446,10 +763,10 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   };
   return (
     <Modal open onClose={requestClose} title={title} size="sm">
-      {mode === 'signup' && (
+      {(mode === 'signup' || mode === 'pay') && !pixStep && (
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--em-gold)' }}>R$20</span>
+            <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--em-gold)' }}>{priceLabel()}</span>
             <span style={{ fontSize: '0.82rem', color: 'var(--em-muted)' }}>{ct('pagamento único pelo save em nuvem')}</span>
           </div>
           {/* reassurance: tira as 3 dúvidas mais comuns antes do pagamento */}
@@ -458,12 +775,19 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             <span>✔ {ct('Acesso imediato')}</span>
             <span>✔ {ct('Pix ou cartão')}</span>
           </div>
+          {pixFirst && (
+            <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--c-win)', fontWeight: 700 }}>
+              {playerNick
+                ? <>{ct('Pix aprova na hora · o')} {playerNick} {ct('continua de onde parou')}</>
+                : ct('Pix aprova na hora · seu jogador continua de onde parou')}
+            </p>
+          )}
           {/* prova social REAL (servidor); fetch falhou → não renderiza nada */}
           <FounderCounter style={{ marginTop: '8px' }} />
         </div>
       )}
-      {info && mode !== 'signup' && <p style={{ color: '#5ed88a', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
-      {mode !== 'reset' ? (
+      {info && mode !== 'signup' && !pixStep && <p style={{ color: 'var(--c-win)', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
+      {mode === 'pay' || pixStep ? null : mode !== 'reset' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
           <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
@@ -475,7 +799,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
                 {showPw ? ct('ocultar') : ct('mostrar')}
               </button>
             </div>
-            <input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type={showPw ? 'text' : 'password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} />
+            <input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type={showPw ? 'text' : 'password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && (mode === 'signup' ? goPix() : go())} />
           </div>
           {/* Confirmação só no CADASTRO: um typo aqui cria uma conta com senha que
               ninguém conhece. O reset por e-mail existe e resolve, mas obriga quem
@@ -492,7 +816,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
                 type={showPw ? 'text' : 'password'}
                 autoComplete="new-password"
                 aria-invalid={pwMismatch}
-                onKeyDown={(e) => e.key === 'Enter' && go()}
+                onKeyDown={(e) => e.key === 'Enter' && goPix()}
               />
               {pwMismatch && <p style={{ color: '#e2574c', fontSize: '0.74rem', margin: '6px 0 0' }}>{ct('As senhas não são iguais.')}</p>}
             </div>
@@ -530,20 +854,29 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           )}
         </div>
       )}
-      {mode === 'signup' && (
+      {mode === 'signup' && !pixStep && (
         <label className="checkout-legal-accept">
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
           <span>{ct('Li e aceito os')} <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">{ct('Termos')}</a> {ct('e a')} <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">{ct('Política de Reembolso')}</a>{ct(', consultei a')} <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">{ct('Privacidade')}</a> {ct('e confirmo ser maior de 18 anos ou responsável legal pela compra.')}</span>
         </label>
       )}
-      {err && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
+      {err && !pixStep && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
       {/* funil: dado real (checkout_open x rtm_paid_emails, por método) mostra o Pix
           confirmando a imensa maioria dos checkouts abertos, enquanto o cartão perde
           a maior parte no redirect pro Stripe — então o Pix vira o CTA primário
           (ouro) e o cartão passa a secundário, sem tirar a opção de ninguém. */}
-      {mode === 'signup' ? (
+      {pixStep ? null : mode === 'signup' || mode === 'pay' ? (
         <>
-          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={goPix}>
+          {/* funil: dado real (28d) — 10 dos 26 checkout_abandon(pix) (38%) fecham
+              em MENOS de 15s, rápido demais pra ser espera de pagamento. É gente
+              clicando "Pagar com Pix" sem o banco à mão e desistindo assim que o
+              QR aparece. Os nudges existentes (troca pro cartão, reassurance)
+              só entram DEPOIS que o QR já está na tela — não alcançam esse grupo.
+              Avisa ANTES do clique, sem fricção nem passo extra. */}
+          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
+            {ct('Tenha o app do banco à mão: o código Pix aparece logo em seguida')}
+          </p>
+          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '8px' }} onClick={goPix}>
             {busy ? ct('Aguarde…') : ct('Pagar com Pix')}
           </Button>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '6px 0 0' }}>{ct('Confirma na hora, sem sair desta tela')}</p>
@@ -554,76 +887,39 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
       ) : mode === 'login' ? (
         <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : ct('Entrar')}</Button>
       ) : null}
-      {pix && (
-        <div style={{ marginTop: '14px', background: 'rgba(94,216,138,.08)', border: '1px solid rgba(94,216,138,.35)', borderRadius: '6px', padding: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#5ed88a', boxShadow: '0 0 8px #5ed88a', animation: 'pulse 1.4s infinite' }} />
-            <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
-          </div>
-          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-            {/* funil: a mediana real de espera do Pix é ~133s — "aprovado em
-                segundos" prometia rápido demais e pode ter puxado parte dos 30%
-                de abandonos que saem em menos de 1min. Troca por expectativa
-                honesta desde o primeiro segundo, sem depender só do timer acima. */}
-            {ct('Esta tela confirma sozinha assim que o Pix cair — não precisa recarregar. Costuma levar de 1 a 3 minutos.')}
-          </p>
-          {pix.charge.qrCodeImage && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
-              <img src={pix.charge.qrCodeImage} alt="QR Pix" style={{ width: '200px', height: '200px', background: '#fff', padding: '8px', borderRadius: '8px' }} />
-            </div>
-          )}
-          {pix.charge.brCode && (
-            <>
-              <label style={lbl}>{ct('Pix copia e cola')}</label>
-              <textarea readOnly value={pix.charge.brCode} rows={3} onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-                style={{ ...input, fontFamily: 'monospace', fontSize: '0.72rem', resize: 'none', wordBreak: 'break-all' }} />
-              <button type="button" onClick={copyBr}
-                style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'rgba(94,216,138,.2)' : 'var(--em-panel-2)', border: '1px solid var(--em-border)', color: 'var(--em-text)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                {copied ? ct('Copiado!') : ct('Copiar código Pix')}
-              </button>
-            </>
-          )}
-          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
-            {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
-          </p>
-          {/* saída honesta pro cartão — visível desde que o QR abre, não mais só
-              aos 25s (ver comentário no effect acima: 29% dos abandonos do Pix
-              desistem antes disso). O Pix continua o CTA primário e o QR não some. */}
-          <button
-            type="button"
-            onClick={() => void switchToCard()}
-            disabled={cardSwitching}
-            style={{ display: 'block', width: '100%', marginTop: '10px', padding: '8px', borderRadius: '6px', cursor: cardSwitching ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: cardSwitching ? 0.6 : 1 }}
-          >
-            {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
-          </button>
-          {pixWaitLong && (
-            /* reassurance honesta pra quem passou de 25s esperando (ver comentário no effect acima) */
-            <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
-              {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
-            </p>
-          )}
-          {nudge && (
-            /* nudge anti-abandono (1x/sessão): inline, honesto, descartável */
-            <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(232,193,112,.08)', border: '1px solid rgba(232,193,112,.4)', borderRadius: '6px' }}>
-              <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--em-text)', lineHeight: 1.5 }}>
-                {ct('Ficou alguma dúvida? O acesso é vitalício e o Pix confirma na hora.')}
-              </p>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" onClick={() => setNudge(false)}
-                  style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'var(--em-gold)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                  {ct('Continuar pagamento')}
-                </button>
-                <button type="button" onClick={onClose}
-                  style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                  {ct('Fechar')}
-                </button>
+      {pixStep && (
+        <PixPanel
+          charge={pix?.charge ?? null}
+          chargeAt={pix?.at ?? 0}
+          generating={pixGenerating}
+          error={pixErr}
+          onRegenerate={regenPix}
+          /* saída honesta pro cartão — visível desde que o QR abre, não mais só
+             aos 25s (ver comentário no effect acima: 29% dos abandonos do Pix
+             desistem antes disso). O Pix continua o CTA primário e o QR não some. */
+          onCard={() => void switchToCard()}
+          cardSwitching={cardSwitching}
+          /* reassurance + "Já paguei, verificar agora" a partir dos 25s (ver os
+             comentários do pixWaitLong e do checkPixNow acima) */
+          waitLong={pixWaitLong}
+          onCheckNow={() => void checkPixNow()}
+          checkingNow={checkingNow}
+          pollPaused={pollPaused}
+          note={playerNick ? <>{ct('Pix aprova na hora · o')} {playerNick} {ct('continua de onde parou')}</> : undefined}
+          interrupt={nudge ? (
+            /* nudge anti-abandono (1x/sessão): inline, honesto, descartável. Logo
+               abaixo do status (antes ficava no fim do QR, fora da tela no celular). */
+            <div className="pix-panel__nudge" role="group" aria-label={ct('Continuar pagamento')}>
+              <p>{ct('Ficou alguma dúvida? O acesso é vitalício e o Pix confirma na hora.')}</p>
+              <div className="pix-panel__nudge-actions">
+                <Button variant="secondary" autoFocus onClick={() => setNudge(false)}>{ct('Continuar pagamento')}</Button>
+                <Button variant="ghost" onClick={onClose}>{ct('Fechar')}</Button>
               </div>
             </div>
-          )}
-        </div>
+          ) : undefined}
+        />
       )}
-      <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
+      {mode !== 'pay' && !pixStep && <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
         {mode === 'reset' ? (
           <button type="button" onClick={() => { setMode('login'); setResetStep('ask'); setErr(''); setInfo(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>← {ct('Voltar pro login')}</button>
         ) : (
@@ -632,59 +928,129 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); setInfo(''); setPw2(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
           </>
         )}
-      </p>
+      </p>}
       <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', opacity: 0.75, textAlign: 'center', margin: '10px 0 0' }}>{ct('Cartão pelo Stripe ou Pix pelo Woovi. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.')}</p>
     </Modal>
   );
 }
 
-// banda de novidades: o tweet de anúncio do @castroomath como prova social, logo
-// abaixo dos modos e antes do plano (momento de decisão).
-function TweetBand() {
-  return (
-    <section id="novidades" className="lp-wrap" style={{ padding: '50px 22px', textAlign: 'center' }}>
-      <div className="rtm-reveal" style={{ maxWidth: '600px', margin: '0 auto' }}>
-        <div style={{ fontSize: '11px', letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800, marginBottom: '6px' }}>{ct('Acompanhe o projeto')}</div>
-        <h2 style={{ fontFamily: 'var(--font-cond)', fontSize: '30px', textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-text-strong)', margin: '0 0 6px' }}>{ct('Novidades direto do X')}</h2>
-        <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', margin: '0 0 22px' }}>{ct('Updates, bastidores e o anúncio oficial do Road to Major.')}</p>
-        <AnnouncementTweet />
-        <div style={{ marginTop: '20px' }}><TwitterLink /></div>
-      </div>
-    </section>
-  );
-}
-
-export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean }) {
+export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
+  onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean;
+  /** abre o Modo Major, numa aba se pedir (o App mede o clique: major_vitrine_click, surface landing) */
+  onMajor?: (tab?: MajorTab) => void;
+  /** porta do "Em 1 minuto" (Diário, Draft, Carreira); sem ela, cai no onPlay */
+  onDoor?: (door: LandingDoor) => void;
+}) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar OU clique numa trava dentro do app: pula a landing e abre direto o cadastro
   const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
   const ref = useReveal();
-  // funil: CTA da landing abrindo o modal de conta — first-touch, então quem
+  // hero do Major enquanto a vitrine estiver no ar (data/majorWindow.ts) e o App
+  // souber abrir o modo; o instante é lido 1x por visita (régua e contagem)
+  const [now] = useState(() => Date.now());
+  const hero = landingHero(now, !!onMajor);
+  // ao vivo: o Stage do dia (data/majorLive.ts) e o CTA pelo palpite deste navegador
+  const [live] = useState(() => {
+    const { parts, snaps } = readMajorLocal();
+    return { stage: liveStage(now, livePublished()), cta: landingMajorCta(pickemStanding(parts, snaps, LIVE_LOCKS, now)) };
+  });
+  // nunca repassa o evento do clique como aba
+  const openMajor = () => {
+    if (!onMajor) return onPlay();
+    if (live.cta === 'placar') { requestPlacarFocus(); onMajor('pickem'); }
+    else if (live.cta === 'jogar') onMajor('play');
+    else onMajor();
+  };
+  const openDoor = onDoor ?? (() => onPlay());
+  // funil: CTA da landing abrindo o modal de conta. first-touch, então quem
   // chegou de uma trava (home-rtp, wl-lock...) mantém a origem original.
-  // src por botão (28d): os 4 CTAs de cadastro da página (Nav, Hero, Pricing,
-  // FinalCta) caíam todos no mesmo 'landing' — 3181 paywall_view mas só 32
-  // checkout_open, sem dar pra saber qual CTA puxa o funil. Separa a atribuição
-  // por posição pra próxima iteração enxergar isso.
+  // src por botão: landing-nav, landing-hero, landing-pricing, landing-final e
+  // landing-ghost; o "Entrar" segue com o src padrão 'landing'.
   const openAcct = (mode: 'signup' | 'login' = 'signup', src: string = 'landing') => { setCheckoutSrc(src); setAcctMode(mode); setAcct(true); };
+  // conta grátis já logada (cadastro pendente) que chegou aqui pra pagar (trava do
+  // perfil/ranking → goToCheckout, /?criar): vai direto pro passo do pagamento,
+  // sem refazer o cadastro (antes: os 4 campos + o aceite de novo).
+  const { account } = useAccount();
+  const payingAccount = acctMode === 'signup' && account && !account.paid ? { email: account.email, nick: account.nick } : null;
   // desafio de fantasma pendente (link aberto sem vitalícia): o motivo de
-  // comprar HOJE — o desafio expira à meia-noite.
+  // comprar HOJE, o desafio expira à meia-noite.
   const ghost = loadGhost(dayNumberOf(dateKeyOf(new Date())));
+  const duelInvite = loadDuelInvite(); // [U11]
+  // [URG-2] evento de fim de semana: lê o live-ops público (o servidor mescla o automático) e
+  // recalcula a cada minuto pro contador; sem rede cai no cálculo local do mesmo engine.
+  // O módulo do evento vem sob demanda: o cálculo local usa o catálogo do
+  // Ultimate (a base de jogadores, ~124 KB gz) e não pode entrar na primeira
+  // carga da landing. Até ele chegar, a faixa ocupa o mesmo lugar sem texto
+  // visível (não empurra o hero quando aparece: CLS).
+  const [wk, setWk] = useState<{ view: WeekendEventView; card: UltCard | null } | null>(null);
+  useEffect(() => {
+    let on = true;
+    let t = 0;
+    void import('../state/weekendEvent').then((m) => {
+      const compute = () => { if (on) { const view = m.weekendEventView(); setWk({ view, card: m.weekendExclusiveCard(view) }); } };
+      compute();
+      void fetchActiveLiveops().then(compute, compute);
+      t = window.setInterval(compute, 60_000);
+    }, () => { /* sem o chunk: a faixa fica de fora */ });
+    return () => { on = false; window.clearInterval(t); };
+  }, []);
+  const wknd = wk?.view ?? null;
+  const wkndCard = wk?.card ?? null;
+  const wkndRemain = wknd ? (wknd.open ? wknd.endsAtMs : wknd.startsAtMs) - Date.now() : 0;
   return (
-    <div ref={ref} className="lp-root">
+    <div ref={ref} className="lp-page">
+      <a className="lp-skip" href="#conteudo">{ct('Pular para o conteúdo')}</a>
       <Nav onAccount={() => openAcct('signup', 'landing-nav')} onLogin={() => openAcct('login')} onPlay={onPlay} />
-      {ghost && (
-        <div style={{ background: 'color-mix(in srgb, var(--rtm-gold) 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
-          🥊 <b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')} — {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {ct('O desafio expira à meia-noite — a Série do Dia é da conta vitalícia (R$20, uma vez).')}{' '}
-          <button type="button" onClick={() => openAcct('signup', 'landing-ghost')} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>{ct('Aceitar o desafio')}</button>
+      <main id="conteudo" tabIndex={-1}>
+        {/* o Modo Major não tem mais faixa aqui: com a vitrine no ar, ele é o hero */}
+        <div className="lp-notices">
+          {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
+          {duelInvite && (
+            <div className="lp-notice">
+              <Swords size={16} aria-hidden />
+              <span>{ct('Você foi convidado pra um DUELO no Ultimate')}, {ct('sala')} <b className="lp-notice__code">{duelInvite}</b>. {ct('A sala expira em algumas horas.')}</span>
+              <button type="button" className="lp-notice__go" onClick={onPlay}>{ct('Entrar e aceitar')} <ArrowRight size={14} aria-hidden /></button>
+            </div>
+          )}
+          {/* [URG-2] evento de fim de semana: discreto, acima da dobra, mesmo deslogado */}
+          {!wk && (
+            // reserva o lugar da faixa do evento enquanto o módulo carrega (sem CLS)
+            <div className="lp-notice lp-notice--wait" aria-hidden>
+              <Gift size={16} aria-hidden />
+              <span>{ct('Evento até domingo')}: <b>Fim de Semana</b> · {ct('carta exclusiva')} <b>…</b> · {ct('termina em')} <b>…</b></span>
+              <span className="lp-notice__go">{ct('Jogar')} <ArrowRight size={14} aria-hidden /></span>
+            </div>
+          )}
+          {wknd && (
+            <div className="lp-notice">
+              <Gift size={16} aria-hidden />
+              <span>
+                {wknd.open
+                  ? <>{ct('Evento até domingo')}: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>} · {ct('termina em')} <b>{formatCountdown(wkndRemain)}</b></>
+                  : <>{ct('Próximo evento em')} <b>{formatCountdown(wkndRemain)}</b>: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>}</>}
+              </span>
+              <button type="button" className="lp-notice__go" onClick={onPlay}>{ct('Jogar')} <ArrowRight size={14} aria-hidden /></button>
+            </div>
+          )}
+          {ghost && (
+            <div className="lp-notice">
+              <Target size={16} aria-hidden />
+              <span><b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')}, {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {withPrice(ct('O desafio expira à meia-noite. A Série do Dia é da conta vitalícia ({preço}, uma vez).'))}</span>
+              <button type="button" className="lp-notice__go" onClick={() => openAcct('signup', 'landing-ghost')}>{ct('Aceitar o desafio')} <ArrowRight size={14} aria-hidden /></button>
+            </div>
+          )}
+          <CommunityGoalBar onPlay={onPlay} />
         </div>
-      )}
-      <Hero onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />
-      <Modes onPlay={onPlay} />
-      <TweetBand />
-      <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPlay={onPlay} />
-      <How />
-      <Faq />
-      <FinalCta onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
-      {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} />}
+        {hero === 'major'
+          ? <HeroMajor now={now} stage={live.stage} cta={live.cta} onMajor={openMajor} onPlay={onPlay} onAccount={() => openAcct('signup', 'landing-hero')} />
+          : <HeroGeneral onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />}
+        <QuickStart hero={hero} cta={live.cta} onMajor={openMajor} onDoor={openDoor} />
+        <Modes hero={hero} onPlay={onPlay} />
+        <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPlay={onPlay} />
+        <Faq hero={hero} />
+        <FinalCta hero={hero} cta={live.cta} onMajor={openMajor} onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
+      </main>
+      {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} payingAccount={payingAccount} />}
     </div>
   );
 }

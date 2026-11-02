@@ -1,21 +1,10 @@
-// Aba Inbox — T1.4 + T2.4 + DRAFT5.
-//
-// DRAFT5 in-game: a caixa de entrada agora é a plataforma de notícias DRAFT5.
-//   - Masthead com a marca (amarelo/preto, como o site real)
-//   - Manchetes da carreira viram MATÉRIAS assinadas por redatores fictícios
-//     (autor determinístico por id — mesma manchete, mesmo redator)
-//   - Posts sociais continuam como posts (rede social ≠ redação)
-//   - Rodapé "Direto da redação": feed REAL da Draft5 via /api/news
-//     (proxy com cache de 15 min; se o feed falhar a seção some em silêncio)
-//
-// T2.4 (renovação):
-//   - Badge de UNREAD no chip "Todas" (gold, destacado)
-//   - Botão "Marcar tudo como lido" (ações do header da DashCard)
-//   - Auto-mark on view: ao abrir a aba, zera save.unread após 600ms
-
-import { useEffect, useState } from 'react';
-import { DashCard } from '../../components/ds';
-import { CareerIcon, CareerIconLegacy } from '../../components/career/CareerIcon';
+// Caixa de entrada estilo FM (a "nova interface"): lista de mensagens à
+// esquerda com filtros por categoria e painel de leitura à direita, com a
+// matéria completa da DRAFT5 e as AÇÕES dentro da mensagem (ir ao mercado,
+// ver resultados, abrir olheiros…). No celular vira lista → leitura.
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, ArrowRight, ExternalLink, Inbox, Newspaper, MessageCircle } from 'lucide-react';
+import { Panel, Segmented } from '../../components/ds/index';
 import { NEWS_CATS, type NewsCat, type NewsItem } from '../../components/CareerScreen';
 import {
   DRAFT5_META, draft5Author, draft5Category, draft5ArticleUrl,
@@ -28,215 +17,173 @@ interface Props {
   news: NewsItem[];
   newsCat: NewsCat | 'all';
   setNewsCat: (c: NewsCat | 'all') => void;
-  // T2.4: contador de unread vindo do save.unread
   unread: number;
-  // T2.4: callback que zera save.unread (chamado on-view + via botão)
   onMarkAllRead: () => void;
-  // nome da org (ancora a análise da matéria aberta)
   orgName?: string;
+  /** ações dentro da mensagem: leva pra uma seção da carreira */
+  onAction?: (section: string) => void;
 }
 
-// tempo de leitura fake mas estável (2-4 min) — vitrine, não métrica
+// tempo de leitura estável por matéria (2–4 min), derivado do id
 const readMinutes = (id: string) => {
   let h = 5381;
   for (let i = 0; i < id.length; i++) h = ((h << 5) + h + id.charCodeAt(i)) >>> 0;
   return 2 + (h % 3);
 };
 
-export function InboxTab({ news, newsCat, setNewsCat, unread, onMarkAllRead, orgName }: Props) {
+const CAT_TONE: Record<string, string> = {
+  board: 'var(--c-brand)', scout: 'var(--c-role-rifler)', transfer: 'var(--c-role-support)',
+  result: 'var(--c-win)', scene: 'var(--c-ink-dim)', social: 'var(--c-role-entry)',
+};
+const CAT_ACTIONS: Record<string, { label: string; section: string }[]> = {
+  transfer: [{ label: 'Abrir o mercado', section: 'tf' }, { label: 'Ver contratos', section: 'ct' }],
+  board: [{ label: 'Ver finanças', section: 'fi' }, { label: 'Ver agenda', section: 'ag' }],
+  scout: [{ label: 'Abrir olheiros', section: 'sc' }, { label: 'Relatório do analista', section: 'an' }],
+  result: [{ label: 'Ver classificação', section: 'cl' }, { label: 'Central de dados', section: 'dh' }],
+  scene: [{ label: 'Ranking VRS', section: 'vr' }],
+  social: [{ label: 'Ver o elenco', section: 'sq' }],
+};
+
+export function InboxTab({ news, newsCat, setNewsCat, unread, onMarkAllRead, orgName, onAction }: Props) {
   const all = news;
   const shown = newsCat === 'all' ? all : all.filter((n) => (n.cat ?? 'scene') === newsCat);
-  // matéria aberta pra leitura (null = feed)
+  // as N primeiras são as novas desta visita (a contagem zera logo ao abrir)
+  const [unreadAtOpen] = useState(unread);
+  const unreadIds = useMemo(() => new Set(all.slice(0, unreadAtOpen).map((n) => n.id)), [all, unreadAtOpen]);
   const [openId, setOpenId] = useState<string | null>(null);
-  const openNews = openId ? all.find((n) => n.id === openId) ?? null : null;
+  const [mobileReading, setMobileReading] = useState(false);
+  const selected = shown.find((n) => n.id === openId) ?? shown[0] ?? null;
 
-  // feed real da Draft5 (cache de 15 min no cliente + 15 min no proxy)
+  // feed REAL da DRAFT5 (cenário de verdade) — best-effort
   const [feed, setFeed] = useState<{ items: Draft5FeedItem[]; link: string } | null>(null);
   useEffect(() => {
     let alive = true;
     fetchDraft5Feed(5).then((f) => { if (alive) setFeed(f); });
     return () => { alive = false; };
   }, []);
-
-  // T2.4: marca tudo como lido ao abrir a aba (com delay pra UX não piscar).
-  // Se a aba reabre depois (re-render), o efeito não dispara de novo enquanto
-  // unread já estiver 0 (guard interno).
+  // abrir a caixa marca as manchetes como lidas (mesmo comportamento de antes)
   useEffect(() => {
     if (unread <= 0) return;
     const t = setTimeout(() => onMarkAllRead(), 600);
     return () => clearTimeout(t);
   }, [unread, onMarkAllRead]);
 
-  const headerActions = unread > 0 ? (
-    <button
-      type="button"
-      className="btn small ghost"
-      onClick={onMarkAllRead}
-      title={ct('Marcar todas as manchetes como lidas')}
-    >
-      <CareerIcon name="check" size={12} /> {ct('Marcar tudo como lido')}
-    </button>
-  ) : undefined;
-
-  // ---------- página de leitura da matéria (nos moldes da Draft5) ----------
-  if (openNews) {
-    const author = draft5Author(openNews.id, openNews.cat);
-    const paras = buildArticle({
-      id: openNews.id, title: openNews.title, body: openNews.body,
-      cat: openNews.cat, tone: openNews.tone, split: openNews.split,
-      org: orgName ?? ct('sua organização'),
-    });
-    return (
-      <DashCard title="DRAFT5">
-        <div className="d5-masthead">
-          <span className="d5-logo">DRAFT5</span>
-          <span className="d5-tagline">{DRAFT5_META.tagline}</span>
-        </div>
-        <article className="d5-page">
-          <button type="button" className="btn small ghost d5-page-back" onClick={() => setOpenId(null)}>
-            ← {ct('Voltar pro feed')}
-          </button>
-          <div className="d5-kicker">
-            <span className="d5-cat">{draft5Category(openNews.cat)}</span>
-            <span className="news-split">Split {openNews.split}</span>
-          </div>
-          <h1 className="d5-page-title">{openNews.title}</h1>
-          <p className="d5-page-standfirst">{openNews.body}</p>
-          <div className="d5-page-byline">
-            <span className="d5-page-avatar">{author.name.split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>
-            <span>
-              {ct('Por')} <strong>{author.name}</strong> · {author.role}
-              <span className="d5-page-meta">DRAFT5 · Split {openNews.split} · {readMinutes(openNews.id)} {ct('min de leitura')}</span>
-            </span>
-          </div>
-          <div className="d5-page-body">
-            {paras.map((p, i) => <p key={i}>{p}</p>)}
-          </div>
-          <div className="d5-page-footer">
-            <span className="d5-logo small">DRAFT5</span>
-            <span className="muted small">{ct('Cobertura do modo carreira · Road to Major')}</span>
-          </div>
-        </article>
-      </DashCard>
-    );
-  }
+  const cats = NEWS_CATS.map((c) => ({ ...c, n: c.key === 'all' ? all.length : all.filter((x) => (x.cat ?? 'scene') === c.key).length }))
+    .filter((c) => c.key === 'all' || c.n > 0);
+  const idx = selected ? shown.findIndex((n) => n.id === selected.id) : -1;
+  const open = (id: string) => { setOpenId(id); setMobileReading(true); };
 
   return (
-    <DashCard title="DRAFT5" actions={headerActions}>
-      <div className="d5-masthead">
-        <span className="d5-logo">DRAFT5</span>
-        <span className="d5-tagline">{DRAFT5_META.tagline}</span>
-      </div>
-      {all.length === 0 ? (
-        <p className="muted small">
-          {ct('A redação ainda não publicou nada sobre a sua carreira. As matérias saem ao longo dos splits (resultados, diretoria, mercado, cenário e social).')}
-        </p>
-      ) : (
-        <>
-          <div className="news-cats">
-            {NEWS_CATS.map((c) => {
-              const n = c.key === 'all' ? all.length : all.filter((x) => (x.cat ?? 'scene') === c.key).length;
-              if (c.key !== 'all' && n === 0) return null;
-              // T2.4: chip "Todas" mostra unread em badge dourado
-              const showUnreadBadge = c.key === 'all' && unread > 0;
-              return (
-                <button
-                  key={c.key}
-                  className={`nc-chip${newsCat === c.key ? ' on' : ''}`}
-                  onClick={() => setNewsCat(c.key)}
-                >
-                  {ct(c.label)}
-                  <span className="nc-n">{n}</span>
-                  {showUnreadBadge && (
-                    <span
-                      style={{
-                        marginLeft: 6,
-                        padding: '1px 6px',
-                        borderRadius: 10,
-                        background: 'var(--em-gold)',
-                        color: '#1a1205',
-                        fontSize: '0.66rem',
-                        fontWeight: 800,
-                        letterSpacing: '0.3px',
-                      }}
-                      title={`${unread} ${ct('não lida(s)')}`}
-                    >
-                      {unread > 99 ? '99+' : unread} novas
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <div className="news-list">
-            {shown.map((n) => {
-              if (n.cat === 'social') {
+    <div className="inbox" data-reading={mobileReading ? '' : undefined}>
+      <Panel
+        icon={<Inbox size={16} />}
+        title={ct('Mensagens')}
+        flush
+        className="inbox-list"
+        actions={unreadAtOpen > 0 ? <span className="gs-badge">{unreadAtOpen}</span> : undefined}
+      >
+        {all.length === 0 ? (
+          <p className="inbox-empty">{ct('A redação ainda não publicou nada sobre a sua carreira. As matérias saem ao longo dos splits (resultados, diretoria, mercado, cenário e social).')}</p>
+        ) : (
+          <>
+            <div className="inbox-filters">
+              <Segmented<NewsCat | 'all'>
+                label={ct('Filtrar por categoria')}
+                value={newsCat}
+                onChange={(v) => { setNewsCat(v); setOpenId(null); }}
+                items={cats.map((c) => ({ value: c.key, label: ct(c.label), count: c.key === 'all' ? undefined : c.n }))}
+              />
+            </div>
+            <div className="inbox-items" role="listbox" aria-label={ct('Mensagens')}>
+              {shown.map((n) => {
+                const on = selected?.id === n.id;
+                const isNew = unreadIds.has(n.id);
                 return (
-                  <div key={n.id} className="news-item social">
-                    <span className="news-ic"><CareerIcon name="chat" size={18} /></span>
-                    <div className="news-body">
-                      <div className="news-title">
-                        <span className="news-handle">{n.handle}</span> <span className="news-split">Split {n.split}</span>
-                      </div>
-                      <div className="news-text">{n.body}</div>
-                    </div>
-                  </div>
+                  <button
+                    key={n.id}
+                    type="button"
+                    role="option"
+                    aria-selected={on}
+                    className="inbox-item"
+                    onClick={() => open(n.id)}
+                  >
+                    <span className="inbox-item__dot" data-new={isNew ? '' : undefined} aria-label={isNew ? ct('nova') : undefined} />
+                    <span className="inbox-item__txt">
+                      <span className="inbox-item__top">
+                        <b style={{ color: CAT_TONE[n.cat ?? 'scene'] }}>{n.cat === 'social' ? (n.handle ?? 'Social') : draft5Category(n.cat)}</b>
+                        <small>Split {n.split}</small>
+                      </span>
+                      <span className="inbox-item__title" data-new={isNew ? '' : undefined}>{n.cat === 'social' ? n.body : n.title}</span>
+                      {n.cat !== 'social' && <span className="inbox-item__sub">{n.body}</span>}
+                    </span>
+                  </button>
                 );
-              }
-              const author = draft5Author(n.id, n.cat);
-              return (
-                <button
-                  key={n.id}
-                  type="button"
-                  className={`news-item d5-article d5-clickable ${n.tone}`}
-                  onClick={() => setOpenId(n.id)}
-                  title={ct('Ler a matéria completa')}
-                >
-                  <span className="news-ic"><CareerIconLegacy icon={n.icon} size={18} /></span>
-                  <div className="news-body">
-                    <div className="d5-kicker">
-                      <span className="d5-cat">{draft5Category(n.cat)}</span>
-                      <span className="news-split">Split {n.split}</span>
-                    </div>
-                    <div className="news-title">{n.title}</div>
-                    <div className="news-text muted small">{n.body}</div>
-                    <div className="d5-byline">
-                      {ct('Por')} <strong>{author.name}</strong> · {author.role} · DRAFT5 · <span className="d5-readmore">{ct('ler matéria')} →</span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-            {shown.length === 0 && <p className="muted small">{ct('Nada nessa categoria ainda.')}</p>}
-          </div>
-        </>
-      )}
-      {feed && feed.items.length > 0 && (
-        <div className="d5-real">
-          <div className="d5-real-head">
-            <span className="d5-logo small">DRAFT5</span>
-            <span className="d5-real-title">{ct('Direto da redação — cenário real')}</span>
-          </div>
-          <div className="d5-real-list">
-            {feed.items.map((it) => (
-              <a
-                key={it.slug}
-                className="d5-real-item"
-                href={draft5ArticleUrl(it.slug, feed.link)}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                {it.image && <img className="d5-real-img" src={it.image} alt="" loading="lazy" />}
-                <span className="d5-real-body">
-                  <span className="d5-real-item-title">{it.title}</span>
-                  <span className="d5-real-excerpt muted small">{it.excerpt}</span>
-                  <span className="d5-byline">{it.author && <>{ct('Por')} <strong>{it.author}</strong> · </>}draft5.gg</span>
-                </span>
+              })}
+              {shown.length === 0 && <p className="inbox-empty">{ct('Nada nessa categoria ainda.')}</p>}
+            </div>
+          </>
+        )}
+      </Panel>
+
+      <section className="inbox-read ds-panel" aria-live="polite">
+        {selected ? (() => {
+          const social = selected.cat === 'social';
+          const author = draft5Author(selected.id, selected.cat);
+          const paras = social ? [] : buildArticle({
+            id: selected.id, title: selected.title, body: selected.body,
+            cat: selected.cat, tone: selected.tone, split: selected.split,
+            org: orgName ?? ct('sua organização'),
+          });
+          const actions = CAT_ACTIONS[selected.cat ?? 'scene'] ?? [];
+          return (
+            <article className="inbox-article">
+              <button type="button" className="inbox-back" onClick={() => setMobileReading(false)}>
+                <ArrowLeft size={16} aria-hidden /> {ct('Mensagens')}
+              </button>
+              <div className="inbox-kicker" style={{ color: CAT_TONE[selected.cat ?? 'scene'] }}>
+                {social ? <MessageCircle size={14} aria-hidden /> : <Newspaper size={14} aria-hidden />}
+                {social ? 'Social' : draft5Category(selected.cat)} · Split {selected.split}
+              </div>
+              <h2 className="inbox-title">{social ? (selected.handle ?? 'Social') : selected.title}</h2>
+              {!social && (
+                <p className="inbox-byline">
+                  {ct('Por')} <b>{author.name}</b> · {author.role} · DRAFT5 · {readMinutes(selected.id)} {ct('min de leitura')}
+                </p>
+              )}
+              <div className="inbox-body">
+                <p className="inbox-lead">{selected.body}</p>
+                {paras.map((p, i) => <p key={i}>{p}</p>)}
+              </div>
+              <footer className="inbox-actions">
+                {actions.map((a, i) => (
+                  <button key={a.section} type="button" className={i === 0 ? 'inbox-btn inbox-btn--primary' : 'inbox-btn'} onClick={() => onAction?.(a.section)}>
+                    {ct(a.label)}
+                  </button>
+                ))}
+                {idx >= 0 && idx < shown.length - 1 && (
+                  <button type="button" className="inbox-btn inbox-btn--ghost" onClick={() => setOpenId(shown[idx + 1].id)}>
+                    {ct('Próxima mensagem')} <ArrowRight size={15} aria-hidden />
+                  </button>
+                )}
+              </footer>
+            </article>
+          );
+        })() : (
+          <p className="inbox-empty">{ct('Selecione uma mensagem.')}</p>
+        )}
+
+        {feed && feed.items.length > 0 && (
+          <div className="inbox-real">
+            <div className="ds-kicker">{DRAFT5_META.tagline} · {ct('cenário real')}</div>
+            {feed.items.slice(0, 3).map((it) => (
+              <a key={it.slug} className="inbox-real__item" href={draft5ArticleUrl(it.slug, feed.link)} target="_blank" rel="noreferrer noopener">
+                <span>{it.title}</span>
+                <ExternalLink size={13} aria-hidden />
               </a>
             ))}
           </div>
-        </div>
-      )}
-    </DashCard>
+        )}
+      </section>
+    </div>
   );
 }

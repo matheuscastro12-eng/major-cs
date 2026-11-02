@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ct } from '../../state/career-i18n';
 import { Flag } from '../ui';
 import { RtpIcon } from './RtpIcon';
+import { RtpFrame } from './RtpFrame';
 import { legacyScore, legacyTier, traitById } from '../../engine/rtp/perks';
 import { archetypeDef } from '../../engine/rtp/createSave';
 import { LEGEND_MARKS, legendBoard } from '../../engine/rtp/legends';
@@ -96,8 +97,10 @@ export function RtpLegacy({ save, onReset, onExit }: {
   ];
   const arch = archetypeDef(player.archetype);
 
+  // no shell (RtpFrame), como as outras telas de fluxo do RtP
   return (
-    <div className="rtp rtp-screen rtp-legacy" data-fx="on">
+    <RtpFrame onExit={onExit} kicker={ct('Fim de carreira')}>
+    <div className="rtp-legacy">
       <div className="rtp-legacy-inner">
         <div className="rtp-legacy-badge"><RtpIcon name="trophy" size={30} /></div>
         <div className="rtp-legacy-kicker">{ct('FIM DE CARREIRA')}</div>
@@ -238,5 +241,6 @@ export function RtpLegacy({ save, onReset, onExit }: {
         </div>
       </div>
     </div>
+    </RtpFrame>
   );
 }

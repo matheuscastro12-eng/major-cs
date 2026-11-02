@@ -262,6 +262,7 @@ export function CareerOverview({
                     consistency: p.consistency,
                     awp: p.awp,
                     igl: p.igl,
+                    attrs: p.attrs, // [realismo FM]
                   };
                   return (
                     <PlayerLink

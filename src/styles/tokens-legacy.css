@@ -1,0 +1,245 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   CAMADAS LEGADAS → TOKENS SEMÂNTICOS (transição da super atualização)
+   ────────────────────────────────────────────────────────────────────────────
+   Antes coexistiam 5 famílias de tokens (--rtm-*, --em-*, --rtp-*, --ut-*, --dl-*
+   e os aliases sem prefixo do tema hltv), cada uma redefinida por modo — o
+   mesmo --em-gold valia dourado, âmbar ou teal conforme a tela (UX-01).
+   Agora TODAS apontam para os tokens de tokens.css, e as definições antigas
+   espalhadas em index.css, career-dashboard.css, rtp.css, ultimate.css e
+   daily.css foram removidas. Resultado: as ~6 mil regras antigas ganham a
+   paleta "Broadcast Desk" de uma vez, sem mexer tela a tela.
+
+   Regras:
+   - Nenhum hexadecimal aqui: só var(--c-*) e derivados. Cor nova nasce em
+     tokens.css.
+   - Código novo NÃO usa estes nomes. Use --c-*, --sp-*, --fs-*, --rad-*.
+     A Onda B troca as referências antigas pelos tokens e apaga este arquivo.
+   - Os aliases são redeclarados em todo elemento que muda o acento ou o tema
+     ([data-mode], [data-theme] e as raízes antigas de modo). Custom property
+     que referencia outra é resolvida NO elemento onde é declarada; sem a
+     redeclaração, um [data-mode] local não chegaria em var(--em-gold).
+   - scripts/test-design-tokens.mts falha se algum var(--legado) usado no app
+     não estiver mapeado aqui (nenhuma variável órfã).
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Raízes antigas de modo: marcam o acento mesmo quando a tela é embutida
+   (ex.: o portal do RtP aberto por cima da Home). */
+.rtp { --c-accent: var(--mode-rtp); }
+.ut-root { --c-accent: var(--mode-ultimate); }
+.rtm-daily { --c-accent: var(--mode-diario); }
+main.page-career { --c-accent: var(--mode-carreira); }
+
+:root,
+[data-mode],
+[data-theme],
+.rtp,
+.ut-root,
+.rtm-daily,
+main.page-career {
+  /* ── Tema hltv original (sem prefixo) ── */
+  --bg: var(--c-surface-0);
+  --bg-deep: var(--c-surface-0);
+  --panel: var(--c-surface-1);
+  --panel-2: var(--c-surface-2);
+  --panel-3: var(--c-surface-3);
+  --header: var(--c-surface-2);
+  --row-a: var(--c-surface-1);
+  --row-b: var(--c-surface-2);
+  --border: var(--c-line-strong);
+  --border-soft: var(--c-line);
+  --text: var(--c-ink);
+  --text-strong: var(--c-ink);
+  --dim: var(--c-ink-dim);
+  --muted: var(--c-ink-dim);
+  --faint: var(--c-ink-faint);
+  --link: var(--c-accent);
+  --blue: var(--c-accent);
+  --blue-bright: var(--c-accent-strong);
+  --green: var(--c-win);
+  --green-bright: var(--c-win);
+  --red: var(--c-loss);
+  --red-bright: var(--c-loss);
+  --gold: var(--c-accent);
+  --gold-2: var(--c-accent-strong);
+  --gold-soft: var(--c-accent-line);
+  --gold-glow: var(--c-accent-soft);
+  --pos: var(--c-win);
+  --pos-soft: var(--c-win-soft);
+  --neg: var(--c-loss);
+  --neg-soft: var(--c-loss-soft);
+  --radius: var(--rad-2);
+  --r-sm: var(--rad-1);
+  --r: var(--rad-2);
+  --r-lg: var(--rad-3);
+  --elev-1: var(--shadow-1);
+  --elev-2: var(--shadow-2);
+  --font: var(--font-ui);
+  --font-cond: var(--font-display);
+  --mono: var(--font-num);
+  --font-mono: var(--font-num);
+
+  /* ── Carreira / dashboard (--em-*, --dash-*) ── */
+  --em-bg: var(--c-surface-0);
+  --em-panel: var(--c-surface-1);
+  --em-panel-2: var(--c-surface-2);
+  --em-border: var(--c-line);
+  --em-border-strong: var(--c-line-strong);
+  --em-text: var(--c-ink);
+  --em-muted: var(--c-ink-dim);
+  --em-gold: var(--c-accent);
+  --em-gold-soft: var(--c-accent-soft);
+  --em-red: var(--c-loss);
+  --em-red-hover: var(--c-loss);
+  --em-green: var(--c-win);
+  --dash-win: var(--c-win);
+  --dash-loss: var(--c-loss);
+
+  /* ── "Road to Major Design System" (--rtm-*) ── */
+  --rtm-bg-deep: var(--c-surface-0);
+  --rtm-bg: var(--c-surface-0);
+  --rtm-header: var(--c-surface-2);
+  --rtm-panel: var(--c-surface-1);
+  --rtm-panel-2: var(--c-surface-2);
+  --rtm-panel-3: var(--c-surface-3);
+  --rtm-row-a: var(--c-surface-1);
+  --rtm-row-b: var(--c-surface-2);
+  --rtm-border: var(--c-line-strong);
+  --rtm-border-soft: var(--c-line);
+  --rtm-text: var(--c-ink);
+  --rtm-text-strong: var(--c-ink);
+  --rtm-dim: var(--c-ink-dim);
+  --rtm-faint: var(--c-ink-faint);
+  --rtm-blue: var(--c-accent);
+  --rtm-blue-bright: var(--c-accent-strong);
+  --rtm-link: var(--c-accent);
+  --rtm-gold: var(--c-accent);
+  --rtm-gold-soft: var(--c-accent-line);
+  --rtm-gold-bright: var(--c-accent-strong);
+  --rtm-gold-glow: var(--c-accent-soft);
+  --rtm-green: var(--c-win);
+  --rtm-green-bright: var(--c-win);
+  --rtm-red: var(--c-loss);
+  --rtm-red-bright: var(--c-loss);
+  --rtm-role-awp: var(--c-achievement);
+  --rtm-role-igl: var(--c-epic);
+  --rtm-role-entry: var(--c-loss);
+  --rtm-role-support: var(--c-win);
+  --rtm-role-lurker: var(--c-ct);
+  --rtm-font: var(--font-ui);
+  --rtm-font-cond: var(--font-display);
+  --rtm-mono: var(--font-num);
+  --rtm-radius: var(--rad-2);
+  --rtm-radius-sm: var(--rad-1);
+  --rtm-radius-pill: var(--rad-pill);
+  --rtm-shadow-panel: var(--shadow-1);
+  --rtm-shadow-card-hover: var(--shadow-2);
+  --rtm-shadow-banner: var(--shadow-2);
+  --rtm-shadow-header: var(--shadow-1);
+  --rtm-shadow-btn: var(--shadow-1);
+  --rtm-accent-inset: inset 3px 0 0 var(--c-accent);
+  --rtm-grad-btn: var(--c-accent);
+  --rtm-grad-btn-hover: var(--c-accent-strong);
+  --rtm-grad-header: var(--c-surface-2);
+  --rtm-grad-panel-head: var(--c-surface-2);
+  --rtm-ease: var(--ease-out);
+  --rtm-dur-fast: var(--dur-1);
+  --rtm-dur: var(--dur-3);
+
+  /* ── Road to Pro "The Desk" (--rtp-*) ── */
+  --rtp-void: var(--c-surface-0);
+  --rtp-stage: var(--c-surface-1);
+  --rtp-deck: var(--c-surface-2);
+  --rtp-deck-2: var(--c-surface-3);
+  --rtp-well: var(--c-surface-1);
+  --rtp-surface: var(--c-surface-1);
+  --rtp-line: var(--c-line);
+  --rtp-line-hot: var(--c-line-strong);
+  --rtp-ink: var(--c-ink);
+  --rtp-ink-dim: var(--c-ink-dim);
+  --rtp-ink-faint: var(--c-ink-faint);
+  --rtp-ct: var(--c-ct);
+  --rtp-ct-deep: color-mix(in srgb, var(--c-ct) 45%, var(--c-surface-0));
+  --rtp-ct-glow: color-mix(in srgb, var(--c-ct) 40%, transparent);
+  --rtp-t: var(--c-t);
+  --rtp-t-deep: color-mix(in srgb, var(--c-t) 55%, var(--c-surface-0));
+  --rtp-t-glow: color-mix(in srgb, var(--c-t) 38%, transparent);
+  --rtp-live: var(--c-live);
+  --rtp-live-glow: color-mix(in srgb, var(--c-live) 70%, transparent);
+  --rtp-signal: var(--c-accent);
+  --rtp-signal-glow: color-mix(in srgb, var(--c-accent) 45%, transparent);
+  --rtp-accent: var(--c-accent);
+  --rtp-win: var(--c-win);
+  --rtp-loss: var(--c-loss);
+  --rtp-bad: var(--c-live);
+  --rtp-warn: var(--c-warn);
+  --rtp-clutch: var(--c-epic);
+  --rtp-frag: var(--c-achievement);
+  --rtp-gold: var(--c-achievement);
+  --rtp-odds-hi: var(--c-win);
+  --rtp-odds-mid: var(--c-warn);
+  --rtp-odds-lo: var(--c-loss);
+  --rtp-display: var(--font-display);
+  --rtp-body: var(--font-ui);
+  --rtp-mono: var(--font-num);
+  --rtp-font-mono: var(--font-num);
+  --rtp-radius: var(--rad-3);
+  --rtp-s1: var(--sp-1);
+  --rtp-s2: var(--sp-2);
+  --rtp-s3: var(--sp-3);
+  --rtp-s4: var(--sp-4);
+  --rtp-s5: var(--sp-5);
+  --rtp-s6: var(--sp-8);
+  --rtp-r-sm: var(--rad-2);
+  --rtp-r: var(--rad-3);
+  --rtp-r-lg: var(--rad-4);
+  --rtp-e1: var(--shadow-1);
+  --rtp-e2: var(--shadow-2);
+  --rtp-e3: var(--shadow-3);
+  --rtp-dur: var(--dur-2);
+  --rtp-ease: var(--ease-out);
+
+  /* ── Ultimate (--ut-*) — agora em superfície escura (UX-02): a carta é o
+     herói e o fundo é o palco ── */
+  --ut-ink: var(--c-ink);
+  --ut-ink-2: var(--c-ink-dim);
+  --ut-muted: var(--c-ink-faint);
+  --ut-red: var(--c-loss);
+  --ut-green: var(--c-win);
+  --ut-green-deep: var(--c-win);
+  --ut-amber: var(--c-accent);
+  --ut-amber-ink: var(--c-accent);
+  --ut-teal: var(--c-accent);
+  --ut-purple: var(--c-epic);
+  --ut-gold: var(--c-achievement);
+  --ut-card: var(--c-surface-2);
+  --ut-line: var(--c-line);
+  --ut-border: var(--c-line);
+  --ut-well: var(--c-surface-0);
+  --ut-page-bg: var(--c-surface-0);
+  --ut-shadow: var(--shadow-1);
+  --ut-shadow-sm: var(--shadow-1);
+  --ut-font-cond: var(--font-display);
+  --ut-font-mono: var(--font-num);
+  --ut-gold-1: var(--c-accent);
+  --ut-gold-2: var(--c-accent-deep);
+  --ut-gold-ink: var(--c-on-accent);
+  --ut-bar-1: var(--c-surface-2);
+  --ut-bar-2: var(--c-surface-1);
+  --ut-bar-ink: var(--c-ink);
+  --ut-bar-dim: var(--c-ink-dim);
+  --ut-bar-line: var(--c-line);
+
+  /* ── Diário (--dl-*) ── */
+  --dl-t: var(--c-accent);
+  --dl-ct: var(--c-ct);
+  --dl-win: var(--c-win);
+  --dl-loss: var(--c-loss);
+  --dl-warn: var(--c-warn);
+  --dl-ink: var(--c-ink);
+  --dl-dim: var(--c-ink-dim);
+  --dl-line: var(--c-line);
+  --dl-panel: var(--c-surface-2);
+  --dl-well: var(--c-surface-1);
+  --dl-cond: var(--font-display);
+  --dl-mono: var(--font-num);
+}

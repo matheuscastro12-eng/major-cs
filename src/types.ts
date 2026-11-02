@@ -1,3 +1,4 @@
+import type { PlayerAttrs } from './engine/attrs/model';
 export type Game = 'CS 1.6' | 'CS:Source' | 'CS:GO' | 'CS2';
 
 export type Role = 'AWP' | 'IGL' | 'Rifler' | 'Entry' | 'Support' | 'Lurker';
@@ -38,6 +39,7 @@ export interface Player {
   consistency: number;
   awp: number;
   igl: number;
+  attrs?: PlayerAttrs | null; // [realismo FM] atributos próprios (fonte da verdade); sem eles, attrsOf() deriva dos 5 acima
 }
 
 export type CoachStyle = 'tactical' | 'aggressive' | 'discipline';
@@ -48,6 +50,9 @@ export interface Coach {
   country: string;
   rating: number; // 50-99
   style: CoachStyle;
+  // [equilíbrio] potência do estilo no motor (0 ≈ nota 10 no atributo da função,
+  // ~1,6 no 20). Ausente = derivada do rating (times da IA, draft).
+  pow?: number;
 }
 
 export const COACH_STYLE_LABELS: Record<CoachStyle, string> = {
@@ -79,6 +84,10 @@ export interface TeamSeason {
   // true = aguardando aprovação do admin no CRM; fica oculto para os jogadores
   // até ser liberado. Times sem o campo já são considerados aprovados.
   pending?: boolean;
+  // true = time que acabou (ou o virtual `__retired__`): fica no arquivo para
+  // saves que guardam o id, mas não é disputável (fora do mundo da carreira,
+  // do Road to Pro e do online). Ver docs/elencos-set-2026.md.
+  defunct?: boolean;
   players: Player[];
 }
 
@@ -111,9 +120,13 @@ export interface TPlayer {
   consistency: number;
   awp: number;
   igl: number;
+  attrs?: PlayerAttrs | null; // [realismo FM] ver engine/attrs/model.ts
   skill: number; // derived overall
   ovr: number; // overall exibido (50-99)
   form?: number; // fase no torneio (0.9 frio … 1.1 em chamas), atualizada a cada série
+  // [realismo FM fase 2 · treino] condição do jogador NESTA partida (0–100):
+  // fitness (cansaço) e sharpness (ritmo de jogo). Ausente = neutro (IA, outros modos).
+  cond?: { fitness: number; sharpness: number };
   fromTeam?: string; // era label for drafted players
   originTeam?: string;
   originTeamId?: string;
@@ -144,6 +157,10 @@ export interface TTeam {
   playbook?: Playbook; // esquema tático treinado (modo carreira)
   playbookFam?: number; // entrosamento no esquema, 0..1 (quão bem treinado)
   noEdge?: boolean; // Road to Pro: dispensa o AI_EDGE de dificuldade do modo carreira
+  // [realismo FM fase 2 · tática por mapa] plano preparado (papéis, setup CT,
+  // execuções T, instruções, familiaridade, anti-strat). Opt-in: sem ele o motor
+  // v2 joga exatamente como antes; o v1 ignora. Ver engine/gestao/tatica.ts.
+  tactics?: import('./engine/gestao/model').TacticsState | null;
   onlinePlan?: {
     captainNick?: string;
     reserveNick?: string;
@@ -212,6 +229,9 @@ export interface MapResult {
   roundLog: (0 | 1)[];
   killFeed: KillEvent[];
   stats: Record<string, PlayerMapStats>;
+  // [estilo de jogo] motor v2 com tática: estatística de estilo por time e o estilo usado no fim do mapa
+  styleStats?: [import('./engine/gestao/estilo').StyleStats, import('./engine/gestao/estilo').StyleStats];
+  styles?: [import('./engine/gestao/model').TeamStyle | null, import('./engine/gestao/model').TeamStyle | null];
 }
 
 export interface SeriesResult {
@@ -243,6 +263,8 @@ export interface Tournament {
   // Major em STAGES: um Swiss isolado que para ao definir os 8 classificados
   // (phase 'done', sem playoffs) — o stage seguinte carrega esses 8 + 8 seeds.
   stageOnly?: boolean;
+  // [fase 4 · circuito] evento LAN/Major: peso do oculto bigMatch no motor v2 (0 = online)
+  pressure?: number;
 }
 
 export interface DraftRound {

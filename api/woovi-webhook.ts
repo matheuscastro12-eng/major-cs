@@ -1,10 +1,22 @@
-// Webhook do Woovi (Pix): ativa a conta vitalícia quando a cobrança é paga.
-// Casa pelo E-MAIL do pagador (o checkout do Woovi coleta e-mail) com o cadastro
-// pendente / conta. Seguro: valida o header x-webhook-signature com a chave PÚBLICA
-// do Woovi (RSA-SHA256), então só um webhook real do Woovi consegue marcar pago.
-import { neon } from '@neondatabase/serverless';
+// Webhook do Woovi (Pix): ativa a conta vitalícia quando a cobrança é paga e dá
+// baixa nos pedidos de coins/passe. Valida o header x-webhook-signature com a
+// chave PÚBLICA do Woovi (RSA-SHA256), então só um webhook real do Woovi chega
+// aqui. Endurecimento O0-24 (SEGU-06/ECON-07): vitalícia só com correlationID
+// "rtm-" e valor >= preço, e-mail tirado do correlationID (não do pagador),
+// pedido só com valor igual ao do pedido e idempotência por pagamento.
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { createVerify } from 'node:crypto';
-import { accountReference, cleanEnv, renumberFounders } from '../server/payments.js';
+import { logSettleAttention, settleOrder } from '../server/order-settle.js';
+import {
+  accountReference,
+  assignFounderNumbers,
+  cleanEnv,
+  COIN_TIERS,
+  parsePassTier,
+  PASS_PRICE_CENTS,
+  pixAccountPriceCents,
+} from '../server/payments.js';
+import { isPaidEvent, rtmEmailFromCorrelation, wooviCorrelation, wooviPaidCents, wooviPayerEmail, wooviPaymentKey } from '../server/woovi.js';
 
 // chave pública do Woovi (https://developers.woovi.com/docs/webhook/seguranca).
 // Override por env WOOVI_PUBLIC_KEY caso o Woovi rotacione a chave.
@@ -25,24 +37,77 @@ function verifyWoovi(raw: string, signature: string): boolean {
   } catch { return false; }
 }
 
-const norm = (e?: unknown) => String(e ?? '').trim().toLowerCase();
-
-// eventos de pagamento confirmado do Woovi/OpenPix
-function isPaidEvent(b: Record<string, unknown>): boolean {
-  const ev = String(b.event ?? '');
-  if (ev.includes('CHARGE_COMPLETED') || ev.includes('TRANSACTION_RECEIVED')) return true;
-  const charge = b.charge as Record<string, unknown> | undefined;
-  const st = String(charge?.status ?? '');
-  return st === 'COMPLETED' || st === 'CONFIRMED';
+// Idempotência por PAGAMENTO (O0-24): o mesmo Pix chega em CHARGE_COMPLETED e
+// TRANSACTION_RECEIVED, e o Woovi re-entrega quando a resposta demora. A chave
+// é gravada ANTES de processar e apagada se o processamento falhar (o Woovi
+// re-tenta e a gente processa de novo).
+let schemaReady = false;
+async function ensureWebhookSchema(sql: NeonQueryFunction<false, false>): Promise<void> {
+  if (schemaReady) return;
+  await sql.transaction([
+    sql`CREATE TABLE IF NOT EXISTS rtm_webhook_events (provider TEXT NOT NULL, event_key TEXT NOT NULL, correlation_id TEXT, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (provider, event_key))`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ, method TEXT DEFAULT 'pix')`,
+    sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
+  ]);
+  schemaReady = true;
 }
 
-function payerEmail(b: Record<string, unknown>): string {
-  const charge = b.charge as Record<string, unknown> | undefined;
-  const chargeCustomer = charge?.customer as Record<string, unknown> | undefined;
-  const customer = b.customer as Record<string, unknown> | undefined;
-  const pix = b.pix as Record<string, unknown> | undefined;
-  const payer = pix?.payer as Record<string, unknown> | undefined;
-  return norm(chargeCustomer?.email ?? customer?.email ?? payer?.email);
+// handled: o pagamento foi resolvido (creditado, já baixado antes ou marcado pra
+// revisão). false = nada aconteceu, e a chave de idempotência é liberada pra um
+// evento mais completo do mesmo Pix (ex.: TRANSACTION_RECEIVED sem a cobrança
+// antes do CHARGE_COMPLETED) ainda poder processar.
+type Outcome = { handled: boolean; body: Record<string, unknown> };
+
+async function processPaid(sql: NeonQueryFunction<false, false>, body: Record<string, unknown>, corr: string, paid: number): Promise<Outcome> {
+  // compra de coins do Ultimate OU do Passe Premium (correlationID
+  // "ultcoins:..."; o passe reusa rtm_coin_orders com tier "pass-s<N>",
+  // coins=0): baixa o pedido e PARA aqui — não ativa conta vitalícia.
+  if (corr.startsWith('ultcoins:')) {
+    // órfão (Pix pago sem pedido gravado): reconstrói pelo tier do correlationID
+    // e pelo e-mail da cobrança, com o preço da tabela única de payments.ts.
+    const tier = corr.split(':')[1] ?? '';
+    const pack = COIN_TIERS[tier] ?? (parsePassTier(tier) ? { cents: PASS_PRICE_CENTS, coins: 0 } : undefined);
+    const orphan = pack ? { email: wooviPayerEmail(body), tier, coins: pack.coins, cents: pack.cents } : undefined;
+    const r = await settleOrder(sql, corr, paid, 'pix', orphan);
+    logSettleAttention('woovi', corr, paid, r);
+    return { handled: r.status !== 'not_found', body: { received: true, processed: r.status === 'paid' || r.status === 'already', coins: true, status: r.status } };
+  }
+
+  // Conta vitalícia: só cobrança NOSSA ("rtm-<email>-<ts>", action 'pix') e com
+  // valor >= preço. O e-mail vem do correlationID — a conta que gerou a
+  // cobrança —, nunca do pagador (ECON-07).
+  const email = rtmEmailFromCorrelation(corr);
+  if (!email) {
+    console.warn('[woovi] Pix pago sem cobrança conhecida, ignorado:', corr || '(sem correlationID)', paid);
+    return { handled: false, body: { received: true, processed: false, reason: 'cobrança desconhecida' } };
+  }
+  if (!(paid >= pixAccountPriceCents())) {
+    console.error(`[woovi] vitalícia com valor abaixo do preço: ${corr} pagou ${paid} centavos — conferir no CRM`);
+    return { handled: true, body: { received: true, processed: false, reason: 'valor abaixo do preço' } };
+  }
+
+  await sql.transaction([
+    sql`INSERT INTO rtm_paid_emails (email) VALUES (${email}) ON CONFLICT DO NOTHING`,
+    // promove o cadastro pendente em conta paga (regra: só pago tem conta)
+    sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
+        SELECT email, nick, pass_hash, true, ${accountReference(email)} FROM rtm_pending_signups WHERE email=${email}
+        ON CONFLICT (email) DO UPDATE SET paid=true`,
+    // método real vence o 'admin' de um grant antigo (senão a conta nunca entraria na fila de Fundador)
+    sql`UPDATE rtm_accounts SET paid=true, stripe_ref=COALESCE(stripe_ref, ${accountReference(email)}),
+        payment_method=CASE WHEN payment_method IS NULL OR payment_method='admin' THEN 'pix' ELSE payment_method END
+        WHERE email=${email}`,
+    sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
+  ]);
+  await assignFounderNumbers(sql); // número de Fundador na ordem do pagamento, uma vez só
+
+  return { handled: true, body: { received: true, processed: true } };
 }
 
 async function fetchHandler(request: Request): Promise<Response> {
@@ -60,61 +125,28 @@ async function fetchHandler(request: Request): Promise<Response> {
   try { body = JSON.parse(raw) as Record<string, unknown>; } catch { return Response.json({ received: true, processed: false }); }
   if (!isPaidEvent(body)) return Response.json({ received: true, processed: false });
 
-  // compra de coins do Ultimate OU do Passe Premium (correlationID
-  // "ultcoins:..."; o passe reusa rtm_coin_orders com tier "pass-s<N>",
-  // coins=0): marca o pedido pago e PARA aqui — não ativa conta vitalícia.
-  const chargeObj = body.charge as Record<string, unknown> | undefined;
-  const corr = String(chargeObj?.correlationID ?? (body.correlationID as string | undefined) ?? '');
-  if (corr.startsWith('ultcoins:')) {
-    const coinSql = neon(databaseUrl);
-    await coinSql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ, method TEXT DEFAULT 'pix')`;
-    await coinSql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`;
-    const updated = await coinSql`UPDATE rtm_coin_orders SET status='paid', paid_at=now(), method='pix' WHERE correlation_id=${corr} AND status='pending' RETURNING correlation_id`;
-    if (updated.length === 0) {
-      // rede de segurança: Pix pago sem pedido registrado (falha entre criar a
-      // cobrança e gravar o pedido). Reconstrói pelo correlationID + e-mail do
-      // pagador. Tiers espelham COIN_TIERS em api/account.ts — manter em sincronia.
-      const ULT_COIN_TIERS: Record<string, { cents: number; coins: number }> = {
-        p10: { cents: 1000, coins: 30000 }, p15: { cents: 1500, coins: 50000 }, p30: { cents: 3000, coins: 120000 },
-      };
-      const tier = corr.split(':')[1] ?? '';
-      // Passe Premium: tier "pass-s<N>" (coins=0, R$ 30,00 = 3000 cents).
-      const pack = ULT_COIN_TIERS[tier] ?? (/^pass-s\d+$/.test(tier) ? { cents: 3000, coins: 0 } : undefined);
-      const buyer = payerEmail(body);
-      if (pack && /\S+@\S+\.\S+/.test(buyer)) {
-        // ON CONFLICT DO NOTHING: se o pedido existe como paid/claimed (webhook
-        // duplicado), não recria nem paga duas vezes.
-        await coinSql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, status, paid_at, method) VALUES (${corr}, ${buyer}, ${tier}, ${pack.coins}, ${pack.cents}, 'paid', now(), 'pix') ON CONFLICT (correlation_id) DO NOTHING`;
-      }
-    }
-    return Response.json({ received: true, processed: true, coins: true });
-  }
-
-  const email = payerEmail(body);
-  if (!/\S+@\S+\.\S+/.test(email)) return Response.json({ received: true, processed: false, reason: 'sem email do pagador' });
-
+  const corr = wooviCorrelation(body);
+  const paid = wooviPaidCents(body);
   const sql = neon(databaseUrl);
-  await sql.transaction([
-    sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
-    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
-    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
-    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
-    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
-    sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
-    sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
-  ]);
-  await sql.transaction([
-    sql`INSERT INTO rtm_paid_emails (email) VALUES (${email}) ON CONFLICT DO NOTHING`,
-    // promove o cadastro pendente em conta paga (regra: só pago tem conta)
-    sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
-        SELECT email, nick, pass_hash, true, ${accountReference(email)} FROM rtm_pending_signups WHERE email=${email}
-        ON CONFLICT (email) DO UPDATE SET paid=true`,
-    sql`UPDATE rtm_accounts SET paid=true, stripe_ref=COALESCE(stripe_ref, ${accountReference(email)}), payment_method=COALESCE(payment_method, 'pix') WHERE email=${email}`,
-    sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
-  ]);
-  await renumberFounders(sql); // numera o fundador por ordem de pagamento
+  await ensureWebhookSchema(sql);
 
-  return Response.json({ received: true, processed: true });
+  const key = wooviPaymentKey(body);
+  if (key) {
+    const fresh = await sql`INSERT INTO rtm_webhook_events (provider, event_key, correlation_id) VALUES ('woovi', ${key}, ${corr}) ON CONFLICT DO NOTHING RETURNING event_key`;
+    if (!fresh.length) return Response.json({ received: true, processed: false, duplicate: true });
+  }
+  const release = async () => {
+    if (key) await sql`DELETE FROM rtm_webhook_events WHERE provider='woovi' AND event_key=${key}`.catch(() => undefined);
+  };
+  let out: Outcome;
+  try {
+    out = await processPaid(sql, body, corr, paid);
+  } catch (error) {
+    await release(); // a re-entrega do Woovi processa de novo
+    throw error;
+  }
+  if (!out.handled) await release();
+  return Response.json(out.body);
 }
 
 export default { fetch: fetchHandler };

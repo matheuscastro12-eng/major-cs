@@ -35,11 +35,11 @@ interface Props {
 }
 
 function moodOf(value: number): { label: string; color: string } {
-  if (value >= 85) return { label: 'Hyped', color: '#5ed88a' };
+  if (value >= 85) return { label: 'Hyped', color: 'var(--c-win)' };
   if (value >= 70) return { label: 'Focado', color: '#9bd35c' };
   if (value >= 55) return { label: 'Neutro', color: '#cfa75b' };
   if (value >= 40) return { label: 'Inseguro', color: '#e8a93b' };
-  return { label: 'Abalado', color: '#e58a8a' };
+  return { label: 'Abalado', color: 'var(--c-loss)' };
 }
 
 export function LockerRoomPage({ data, onClose, onReady }: Props) {

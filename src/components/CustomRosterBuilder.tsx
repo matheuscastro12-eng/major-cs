@@ -111,7 +111,7 @@ export function CustomRosterBuilder({
         country: s.country,
         role: s.role,
         // idade escolhida pelo user; a carreira começa no split 1, então age é a
-        // idade-base exata (effectiveAge soma +1 ano a cada 3 splits a partir daqui)
+        // idade-base exata (effectiveAge soma +1 ano a cada temporada a partir daqui)
         age: Math.max(16, Math.min(40, Math.round(s.age))),
         aim: s.aim,
         consistency: s.consistency,
@@ -218,7 +218,7 @@ function SlotCard({ slot, index, onChange }: { slot: SlotDraft; index: number; o
         <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800, color: 'var(--em-muted)' }}>
           {ct('Jogador')} {index + 1}
         </span>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1rem', fontWeight: 900, color: 'var(--em-gold)' }}>
+        <span style={{ fontFamily: 'var(--font-num)', fontSize: '1rem', fontWeight: 900, color: 'var(--em-gold)' }}>
           OVR {derivedOvr}
         </span>
       </div>

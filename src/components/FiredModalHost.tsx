@@ -18,6 +18,11 @@ export function openFiredModal(data: FiredModalData, onRestart: () => void, onJo
   setAll({ data, onRestart, onJobHunt });
 }
 
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+export function closeFiredModal(): void {
+  setAll(null);
+}
+
 export function FiredModalHost() {
   const [state, setState] = useState<State>(current);
 

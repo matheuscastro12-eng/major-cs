@@ -82,7 +82,7 @@ export function resolveGSLRound(l: League, rng: Rng): void {
     const a = leagueTeam(l, m.a);
     const b = leagueTeam(l, m.b);
     const bo = m.bo ?? 3;
-    if (!m.result) m.result = simulateSeries(rng, a, b, autoVeto([a, b], rng, bo), bo);
+    if (!m.result) m.result = l.pressure ? simulateSeries(rng, a, b, autoVeto([a, b], rng, bo), bo, { pressure: l.pressure }) : simulateSeries(rng, a, b, autoVeto([a, b], rng, bo), bo);
     const w = m.result.winner === 0 ? a : b;
     const lo = m.result.winner === 0 ? b : a;
     w.wins++;

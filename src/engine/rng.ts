@@ -12,6 +12,9 @@ export function makeRng(seed: number): Rng {
   };
 }
 
+// Única porta de entropia do engine (a regra no-restricted-properties isenta só
+// este arquivo). Deve ser chamada pela UI/state para gerar a seed, nunca pela
+// lógica de simulação.
 export function randomSeed(): number {
   return Math.floor(Math.random() * 0xffffffff);
 }

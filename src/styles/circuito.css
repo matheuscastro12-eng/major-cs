@@ -1,0 +1,142 @@
+/* [fase 4 · frente CIRCUITO] Calendário, Circuito (evento), rota do Major,
+   composição do VRS e a escolha de campeonato. Só tokens (var(--c-*), --sp-*,
+   --fs-*); primitivos em primitives.css. */
+
+.ci-tab { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.ci-tab .ds-panel { min-width: 0; }
+.ci-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.ci-grid .ci-span2 { grid-column: 1 / -1; }
+@media (max-width: 1100px) { .ci-grid { grid-template-columns: minmax(0, 1fr); } }
+.ci-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); }
+@media (max-width: 720px) { .ci-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ci-note { margin: 0; color: var(--c-ink-faint); font-size: var(--fs-2); line-height: 1.45; }
+.ci-pad { padding: var(--sp-3) var(--sp-4); }
+.ci-dim { color: var(--c-ink-faint); font-size: var(--fs-2); }
+.ci-num { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 800; }
+.ci-up { color: var(--c-win); font-weight: 700; }
+.ci-down { color: var(--c-loss); font-weight: 700; }
+.ci-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.ci-filters .ds-seg { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+
+/* tags de evento */
+.ci-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ci-venue { display: inline-flex; align-items: center; gap: 4px; color: var(--c-ink-dim); font-size: var(--fs-2); white-space: nowrap; }
+
+/* ── rota até o Major ───────────────────────────────────────────── */
+.ci-route { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--sp-2); }
+.ci-route__step {
+  flex: 1 1 130px; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+  padding: var(--sp-2) var(--sp-3); border-radius: 8px; border: 1px solid var(--c-line); background: var(--c-surface-2);
+}
+.ci-route__step small { color: var(--c-ink-faint); font-size: var(--fs-1); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.ci-route__step b { font-size: var(--fs-3); }
+.ci-route__step span { color: var(--c-ink-dim); font-size: var(--fs-2); }
+.ci-route__step--on { border-color: var(--c-accent-line, var(--c-brand)); background: color-mix(in srgb, var(--c-brand) 10%, var(--c-surface-2)); }
+.ci-route__step--done { opacity: 0.72; }
+.ci-route__step--out { border-style: dashed; }
+.ci-route__arrow { align-self: center; color: var(--c-ink-faint); }
+@media (max-width: 720px) { .ci-route__arrow { display: none; } .ci-route__step { flex-basis: calc(50% - var(--sp-2)); } }
+
+/* ── agenda (calendário) ────────────────────────────────────────── */
+.ci-agenda { display: flex; flex-direction: column; }
+.ci-split { border-top: 1px solid var(--c-line); }
+.ci-split:first-child { border-top: 0; }
+.ci-split__head {
+  display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4);
+  background: var(--c-surface-1); font-size: var(--fs-2); color: var(--c-ink-dim); text-transform: uppercase; letter-spacing: var(--tracking-caps);
+}
+.ci-split__head b { color: var(--c-ink); }
+.ci-split__head--now { color: var(--c-brand); }
+.ci-etapa { display: grid; grid-template-columns: 92px minmax(0, 1fr); border-top: 1px solid var(--c-line-soft); }
+.ci-etapa__when { padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 2px; }
+.ci-etapa__when b { font-size: var(--fs-3); }
+.ci-etapa__when small { color: var(--c-ink-faint); font-size: var(--fs-1); }
+.ci-etapa--now .ci-etapa__when b { color: var(--c-brand); }
+.ci-events { display: flex; flex-direction: column; min-width: 0; }
+.ci-ev {
+  display: grid; grid-template-columns: 56px minmax(0, 1.6fr) minmax(0, 1fr) 84px minmax(0, 1.1fr);
+  align-items: center; gap: var(--sp-2); padding: 7px var(--sp-4) 7px 0; min-width: 0;
+  font: inherit; color: inherit; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--c-line-soft); cursor: pointer;
+}
+.ci-ev:last-child { border-bottom: 0; }
+.ci-ev:hover { background: var(--c-hover); }
+.ci-ev:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ci-ev--mine { background: color-mix(in srgb, var(--c-brand) 9%, transparent); }
+.ci-ev--mine .ci-ev__name { color: var(--c-brand); }
+.ci-ev__name { font-weight: 700; font-size: var(--fs-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ci-ev__name small { display: block; font-weight: 500; color: var(--c-ink-faint); font-size: var(--fs-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ci-ev__prize { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; font-size: var(--fs-2); text-align: right; }
+.ci-ev__status { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; font-size: var(--fs-2); white-space: nowrap; overflow: hidden; }
+.ci-ev__status img { flex: none; }
+.ci-break {
+  display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4);
+  color: var(--c-ink-faint); font-size: var(--fs-2); border-top: 1px dashed var(--c-line);
+}
+.ci-empty { padding: var(--sp-4); color: var(--c-ink-faint); font-size: var(--fs-2); }
+@media (max-width: 720px) {
+  .ci-etapa { grid-template-columns: minmax(0, 1fr); }
+  .ci-etapa__when { flex-direction: row; align-items: baseline; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) 0; }
+  .ci-ev { grid-template-columns: 46px minmax(0, 1fr) auto; grid-template-areas: 'tier name prize' 'tier venue status'; row-gap: 2px; padding: 8px var(--sp-3); }
+  .ci-ev > :nth-child(1) { grid-area: tier; }
+  .ci-ev > :nth-child(2) { grid-area: name; }
+  .ci-ev > :nth-child(3) { grid-area: venue; }
+  .ci-ev > :nth-child(4) { grid-area: prize; }
+  .ci-ev > :nth-child(5) { grid-area: status; }
+}
+
+/* ── evento (Circuito) ──────────────────────────────────────────── */
+.ci-select {
+  font: inherit; font-size: var(--fs-3); color: var(--c-ink); background: var(--c-surface-0);
+  border: 1px solid var(--c-line-strong); border-radius: 6px; padding: 6px 10px; max-width: 100%; min-width: 0;
+}
+.ci-select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ci-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); }
+.ci-fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ci-fact small { color: var(--c-ink-faint); font-size: var(--fs-1); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.ci-fact b { font-size: var(--fs-3); overflow-wrap: anywhere; }
+.ci-format { margin: 0; padding: 0 var(--sp-4) var(--sp-3); color: var(--c-ink-dim); font-size: var(--fs-2); line-height: 1.5; }
+.ci-team { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; font-weight: 600; }
+.ci-team span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ci-team--me span { color: var(--c-brand); font-weight: 800; }
+.ci-place { font-family: var(--font-num); font-weight: 800; }
+.ci-place--1 { color: var(--c-achievement); }
+
+/* ── composição do VRS ──────────────────────────────────────────── */
+.ci-factors { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+.ci-factor { display: grid; grid-template-columns: 150px minmax(0, 1fr) 52px; gap: var(--sp-2); align-items: center; font-size: var(--fs-2); }
+.ci-factor b { font-family: var(--font-num); text-align: right; }
+@media (max-width: 720px) { .ci-factor { grid-template-columns: 110px minmax(0, 1fr) 44px; } }
+.ci-mini { display: inline-grid; grid-template-columns: repeat(3, 26px); gap: 3px; vertical-align: middle; }
+.ci-mini i { display: block; height: 6px; border-radius: 3px; background: var(--c-surface-3); position: relative; overflow: hidden; }
+.ci-mini i > u { position: absolute; inset: 0 auto 0 0; background: var(--c-brand); text-decoration: none; }
+.ci-mini i:nth-child(2) > u { background: var(--c-ct); }
+.ci-mini i:nth-child(3) > u { background: var(--c-win); }
+.ci-legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-1); color: var(--c-ink-faint); }
+.ci-legend i { display: inline-block; width: 10px; height: 6px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+
+/* ── escolha de campeonato ──────────────────────────────────────── */
+.ci-pick { max-width: 1040px; margin: var(--sp-5, 24px) auto; padding: 0 var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-4); }
+.ci-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: var(--sp-3); }
+.ci-card {
+  display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); text-align: left; min-width: 0;
+  font: inherit; color: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--c-line); background: var(--c-surface-1);
+}
+.ci-card:hover { border-color: var(--c-line-strong); background: var(--c-surface-2); }
+.ci-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ci-card--on { border-color: var(--c-brand); box-shadow: 0 0 0 1px var(--c-brand) inset; }
+.ci-card--locked { opacity: 0.55; }
+.ci-card__name { font-weight: 800; font-size: var(--fs-4); line-height: 1.2; }
+.ci-card__meta { display: flex; flex-wrap: wrap; gap: 4px var(--sp-3); color: var(--c-ink-dim); font-size: var(--fs-2); }
+.ci-card__route { font-size: var(--fs-2); color: var(--c-ink-dim); }
+.ci-field { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+.ci-field__team { display: flex; align-items: center; gap: var(--sp-2); padding: 6px var(--sp-2); border-radius: 6px; background: var(--c-surface-2); min-width: 0; font-size: var(--fs-2); }
+.ci-field__team b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; font-size: var(--fs-3); }
+.ci-cta { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; justify-content: center; padding: var(--sp-3) var(--sp-4) var(--sp-4); }
+
+/* composição do VRS no celular: some a coluna do peso (a idade) pra não estourar */
+.ci-vrs-rows { width: 100%; table-layout: auto; }
+.ci-vrs-rows td:first-child { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .career-dash table.stats.ci-vrs-rows { min-width: 0; }
+  .ci-vrs-rows td:nth-child(3) { display: none; }
+}

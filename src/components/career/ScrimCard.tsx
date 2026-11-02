@@ -47,7 +47,7 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
           <span style={titleStyle}>Escolha o sparring — a partida é de verdade</span>
         </div>
         <span style={quotaStyle(remaining > 0)}>
-          <b style={{ fontFamily: '"JetBrains Mono", monospace' }}>{scrimsThisSplit}/{SCRIM_INFO.maxPerSplit}</b>
+          <b style={{ fontFamily: 'var(--font-num)' }}>{scrimsThisSplit}/{SCRIM_INFO.maxPerSplit}</b>
           <span style={{ fontSize: '0.66rem', color: 'var(--em-muted)', fontWeight: 700, letterSpacing: '0.4px' }}>USADAS</span>
         </span>
       </header>
@@ -64,14 +64,14 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
               disabled={off}
               onClick={() => setPicked(o.id)}
               style={oppChipStyle(isPicked, off)}
-              title={off ? AVAIL_LABEL[o.avail] : `Força ${o.strength} (${o.diff >= 0 ? '+' : ''}${o.diff} vs você)`}
+              title={off ? AVAIL_LABEL[o.avail] : `Força ${o.strength} (${o.diff >= 0 ? '+' : ''}${o.diff} vs você)${o.offBand ? ' · fora da sua banda de força: rende menos química' : ''}`}
             >
               <TeamBadge tag={o.tag} colors={o.colors} size={18} logoUrl={o.logoUrl} />
               <span style={{ fontWeight: 700, fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.tag}</span>
-              <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.72rem', color: o.diff > 1 ? '#e58a8a' : o.diff < -1 ? '#5ed88a' : 'var(--em-muted)' }}>
+              <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.72rem', color: o.diff > 1 ? 'var(--c-loss)' : o.diff < -1 ? 'var(--c-win)' : 'var(--em-muted)' }}>
                 {o.diff >= 0 ? '+' : ''}{o.diff}
               </b>
-              <span style={{ fontSize: '0.6rem', color: off ? '#e58a8a' : '#5ed88a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+              <span style={{ fontSize: '0.6rem', color: off ? 'var(--c-loss)' : 'var(--c-win)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                 {AVAIL_LABEL[o.avail]}
               </span>
             </button>
@@ -79,7 +79,7 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
         })}
         {opponents.length === 0 && (
           <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem', fontStyle: 'italic' }}>
-            Sem sparrings na sua banda de força (complete o elenco).
+            Complete o elenco (5 titulares e técnico) para marcar scrims.
           </span>
         )}
       </div>
@@ -87,7 +87,7 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
       <div style={bonusRowStyle}>
         <Bonus label="Custo" value={`-$${SCRIM_INFO.cost.toLocaleString('pt-BR')}`} tone="neg" />
         <Bonus label="Química" value={`até +${(SCRIM_INFO.chemGain * 1.6).toFixed(1)}/par`} tone="pos" />
-        <Bonus label="Fadiga" value={`-${SCRIM_INFO.fatigueReduction} pp`} tone="pos" />
+        <Bonus label="Ritmo · condição" value="+6 · -4" tone="pos" />
       </div>
 
       <div style={actionRowStyle}>
@@ -105,7 +105,7 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
       {report && (
         <div style={reportStyle(report.won)}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-            <b style={{ color: report.won ? '#5ed88a' : '#e58a8a', fontFamily: '"JetBrains Mono", monospace' }}>
+            <b style={{ color: report.won ? 'var(--c-win)' : 'var(--c-loss)', fontFamily: 'var(--font-num)' }}>
               {report.won ? 'W' : 'L'} {report.myScore}-{report.oppScore}
             </b>
             <span style={{ fontWeight: 700 }}>vs {report.oppName}</span>
@@ -113,7 +113,7 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {report.lines.map((l) => (
-              <span key={l.nick} style={{ fontSize: '0.74rem', fontFamily: '"JetBrains Mono", monospace', color: l.nick === report.mvp ? '#e8c170' : 'var(--em-text)' }}>
+              <span key={l.nick} style={{ fontSize: '0.74rem', fontFamily: 'var(--font-num)', color: l.nick === report.mvp ? '#e8c170' : 'var(--em-text)' }}>
                 {l.nick === report.mvp ? '★ ' : ''}{l.nick} {l.rating.toFixed(2)} ({l.k}-{l.d})
               </span>
             ))}
@@ -126,13 +126,13 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
 }
 
 function Bonus({ label, value, tone }: { label: string; value: string; tone: 'pos' | 'neg' }) {
-  const color = tone === 'pos' ? '#5ed88a' : '#e58a8a';
+  const color = tone === 'pos' ? 'var(--c-win)' : 'var(--c-loss)';
   return (
     <div style={bonusChipStyle}>
       <span style={{ color: 'var(--em-muted)', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
         {label}
       </span>
-      <b style={{ color, fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem' }}>{value}</b>
+      <b style={{ color, fontFamily: 'var(--font-num)', fontSize: '0.86rem' }}>{value}</b>
     </div>
   );
 }
@@ -233,6 +233,6 @@ const reportStyle = (won: boolean): React.CSSProperties => ({
   padding: '10px 12px',
   background: 'var(--em-panel-2)',
   border: '1px solid var(--em-border)',
-  borderLeft: `3px solid ${won ? '#5ed88a' : '#e58a8a'}`,
+  borderLeft: `3px solid ${won ? 'var(--c-win)' : 'var(--c-loss)'}`,
   borderRadius: 4,
 });

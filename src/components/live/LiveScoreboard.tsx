@@ -56,7 +56,7 @@ export function LiveScoreboard({ state, teams, seriesScores = [], currentMap, ev
         {seriesScores.map((m) => (
           <div key={m.map} style={mapsItemStyle(m.map === currentMap)}>
             <span style={{ fontWeight: 700, fontSize: '0.74rem' }}>{MAP_LABELS[m.map]?.toUpperCase() ?? m.map.toUpperCase()}</span>
-            <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: '"JetBrains Mono", monospace', fontSize: '0.72rem' }}>
+            <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-num)', fontSize: '0.72rem' }}>
               {m.score[0]} - {m.score[1]}
             </span>
           </div>
@@ -168,7 +168,7 @@ const scoreCenterStyle: React.CSSProperties = {
 
 const scoreStyle = (side: 't' | 'ct'): React.CSSProperties => ({
   color: teamSideColor(side),
-  fontFamily: '"JetBrains Mono", monospace',
+  fontFamily: 'var(--font-num)',
   fontSize: '1.9rem',
   fontWeight: 800,
   minWidth: 38,
@@ -187,7 +187,7 @@ const clockBlockStyle: React.CSSProperties = {
 
 const clockTextStyle: React.CSSProperties = {
   color: '#fff',
-  fontFamily: '"JetBrains Mono", monospace',
+  fontFamily: 'var(--font-num)',
   fontWeight: 700,
   fontSize: '1.1rem',
 };

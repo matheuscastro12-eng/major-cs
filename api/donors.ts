@@ -1,5 +1,9 @@
 // Lista pública de apoiadores (GET) e registro de doações pelo admin (POST).
 import { neon } from '@neondatabase/serverless';
+import { requireAdmin } from '../server/admin-auth.js';
+import { parseJsonBody } from '../server/http.js';
+import { internalError } from '../server/internalError.js';
+import type { RateSql } from '../server/rate-limit.js';
 
 interface Res {
   status: (code: number) => { json: (body: unknown) => void };
@@ -9,7 +13,7 @@ interface Res {
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   const url = clean(process.env.DATABASE_URL);
@@ -28,25 +32,22 @@ export default async function handler(
       const total = await sql`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n FROM donors`;
       res.status(200).json({ donors: rows, total: Number(total[0].total), count: Number(total[0].n) });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      internalError(res, 'donors_get', e);
     }
     return;
   }
 
   if (req.method === 'POST') {
     res.setHeader('Cache-Control', 'no-store');
-    const expected = clean(process.env.ADMIN_PASSWORD);
-    const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
-      password?: string;
+    const parsed = parseJsonBody(req.body);
+    if (!parsed) { res.status(400).json({ ok: false, error: 'JSON inválido' }); return; }
+    if (!(await requireAdmin(sql as unknown as RateSql, parsed, req, res))) return; // O0-16
+    const body = parsed as {
       name?: string;
       amount?: number;
       message?: string;
       source?: string;
     };
-    if (!expected || (body.password ?? '').trim() !== expected) {
-      res.status(401).json({ ok: false });
-      return;
-    }
     const name = String(body.name ?? '').slice(0, 60).trim();
     if (!name) {
       res.status(400).json({ error: 'nome obrigatório' });
@@ -59,7 +60,7 @@ export default async function handler(
       await sql`INSERT INTO donors (name, amount, message, source) VALUES (${name}, ${amount}, ${message}, ${source})`;
       res.status(200).json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      internalError(res, 'donors_post', e);
     }
     return;
   }

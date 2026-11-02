@@ -20,17 +20,12 @@
 //     pra reaproveitar todo o sistema de 5 slots + cloud que já funciona.
 
 import { create } from 'zustand';
-import { cloudOnLocalSave, cloudEnabled, pushCloud } from './cloud';
+import { cancelCloudSave, cloudOnLocalSave, cloudEnabled, pushCloud, setCloudHold } from './cloud';
 import { cloudSlot, getActiveSlot, slotKey } from './careerSaves';
 import { captureError } from './errlog';
 import { writeWithQuotaRescue } from './storageQuota';
-import {
-  migrateSave,
-  saveVersion,
-  stampVersion,
-  SAVE_VERSION,
-  type VersionedSave,
-} from './saveMigrations';
+import { registerSaveRetry, reportLocalSave } from './saveHealth';
+import { saveVersion, stampVersion, SAVE_VERSION, type VersionedSave } from './saveVersion';
 
 // Tipagem genérica do save (CareerSave ainda vive em CareerScreen.tsx). Quando
 // T1.4 mover o tipo pra `src/types/career.ts`, trocar `VersionedSave` por `CareerSave`.
@@ -46,6 +41,18 @@ export type GameSave = VersionedSave;
 // trata tudo como `unknown`/`object` pra ler/escrever — typing é só pra DX.
 export type Hydrator<T = GameSave> = (raw: VersionedSave) => T;
 const identityHydrator: Hydrator = (s) => s;
+// Último hidratador recebido no loadFromSlot: o reload "por fora" (nuvem, outra
+// aba) precisa hidratar do mesmo jeito que a tela hidratou.
+let lastHydrator: Hydrator = identityHydrator;
+
+// A cadeia de migrations (saveMigrations.ts) importa os motores da Carreira
+// inteiros e não entra na carga inicial: o App só usa o epoch e o reload. Quem
+// carrega o save (o CareerScreen, lazy) instala a cadeia ao importar o módulo.
+type Migrator = (raw: VersionedSave) => VersionedSave;
+let migrateFn: Migrator | null = null;
+export function installSaveMigrations(fn: Migrator): void {
+  migrateFn = fn;
+}
 
 interface GameStoreState {
   // null = nada carregado ainda (boot / sem save no slot). Diferente de
@@ -57,7 +64,13 @@ interface GameStoreState {
   // True enquanto o boot inicial ainda não rodou (evita race com persist).
   ready: boolean;
   // Marca o último erro de persist pra exibir aviso (quota cheia, etc.).
+  // Espelhado na store saveHealth (banner global "Não consegui salvar").
   lastPersistError: string | null;
+  // Muda quando o save do slot foi trocado POR FORA da tela (restore da nuvem,
+  // lápide de outro aparelho, outra aba). A carreira monta com key={epoch}:
+  // stage/majorT/hubTab são useState com inicializador único e só um REMOUNT
+  // os recalcula a partir do save novo [O0-28/O1-35].
+  epoch: number;
 
   // ---- Actions ----
   // Carrega save do slot do localStorage, aplica migrations e hidrata. Idempotente.
@@ -72,6 +85,8 @@ interface GameStoreState {
   // Persiste o save atual no localStorage do slot ativo. Chamado internamente
   // por setSave/update; exposto pra casos onde o consumidor quer flush manual.
   persistNow: () => void;
+  // Relê o slot carregado do disco (já atualizado por fora) e bumpa o epoch.
+  reloadFromDisk: () => void;
 }
 
 // Helper interno: lê o save cru do localStorage da slot dada. Não migra/hidrata.
@@ -99,7 +114,12 @@ function writeRawSlot(n: number, json: string): { ok: boolean; error?: string } 
     // aqui): o principal é a última coisa que pode falhar — se a cota recusar,
     // libera .corrupt/.bak e tenta de novo antes de desistir.
     const w = writeWithQuotaRescue(KEY, json);
-    if (!w.ok) throw w.error ?? new Error('quota');
+    if (!w.ok) {
+      // [O0-26] falhou a gravação LOCAL: o pagante ainda fica protegido pela
+      // nuvem. Antes o throw vinha antes do cloudOnLocalSave e nem isso subia.
+      cloudOnLocalSave(cloudSlot(n), KEY, () => json);
+      throw w.error ?? new Error('quota');
+    }
     if (w.rescued) captureError(new Error(`quota rescue: ${w.freed} artefato(s) descartado(s) pra salvar ${KEY}`), 'game-store-quota-rescue');
     cloudOnLocalSave(cloudSlot(n), KEY, () => json);
     // backup de um passo: se o save novo ficar ilegível, dá pra voltar pro anterior
@@ -152,9 +172,11 @@ export const useGame = create<GameStoreState>((set, get) => ({
   loadedSlot: -1,
   ready: false,
   lastPersistError: null,
+  epoch: 0,
 
   loadFromSlot: (n, hydrate) => {
     const slot = n ?? getActiveSlot();
+    if (hydrate) lastHydrator = hydrate as Hydrator;
     const hydrator = (hydrate ?? identityHydrator) as Hydrator;
     const raw = readRawSlot(slot);
 
@@ -191,7 +213,12 @@ export const useGame = create<GameStoreState>((set, get) => ({
       return null;
     }
 
-    const migrated = migrateSave(parsed);
+    // save antigo sem a cadeia instalada: falha alto em vez de hidratar (e
+    // regravar) um save no formato velho
+    if (saveVersion(parsed) < SAVE_VERSION && !migrateFn) {
+      throw new Error('gameStore: installSaveMigrations() não foi chamado antes do loadFromSlot');
+    }
+    const migrated = migrateFn ? migrateFn(parsed) : parsed;
     const hydrated = hydrator(migrated);
 
     // se a migração mudou o save (v antigo → v atual), persiste já no formato novo
@@ -253,7 +280,51 @@ export const useGame = create<GameStoreState>((set, get) => ({
       lastPersistError: res.ok ? null : (res.error ?? 'persist failed'),
     });
   },
+
+  reloadFromDisk: () => {
+    const slot = get().loadedSlot;
+    if (slot >= 1) get().loadFromSlot(slot, lastHydrator);
+    set({ epoch: get().epoch + 1 });
+  },
 }));
+
+// Banner global: a falha de gravação da carreira aparece pro jogador, e o
+// "Tentar de novo" regrava o save que está na memória.
+useGame.subscribe((s, prev) => {
+  if (s.lastPersistError !== prev.lastPersistError) reportLocalSave('career', s.lastPersistError);
+});
+registerSaveRetry('career', () => useGame.getState().persistNow());
+
+// [O1-35] Sync entre abas: outra aba gravou o MESMO slot → esta re-hidrata do
+// disco (e a carreira remonta pelo epoch). Sem isso a aba esquecida gravava o
+// estado velho com timestamp novo e o LWW da nuvem espalhava a perda.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    const { loadedSlot: slot, save } = useGame.getState();
+    if (slot < 1 || e.key !== slotKey(slot)) return;
+    // mesma coisa que já está na memória (migração re-gravada, save idêntico):
+    // não remonta a tela à toa no meio de uma partida.
+    if (save && e.newValue != null && e.newValue === JSON.stringify(save)) return;
+    useGame.getState().reloadFromDisk();
+  });
+}
+
+// [O0-12] "Recomeçar" pela tela de erro: tira o save do slot DESTE aparelho sem
+// gravar lápide na nuvem. O principal vai pra `.corrupt` (diagnóstico), o slot
+// fica com a trava 'reset' (o sync não traz de volta o save que quebrou) e a
+// cópia da nuvem só é substituída quando o jogador começar um save novo ali.
+export function resetSlotLocal(n: number): void {
+  const KEY = slotKey(n);
+  const raw = readRawSlot(n);
+  if (raw) stashCorrupt(n, raw);
+  for (const k of [KEY, KEY + '.bak']) {
+    try { localStorage.removeItem(k); } catch { /* sem storage */ }
+  }
+  cancelCloudSave(cloudSlot(n));
+  setCloudHold(KEY, 'reset');
+  const st = useGame.getState();
+  if (st.loadedSlot === n) useGame.setState({ save: null, lastPersistError: null, epoch: st.epoch + 1 });
+}
 
 // Helpers de leitura fora-de-componente (ex.: handler de cloud sync, telemetria).
 export const getGameSave = (): GameSave | null => useGame.getState().save;

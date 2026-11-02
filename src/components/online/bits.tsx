@@ -57,7 +57,7 @@ export function BackBar({ onHub, onExit }: { onHub?: () => void; onExit: () => v
   );
 }
 
-const ROLE_COLOR: Record<string, string> = { AWP: '#d8a943', Entry: '#e25a5a', IGL: '#6fc3df', Support: '#6fd06f', Lurker: '#c792ea', Rifler: '#9fb6cd' };
+const ROLE_COLOR: Record<string, string> = { AWP: '#d8a943', Entry: 'var(--c-loss)', IGL: '#6fc3df', Support: 'var(--c-win)', Lurker: '#c792ea', Rifler: '#9fb6cd' };
 export function RoleTag({ role }: { role: string }) {
   const c = ROLE_COLOR[role] ?? 'var(--em-muted)';
   return <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.4px', textTransform: 'uppercase', color: c, background: `color-mix(in srgb, ${c} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 38%, transparent)`, padding: '1px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }}>{role}</span>;

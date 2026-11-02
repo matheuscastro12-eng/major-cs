@@ -36,6 +36,13 @@ function save(s: DailyStore): void {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* sem storage */ }
 }
 
+// [O0-12] "Recomeçar o dia" pela tela de erro: apaga só o progresso de HOJE dos
+// jogos do Diário (o estado que pode ter quebrado a tela). Sequências ficam.
+export function resetDailyProgress(): void {
+  const s = load();
+  save({ ...s, progress: {} });
+}
+
 export function loadDailyProgress<T extends DailyProgressBase = DailyProgressBase>(gameId: string, dateKey: string): T | null {
   const s = load();
   const cur = s.progress[gameId];

@@ -1,0 +1,49 @@
+# CI mínima (O0-19 / ENGE-01): o portão "lint = 0 + testes verdes" deixa de ser
+# só manual. Roda em todo PR e em push na master. A Vercel continua fazendo o
+# build de deploy por conta própria; aqui o build só prova que o bundle fecha.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Um push novo no mesmo PR cancela a rodada anterior (economiza minutos).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # A versão do Node vem do .nvmrc (a mesma do @types/node do package.json).
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint (gate = 0 problemas)
+        run: npm run lint -- --max-warnings=0
+
+      # tsc -b compila os 3 projetos do tsconfig.json (app, node e payments).
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Testes de servidor
+        run: npm test
+
+      - name: Testes de simulação
+        run: npm run test:sim
+
+      - name: Build
+        run: npx vite build

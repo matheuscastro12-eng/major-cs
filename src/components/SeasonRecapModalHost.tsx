@@ -23,6 +23,15 @@ export function openSeasonRecap(data: SeasonRecapData, onClose?: () => void): vo
   setAll(data);
 }
 
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+// Chama o onClose encadeado: travar o fluxo do fim de split é pior que pular o recap.
+export function closeSeasonRecap(): void {
+  const cb = onCloseCb;
+  onCloseCb = null;
+  setAll(null);
+  cb?.();
+}
+
 export function SeasonRecapModalHost() {
   const [state, setState] = useState<SeasonRecapData | null>(current);
 

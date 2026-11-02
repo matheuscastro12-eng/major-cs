@@ -1,38 +1,37 @@
 import type { ReactNode } from 'react';
-import { IconChevronLeft } from '../career/DashIcons';
+import { GameShell } from '../ds/shell/GameShell';
 import { ct } from '../../state/career-i18n';
 
-// Shell base do Road to Pro — "THE DESK". Identidade broadcast/HUD própria,
-// root `.rtp` (tokens --rtp-*, sempre-dark, desacoplado da Carreira). Top bar com
-// channel-bug (REC/LIVE), back e um slot direito. Telas simples (create/transfer/
-// match/lifeevent) usam isto; o hub tem layout próprio mais rico por cima.
+// Telas de fluxo do Road to Pro (criar jogador, partida, transferência, Major,
+// fim de era) no shell universal: sem sidebar, só a topbar com o escudo da
+// marca e o voltar. O root `.rtp` mantém os tokens/estilos do modo.
 export function RtpFrame({
   onExit,
   right,
   kicker,
   children,
+  immersive = false,
 }: {
   onExit: () => void;
   right?: ReactNode;
-  kicker?: string;      // texto pequeno à direita do wordmark (ex.: "MATCHDAY")
+  kicker?: string;      // contexto da tela (ex.: "MAJOR", "ERA 2026")
   children: ReactNode;
+  /** partida ao vivo: topbar fina */
+  immersive?: boolean;
 }) {
   return (
-    <div className="rtp rtp-screen" data-fx="on">
-      <header className="rtp-bar">
-        <button type="button" className="rtp-bar-back" onClick={onExit} title={ct('Voltar')}>
-          <IconChevronLeft size={16} />
-        </button>
-        <span className="rtp-bug">
-          <span className="rtp-bug-rec" aria-hidden />
-          <span className="rtp-bug-word">ROAD<i>//</i>PRO</span>
-          {kicker && <span className="rtp-bug-kicker">{kicker}</span>}
-        </span>
-        <span className="rtp-bar-spacer" />
-        {right}
-      </header>
-      <div className="rtp-signal" aria-hidden />
-      <div className="rtp-body">{children}</div>
-    </div>
+    <GameShell
+      mode="rtp"
+      variant={immersive ? 'immersive' : 'focus'}
+      identity={{ title: 'Road to Pro', subtitle: kicker }}
+      title={kicker ?? ct('Road to Pro')}
+      crumbs={[]}
+      history={{ back: onExit }}
+      meta={right}
+    >
+      <div className="rtp rtp-screen rtp-in-shell" data-fx="on">
+        <div className="rtp-body">{children}</div>
+      </div>
+    </GameShell>
   );
 }

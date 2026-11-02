@@ -14,7 +14,7 @@
 
 import { hashStr } from '../../state/hash';
 import { MAP_POOL, type MapId, type Role, type TPlayer } from '../../types';
-import type { MomentStyle } from './moments';
+import type { MomentStyle, PostureWeights } from './moments';
 import type { RtpIconName } from './icons';
 import type { RoadToProSave } from './types';
 
@@ -76,6 +76,21 @@ export interface ScoutReport {
   tendency: string;
   note: string;
   edge: number;      // diferença de força (opp - herói): >0 = você é azarão
+}
+
+// Tendência do adversário em PESOS de postura (O1-44) — a mesma contagem de
+// agressivos/passivos que o scouting descreve em texto. Base igual pras três;
+// cada agressivo puxa o rush, cada passivo o jogo passivo, o resto o setup.
+// Sem elenco (fixture) = equilibrado.
+export function postureLeanOf(players: { playstyle?: string }[]): PostureWeights {
+  const w = { aggro: 1, safe: 1, smart: 1 };
+  for (const p of players) {
+    if (p.playstyle === 'aggressive') w.aggro += 0.4;
+    else if (p.playstyle === 'passive') w.safe += 0.4;
+    else w.smart += 0.2;
+  }
+  const tot = w.aggro + w.safe + w.smart;
+  return { aggro: w.aggro / tot, safe: w.safe / tot, smart: w.smart / tot };
 }
 
 export function scoutReport(

@@ -2,11 +2,12 @@
 // campeões da temporada passada. Estilo da tabela espelha o RankingTeams.jsx do design.
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Button, Panel } from './ds';
-import type { Account } from '../state/account';
+import { useAccountStore, type Account } from '../state/account';
 import { getLadder, getChampions, fetchMyRank, type RankRow, type MyRank, type Champion } from '../state/ranking';
 import { ct } from '../state/career-i18n';
 import { trackPaywallView } from '../state/track';
 import { FounderCounter } from './FounderCounter';
+import { usePrice, withPrice } from '../state/price';
 
 const DIV_COLOR: Record<string, string> = {
   Calibrando: 'var(--em-muted)',
@@ -33,6 +34,7 @@ const th: CSSProperties = { background: 'var(--rtm-header)', color: 'var(--em-mu
 const cond: CSSProperties = { fontFamily: 'inherit', fontWeight: 800 };
 
 export function Leaderboard({ account, onBack, onUpgrade }: { account: Account | null; onBack: () => void; onUpgrade: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const paid = !!account?.paid;
   const [data, setData] = useState<{ total: number; ladder: RankRow[]; season: number; endsAt: string } | null>(null);
   const [mine, setMine] = useState<MyRank | null>(null);
@@ -41,7 +43,9 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
   useEffect(() => { void getLadder().then(setData); void getChampions().then(setChamps); }, []);
   useEffect(() => { if (paid) void fetchMyRank(account?.nick).then(setMine); }, [paid, account?.nick]);
   // funil: CTA de vitalícia visto na tela de Ranking (src já existe em App.tsx, faltava a view)
-  useEffect(() => { if (!paid) trackPaywallView('leaderboard'); }, [paid]);
+  // [O0-11] só depois do /me: antes disso o pagante ainda parece grátis
+  const accountReady = useAccountStore((s) => s.ready);
+  useEffect(() => { if (accountReady && !paid) trackPaywallView('leaderboard'); }, [accountReady, paid]);
 
   const myNick = (mine && account?.nick) || account?.nick;
   return (
@@ -131,9 +135,9 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
 
           {!paid && (
             <Panel title={ct('Entre no ranking')} accent="gold">
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{ct('Você joga ranqueada de graça. A conta de R$20 cobre a infraestrutura que mantém MMR e histórico entre sessões.')}</p>
+              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{withPrice(ct('Você joga ranqueada de graça. A conta de {preço} cobre a infraestrutura que mantém MMR e histórico entre sessões.'))}</p>
               <FounderCounter style={{ marginBottom: '10px', display: 'block' }} />
-              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{ct('Ativar ranking persistente (R$20)')}</Button>
+              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{withPrice(ct('Ativar ranking persistente ({preço})'))}</Button>
             </Panel>
           )}
 

@@ -21,6 +21,11 @@ export function openTrophyRoom(input: Input): void {
   setAll(input);
 }
 
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+export function closeTrophyRoom(): void {
+  setAll(null);
+}
+
 export function TrophyRoomHost() {
   const [data, setData] = useState<Input | null>(current);
   useEffect(() => {

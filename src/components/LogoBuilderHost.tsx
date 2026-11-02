@@ -23,6 +23,11 @@ export function openLogoBuilder(input: State): void {
   setAll(input);
 }
 
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+export function closeLogoBuilder(): void {
+  setAll(null);
+}
+
 export function LogoBuilderHost() {
   const [state, setState] = useState<State | null>(current);
 

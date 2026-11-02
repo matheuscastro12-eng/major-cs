@@ -20,6 +20,11 @@ export function openCoachProfile(input: Input): void {
   setAll(input);
 }
 
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+export function closeCoachProfile(): void {
+  setAll(null);
+}
+
 export function CoachProfileHost() {
   const [data, setData] = useState<Input | null>(current);
   useEffect(() => {

@@ -5,9 +5,10 @@
 // local — o save guarda coins pagos. Ver docs-but-map.md §4/§6.
 
 import { create } from 'zustand';
-import { cloudEnabled, cloudOnLocalSave, markSavedAt, syncSlot } from './cloud';
+import { cancelCloudSave, cloudEnabled, cloudHold, cloudOnLocalSave, markSavedAt, setCloudHold, syncSlot, type SyncResult } from './cloud';
 import { captureError } from './errlog';
 import { writeWithQuotaRescue } from './storageQuota';
+import { registerSaveRetry, reportLocalSave } from './saveHealth';
 // Fase 3a da economia server-side: cada mutação econômica (credits/cartas) é
 // ESPELHADA como tx idempotente pro servidor via mirrorUltimateChange — o save
 // local/cloud-save segue sendo a fonte da verdade; o espelho nunca bloqueia
@@ -16,14 +17,22 @@ import { writeWithQuotaRescue } from './storageQuota';
 // roll autoritativo com op_id crash-safe; fallback local se a rede falhar.
 import { bootUltimateShadow, markFlipDrift, mirrorUltimateChange, openPackOnServer } from './ultimateShadow';
 import { scheduledPromo, scheduledSbcById } from './liveops';
+import { mktLegacySeenTags, mktSeenHas } from './ultimateMarket'; // [O0-37] "já vi" legado (localStorage por aparelho)
+import type { PaidVoucher } from './account'; // [O0-46]
 import { CS2_REAL_2026 } from '../data/bo3';
-import { makeRng } from '../engine/rng';
+import { makeRng, randomSeed } from '../engine/rng';
 import { appendSpecials, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { buildFullCatalog } from '../engine/ultimate/catalog';
+import { COLLECTIONS, collectionKey, evaluateCollections, mergeFrames, normalizeClub } from '../engine/ultimate/cosmetics'; // [U10]
+import { streakKey, streakRewardFor } from '../engine/daily/streak'; // [URG-4]
+import { loadStreakState } from './dailyStreak'; // [URG-4]
+import { pickRewardCard, claimableLevels } from '../engine/ultimate/seasonPass'; // [U09]
+import type { LogoConfig } from '../lib/logoBuilder';
 import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
 import { monthIndex, promoForMonth, promoThemeById, PROMO_SIZE, type MonthlyPromo } from '../engine/ultimate/promos';
 import { totwForWeek, weekIndex, type WeeklyTotw } from '../engine/ultimate/totw';
-import { weeklyPackPool } from '../engine/ultimate/packPool';
+import { openingPool } from '../engine/ultimate/packPool';
+import { isSeasonPack, SEASON_PACK, stampPackEditions } from '../engine/ultimate/seasonEdition'; // [URG-1]
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import { pickStarterCards } from '../engine/ultimate/cards';
@@ -58,6 +67,8 @@ import {
   markWeeklyBonusClaimed as _markWeeklyBonusClaimed,
   grantPassXp as _grantPassXp,
   setPassPremium as _setPassPremium,
+  hasSrvSeen as _hasSrvSeen,
+  markSrvSeen as _markSrvSeen,
   passSeasonId,
   type MatchRecord,
   applyMatchResult as _applyMatchResult,
@@ -95,7 +106,9 @@ function load(): UltimateState {
   try { raw = localStorage.getItem(KEY); } catch { return defaultUltimateState(); }
   if (!raw) return defaultUltimateState();
   try {
-    return migrateUltimate(JSON.parse(raw));
+    // [O0-37] semeia o "já vi" do mercado que morava solto no localStorage
+    // deste aparelho: vai pro save (sincronizado) na próxima gravação.
+    return _markSrvSeen(migrateUltimate(JSON.parse(raw)), mktLegacySeenTags());
   } catch (e) {
     // principal ilegível: preserva pra diagnóstico e tenta o backup de um passo
     // (o save guarda coins comprados com dinheiro real — não pode evaporar).
@@ -109,6 +122,15 @@ function load(): UltimateState {
   }
 }
 
+// [O0-26] Erro da última gravação local, na store (persistError) e no banner
+// global. Guardado contra a TDZ: persist pode rodar antes de useUltimate existir.
+function reportPersist(error: string | null): void {
+  try {
+    if (useUltimate.getState().persistError !== error) useUltimate.setState({ persistError: error });
+  } catch { /* store ainda não criada (boot) */ }
+  reportLocalSave('ultimate', error);
+}
+
 function persist(s: UltimateState): void {
   const json = JSON.stringify(s);
   let prev: string | null = null;
@@ -119,8 +141,13 @@ function persist(s: UltimateState): void {
   if (!w.ok) {
     /* storage cheio/indisponível — modo é opcional, não trava o app */
     captureError(w.error ?? new Error('quota'), 'ultimate-persist');
+    reportPersist(w.error instanceof Error ? w.error.message : 'quota');
+    // [O0-26] falhou o LOCAL: ainda empurra pra nuvem (pagante não perde a
+    // compra no F5). Antes o return vinha antes do push.
+    if (!(isPristine(s) && cloudHold(KEY) === 'reset')) cloudOnLocalSave(CLOUD_SLOT, KEY, () => json);
     return;
   }
+  reportPersist(null);
   if (w.rescued) captureError(new Error(`quota rescue: ${w.freed} artefato(s) descartado(s) pra salvar ${KEY}`), 'ultimate-quota-rescue');
   // backup de um passo: se o save novo ficar ilegível, dá pra voltar pro anterior
   if (prev && prev !== json) {
@@ -128,6 +155,9 @@ function persist(s: UltimateState): void {
   }
   // timestamp local + push debounced pra nuvem (no-op se deslogado/grátis).
   markSavedAt(KEY);
+  // depois de recomeçar pela tela de erro, o save virgem do boot não conta como
+  // "save novo": subir ele apagaria a coleção da nuvem sem o jogador jogar.
+  if (isPristine(s) && cloudHold(KEY) === 'reset') return;
   cloudOnLocalSave(CLOUD_SLOT, KEY, () => json);
 }
 
@@ -140,7 +170,7 @@ function isPristine(s: UltimateState): boolean {
 
 // Reconcilia o save do Ultimate com a nuvem no boot (após a conta carregar).
 // 'restored'/'deleted' já rehidratam a store — o consumidor só reage na UI.
-export async function syncUltimateFromCloud(): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
+export async function syncUltimateFromCloud(): Promise<SyncResult> {
   if (!cloudEnabled()) return 'none';
   // Save virgem persistido no boot NÃO pode vencer o save real da nuvem por
   // timestamp (sobrescreveria a coleção do jogador num aparelho novo).
@@ -269,6 +299,8 @@ export function ultimatePromoPack(): PackDef {
 
 interface UltimateStore {
   state: UltimateState;
+  // [O0-26] última falha de gravação local (null = gravou). O banner lê via saveHealth.
+  persistError: string | null;
   grant: (cardKey: string, via: AcquiredVia) => void;
   openPack: (packId: string) => { ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' | 'unavailable' };
   // fase 3b: abre no SERVIDOR quando conta paga+logada (roll autoritativo);
@@ -288,7 +320,16 @@ interface UltimateStore {
   claimDaily: () => DailyClaim;
   syncTitles: () => string[]; // slugs recém-conquistados
   equipTitle: (slug: string | null) => void;
+  setTarget: (cardKey: string | null) => void; // [U07] jogador dos sonhos
+  // [U10] identidade do clube e coleções (cosmético; prêmio idempotente por col:<id>)
+  setClub: (club: { name: string; logo: LogoConfig | null } | null) => void;
+  equipFrame: (id: string | null) => void;
+  claimCollection: (id: string) => { ok: boolean; credits?: number; frame?: string };
+  // [URG-4] marco do STREAK DO DIÁRIO (3/7/30/100 dias): coins + moldura, 1× por marco (chave streak:<n>)
+  claimStreakMilestone: (days: number) => { ok: boolean; credits?: number; frame?: string };
   claimStarter: (formationId: string) => UltCard[];
+  // [URG-5] meta comunitária: coins + pacote (o servidor já marcou o claim — padrão coinsClaim)
+  claimCommunityGoal: (weekId: string, credits: number, packTier: 'gold' | null) => { credits: number; cards: UltCard[] };
   // SBC + season (P5)
   submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
   tickSeason: () => SeasonRollover;
@@ -321,15 +362,23 @@ interface UltimateStore {
   // JÁ está no ledger quando estas rodam — espelhar duplicaria tudo (mesma
   // supressão do openPackCloud, que não chama mirrorUltimateChange).
   marketListCard: (ownedId: string) => void;               // listou: carta sai da coleção local (custódia)
-  marketCardSold: (credits: number) => void;               // venda vista no mktMine: credita proceeds 1×
-  marketCardReturned: (cardId: string, cardKey: string) => void; // cancelou/expirou: carta volta
+  // [O0-37] 1× POR CONTA (não por aparelho): a marca 'sold:<id>'/'back:<id>'
+  // vive no save (srvSeen, sincronizado). Devolvem false se já foi processada.
+  marketCardSold: (listingId: number, credits: number) => boolean;               // venda vista no mktMine: credita proceeds 1×
+  marketCardReturned: (listingId: number, cardId: string, cardKey: string) => boolean; // cancelou/expirou: carta volta 1×
   marketBuyApply: (cardId: string, cardKey: string, price: number) => void; // comprou: debita + adiciona
+  serverCardGrant: (cardId: string, cardKey: string) => boolean; // [CSM-1] carta que o SERVIDOR já entregou (drop)
   // Passe de Temporada (fase A — engine/estado; a tela vem na fase B)
-  unlockPremiumPaid: (orderId: string, orderSeason: number) => { ok: boolean; already?: boolean };
-  claimPassLevel: (level: number, track: PassTrack) => { ok: boolean; reason?: 'unknown' | 'unreached' | 'locked' | 'claimed'; reward?: PassReward; grantedCard?: UltCard; packCards?: UltCard[] };
+  // [O0-46] absorve no save os créditos PAGOS que o servidor já gravou no
+  // ledger (coins:<corr> → coins; pass:<season> → premium). Cada voucher 1×
+  // (srvSeen). freshOrderIds = pedidos recém-claimados (borda do rollover).
+  absorbPaidVouchers: (vouchers: PaidVoucher[], freshOrderIds?: string[]) => { credited: number; passUnlocked: boolean };
+  claimPassLevel: (level: number, track: PassTrack, preferRole?: string | null) => { ok: boolean; reason?: 'unknown' | 'unreached' | 'locked' | 'claimed'; reward?: PassReward; grantedCard?: UltCard; packCards?: UltCard[] };
   // [W2] LEGADO: concede o card do pro aposentado UMA vez por carreira (idempotente
   // pela chave em objectivesClaimed — sobrevive a venda/SBC do card). Sem moeda.
   claimLegacyCard: (cardKey: string) => { ok: boolean; already: boolean; card?: UltCard };
+  // [URG-2] carta exclusiva do evento (concedida pelo servidor no eventClaim; aqui só o espelho local, 1x por evento)
+  grantEventCard: (eventId: string, cardKey: string) => { ok: boolean; already: boolean; card?: UltCard };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -339,7 +388,7 @@ interface UltimateStore {
 // falhar, a carta devolvida perde só o cosmético local (o card_meta segue
 // íntegro no servidor pra quem comprar).
 const ESCROW_META_KEY = 'rtm-ult-mkt-escrow-v1';
-type EscrowMeta = { boost?: number; style?: StyleId };
+type EscrowMeta = { boost?: number; style?: StyleId; ed?: number }; // ed: edição da temporada [URG-1]
 
 function loadEscrowStash(): Record<string, EscrowMeta> {
   try {
@@ -374,6 +423,7 @@ function takeEscrowMeta(cardId: string): EscrowMeta | null {
 
 export const useUltimate = create<UltimateStore>((set, get) => ({
   state: load(),
+  persistError: null,
   grant: (cardKey, via) =>
     set((st) => {
       const s = _grantCard(st.state, cardKey, via);
@@ -383,9 +433,12 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     }),
   openPack: (packId) => {
     // Pacote Promo usa a def em vigor (custo pode vir de promo agendada do live-ops)
-    const pack = packId === PROMO_PACK.id ? ultimatePromoPack() : packById(packId);
+    // [URG-1] Pacote da Temporada só existe enquanto a temporada está ativa
+    const pack = packId === PROMO_PACK.id ? ultimatePromoPack() : isSeasonPack(packId) ? SEASON_PACK : packById(packId);
     if (!pack) return { ok: false, cards: [], reason: 'unknown_pack' };
     const prev = get().state;
+    const season = prev.profile.season;
+    if (isSeasonPack(packId) && (!season || Date.now() > season.endsAt)) return { ok: false, cards: [], reason: 'unavailable' };
     const spent = _spendCredits(prev, pack.cost);
     if (!spent.ok) return { ok: false, cards: [], reason: 'insufficient' };
     // seed incremental gravado ANTES do reveal → reload não re-rola (anti-reroll)
@@ -393,13 +446,16 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     const rng = makeRng(((seed * 2654435761) >>> 0) || 1);
     // Pacote Promo puxa SÓ as promos do mês corrente (o catálogo guarda as de
     // meses passados pra resolver inventário antigo — não podem sair do pack).
-    const cat = pack.id === PROMO_PACK.id
+    // [CSM-2] openingPool: TOTW semanal + versões de evento (mesma função do servidor)
+    const cat = openingPool(pack.id === PROMO_PACK.id
       ? ultimateCatalog().filter((c) => c.rarity !== 'promo' || ultimatePromo().playerIds.includes(c.playerId))
-      : pack.id === 'totw' ? weeklyPackPool(ultimateCatalog(), new Date()) : ultimateCatalog();
+      : ultimateCatalog(), pack.id, new Date());
     if (!cat) return { ok: false, cards: [], reason: 'unavailable' };
     const cards = rollPack(cat, pack, rng);
+    // [URG-1] carimbo de edição: mesmo rng do pack (depois do roll) → reproduzível pelo seed
+    const eds = stampPackEditions(cards.length, rng, season?.n, isSeasonPack(packId));
     let s = { ...spent.state, profile: { ...spent.state.profile, packSeedCounter: seed } };
-    for (const c of cards) s = _grantCard(s, c.key, 'pack');
+    cards.forEach((c, i) => { s = _grantCard(s, c.key, 'pack', { ed: eds[i] }); });
     s = _grantPassXp(s, 'pack', dateKey(new Date())); // XP do passe (cap diário em seasonPass.ts)
     persist(s);
     set({ state: s });
@@ -415,9 +471,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     //   - conta grátis/deslogada (zero rede, comportamento intocado);
     //   - Pacote Promo (custo de live-ops + catálogo filtrado por mês que o
     //     servidor não replica — roll server-side sairia com odds erradas);
+    //   - Pacote da Temporada [URG-1] (o carimbo `ed` é local; o servidor não o conhece);
     //   - qualquer falha de rede/rota (o jogo NUNCA bloqueia esperando rede).
     const localRoll = () => ({ ...get().openPack(packId), source: 'local' as const });
-    if (!cloudEnabled() || packId === PROMO_PACK.id) return localRoll();
+    if (!cloudEnabled() || packId === PROMO_PACK.id || isSeasonPack(packId)) return localRoll();
     const pack = packById(packId);
     if (!pack) return { ok: false, cards: [], reason: 'unknown_pack' as const, source: 'local' as const };
     if (get().state.profile.credits < pack.cost) return { ok: false, cards: [], reason: 'insufficient' as const, source: 'local' as const };
@@ -433,10 +490,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     // O roll do SERVIDOR substitui o local INTEIRO: as cópias entram com o
     // uuid gerado lá (mesmo id em rtm_ult_cards) — a reconciliação do boot
     // compara por id, então os dois lados batem 1:1.
-    // Débito LOCAL do custo (não o saldo absoluto do servidor): política 3b é
-    // local-vence — se o saldo do servidor divergir do esperado, quem corrige
-    // é a reconciliação do boot (servidor → local), nunca o contrário. Assim
-    // um ledger atrasado não "evapora" credits do jogador.
+    // Débito LOCAL do custo (não o saldo absoluto do servidor): até o O1-01 o
+    // save carrega prêmios que só existem no cliente (O0-02), então adotar o
+    // saldo do servidor aqui "evaporaria" esses credits. A divergência fica
+    // registrada (só log) pela leitura do boot.
     const spent = _spendCredits(prev, pack.cost);
     if (!spent.ok) {
       // corrida raríssima (gasto concorrente entre o check e a resposta): o
@@ -450,17 +507,20 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     let s = { ...spent.state, profile: { ...spent.state.profile, packSeedCounter: seed } };
     const idx = ultimateIndex();
     const revealed: UltCard[] = [];
-    for (const c of r.cards) {
+    // [URG-1] a chance de edição no roll do servidor sai do seed que ELE gravou
+    // no ledger (auditável); o carimbo em si é só local (ver pendência no doc).
+    const eds = stampPackEditions(r.cards.length, makeRng((r.seed >>> 0) || 1), prev.profile.season?.n, false);
+    for (const [i, c] of r.cards.entries()) {
       if (s.inventory.some((o) => o.id === c.cardId)) continue; // replay já aplicado — não duplica
-      s = _grantCard(s, c.cardKey, 'pack', { id: c.cardId });
+      s = _grantCard(s, c.cardKey, 'pack', { id: c.cardId, ed: eds[i] });
       const card = idx.get(c.cardKey);
       if (card) revealed.push(card);
     }
     s = _grantPassXp(s, 'pack', dateKey(new Date()));
     if (r.credits !== prev.profile.credits - pack.cost) {
       // saldo do servidor ≠ esperado → o ledger ainda não convergiu com o
-      // local; informativo — a reconciliação do próximo boot resolve.
-      markFlipDrift(`packOpen saldo server=${r.credits} esperado=${prev.profile.credits - pack.cost}`);
+      // local; informativo (esperado enquanto houver prêmio só local — O0-02).
+      markFlipDrift(`packOpen saldo server=${r.credits} esperado=${prev.profile.credits - pack.cost}`, true);
     }
     persist(s);
     set({ state: s });
@@ -513,7 +573,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set((st) => {
       const s = _addCredits(st.state, n);
       persist(s);
-      // crédito direto (compra de coins paga/restaurada etc.) → 'grant'
+      // [O0-02] 'grant' não sai mais do cliente (o espelho filtra): crédito
+      // direto fica só no save até o O1-01. Compra paga NÃO passa por aqui —
+      // vem do servidor via absorbPaidVouchers.
       mirrorUltimateChange(st.state, s, 'grant', { src: 'credit' });
       return { state: s };
     }),
@@ -604,6 +666,49 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       persist(s);
       return { state: s };
     }),
+  setClub: (club) =>
+    set((st) => { const s = { ...st.state, profile: { ...st.state.profile, club: normalizeClub(club) } }; persist(s); return { state: s }; }),
+  equipFrame: (id) =>
+    set((st) => { const owned = st.state.profile.frames ?? []; const next = id && owned.includes(id) ? id : null; const s = { ...st.state, profile: { ...st.state.profile, equippedFrame: next } }; persist(s); return { state: s }; }),
+  claimCollection: (id) => {
+    const def = COLLECTIONS.find((c) => c.id === id);
+    if (!def) return { ok: false };
+    const st = get().state;
+    const key = collectionKey(id);
+    if (st.profile.objectivesClaimed.includes(key)) return { ok: false };
+    const idx = ultimateIndex();
+    const owned = st.inventory.map((o) => idx.get(o.cardKey)).filter((c): c is UltCard => !!c);
+    const prog = evaluateCollections(owned, st.profile.objectivesClaimed).find((p) => p.def.id === id);
+    if (!prog?.done) return { ok: false };
+    let s = _markObjectiveClaimed(st, key);
+    if (def.reward.credits) s = _addCredits(s, def.reward.credits);
+    if (def.reward.frame) s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, [def.reward.frame]), equippedFrame: s.profile.equippedFrame ?? def.reward.frame } };
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'collection', id });
+    return { ok: true, credits: def.reward.credits, frame: def.reward.frame };
+  },
+  claimStreakMilestone: (days) => {
+    const def = streakRewardFor(days);
+    if (!def) return { ok: false };
+    const st = get().state;
+    const key = streakKey(days);
+    if (st.profile.objectivesClaimed.includes(key)) return { ok: false };
+    if (loadStreakState().best < days) return { ok: false }; // marco não atingido nesta máquina
+    let s = _markObjectiveClaimed(st, key);
+    if (def.coins) s = _addCredits(s, def.coins);
+    if (def.frame) s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, [def.frame]), equippedFrame: s.profile.equippedFrame ?? def.frame } };
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'streak', days });
+    return { ok: true, credits: def.coins, frame: def.frame };
+  },
+  setTarget: (cardKey) =>
+    set((st) => {
+      const s = { ...st.state, profile: { ...st.state.profile, target: cardKey ? { cardKey, setAt: Date.now() } : null } };
+      persist(s);
+      return { state: s };
+    }),
   claimStarter: (formationId) => {
     const prev = get().state;
     // [U05] guarda: quem já está onboarded NUNCA ganha starter de novo (antes a única
@@ -614,14 +719,14 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       return (sq?.slots ?? []).map((sl) => { const o = prev.inventory.find((x) => x.id === sl.ownedId); return o ? idx.get(o.cardKey) : undefined; }).filter((c): c is UltCard => !!c);
     }
     const roles = formationSlotRoles(formationId);
-    const cards = pickStarterCards(ultimateCatalog(), roles, 76);
+    const cards = pickStarterCards(ultimateCatalog(), roles, 76, makeRng(randomSeed()));
     let s = _ensureSquad(prev, formationId, roles);
     cards.forEach((c, i) => {
       const id = `starter_${i}_${Math.random().toString(36).slice(2, 9)}`;
       s = _grantCard(s, c.key, 'starter', { id });
       s = _setSlot(s, i, id);
     });
-    s = { ...s, profile: { ...s.profile, onboarded: true } };
+    s = { ...s, profile: { ...s.profile, onboarded: true, frames: mergeFrames(s.profile.frames, ['rookie']), equippedFrame: s.profile.equippedFrame ?? 'rookie' } }; // [U10] moldura Rookie grátis
     s = _mergeTitles(s, ['rookie']).state;
     persist(s);
     set({ state: s });
@@ -661,8 +766,15 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     return { ok: true, reward: def.reward, grantedCard };
   },
   tickSeason: () => {
+    // [U09] direitos preservados: antes do rollover apagar o passe, resgata TUDO o que
+    // já foi atingido e não resgatado (free e premium). Nível alcançado não se perde.
+    const now = Date.now();
+    const pre = get().state;
+    if (pre.profile.season && now > pre.profile.season.endsAt) {
+      for (const track of ['free', 'premium'] as const) for (const lvl of claimableLevels(pre.profile.pass, track)) get().claimPassLevel(lvl, track);
+    }
     const prev = get().state;
-    const r = _applySeasonRollover(prev, Date.now());
+    const r = _applySeasonRollover(prev, now);
     // só grava se o estado mudou (evita write no localStorage a cada mount).
     if (r.state !== prev) {
       persist(r.state);
@@ -899,6 +1011,27 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     mirrorUltimateChange(st, s, 'reward', { src: 'weekly-bonus', seed });
     return { ok: true, cards };
   },
+  claimCommunityGoal: (weekId, credits, packTier) => {
+    // prêmio da META COMUNITÁRIA: o servidor marcou `claimed` (idempotente por
+    // semana+conta); aqui só aplica no save. O pacote abre NA HORA com o mesmo
+    // esquema anti-reroll do claimWeeklyBonus (seed incremental antes do reveal).
+    const st = get().state;
+    let s = credits > 0 ? _addCredits(st, credits) : st;
+    let cards: UltCard[] = [];
+    const pack = packTier ? packById(packTier) : undefined;
+    if (pack) {
+      const seed = s.profile.packSeedCounter + 1;
+      const rng = makeRng(((seed * 2654435761) >>> 0) || 1);
+      cards = rollPack(ultimateCatalog(), pack, rng);
+      s = { ...s, profile: { ...s.profile, packSeedCounter: seed } };
+      for (const c of cards) s = _grantCard(s, c.key, 'reward');
+    }
+    if (s === st) return { credits: 0, cards: [] };
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'community-goal', weekId, credits, packTier: packTier ?? '' });
+    return { credits, cards };
+  },
   marketListCard: (ownedId) =>
     set((st) => {
       const owned = st.state.inventory.find((o) => o.id === ownedId);
@@ -906,38 +1039,47 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // guarda boost/estilo da cópia num stash local: o servidor preserva o
       // card_meta no custódia, mas o retorno (cancel/expire) chega só com
       // cardId/cardKey — sem o stash a carta voltaria "pelada" na UI local.
-      stashEscrowMeta(owned.id, { boost: owned.boost, style: owned.style });
+      stashEscrowMeta(owned.id, { boost: owned.boost, style: owned.style, ed: owned.ed });
       const s = _removeOwnedCards(st.state, [ownedId]);
       persist(s);
       // SEM mirror: o mktList já gravou a perna 'escrow' (remove) no ledger.
       return { state: s };
     }),
-  marketCardSold: (credits) =>
-    set((st) => {
-      const n = Math.max(0, Math.trunc(credits));
-      if (!n) return {};
-      const s = _addCredits(st.state, n);
-      persist(s);
-      // SEM mirror: o 'trade' do servidor já creditou os proceeds no ledger.
-      return { state: s };
-    }),
-  marketCardReturned: (cardId, cardKey) =>
-    set((st) => {
-      if (st.state.inventory.some((o) => o.id === cardId)) return {}; // já voltou (outra aba/poll)
-      let s = _grantCard(st.state, cardKey, 'market', { id: cardId });
+  marketCardSold: (listingId, credits) => {
+    const st = get().state;
+    const tag = `sold:${listingId}`;
+    // [O0-37] já creditada NESTA conta (save sincronizado) ou neste aparelho (legado)
+    if (_hasSrvSeen(st, tag) || mktSeenHas(tag)) return false;
+    const n = Math.max(0, Math.trunc(credits));
+    const s = _markSrvSeen(n ? _addCredits(st, n) : st, [tag]);
+    persist(s);
+    set({ state: s });
+    // SEM mirror: o 'trade' do servidor já creditou os proceeds no ledger.
+    return true;
+  },
+  marketCardReturned: (listingId, cardId, cardKey) => {
+    const st = get().state;
+    const tag = `back:${listingId}`;
+    if (_hasSrvSeen(st, tag) || mktSeenHas(tag)) return false;
+    let s = _markSrvSeen(st, [tag]);
+    // já voltou (outra aba/poll): só anota a marca
+    if (!s.inventory.some((o) => o.id === cardId)) {
+      s = _grantCard(s, cardKey, 'market', { id: cardId });
       const meta = takeEscrowMeta(cardId);
-      if (meta && (meta.boost || meta.style)) {
+      if (meta && (meta.boost || meta.style || meta.ed)) {
         s = {
           ...s,
           inventory: s.inventory.map((o) => (o.id === cardId
-            ? { ...o, ...(meta.boost ? { boost: meta.boost } : {}), ...(meta.style ? { style: meta.style } : {}) }
+            ? { ...o, ...(meta.boost ? { boost: meta.boost } : {}), ...(meta.style ? { style: meta.style } : {}), ...(meta.ed ? { ed: meta.ed } : {}) }
             : o)),
         };
       }
-      persist(s);
-      // SEM mirror: a devolução já tem perna 'escrow' (add) no ledger.
-      return { state: s };
-    }),
+    }
+    persist(s);
+    set({ state: s });
+    // SEM mirror: a devolução já tem perna 'escrow' (add) no ledger.
+    return true;
+  },
   marketBuyApply: (cardId, cardKey, price) =>
     set((st) => {
       let s = st.state;
@@ -946,7 +1088,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       if (s.inventory.some((o) => o.id === cardId)) return {};
       s = _grantCard(s, cardKey, 'market', { id: cardId });
       // débito LOCAL do preço (não o saldo absoluto do servidor) — política
-      // local-vence do 3b: divergência é resolvida pela reconciliação do boot.
+      // do save até o O1-01 (O0-02): divergência com o servidor fica só no log.
       const p = Math.max(0, Math.trunc(price));
       // bazaarBuys herdado do bazar de IA (removido): agora conta compras no
       // Mercado entre managers — mantém a missão semanal "Olho no mercado"
@@ -956,31 +1098,54 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // SEM mirror: o 'trade' do servidor já debitou + moveu a carta no ledger.
       return { state: s };
     }),
-  unlockPremiumPaid: (orderId, orderSeason) => {
-    // Passe Premium PAGO (R$ 30,00 Pix/Stripe): o pedido "pass-s<N>" já foi
-    // pago (webhook) e claimado (passClaim) no servidor — aqui só liga o flag.
-    // premiumVia:'coins' = dinheiro real (renomear pra 'paid' exigiria migrar o
-    // save/codec; o significado está documentado em seasonPass.ts). A compra
-    // legada por credits (v1) permanece válida — nada retroativo.
+  serverCardGrant: (cardId, cardKey) => {
+    // [CSM-1] a cópia entra com o MESMO uuid do servidor; replay não duplica.
+    // SEM mirror: o 'grant' (op_id drop:<id>) já está no ledger.
     const prev = get().state;
-    const seasonNow = passSeasonId(prev.profile);
-    const pass = ensurePass(prev.profile.pass, seasonNow);
-    if (pass.premium) return { ok: true, already: true };
-    const s = _setPassPremium({ ...prev, profile: { ...prev.profile, pass } }, 'coins');
+    if (!cardId || !cardKey || prev.inventory.some((o) => o.id === cardId)) return false;
+    const s = _grantCard(prev, cardKey, 'reward', { id: cardId });
     persist(s);
     set({ state: s });
-    // creditsDelta = 0 — o 'grant' registra o desbloqueio no ledger-sombra.
-    // Comprado na borda do rollover (orderSeason ≠ temporada atual): honramos a
-    // temporada CORRENTE e anotamos a divergência no meta.
-    mirrorUltimateChange(prev, s, 'grant', {
-      src: 'pass-premium-paid',
-      orderId,
-      orderSeason,
-      ...(orderSeason !== seasonNow ? { honoredSeason: seasonNow } : {}),
-    });
-    return { ok: true };
+    return true;
   },
-  claimPassLevel: (level, track) => {
+  absorbPaidVouchers: (vouchers, freshOrderIds = []) => {
+    // [O0-46] O servidor JÁ creditou (coinsClaim/passClaim gravam coins:<corr>
+    // e pass:<season> no ledger). Aqui só entra no save o que ele ainda não
+    // viu — nunca addCredits + grant, nunca espelho (seria crédito em dobro).
+    const prev = get().state;
+    const seasonNow = passSeasonId(prev.profile);
+    const fresh = new Set(freshOrderIds);
+    let s = prev;
+    let credited = 0;
+    let passUnlocked = false;
+    for (const v of vouchers) {
+      if (!v.opId || _hasSrvSeen(s, v.opId)) continue;
+      if (v.kind === 'coins') {
+        const n = Math.max(0, Math.trunc(v.credits));
+        if (n) { s = _addCredits(s, n); credited += n; }
+      } else {
+        // Passe Premium PAGO (R$ 30,00): vale pra temporada CORRENTE. Pedido
+        // recém-claimado de outra temporada (compra na borda do rollover)
+        // também honra a corrente — mesma regra de antes. Voucher de temporada
+        // passada absorvido depois (aparelho novo) só é anotado, não liga nada.
+        // premiumVia:'coins' = dinheiro real (renomear pra 'paid' exigiria
+        // migrar o save/codec; o significado está documentado em seasonPass.ts).
+        const pass = ensurePass(s.profile.pass, seasonNow);
+        if (!pass.premium && (v.season === seasonNow || fresh.has(v.orderId))) {
+          s = _setPassPremium({ ...s, profile: { ...s.profile, pass } }, 'coins');
+          // [U09] benefício IMEDIATO e permanente: moldura Premium (cosmético) equipada se não houver outra
+          s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, ['pass-premium']), equippedFrame: s.profile.equippedFrame ?? 'pass-premium' } };
+          passUnlocked = true;
+        }
+      }
+      s = _markSrvSeen(s, [v.opId]);
+    }
+    if (s === prev) return { credited: 0, passUnlocked: false };
+    persist(s);
+    set({ state: s });
+    return { credited, passUnlocked };
+  },
+  claimPassLevel: (level, track, preferRole = null) => {
     const st = get().state;
     const def = passLevelDef(level);
     if (!def) return { ok: false, reason: 'unknown' as const };
@@ -995,11 +1160,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     let grantedCard: UltCard | undefined;
     if (reward.card) {
       // mesmo funil de carta aleatória por raridade dos outros claims
-      const pool = ultimateCatalog().filter((c) => c.rarity === reward.card);
-      if (pool.length) {
-        grantedCard = pool[Math.floor(Math.random() * pool.length)];
-        s = _grantCard(s, grantedCard.key, 'reward', { id: `pass_${Math.random().toString(36).slice(2, 9)}` });
-      }
+      // [U09] escolha no marco: preferir função (sorteio dentro da raridade); sem pool cai no funil antigo
+      grantedCard = pickRewardCard(ultimateCatalog(), reward.card, preferRole, (n) => Math.floor(Math.random() * n));
+      if (grantedCard) s = _grantCard(s, grantedCard.key, 'reward', { id: `pass_${Math.random().toString(36).slice(2, 9)}` });
     }
     let packCards: UltCard[] = [];
     if (reward.pack) {
@@ -1037,6 +1200,20 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     mirrorUltimateChange(prev, s, 'reward', { src: 'legacy', cardKey });
     return { ok: true, already: false, card };
   },
+  grantEventCard: (eventId, cardKey) => {
+    const prev = get().state;
+    // id determinístico por evento — o MESMO que o servidor gravou em rtm_ult_cards (ON CONFLICT no espelho);
+    // reaplicar (F5 no meio, replay do claim) nunca duplica a cópia
+    const id = `ev_${eventId.replace(/[^a-z0-9]/gi, '')}`;
+    if (prev.inventory.some((o) => o.id === id)) return { ok: false, already: true };
+    const card = ultimateIndex().get(cardKey);
+    if (!card) return { ok: false, already: false };
+    const s = _grantCard(prev, cardKey, 'reward', { id, ev: eventId });
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(prev, s, 'reward', { src: 'event-card', eventId, cardKey });
+    return { ok: true, already: false, card };
+  },
   setState: (s) => {
     persist(s);
     set({ state: s });
@@ -1047,6 +1224,22 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
   },
 }));
+
+// "Tentar de novo" do banner: regrava o estado da memória.
+registerSaveRetry('ultimate', () => persist(useUltimate.getState().state));
+
+// [O0-12] "Recomeçar o Ultimate" pela tela de erro: tira o save DESTE aparelho
+// (principal vai pra `.corrupt`), sem lápide na nuvem e sem persistir o estado
+// virgem por cima — a trava 'reset' segura o sync até o jogador jogar de novo.
+export function resetUltimateLocal(): void {
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(KEY); } catch { /* sem storage */ }
+  if (raw) { try { localStorage.setItem(KEY + '.corrupt', raw); } catch { /* sem espaço pro diagnóstico */ } }
+  for (const k of [KEY, KEY + '.bak']) { try { localStorage.removeItem(k); } catch { /* sem storage */ } }
+  cancelCloudSave(CLOUD_SLOT);
+  setCloudHold(KEY, 'reset');
+  useUltimate.setState({ state: defaultUltimateState(), persistError: null });
+}
 
 // Sync entre abas: outra aba do site persistiu → rehidrata esta store (evita
 // last-writer-wins sobrescrever resgates one-time feitos na outra aba).

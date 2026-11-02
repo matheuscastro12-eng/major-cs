@@ -22,6 +22,11 @@ export function openMeta(input: Omit<MetaInput, 'onClose'>): void {
   setAll({ ...input, onClose: () => setAll(null) });
 }
 
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+export function closeMeta(): void {
+  setAll(null);
+}
+
 export function MetaPageHost() {
   const [data, setData] = useState<MetaInput | null>(current);
 

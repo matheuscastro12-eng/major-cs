@@ -16,7 +16,7 @@ body:has(.page-play) .app-header {
   background: rgba(9, 9, 14, 0.62);
   backdrop-filter: blur(16px) saturate(1.2);
   -webkit-backdrop-filter: blur(16px) saturate(1.2);
-  border-bottom-color: rgba(97, 168, 221, 0.20);
+  border-bottom-color: color-mix(in srgb, var(--c-accent) 20%, transparent);
   box-shadow: 0 2px 20px rgba(0, 0, 0, 0.45);
 }
 
@@ -64,12 +64,12 @@ body:has(.page-play) .app-header {
 }
 .play-bg-orb--a {
   width: 70vw; height: 55vh; top: -10%; left: -18%;
-  background: radial-gradient(ellipse, rgba(67,130,182,0.40) 0%, transparent 68%);
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--c-accent) 40%, transparent) 0%, transparent 68%);
   animation: playOrbFloat 18s ease-in-out infinite alternate;
 }
 .play-bg-orb--b {
   width: 55vw; height: 45vh; top: -5%; right: -15%;
-  background: radial-gradient(ellipse, rgba(216,169,67,0.22) 0%, transparent 68%);
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--c-accent) 22%, transparent) 0%, transparent 68%);
   animation: playOrbFloat 22s ease-in-out infinite alternate-reverse;
 }
 .play-bg-orb--c {
@@ -120,11 +120,11 @@ body:has(.page-play) .app-header {
     0 0 60px rgba(0,0,0,0.90),
     0 0 120px rgba(0,0,0,0.70),
     0 2px 8px rgba(0,0,0,1),
-    0 0 24px rgba(97,168,221,0.50) !important;
+    0 0 24px color-mix(in srgb, var(--c-accent) 50%, transparent) !important;
 }
 
 .play-hub .hero-mark {
-  filter: drop-shadow(0 0 30px rgba(97,168,221,0.55))
+  filter: drop-shadow(0 0 30px color-mix(in srgb, var(--c-accent) 55%, transparent))
           drop-shadow(0 6px 18px rgba(0,0,0,0.65)) !important;
   height: 96px !important;
 }
@@ -146,20 +146,20 @@ body:has(.page-play) .app-header {
   gap: 12px;
   margin: 18px auto 0;
   padding: 10px 16px 10px 12px;
-  background: linear-gradient(120deg, rgba(232,193,112,0.18), rgba(232,193,112,0.06) 60%, rgba(0,0,0,0.4));
-  border: 1px solid rgba(232,193,112,0.55);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--c-accent) 18%, transparent), color-mix(in srgb, var(--c-accent) 6%, transparent) 60%, rgba(0,0,0,0.4));
+  border: 1px solid color-mix(in srgb, var(--c-accent) 55%, transparent);
   border-radius: 999px;
   color: var(--em-text, #f0f0f0);
   font-family: inherit;
   font-size: 0.86rem;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(232,193,112,0.18);
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--c-accent) 18%, transparent);
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
 }
 .play-hub .rtm-supporter-pill:hover {
   transform: translateY(-1px);
   border-color: var(--em-gold, #e8c170);
-  box-shadow: 0 6px 22px rgba(232,193,112,0.28);
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--c-accent) 28%, transparent);
 }
 .play-hub .rtm-supporter-pill-badge {
   width: 24px;
@@ -234,7 +234,7 @@ body:has(.page-play) .app-header {
   margin: 0 0 12px;
   font-size: 11.5px;
   line-height: 1.5;
-  color: rgba(232, 193, 112, 0.92);
+  color: color-mix(in srgb, var(--c-accent) 92%, transparent);
   font-weight: 600;
   letter-spacing: 0.2px;
 }
@@ -259,7 +259,7 @@ body:has(.page-play) .app-header {
   letter-spacing: 0.2px;
   text-decoration: underline;
   text-underline-offset: 2px;
-  color: rgba(232, 193, 112, 0.92);
+  color: color-mix(in srgb, var(--c-accent) 92%, transparent);
 }
 .play-hub .rtm-modecard-skip:hover,
 .play-hub .rtm-modecard-skip:focus-visible {
@@ -267,16 +267,16 @@ body:has(.page-play) .app-header {
 }
 
 .play-hub .rtm-modecard[data-tone="gold"]:hover {
-  border-color: rgba(216,169,67,.35);
-  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px rgba(216,169,67,.20);
+  border-color: color-mix(in srgb, var(--c-accent) 35%, transparent);
+  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px color-mix(in srgb, var(--c-accent) 20%, transparent);
 }
 .play-hub .rtm-modecard[data-tone="blue"]:hover {
-  border-color: rgba(97,168,221,.40);
-  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px rgba(97,168,221,.20);
+  border-color: color-mix(in srgb, var(--c-accent) 40%, transparent);
+  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px color-mix(in srgb, var(--c-accent) 20%, transparent);
 }
 .play-hub .rtm-modecard[data-tone="green"]:hover {
-  border-color: rgba(111,208,111,.35);
-  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px rgba(111,208,111,.16);
+  border-color: color-mix(in srgb, var(--c-win) 35%, transparent);
+  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px color-mix(in srgb, var(--c-win) 16%, transparent);
 }
 .play-hub .rtm-modecard[data-tone="purple"]:hover {
   border-color: rgba(155,124,237,.40);
@@ -289,7 +289,7 @@ body:has(.page-play) .app-header {
   margin-top: 24px;
   padding: 8px 18px;
   border-radius: 999px;
-  border: 1px solid rgba(97,168,221,0.16);
+  border: 1px solid color-mix(in srgb, var(--c-accent) 16%, transparent);
   background: rgba(9,9,14,0.60);
   font-size: 12px;
   color: var(--rtm-dim);
@@ -304,7 +304,7 @@ body:has(.page-play) .app-header {
   padding: 28px 28px 32px;
   border-radius: 14px;
   background: rgba(9,11,18,0.80);
-  border: 1px solid rgba(97,168,221,0.13);
+  border: 1px solid color-mix(in srgb, var(--c-accent) 13%, transparent);
   box-shadow: 0 28px 72px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
@@ -316,10 +316,10 @@ body:has(.page-play) .app-header {
 }
 .play-hub .pool-card:hover,
 .play-hub .mode-card:hover,
-.play-hub .diff-card:hover { border-color: rgba(97,168,221,0.45) !important; transform: translateY(-2px); }
+.play-hub .diff-card:hover { border-color: color-mix(in srgb, var(--c-accent) 45%, transparent) !important; transform: translateY(-2px); }
 .play-hub .pool-card.sel, .play-hub .mode-card.sel {
   border-color: var(--rtm-blue-bright) !important;
-  box-shadow: 0 0 0 1px rgba(97,168,221,.28), 0 8px 24px rgba(0,0,0,.40);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c-accent) 28%, transparent), 0 8px 24px rgba(0,0,0,.40);
 }
 .play-hub .diff-card.normal.sel { border-color: var(--rtm-green-bright) !important; }
 .play-hub .diff-card.hard.sel { border-color: #e08a2e !important; }
@@ -327,12 +327,12 @@ body:has(.page-play) .app-header {
 
 .play-hub .name-input input {
   background: rgba(9,9,14,0.85) !important;
-  border-color: rgba(97,168,221,0.22) !important;
+  border-color: color-mix(in srgb, var(--c-accent) 22%, transparent) !important;
   color: var(--rtm-text-strong);
 }
 .play-hub .name-input input:focus {
   border-color: var(--rtm-blue-bright) !important;
-  box-shadow: 0 0 0 2px rgba(97,168,221,.16) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-accent) 16%, transparent) !important;
 }
 
 /* crédito */

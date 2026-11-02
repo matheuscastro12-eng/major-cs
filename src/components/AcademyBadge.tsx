@@ -83,7 +83,7 @@ export function AcademyBadge({
             letterSpacing: '0.6px',
             color: 'var(--em-gold)',
             textTransform: 'uppercase',
-            fontFamily: '"JetBrains Mono", monospace',
+            fontFamily: 'var(--font-num)',
             opacity: 0.85,
             marginTop: 1,
           }}

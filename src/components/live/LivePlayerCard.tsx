@@ -2,8 +2,7 @@
 // [Foto] · NICK · HP · Arma · KDA · Money
 //
 // Por enquanto:
-//   - Foto: PlayerAvatar (initials por hash). Vai melhorar quando tivermos
-//     fotos reais por player_id em data/player-photos.json (já existe a infra).
+//   - Foto: PlayerAvatar (foto do bo3.gg quando existe; senão iniciais por hash).
 //   - HP: 100 se alive, 0 se morto (sem dano gradual no piloto)
 //   - Arma: AK pra T, M4A1 pra CT (sem track real ainda)
 //   - KDA: vem direto do `agent.stats` (cumulativo no mapa). ANTES eu filtrava
@@ -101,7 +100,7 @@ export function LivePlayerCard({ agent, team, state, align, isUser = false }: Pr
               }}
             />
           </div>
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.74rem', fontWeight: 700, minWidth: 26, textAlign: 'right' }}>
+          <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.74rem', fontWeight: 700, minWidth: 26, textAlign: 'right' }}>
             {hp}
           </span>
         </div>
@@ -113,14 +112,14 @@ export function LivePlayerCard({ agent, team, state, align, isUser = false }: Pr
 
         {/* KDA + money */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.66rem' }}>
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', color: 'rgba(255,255,255,0.8)' }}>
+          <span style={{ fontFamily: 'var(--font-num)', color: 'rgba(255,255,255,0.8)' }}>
             <b style={{ color: '#5ed85e' }}>{k}</b>
             <span style={{ color: 'rgba(255,255,255,0.3)' }}> · </span>
             <span>{a}</span>
             <span style={{ color: 'rgba(255,255,255,0.3)' }}> · </span>
             <b style={{ color: '#ff8a8a' }}>{d}</b>
           </span>
-          <span style={{ color: '#bfd14d', fontFamily: '"JetBrains Mono", monospace', fontWeight: 700 }}>
+          <span style={{ color: '#bfd14d', fontFamily: 'var(--font-num)', fontWeight: 700 }}>
             ${money}
           </span>
         </div>

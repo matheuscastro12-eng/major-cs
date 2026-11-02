@@ -8,10 +8,16 @@ export function isAdminUnlocked(): boolean {
   try { return localStorage.getItem(KEY) === '1'; } catch { return false; }
 }
 
-// Chave do CRM usada pelos endpoints de admin já existentes (enviada como body.password).
-// Agora é preenchida AUTOMATICAMENTE pela conta admin (via fetchAdminKey), não digitada.
+// Credencial do CRM usada pelos endpoints de admin (enviada como body.password).
+// É a SESSÃO de admin da conta (12h, "adm.…"), renovada a cada abertura do CRM via
+// fetchAdminKey — não mais a ADMIN_PASSWORD (O0-16). Um valor antigo guardado
+// (a senha mestra, de antes desta versão) é descartado na leitura.
 export function adminPassword(): string {
-  try { return localStorage.getItem(PASS_KEY) ?? ''; } catch { return ''; }
+  try {
+    const v = localStorage.getItem(PASS_KEY) ?? '';
+    if (v && v !== 'dev' && !v.startsWith('adm.')) { localStorage.removeItem(PASS_KEY); return ''; }
+    return v;
+  } catch { return ''; }
 }
 
 export function lockAdmin(): void {
@@ -39,6 +45,7 @@ export function AdminGate({
     let on = true;
     const isDev = import.meta.env.DEV || location.hostname === 'localhost';
     if (account?.admin) {
+      // sessão de admin expira (12h): renova a cada abertura do CRM (sobrescreve a antiga).
       void fetchAdminKey().then((key) => {
         if (!on) return;
         if (key) {

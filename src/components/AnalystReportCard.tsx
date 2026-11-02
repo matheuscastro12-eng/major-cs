@@ -1,3 +1,4 @@
+import { Binoculars } from 'lucide-react';
 // AnalystReportCard — T3.13. Mostra o relatório do analista sobre o adversário
 // antes da partida. Recebe o report + nome dos times.
 //
@@ -32,7 +33,7 @@ export function AnalystReportCard({ report, oppName, oppTag }: Props) {
   return (
     <section style={cardStyle}>
       <header style={headerStyle}>
-        <span style={iconStyle}>📊</span>
+        <span style={iconStyle}><Binoculars size={20} aria-hidden /></span>
         <div style={{ flex: 1 }}>
           <div style={titleStyle}>Relatório do analista</div>
           <div style={subtitleStyle}>
@@ -80,20 +81,20 @@ function withRecord(m: string, report: AnalystReport): string {
 }
 
 function PlayerChip({ label, value, sub, tone }: { label: string; value: string; sub: string; tone: 'warning' | 'positive' }) {
-  const color = tone === 'warning' ? '#e25a5a' : '#5ed88a';
+  const color = tone === 'warning' ? 'var(--c-loss)' : 'var(--c-win)';
   return (
     <div style={playerChipStyle(color)}>
       <span style={{ color: 'var(--em-muted)', fontSize: '0.66rem', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
         {label}
       </span>
       <span style={{ color: 'var(--em-text)', fontWeight: 700, fontSize: '0.96rem' }}>{value}</span>
-      <span style={{ color, fontSize: '0.74rem', fontFamily: '"JetBrains Mono", monospace' }}>{sub}</span>
+      <span style={{ color, fontSize: '0.74rem', fontFamily: 'var(--font-num)' }}>{sub}</span>
     </div>
   );
 }
 
 function MapChip({ label, maps, tone }: { label: string; maps: string[]; tone: 'danger' | 'success' }) {
-  const color = tone === 'danger' ? '#e25a5a' : '#5ed88a';
+  const color = tone === 'danger' ? 'var(--c-loss)' : 'var(--c-win)';
   return (
     <div style={mapChipStyle}>
       <span style={{ color: 'var(--em-muted)', fontSize: '0.66rem', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
@@ -105,8 +106,8 @@ function MapChip({ label, maps, tone }: { label: string; maps: string[]; tone: '
             key={m}
             style={{
               padding: '3px 10px',
-              background: `${color}22`,
-              border: `1px solid ${color}55`,
+              background: `color-mix(in srgb, ${color} 13%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${color} 33%, transparent)`,
               borderRadius: 3,
               color,
               fontWeight: 700,
@@ -167,7 +168,7 @@ const threatChipStyle = (color: string): React.CSSProperties => ({
   gap: 2,
   padding: '4px 10px',
   background: 'var(--em-panel-2)',
-  border: `1px solid ${color}55`,
+  border: `1px solid color-mix(in srgb, ${color} 33%, transparent)`,
   borderRadius: 3,
 });
 

@@ -1,14 +1,25 @@
+import { DRAFT_SESSION_VERSION, migrateDraftSession, type DraftSession } from './state/draftSession';
+import { hasIntent } from './state/purchaseIntent';
+import { captureDuelInviteFromUrl, hasDuelInvite } from './state/duelInvite';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { AdminGate } from './components/AdminGate';
+import { DonateModal } from './components/Donate';
 import { BrandMark } from './components/brand';
-import { DonateButton, DonateModal } from './components/Donate';
 import { AdBanner } from './components/AdBanner';
-import { Draft } from './components/Draft';
-import { AppFrame } from './components/ds';
+import { GameShell, PeekLayer, ShellProvider, type ShellCommand, type ShellGlobal, type ShellMode, type ShellNavGroup } from './components/ds';
+import { TeamBadge } from './components/ui';
+import {
+  CalendarDays, Star, ChartColumn, CircleUser, Crosshair, Heart, House, Landmark, Layers, ListOrdered, LogIn,
+  Medal, Network, Swords, Trophy, Plus, Shuffle, Play, FastForward, CalendarRange,   LayoutDashboard, Newspaper, BookOpen, ArrowLeftRight, PencilRuler,
+  Dices, Gamepad2, ListChecks, UsersRound,
+} from 'lucide-react';
+import { openPatchNotes, hasNewPatch } from './components/PatchNotesModal';
+import { openHowToPlay } from './components/HowToPlayHost';
 import { Home } from './components/Home';
-import { DailyScreen } from './components/daily/DailyScreen';
-import { Hub } from './components/Hub';
-import { MatchScreen } from './components/MatchScreen';
+import { DAILY_GAMES, dateKeyOf } from './engine/daily/lines';
+import { dailyDayStatus } from './state/daily';
+import { majorClock } from './data/majorWindow';
+import { MAJOR_TABS, initialMajorTab, type MajorTab } from './components/major/majorTabs';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
 import { UpsellCard } from './components/UpsellCard';
 import { UltimateGate } from './components/ultimate/UltimateGate';
@@ -66,13 +77,30 @@ const Admin = lazyWithReload(() => import('./components/Admin').then((m) => ({ d
 const CareerScreen = lazyWithReload(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
 const CareerSaves = lazyWithReload(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
 const CareerCRM = lazyWithReload(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
+// [fase 4] editor de base (carrega a base oficial: chunk próprio, como a Carreira)
+const DatabaseEditor = lazyWithReload(() => import('./components/editor/DatabaseEditor').then((m) => ({ default: m.DatabaseEditor })));
 const RevenueCRM = lazyWithReload(() => import('./components/RevenueCRM').then((m) => ({ default: m.RevenueCRM })));
 const LiveopsCRM = lazyWithReload(() => import('./components/LiveopsCRM').then((m) => ({ default: m.LiveopsCRM })));
 const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
 const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
 const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
+// style guide do design system "Broadcast Desk" (/design) — fora do bundle das telas
+const DesignScreen = lazyWithReload(() => import('./pages/DesignScreen').then((m) => ({ default: m.DesignScreen })));
 const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
+const MajorSingaporeScreen = lazyWithReload(() => import('./components/major/MajorSingaporeScreen').then((m) => ({ default: m.MajorSingaporeScreen })));
 const RoadToPro = lazyWithReload(() => import('./components/rtp/RoadToPro').then((m) => ({ default: m.RoadToPro })));
+// o Diário puxa a base de jogadores (bo3) e o catálogo do Ultimate: fora da carga inicial
+const DailyScreen = lazyWithReload(() => import('./components/daily/DailyScreen').then((m) => ({ default: m.DailyScreen })));
+// a criação de perfil puxa o Hall do Road to Pro (motor do RtP + base de jogadores)
+const ManagerSetup = lazyWithReload(() => import('./components/ManagerSetup').then((m) => ({ default: m.ManagerSetup })));
+// telas de dentro do jogo: a landing e o /major-singapore não precisam delas
+// (a partida puxa o radar 2D, a narração e o canvas ao vivo)
+const Draft = lazyWithReload(() => import('./components/Draft').then((m) => ({ default: m.Draft })));
+const Hub = lazyWithReload(() => import('./components/Hub').then((m) => ({ default: m.Hub })));
+const VetoScreen = lazyWithReload(() => import('./components/VetoScreen').then((m) => ({ default: m.VetoScreen })));
+const MatchScreen = lazyWithReload(() => import('./components/MatchScreen').then((m) => ({ default: m.MatchScreen })));
+const ManagerProfile = lazyWithReload(() => import('./components/ManagerProfile').then((m) => ({ default: m.ManagerProfile })));
+const Leaderboard = lazyWithReload(() => import('./components/Leaderboard').then((m) => ({ default: m.Leaderboard })));
 
 // Ultimate Squad: VISÍVEL em localhost (dev/preview local), OCULTO no site real
 // (roadtomajor.com.br). O código existe no bundle, mas o menu e a rota só ligam
@@ -101,27 +129,32 @@ const RTP_ENABLED = (() => {
 const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
 const TournamentStats = lazyWithReload(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
 import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
-import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
-import { createTournament, getTeam, pairingBestOf, phaseLabelDisplay, placementCode, resolveRound, userMapRecord, userPairing, userTeam, type PlacementCode } from './engine/swiss';
+import { getTeam, pairingBestOf, phaseLabelDisplay, placementCode, userMapRecord, userPairing, userTeam, type PlacementCode } from './engine/swissView';
+// o motor do suíço (simula as séries da IA com o motor de partida inteiro) só
+// carrega quando o jogo roda: a landing e o /major-singapore não precisam dele
+const loadSwiss = () => import('./engine/swiss');
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendingBaseTeams, resetDataset, saveDataset } from './state/crm';
 import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { ct, setCareerLang } from './state/career-i18n';
-import { LangSwitcher } from './components/social';
 import { Landing, AccountModal } from './components/Landing';
+import type { LandingDoor } from './data/majorLanding';
 import { LegalPage } from './components/Legal';
-import { ManagerSetup } from './components/ManagerSetup';
-import { ManagerProfile } from './components/ManagerProfile';
-import { Leaderboard } from './components/Leaderboard';
 import { beginCheckout, claim as claimAccount, useAccount } from './state/account';
 import { parseCareerPlayerId, isCareerPlayerPath, careerPlayerPath } from './state/career-player-route';
+import { initAppHistory, pushAppEntry, replaceAppEntry } from './state/app-history';
 import { parseCareerTeamId, careerTeamPath, isCareerTeamPath } from './state/career-team-route';
 import { getActiveSlot, setActiveSlot, slotKey, cloudSlot } from './state/careerSaves';
+import { useGame } from './state/gameStore';
+import { writeWithQuotaRescue } from './state/storageQuota';
+import { registerSaveRetry, reportLocalSave } from './state/saveHealth';
+import { ModeErrorBoundary } from './components/ModeErrorBoundary';
+import { SaveHealthBanner } from './components/SaveHealthBanner';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
-import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackPaywallView, trackVisit } from './state/track';
+import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackFirstMatchDone, trackPaywallView, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -148,12 +181,15 @@ type Screen =
   | 'daily'
   | 'career'
   | 'careerSaves'
+  | 'editor'
   | 'careerCRM'
   | 'revenueCRM'
   | 'liveopsCRM'
   | 'privacy'
   | 'terms'
-  | 'refund';
+  | 'refund'
+  | 'design'
+  | 'majorsg';
 
 const SCREEN_PATH: Record<Screen, string> = {
   landing: '/',
@@ -167,6 +203,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   daily: '/diario',
   career: '/carreira',
   careerSaves: '/carreira/saves',
+  editor: '/editor',
   hall: '/hall',
   draft: '/jogo/draft',
   hub: '/jogo/major',
@@ -184,6 +221,20 @@ const SCREEN_PATH: Record<Screen, string> = {
   privacy: '/privacidade',
   terms: '/termos',
   refund: '/reembolso',
+  design: '/design',
+  majorsg: '/major-singapore',
+};
+
+// Modo de cada tela → acento do design system (tokens.css: [data-mode]). Telas
+// fora da lista (hub, landing, Major rápido) ficam com o acento base.
+const SCREEN_MODE: Partial<Record<Screen, 'carreira' | 'rtp' | 'ultimate' | 'diario' | 'online'>> = {
+  career: 'carreira',
+  careerSaves: 'carreira',
+  editor: 'carreira',
+  rtp: 'rtp',
+  ultimate: 'ultimate',
+  daily: 'diario',
+  online: 'online',
 };
 
 const PATH_SCREEN: Record<string, Screen> = Object.fromEntries(
@@ -194,6 +245,10 @@ const TRANSIENT_SCREENS = new Set<Screen>([
   'draft', 'hub', 'veto', 'match', 'final', 'stats', 'transfer', 'matchdetail',
 ]);
 const ROUTE_SESSION_ID = `${Date.now()}-${Math.random()}`;
+// telas de ferramenta interna (sem o shell do jogo): continuam no container .page
+const ADMIN_SCREENS = new Set<Screen>(['admin', 'lab', 'careerCRM', 'revenueCRM', 'liveopsCRM']);
+// telas fora do jogo: o histórico do shell (Voltar/Avançar) não volta pra elas
+const OUTSIDE_GAME = new Set<Screen>(['landing', 'setup', 'privacy', 'terms', 'refund', 'design', ...ADMIN_SCREENS]);
 
 const normalizePath = (path: string) => {
   const normalized = path.toLowerCase().replace(/\/+$/, '');
@@ -285,6 +340,10 @@ try {
 // Lido UMA vez no carregamento (nível de módulo) pra sobreviver ao remount do
 // StrictMode em dev — se fosse lido no efeito, a limpeza da URL no 1º mount faria
 // o 2º mount não reabrir.
+// [U11] captura ?duelo=CODE uma vez, no carregamento (limpa a URL)
+captureDuelInviteFromUrl();
+// posição da entrada de chegada na pilha do jogo (Voltar/Avançar do shell)
+initAppHistory();
 const WANTS_SIGNUP = (() => {
   try {
     return new URLSearchParams(window.location.search).get('criar') !== null
@@ -331,8 +390,8 @@ export default function App() {
     // RtP SEM vitalícia agora entra em modo DEMO (peneira + primeiras semanas)
     // — a conversão acontece DENTRO do jogo (RtpDemoGate), não mais na porta.
     if (accountReady && screen === 'ultimate' && !account && !utGuest) setScreen('landing');
-  }, [screen, accountReady, account?.paid, utGuest]);
-  // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
+  }, [screen, accountReady, account, utGuest]);
+  // funil: grátis/deslogado vendo a landing (pricing da vitalícia) conta como paywall_view
   useEffect(() => {
     if (screen === 'landing' && accountReady && !account?.paid) trackPaywallView('landing');
   }, [screen, accountReady, account?.paid]);
@@ -340,16 +399,24 @@ export default function App() {
   const [paidToast, setPaidToast] = useState(false);
   // desafio de fantasma: captura ?desafio=… UMA vez no boot (Série do Dia consome)
   useEffect(() => { captureGhostFromUrl(); }, []);
+  // [U11] convite de duelo (?duelo=CODE): capturado no boot (nível de módulo); com conta ou convidado
+  // vai pro Ultimate (que abre a aba Duelo com o código); sem conta abre o gate (conta × convidado).
+  useEffect(() => {
+    if (!accountReady || !hasDuelInvite()) return;
+    const t = window.setTimeout(() => { if (account || utGuest) setScreen('ultimate'); else setUtGateOpen(true); }, 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountReady]);
   // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     if (sp.get('conta') !== 'ok') return;
     const cs = sp.get('cs') ?? '';
     void (async () => {
-      if (cs) { const ok = await claimAccount(cs); if (ok) { setPaidToast(true); await refreshAccount(); } }
+      if (cs) { const ok = await claimAccount(cs); if (ok) { setPaidToast(true); await refreshAccount(); if (hasIntent()) setScreen('ultimate'); } } // [U08] retorno do checkout com intenção viva
       const url = new URL(window.location.href);
       url.searchParams.delete('conta'); url.searchParams.delete('cs');
-      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     })();
   }, [refreshAccount]);
   const [achToast, setAchToast] = useState<AchDef[]>([]); // conquistas recém-desbloqueadas
@@ -374,10 +441,17 @@ export default function App() {
   const [detail, setDetail] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; event: string } | null>(null);
   const [detailReturn, setDetailReturn] = useState<Screen>('hub');
   const [donateOpen, setDonateOpen] = useState(false);
+  // shell: pedido de aba do Ultimate (o trilho "Online" abre direto na Ranqueada)
+  // e pedido de visão da Home (o trilho "Draft" abre o setup do Major rápido)
+  const [ultTabReq, setUltTabReq] = useState<{ tab: string; n: number } | null>(null);
+  const [homeViewReq, setHomeViewReq] = useState<{ view: 'menu' | 'draft'; n: number }>({ view: 'menu', n: 0 });
   const [showOnboarding, setShowOnboarding] = useState(() => shouldOnboard());
+  // porta escolhida no "Em 1 minuto" da landing: sem manager, o Setup vem antes e a porta abre logo depois dele
+  const [doorAfterSetup, setDoorAfterSetup] = useState<LandingDoor | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
   const routeReadyRef = useRef(false);
   const popNavigationRef = useRef(false);
+  const prevScreenRef = useRef(screen);
   const rng = useCallback(() => rngRef.current(), []);
   const { t, lang } = useLang();
   setCareerLang(lang); // idioma global: ct() traduz em QUALQUER tela (não só na carreira)
@@ -425,13 +499,16 @@ export default function App() {
   };
 
   // ---------- persistência de campanha ----------
+  // [O0-26/FRON-17] com resgate de cota; se nem assim couber, o banner global
+  // avisa ("Não consegui salvar") em vez de a campanha morrer no F5 em silêncio.
   useEffect(() => {
-    if (!tournament) return;
-    try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ draft, tournament, pickem, career }));
-    } catch {
-      /* storage cheio - campanha segue só em memória */
-    }
+    if (!tournament) { reportLocalSave('draft', null); return; } // campanha encerrada: sem aviso pendurado
+    const write = () => {
+      const w = writeWithQuotaRescue(SESSION_KEY, JSON.stringify({ _v: DRAFT_SESSION_VERSION, draft, tournament, pickem, career }));
+      reportLocalSave('draft', w.ok ? null : (w.error instanceof Error ? w.error.message : 'quota'));
+    };
+    write();
+    registerSaveRetry('draft', write);
   }, [draft, tournament, pickem, career]);
 
   // sessionStamp invalida o memo quando o save é apagado sem mudar de tela
@@ -441,12 +518,9 @@ export default function App() {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return null;
-      const s = JSON.parse(raw) as {
-        draft: DraftState | null;
-        tournament: Tournament | null;
-        pickem?: PickemState;
-        career?: CareerState;
-      };
+      const parsed = JSON.parse(raw) as DraftSession<PickemState, CareerState>;
+      // [realismo FM] sessão v2: o seu time guarda os atributos (idempotente)
+      const s = parsed?.tournament ? migrateDraftSession(parsed) : null;
       return s?.tournament ? s : null;
     } catch {
       return null;
@@ -467,29 +541,55 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(WANTS_SIGNUP); // modal de login/conta acessível do header
   const [authMode, setAuthMode] = useState<'login' | 'signup'>(WANTS_SIGNUP ? 'signup' : 'login');
   const [utGateOpen, setUtGateOpen] = useState(false); // modal de escolha (convidado × conta)
+  // CHECKOUT IN-PLACE: o AccountModal abre POR CIMA da tela atual (trava do Road
+  // to Pro, upsell-card, aviso de convidado do Ultimate) em vez de trocar pra
+  // landing — o jogador, a proposta e o relógio continuam visíveis na hora da
+  // decisão. Mesmo atalho do onSignup do UltimateGate. `inlineCheckout` segura a
+  // tela ao concluir (onPlay não navega) e também liga o pixFirst do modal — o QR
+  // substitui o formulário assim que abre, em vez dos dois juntos na tela.
+  // `checkoutNick` é o jogador do RtP citado no reforço do Pix.
+  const [inlineCheckout, setInlineCheckout] = useState(false);
+  const [checkoutNick, setCheckoutNick] = useState('');
+  const openInlineCheckout = (src: string, nick?: string) => {
+    setCheckoutSrc(src); // first-touch: se a trava/cliff já marcou a origem, ela fica
+    setCheckoutNick(nick ?? '');
+    setInlineCheckout(true);
+    setAuthMode('signup');
+    setAuthOpen(true);
+  };
   // limpa o ?criar/#criar da URL depois que a intenção já foi capturada.
   useEffect(() => {
     if (!WANTS_SIGNUP) return;
     const url = new URL(window.location.href);
     url.searchParams.delete('criar');
     if (url.hash.toLowerCase() === '#criar') url.hash = '';
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
   }, []);
+  // [O0-28] pagante espera o syncSlot antes de montar a carreira (F5 direto em
+  // /carreira num aparelho novo abria a fundação e o restore chegava depois).
+  // Teto de 10s: sem resposta, monta com o local e o remount abaixo cobre o resto.
+  // careerSynced nasce false: o 1º render do pagante já mostra o loader (sem
+  // montar a carreira por um frame e desmontar quando o effect começa o sync).
+  const [careerSynced, setCareerSynced] = useState(false);
+  const careerEpoch = useGame((s) => s.epoch);
   useEffect(() => {
     setCloudEnabled(!!account?.paid);
     if (!account?.paid) return;
     let alive = true;
+    const cap = window.setTimeout(() => { if (alive) setCareerSynced(true); }, 10_000);
     void syncSlot(cloudSlot(getActiveSlot()), slotKey(getActiveSlot())).then((r) => {
-      if (alive && r === 'restored') {
+      if (!alive) return;
+      if (r === 'restored') {
         setCloudToast(ct('☁ Save da carreira carregado da nuvem'));
         setSessionStamp((s) => s + 1);
-        // BUG FIX (caça-bugs): syncSlot só grava no localStorage; o gameStore em
-        // memória continua com o save velho e o próximo autosave SOBRESCREVE o da
-        // nuvem. Avisa a carreira (se montada) pra re-hidratar do disco já atualizado.
-        window.dispatchEvent(new Event('rtm:cloud-restored'));
       }
-    });
-    return () => { alive = false; };
+      // syncSlot só mexe no disco. O gameStore em memória continuava com o save
+      // velho (e o próximo autosave sobrescrevia a nuvem); na lápide, o save
+      // apagado ressuscitava. Relê do disco e bumpa o epoch: a carreira REMONTA
+      // (stage/majorT/hubTab recalculados do save novo, não só o save).
+      if (r === 'restored' || r === 'deleted') useGame.getState().reloadFromDisk();
+    }).finally(() => { window.clearTimeout(cap); if (alive) setCareerSynced(true); });
+    return () => { alive = false; window.clearTimeout(cap); };
   }, [account?.paid]);
   useEffect(() => {
     if (!cloudToast) return;
@@ -549,22 +649,35 @@ export default function App() {
     }
     const target = `${targetPath}${window.location.search}`;
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const prev = prevScreenRef.current;
+    prevScreenRef.current = screen;
     if (current !== target) {
+      // entradas pela pilha do app (state/app-history): o Voltar do shell
+      // anda por elas. Quem chega de fora do jogo (landing, termos, criar
+      // manager, admin) começa uma pilha nova: o Voltar não leva de volta pra lá.
       if (!routeReadyRef.current || popNavigationRef.current) {
-        window.history.replaceState({ screen, routeSession: ROUTE_SESSION_ID }, '', target);
+        replaceAppEntry({ ...(window.history.state ?? {}), screen, routeSession: ROUTE_SESSION_ID }, target);
       } else {
-        window.history.pushState({ screen, routeSession: ROUTE_SESSION_ID }, '', target);
+        pushAppEntry({ screen, routeSession: ROUTE_SESSION_ID }, target, { reset: OUTSIDE_GAME.has(prev) });
       }
     }
     routeReadyRef.current = true;
     popNavigationRef.current = false;
   }, [screen, bannerPreview]);
 
+  // acento do modo no <html>: vale também pra modais portados ao body
+  useEffect(() => {
+    const mode = SCREEN_MODE[screen];
+    if (mode) document.documentElement.dataset.mode = mode;
+    else delete document.documentElement.dataset.mode;
+  }, [screen]);
+
   // título da aba acompanha a tela (cara mais profissional, abas distinguíveis)
   useEffect(() => {
     const TITLES: Partial<Record<Screen, string>> = {
       draft: 'Draft', hub: 'Campeonato', veto: 'Veto de mapas', match: 'Partida ao vivo',
-      final: 'Resultado', online: 'Online', career: 'Modo Carreira', hall: 'Hall da Fama',
+      final: 'Resultado', online: 'Online', career: 'Modo Carreira', hall: 'Hall da Fama', editor: 'Editor de base',
+      design: 'Design system', majorsg: 'PGL Major Singapore',
       stats: 'Estatísticas', admin: 'Admin',
       privacy: 'Privacidade', terms: 'Termos', refund: 'Reembolso',
     };
@@ -659,6 +772,9 @@ export default function App() {
   const tournamentName = (pool: TournamentPool, season: number) =>
     `${t(pool === 'br' ? 'home.poolBr' : 'home.poolWorld')}${season > 1 ? ` · ${t('final.season').toUpperCase()} ${season}` : ''}`;
 
+  // no Draft o motor do suíço já começa a baixar: escolher o coach cria o torneio na hora
+  useEffect(() => { if (screen === 'draft') void loadSwiss(); }, [screen]);
+
   const pickCoach = (teamSeasonId: string) => {
     if (!draft) return;
     const coachTeam = dataset.find((t) => t.id === teamSeasonId);
@@ -669,17 +785,19 @@ export default function App() {
       return { player, from };
     });
     const user = buildUserTeam(draft.teamName, picks, coachTeam.coach);
-    const t = createTournament(
-      poolTeams(draft.pool),
-      user,
-      rngRef.current,
-      tournamentName(draft.pool, 1),
-      DIFFICULTY_OPP_BOOST[draft.difficulty],
-    );
-    track('game_start', { pool: draft.pool, difficulty: draft.difficulty, mode: draft.mode });
-    setDraft({ ...draft, pickedCoachTeamId: teamSeasonId });
-    setTournament(t);
-    setScreen('hub');
+    void loadSwiss().then(({ createTournament }) => {
+      const t = createTournament(
+        poolTeams(draft.pool),
+        user,
+        rngRef.current,
+        tournamentName(draft.pool, 1),
+        DIFFICULTY_OPP_BOOST[draft.difficulty],
+      );
+      track('game_start', { pool: draft.pool, difficulty: draft.difficulty, mode: draft.mode });
+      setDraft({ ...draft, pickedCoachTeamId: teamSeasonId });
+      setTournament(t);
+      setScreen('hub');
+    });
   };
 
   // ---------- pick'em ----------
@@ -781,16 +899,21 @@ export default function App() {
     const clone = structuredClone(tournament) as Tournament;
     const p = clone.pairings.find((x) => x.a === 'user' || x.b === 'user');
     if (p) p.result = series;
-    resolveRound(clone, rngRef.current);
-    setMatchCtx(null);
-    afterResolve(clone);
+    trackFirstMatchDone('draft'); // ativação: 1ª série concluída (1x por navegador)
+    void loadSwiss().then(({ resolveRound }) => {
+      resolveRound(clone, rngRef.current);
+      setMatchCtx(null);
+      afterResolve(clone);
+    });
   };
 
   const simRound = () => {
     if (!tournament) return;
     const clone = structuredClone(tournament) as Tournament;
-    resolveRound(clone, rngRef.current);
-    afterResolve(clone);
+    void loadSwiss().then(({ resolveRound }) => {
+      resolveRound(clone, rngRef.current);
+      afterResolve(clone);
+    });
   };
 
   // ---------- modo carreira ----------
@@ -817,30 +940,29 @@ export default function App() {
   const confirmTransfer = (newTeam: TTeam, cost = 0) => {
     if (!draft) return;
     const nextSeason = career.season + 1;
-    track('season_start', { season: nextSeason, pool: draft.pool });
-    // funil: o gancho 'market' já existia em HOOKS (UpsellCard.tsx) — texto
-    // pronto pra "montando seu elenco" — mas nenhuma tela chamava. Dado real
-    // (28d) mostra o card de upsell como a superfície que mais converte
-    // paywall_view em checkout_open do funil inteiro (~2%, contra 0,4-0,6%
-    // das travas de tela cheia); só perde pra falta de exposição. A janela de
-    // transferências é o único momento do Draft grátis (fim de temporada, o
-    // jogador acabou de mexer no elenco) sem nenhum gancho de ativação. Usa o
-    // mesmo cooldown global de 45min do UpsellCard — não aumenta a frequência
-    // de exibição pra quem já vê os outros ganchos (draft-win/save-risk).
-    if (!account?.paid) window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'market' } }));
-    setCareer((c) => ({ ...c, season: nextSeason, budget: c.budget - cost, lastPrize: undefined }));
-    rngRef.current = makeRng(randomSeed());
-    const t = createTournament(
-      poolTeams(draft.pool),
-      newTeam,
-      rngRef.current,
-      tournamentName(draft.pool, nextSeason),
-      DIFFICULTY_OPP_BOOST[draft.difficulty ?? 'normal'],
-    );
-    setPickem({ picks: {}, score: 0, total: 0 });
-    setTransferCtx(null);
-    setTournament(t);
-    setScreen('hub');
+    void loadSwiss().then(({ createTournament }) => {
+      track('season_start', { season: nextSeason, pool: draft.pool });
+      // funil: o gancho 'market' já existia em HOOKS (UpsellCard.tsx) — texto
+      // pronto pra "montando seu elenco" — mas nenhuma tela chamava. O card de
+      // upsell é a superfície que mais converte paywall_view em checkout_open
+      // (~2%); a janela de transferências é o único momento do Draft grátis sem
+      // gancho. O UpsellCard decide se mostra (#159: só depois do 1º valor, 1
+      // oferta automática por sessão, mesmo cooldown dos outros ganchos).
+      if (!account?.paid) window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'market' } }));
+      setCareer((c) => ({ ...c, season: nextSeason, budget: c.budget - cost, lastPrize: undefined }));
+      rngRef.current = makeRng(randomSeed());
+      const t = createTournament(
+        poolTeams(draft.pool),
+        newTeam,
+        rngRef.current,
+        tournamentName(draft.pool, nextSeason),
+        DIFFICULTY_OPP_BOOST[draft.difficulty ?? 'normal'],
+      );
+      setPickem({ picks: {}, score: 0, total: 0 });
+      setTransferCtx(null);
+      setTournament(t);
+      setScreen('hub');
+    });
   };
 
   const restart = () => {
@@ -861,18 +983,6 @@ export default function App() {
     markDirty(); // edições locais: só valem aqui até o admin "Salvar no banco"
   };
 
-  const goHome = () => {
-    // sem campanha carregada nesta sessão: só navega. NUNCA apagar um save em
-    // disco por um clique no logo (vindo do online/hall, tournament é null).
-    if (!tournament) {
-      setScreen('home');
-      return;
-    }
-    if (tournament.phase !== 'done' && screen !== 'final') {
-      if (!confirm(ct('Abandonar o Major em andamento e voltar para o início?'))) return;
-    }
-    restart();
-  };
 
   const vetoData = useMemo(() => {
     if (!tournament) return null;
@@ -908,10 +1018,231 @@ export default function App() {
     }
   };
 
+  // ── shell universal: trilho de modos, usuário e comandos globais ──────────
+  // [fase 4] editor de base: de onde veio decide o "voltar" (Início ou a criação da Carreira)
+  const [editorFrom, setEditorFrom] = useState<'home' | 'career'>('home');
+  const openEditor = (from: 'home' | 'career') => { setEditorFrom(from); setScreen('editor'); };
+  const openCareerMode = () => {
+    // mesmo caminho do card da Home: espera a conta pra decidir (vitalícia → saves)
+    if (!accountReady) return;
+    if (account?.paid) setScreen('careerSaves');
+    else { setActiveSlot(1); setScreen('career'); }
+  };
+  const openUltimateMode = (tab: string) => {
+    if (account || utGuest) {
+      setUltTabReq((r) => ({ tab, n: (r?.n ?? 0) + 1 }));
+      setScreen('ultimate');
+    } else { setCheckoutSrc(tab === 'ranked' ? 'rail-online' : 'rail-ultimate'); setUtGateOpen(true); }
+  };
+  const openDraftMode = () => {
+    if (tournament) { setScreen(tournament.phase === 'done' ? 'final' : 'hub'); return; }
+    if (savedSession?.tournament) { resumeSession(); return; }
+    setHomeViewReq((r) => ({ view: 'draft', n: r.n + 1 }));
+    setScreen('home');
+  };
+  const newMajor = () => { setHomeViewReq((r) => ({ view: 'draft', n: r.n + 1 })); setScreen('home'); };
+  // portas da landing: já escolheu por onde começar, então o modal das 3 rotas não cobre o modo nesta visita
+  const openLandingDoor = (d: LandingDoor) => {
+    setShowOnboarding(false);
+    if (d === 'diario') setScreen('daily'); else if (d === 'draft') openDraftMode(); else if (accountReady) openCareerMode(); else setScreen('home');
+  };
+  const openAccount = () => { if (account) setScreen(manager ? 'profile' : 'setup'); else { setAuthMode('login'); setAuthOpen(true); } };
+  // Modo Major no trilho só na janela do evento (até 13/12): selo com a
+  // contagem ("24d") antes e AO VIVO durante; depois volta pro painel do Início.
+  // O clique segue medido como 'sidebar' (a navegação lateral), com o lugar em `via`.
+  const mClock = majorClock();
+  const majorInRail = mClock.phase !== 'after';
+  const majorStatus = mClock.phase === 'live' ? `${ct('AO VIVO')} · ${ct('Dia')} ${mClock.day}/${mClock.of}`
+    : mClock.phase === 'before' ? `${ct('Começa em')} ${mClock.days > 0 ? `${mClock.days} ${ct('dias')}` : `${mClock.hours}h`}` : '';
+  const majorRail: ShellMode[] = mClock.phase === 'after' ? [] : [{
+    id: 'majorsg', label: ct('Modo Major'), short: 'Major', icon: Trophy, inPalette: false,
+    badge: mClock.phase === 'live' ? ct('AO VIVO') : mClock.days > 0 ? `${mClock.days}d` : `${mClock.hours}h`,
+    badgeTone: mClock.phase === 'live' ? 'live' : 'brand',
+    hint: mClock.phase === 'live' ? majorStatus : `PGL Major Singapore · ${majorStatus}`,
+    onSelect: (src) => { track('major_vitrine_click', { surface: 'sidebar', via: src ?? 'rail' }); setScreen('majorsg'); },
+  }];
+  // desafios do Diário que faltam hoje (selo no trilho); relido a cada troca de tela
+  const dailyLeft = useMemo(() => {
+    const st = dailyDayStatus(DAILY_GAMES.map((g) => g.id), dateKeyOf(new Date()));
+    return st.total - st.done;
+  }, [screen]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [majorTab, setMajorTab] = useState<MajorTab>(initialMajorTab);
+  // Início e landing abrem o Modo Major numa aba (ao vivo: "veja seus pontos" → pickem, "jogar com um time" → play)
+  const openMajorAt = (tab?: MajorTab) => { if (tab && MAJOR_TABS.includes(tab)) setMajorTab(tab); setScreen('majorsg'); };
+  const shellModes: ShellMode[] = [
+    { id: 'inicio', label: ct('Início'), short: ct('Início'), icon: House, onSelect: () => { setHomeViewReq((r) => ({ view: 'menu', n: r.n + 1 })); setScreen('home'); } },
+    ...majorRail,
+    { id: 'carreira', label: ct('Carreira'), short: ct('Carreira'), icon: Trophy, onSelect: openCareerMode },
+    ...(RTP_ENABLED ? [{ id: 'rtp' as const, label: 'Road to Pro', short: 'Road to Pro', icon: Crosshair, hint: account?.paid ? undefined : ct('Demo grátis'), onSelect: () => setScreen('rtp') }] : []),
+    ...(ULTIMATE_ENABLED ? [{ id: 'ultimate' as const, label: 'Ultimate', short: 'Ultimate', icon: Star, onSelect: () => openUltimateMode('hub') }] : []),
+    { id: 'major', label: 'Draft', short: 'Draft', icon: Layers, hint: tournament || savedSession?.tournament ? ct('Campeonato em andamento') : undefined, onSelect: openDraftMode },
+    { id: 'diario', label: ct('Diário'), short: ct('Diário'), icon: CalendarDays, badge: dailyLeft > 0 ? dailyLeft : undefined, hint: dailyLeft > 0 ? `${dailyLeft} ${ct('desafios esperando')}` : undefined, onSelect: () => setScreen('daily') },
+    ...(ULTIMATE_ENABLED ? [{ id: 'online' as const, label: 'Online', short: 'Online', icon: Swords, hint: ct('Ranqueada, duelo e Major da Semana'), onSelect: () => openUltimateMode('ranked') }] : []),
+  ];
+  const shellCommands: ShellCommand[] = [
+    { id: 'major-sg', label: ct('Modo Major: PGL Major Singapore'), group: ct('Ações'), icon: Trophy, keywords: 'major singapore pickem pick em chave bracket pgl', run: () => { track('major_vitrine_click', { surface: 'palette' }); setScreen('majorsg'); } },
+    { id: 'new-major', label: ct('Novo Major (draft)'), group: ct('Ações'), icon: Plus, keywords: 'draft major rapido', run: newMajor },
+    { id: 'editor', label: ct('Editor de base'), group: ct('Ações'), icon: PencilRuler, keywords: 'editor base database jogadores times fm', run: () => openEditor('home') },
+    { id: 'achievements', label: ct('Conquistas'), group: ct('Você'), icon: Medal, run: () => setAchOpen(true) },
+    { id: 'hall', label: ct('Hall da Fama'), group: ct('Você'), icon: Landmark, run: () => setScreen('hall') },
+    { id: 'ranking', label: ct('Ranking'), group: ct('Você'), icon: ListOrdered, run: () => setScreen('leaderboard') },
+    { id: 'account', label: account ? ct('Perfil e conta') : ct('Entrar ou criar conta'), group: ct('Você'), icon: account ? CircleUser : LogIn, run: openAccount },
+    { id: 'donate', label: ct('Apoiar o projeto'), group: ct('Projeto'), icon: Heart, run: () => { track('donate_click', { from: 'palette' }); setDonateOpen(true); } },
+  ];
+  const shellGlobal: ShellGlobal = {
+    modes: shellModes,
+    commands: shellCommands,
+    user: manager ? {
+      nick: manager.nick,
+      sub: account ? (account.founder ? `${ct('Fundador')}${account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''}` : account.paid ? ct('Conta vitalícia') : ct('Conta grátis')) : ct('Convidado · sem conta'),
+      paid: !!account?.paid,
+      founder: !!account?.founder,
+      onOpen: openAccount,
+    } : undefined,
+    alerts: { count: hasNewPatch() ? 1 : 0, onClick: openPatchNotes },
+    // menu "Conta" no pé do trilho: o lugar único de perfil e conta, de qualquer modo
+    railFoot: [
+      { id: 'rf-account', label: account ? ct('Perfil e conta') : ct('Entrar'), icon: account ? CircleUser : LogIn, run: openAccount },
+      { id: 'rf-achievements', label: ct('Conquistas'), icon: Medal, run: () => setAchOpen(true) },
+      { id: 'rf-ranking', label: ct('Ranking'), icon: ListOrdered, run: () => setScreen('leaderboard') },
+      { id: 'rf-hall', label: ct('Hall da Fama'), icon: Landmark, run: () => setScreen('hall') },
+      { id: 'rf-donate', label: ct('Apoiar o projeto'), icon: Heart, run: () => { track('donate_click', { from: 'rail' }); setDonateOpen(true); } },
+    ],
+  };
+  // Início: só o contexto da casa. Os modos (e o Modo Major, na janela) estão
+  // no trilho; perfil e conta, no menu Conta do pé do trilho.
+  const homeNav = (active?: string): ShellNavGroup[] => [
+    { id: 'principal', label: ct('Principal'), icon: House, items: [
+      { id: 'home', label: ct('Visão geral'), icon: LayoutDashboard },
+      { id: 'news', label: ct('Novidades'), icon: Newspaper, alert: hasNewPatch() },
+      ...(majorInRail ? [] : [{ id: 'majorsg', label: ct('Modo Major'), icon: Trophy }]),
+    ] },
+    { id: 'progresso', label: ct('Progresso'), icon: Medal, items: [
+      { id: 'achievements', label: ct('Conquistas'), icon: Medal },
+      { id: 'leaderboard', label: ct('Ranking'), icon: ListOrdered },
+      { id: 'hall', label: ct('Hall da Fama'), icon: Landmark },
+    ] },
+    { id: 'mais', label: ct('Mais'), icon: Heart, items: [
+      { id: 'editor', label: ct('Editor de base'), icon: PencilRuler },
+      { id: 'howto', label: ct('Como jogar'), icon: BookOpen },
+      { id: 'donate', label: ct('Apoiar o projeto'), icon: Heart },
+    ] },
+  ].map((g) => ({ ...g, items: g.items.map((it) => ({ ...it, alert: it.alert && it.id !== active })) }));
+  // tab bar do Início no celular: o Modo Major entra como atalho do modo (na
+  // janela) ou como item do painel (depois); o que não existir some
+  const homeMobileNav = ['home', 'mode:majorsg', 'majorsg', 'news', 'leaderboard'];
+  // Modo Major na janela: o painel são as abas do próprio modo
+  const majorNav: ShellNavGroup[] = [
+    { id: 'major', label: 'PGL Major Singapore', icon: Trophy, items: [
+      { id: 'overview', label: ct('Visão geral'), icon: LayoutDashboard },
+      { id: 'pickem', label: "Pick'em", icon: ListChecks },
+      { id: 'league', label: ct('Liga'), icon: UsersRound },
+      { id: 'play', label: ct('Jogar'), icon: Gamepad2 },
+      { id: 'sim', label: ct('Simular'), icon: Dices },
+    ] },
+  ];
+  const onHomeNav = (id: string) => {
+    if (id === 'majorsg') track('major_vitrine_click', { surface: 'sidebar' });
+    if (id === 'news') openPatchNotes();
+    else if (id === 'achievements') setAchOpen(true);
+    else if (id === 'howto') openHowToPlay();
+    else if (id === 'donate') { track('donate_click', { from: 'menu' }); setDonateOpen(true); }
+    else if (id === 'profile') openAccount();
+    else if (id === 'editor') openEditor('home');
+    else setScreen(id as Screen);
+  };
+  const withShell = (node: React.ReactNode) => (
+    <ShellProvider value={shellGlobal}>
+      {node}
+      <PeekLayer />
+    </ShellProvider>
+  );
+
+  // Major rápido (draft → chave → partida → resultado): seções do modo
+  const majorShell = (active: string, children: React.ReactNode, opts: { variant?: 'full' | 'focus' | 'immersive'; title?: string } = {}) => {
+    const up = tournament ? userPairing(tournament) : null;
+    const opp = tournament && up ? getTeam(tournament, up.a === 'user' ? up.b : up.a) : null;
+    const user = tournament ? getTeam(tournament, 'user') : null;
+    const nav: ShellNavGroup[] = [
+      { id: 'camp', label: ct('Campeonato'), icon: Trophy, items: [
+        { id: 'hub', label: ct('Chave e rodada'), icon: Network, disabled: !tournament, alert: !!up },
+        { id: 'stats', label: ct('Estatísticas'), icon: ChartColumn, disabled: !tournament },
+        { id: 'final', label: ct('Resultado'), icon: Medal, disabled: tournament?.phase !== 'done' },
+      ] },
+      { id: 'mercado', label: ct('Elenco'), icon: ArrowLeftRight, items: [
+        { id: 'draft', label: ct('Draft do elenco'), icon: Shuffle, disabled: !draft || draft.current >= 5 && !!draft.pickedCoachTeamId },
+      ] },
+      { id: 'mais', label: ct('Mais'), icon: CalendarRange, items: [
+        { id: 'new', label: ct('Novo Major'), icon: Plus },
+        { id: 'hall', label: ct('Hall da Fama'), icon: Landmark },
+      ] },
+    ];
+    const onNav = (id: string) => {
+      if (id === 'new') newMajor();
+      else setScreen(id as Screen);
+    };
+    const next = screen === 'hub' && tournament
+      ? (up && opp
+        ? { label: ct('Jogar'), detail: `vs ${opp.name} · MD${pairingBestOf(tournament, up)}`, icon: Play, onGo: playUserMatch }
+        : { label: ct('Simular rodada'), detail: phaseLabelDisplay(tournament), icon: FastForward, onGo: simRound })
+      : screen === 'final' && tournament
+        ? { label: ct('Próxima temporada'), detail: ct('janela de transferências'), onGo: openTransferWindow }
+        : undefined;
+    return (
+      <GameShell
+        mode="major"
+        variant={opts.variant ?? 'full'}
+        identity={{
+          title: user?.name ?? draft?.teamName ?? 'Draft',
+          subtitle: tournament ? `${tournament.name} · ${phaseLabelDisplay(tournament)}` : ct('Major rápido'),
+          badge: user ? <TeamBadge tag={user.tag} colors={user.colors} size={36} /> : undefined,
+          colors: user?.colors,
+        }}
+        nav={nav}
+        active={active}
+        onNav={onNav}
+        title={opts.title}
+        next={next}
+      >
+        {children}
+      </GameShell>
+    );
+  };
+
+  // style guide: aberto a qualquer um (sem manager), pro QA visual e pra
+  // conferir tokens e primitivos num lugar só
+  if (screen === 'design') {
+    return (
+      <Suspense fallback={<Loader text="…" />}>
+        <DesignScreen onBack={() => setScreen(manager ? 'home' : 'landing')} />
+      </Suspense>
+    );
+  }
+
+  // Modo Major (PGL Major Singapore): aberto a qualquer um, sem manager — o link
+  // do pick'em compartilhado tem que abrir direto pra quem não joga ainda
+  if (screen === 'majorsg') {
+    const identity = { title: manager?.nick ?? 'Road to Major', subtitle: manager?.org, badge: <BrandMark size={32} /> };
+    const onLogin = () => { setAuthMode('login'); setAuthOpen(true); };
+    return withShell(majorInRail ? (
+      <GameShell mode="majorsg" identity={{ ...identity, subtitle: majorStatus }} crumbs={[]} variant="full" nav={majorNav} active={majorTab} onNav={(id) => setMajorTab(id as MajorTab)} mobileNav={['mode:inicio', 'overview', 'pickem', 'league']}>
+        <Suspense fallback={<Loader text="…" />}>
+          <MajorSingaporeScreen onLogin={onLogin} tab={majorTab} onTab={setMajorTab} />
+        </Suspense>
+      </GameShell>
+    ) : (
+      <GameShell mode="inicio" identity={identity} title={ct('Modo Major')} crumbs={[{ label: ct('Início') }]} variant="full" nav={homeNav('majorsg')} active="majorsg" onNav={onHomeNav} mobileNav={homeMobileNav}>
+        <Suspense fallback={<Loader text="…" />}>
+          <MajorSingaporeScreen onLogin={onLogin} />
+        </Suspense>
+      </GameShell>
+    ));
+  }
+
   if (screen === 'landing') {
     return (
       <>
-        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} />
+        <Landing onPlay={() => { setDoorAfterSetup(null); setScreen(manager ? 'home' : 'setup'); }} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} onMajor={(tab) => { track('major_vitrine_click', { surface: 'landing' }); openMajorAt(tab); }} onDoor={(d) => { if (manager) openLandingDoor(d); else { setDoorAfterSetup(d); setScreen('setup'); } }} />
         {!bannerPreview && <AdBanner />}
       </>
     );
@@ -924,18 +1255,29 @@ export default function App() {
   // Portão do Setup: não vive só no botão "Jogar". Sem manager criado, qualquer
   // entrada direta no jogo (deep link, F5, retorno do Stripe em /jogar) cai aqui.
   if (screen === 'setup' || !manager) {
-    return <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); setScreen('home'); }} />;
+    return (
+      <Suspense fallback={<Loader text="…" />}>
+        <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); const d = doorAfterSetup; setDoorAfterSetup(null); if (d) openLandingDoor(d); else setScreen('home'); }} />
+      </Suspense>
+    );
   }
 
   if (screen === 'profile' && manager) {
-    return (
-      <main className="page" style={{ paddingTop: 24 }}>
+    return withShell(
+      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Perfil')} crumbs={[{ label: ct('Conta') }]} variant="full" nav={homeNav('profile')} active="profile" onNav={onHomeNav} mobileNav={homeMobileNav}>
+        <Suspense fallback={<Loader text="…" />}>
         <ManagerProfile
           manager={manager}
           account={account}
           onBack={() => setScreen('home')}
           onEdit={() => setScreen('setup')}
-          onUpgrade={() => { setCheckoutSrc('profile'); goToCheckout(); }}
+          /* funil: dado real (90d) — 15 sids únicos viram o paywall_view 'profile'
+             e NENHUM converteu em checkout_open. goToCheckout manda pra Landing
+             com o modal em modo CADASTRO sempre, mesmo pra quem já tem conta
+             grátis logada aqui — o mesmo buraco já corrigido no home-pill/
+             acct-chip (cai num formulário de "criar conta" com o e-mail que já
+             existe). Quem já tem conta pula direto pro pagamento. */
+          onUpgrade={() => { setCheckoutSrc('profile'); if (account) startCheckout(); else goToCheckout(); }}
           onManageSaves={account?.paid ? () => setScreen('careerSaves') : undefined}
           onAccountDeleted={() => {
             logout();
@@ -944,19 +1286,22 @@ export default function App() {
             setScreen('home');
           }}
         />
-      </main>
+        </Suspense>
+      </GameShell>,
     );
   }
 
   if (screen === 'leaderboard') {
-    return (
-      <main className="page" style={{ paddingTop: 24 }}>
-        <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); goToCheckout(); }} />
-      </main>
+    return withShell(
+      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Ranking')} crumbs={[{ label: ct('Progresso') }]} nav={homeNav('leaderboard')} active="leaderboard" onNav={onHomeNav} mobileNav={homeMobileNav}>
+        <Suspense fallback={<Loader text="…" />}>
+          <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); goToCheckout(); }} />
+        </Suspense>
+      </GameShell>,
     );
   }
 
-  return (
+  return withShell(
     <>
       {/* barra de progresso: remonta a cada troca de tela e replaya a animação */}
       <div className="route-progress" key={screen} />
@@ -997,40 +1342,8 @@ export default function App() {
           </div>
         </div>
       )}
-      {screen !== 'career' && screen !== 'ultimate' && screen !== 'rtp' && (
-        <header className="app-header">
-          <div className="topbar">
-            <span className="logo" onClick={goHome}>
-              <BrandMark size={32} className="logo-mark" />
-              ROAD&nbsp;TO&nbsp;<span>MAJOR</span>
-            </span>
-            <span className="subtitle">{t('nav.subtitle')}</span>
-            <LangSwitcher />
-            <DonateButton onClick={() => setDonateOpen(true)} />
-            {/* no /jogar (screen 'home') o Home já renderiza o AccountChip fixo no
-                canto — este aqui junto DUPLICAVA o chip (um por trás de CONTA/HALL). */}
-            {account && screen !== 'home' && (
-              <button className="acct-chip" title={account.founder ? `${ct('Fundador')}${account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''} · ${ct('apoiador desde o lançamento')}` : account.paid ? ct('Conta vitalícia (apoiador) · perfil, saves e conta') : ct('Sua conta · ver perfil')} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
-                {account.paid && <span className="acct-star">★</span>}
-                {account.nick || account.email}
-                {account.founder
-                  ? <span className="acct-tag">{ct('FUNDADOR')}{account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''}</span>
-                  : account.paid && <span className="acct-tag">{ct('VITALÍCIA')}</span>}
-              </button>
-            )}
-            <button
-              className="nav-btn"
-              title={account ? ct('Perfil e configurações da conta') : ct('Entrar ou criar conta')}
-              onClick={() => { if (account) { setScreen(manager ? 'profile' : 'setup'); } else { setAuthOpen(true); } }}
-            >
-              {account ? ct('Conta') : ct('Entrar')}
-            </button>
-            <button className="nav-btn" onClick={() => setScreen('hall')}>
-              {t('nav.hall')}
-            </button>
-          </div>
-        </header>
-      )}
+      {/* o topo antigo (logo, idioma, apoiar, conta, hall) virou o shell universal:
+          trilho de modos + rodapé do trilho + sidebar do Início (GameShell) */}
 
       <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
       {/* card de ativação (upsell) global: abre via evento rtm:upsell de qualquer tela.
@@ -1048,16 +1361,28 @@ export default function App() {
              sequer captura o erro — falha muda e o clique não faz nada). Manda
              pro mesmo caminho de convidado que a landing já usa (cadastro +
              pagamento na mesma tela). */
-          onGuestUpgrade={goToCheckout}
+          onGuestUpgrade={() => openInlineCheckout('upsell-card')}
           onPixPaid={async () => { setPaidToast(true); await refreshAccount(); }}
         />
       )}
-      {authOpen && !account && (
+      {/* !account?.paid (antes !account): o signup/login grava a conta no store
+          ANTES do QR Pix aparecer — com !account o modal desmontava no meio do
+          pagamento. Conta grátis já logada abre direto no passo de pagamento. */}
+      {authOpen && !account?.paid && (
         <AccountModal
           initialMode={authMode}
-          onClose={() => { setAuthOpen(false); setAuthMode('login'); }}
+          payingAccount={account}
+          pixFirst={screen === 'rtp' || inlineCheckout}
+          playerNick={checkoutNick}
+          onClose={() => { setAuthOpen(false); setAuthMode('login'); setInlineCheckout(false); }}
           onCheckout={startCheckout}
-          onPlay={async () => { setAuthOpen(false); await refreshAccount(); setScreen(manager ? 'home' : 'setup'); }}
+          onPlay={async () => {
+            setAuthOpen(false); setInlineCheckout(false);
+            await refreshAccount();
+            // checkout in-place (trava do RtP, upsell): fica na mesma tela — o
+            // RoadToPro sai da trava sozinho (demo=false) no MESMO save.
+            setScreen(screen === 'rtp' || inlineCheckout ? screen : hasIntent() ? 'ultimate' : manager ? 'home' : 'setup'); /* [U08] intenção de compra viva → volta pro Ultimate */
+          }}
         />
       )}
       {utGateOpen && !account && (
@@ -1073,9 +1398,16 @@ export default function App() {
           onGuest={() => { setUtGateOpen(false); enableUtGuest(); setScreen('ultimate'); }}
         />
       )}
-      {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
+      {showOnboarding && screen === 'home' && (
+        <Onboarding
+          onClose={() => setShowOnboarding(false)}
+          onRoute={(route) => { if (route === 'major') { track('major_vitrine_click', { surface: 'onboarding' }); setScreen('majorsg'); } else if (route === 'draft') openDraftMode(); else openCareerMode(); }}
+        />
+      )}
 
-      <main className={screen === 'career' ? 'page page-career' : screen === 'rtp' ? 'page page-rtp' : screen === 'home' ? 'page page-play' : screen === 'ultimate' ? 'page page-ultimate' : 'page'}>
+      {/* "Não consegui salvar" + avisos da nuvem (413 / restore sem espaço) */}
+      <SaveHealthBanner />
+      <div className={ADMIN_SCREENS.has(screen) ? 'page' : 'app-stage'}>
       <Suspense fallback={<Loader text="…" />}>
       {bannerPreview && screen === 'home' && (
         <>
@@ -1107,9 +1439,11 @@ export default function App() {
           onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onDaily={() => setScreen('daily')}
+          onMajor={(tab) => { track('major_vitrine_click', { surface: 'home' }); openMajorAt(tab); }}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
+          onEditor={() => openEditor('home')}
           onCareer={() => {
             // Aguarda account terminar de carregar antes de decidir o caminho —
             // antes podia cair no else se o usuário clicava muito rápido
@@ -1142,6 +1476,10 @@ export default function App() {
           playerCount={playerCount}
           savedCampaign={savedSession?.tournament ? { name: savedSession.tournament.name, phase: savedSession.tournament.phase } : null}
           onResume={resumeSession}
+          shellNav={homeNav('home')}
+          onShellNav={onHomeNav}
+          viewReq={homeViewReq}
+          onOpenRanking={() => setScreen('leaderboard')}
           onDiscardCampaign={() => {
             localStorage.removeItem(SESSION_KEY);
             setSessionStamp((s) => s + 1); // o banner some na hora, mesmo já na home
@@ -1183,21 +1521,32 @@ export default function App() {
           convidado, o guard de rota manda pra landing. Os perks pagos (coins,
           ladder persistente, save na nuvem) ficam no entitlement, não no acesso. */}
       {ULTIMATE_ENABLED && (account || utGuest) && screen === 'ultimate' && (
-        <UltimateSquadScreen
-          onBack={() => setScreen('home')}
-          guest={!account}
-          /* funil: o botão do mkt-lock (Mercado P2P) foi adicionado em 27/07 pra
-             sair de 0% de conversão, mas continuava mandando pra landing inteira
-             — 87 paywall_view/28d e 0 checkout_open, mesmo depois do botão existir.
-             Convidado vai direto pro cadastro; conta grátis vai direto pro checkout
-             (mesmo atalho do onUpgrade abaixo). */
-          onCreateAccount={() => {
-            setCheckoutSrc('ultimate-guest');
-            if (account) startCheckout();
-            else { setAuthMode('signup'); setAuthOpen(true); }
-          }}
-          onUpgrade={() => startCheckout()}
-        />
+        <ModeErrorBoundary mode="ultimate" onExit={() => setScreen('home')}>
+          <UltimateSquadScreen
+            onBack={() => setScreen('home')}
+            tabRequest={ultTabReq}
+            guest={!account}
+            /* funil: o botão do mkt-lock (Mercado P2P) foi adicionado em 27/07 pra
+               sair de 0% de conversão, mas continuava mandando pra landing inteira
+               — 87 paywall_view/28d e 0 checkout_open, mesmo depois do botão existir.
+               Convidado vai direto pro cadastro; conta grátis vai direto pro checkout
+               (mesmo atalho do onUpgrade abaixo).
+               Dado real (60d): o aviso de convidado (ut-guest-warn) é a maior
+               exposição do modo convidado do Ultimate (430 paywall_view / 160 sid)
+               e nunca teve um único checkout_open — 0 em 2 meses, mesmo já tendo
+               preço no botão (iter42). O cadastro do convidado abria no modal
+               padrão (form cru, sem o checkout-in-place/pixFirst que já existe pro
+               RtP e pro upsell-card): depois de criar a conta, a tela mostrava o
+               formulário preenchido E o QR Pix juntos, exigindo rolar a tela no
+               celular. openInlineCheckout aplica o mesmo atalho já validado — o
+               QR substitui o formulário assim que abre, sem precisar rolar. */
+            onCreateAccount={() => {
+              if (account) { setCheckoutSrc('ultimate-guest'); startCheckout(); }
+              else openInlineCheckout('ultimate-guest');
+            }}
+            onUpgrade={() => startCheckout()}
+          />
+        </ModeErrorBoundary>
       )}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
@@ -1208,24 +1557,47 @@ export default function App() {
           rtp-demo-gate é vista por 15-40 sids/dia mas o checkout_open desse src
           sumiu (0-1/dia desde 25/08, contra 3-6/dia antes) — quem bate na trava
           cai na landing cheia e precisa achar OUTRO CTA pra abrir o pagamento.
-          goToCheckout pula esse passo, igual toda outra trava já faz. */}
-      {RTP_ENABLED && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={goToCheckout} />}
+          goToCheckout pula esse passo, igual toda outra trava já faz.
+          Agora nem a landing: o AccountModal abre POR CIMA da trava (Pix
+          primeiro), com o jogador e a proposta visíveis enquanto paga. A
+          trava/cliff já marcam a origem (first-touch) antes do onUpgrade. */}
+      {/* [O0-11] demo só depois do /me: com a conta ainda carregando, o RtP
+          montava com demo=true, injetava o cliffhanger no save do pagante e
+          disparava a trava + paywall_view. Espera accountReady. */}
+      {RTP_ENABLED && screen === 'rtp' && (accountReady
+        ? <ModeErrorBoundary mode="rtp" onExit={() => setScreen('home')}><RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={(nick) => openInlineCheckout('rtp-demo', nick)} /></ModeErrorBoundary>
+        : <Loader text="…" />)}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
-      {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} />}
+      {screen === 'daily' && <ModeErrorBoundary mode="daily" onExit={() => setScreen('home')}><DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} /></ModeErrorBoundary>}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (
-        <CareerSaves
-          paid={!!account?.paid}
-          onPlay={(slot) => { setActiveSlot(slot); setScreen('career'); }}
-          onBack={() => setScreen('home')}
-        />
+        <GameShell mode="carreira" variant="focus" identity={{ title: ct('Carreira'), subtitle: ct('Seus saves') }} title={ct('Escolha a carreira')} crumbs={[{ label: ct('Saves') }]}>
+          <CareerSaves
+            paid={!!account?.paid}
+            onPlay={(slot) => { setActiveSlot(slot); setScreen('career'); }}
+            onBack={() => setScreen('home')}
+          />
+        </GameShell>
       )}
-      {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
+      {/* carreira aberta de graça pra todos (a vitalícia vale por save na nuvem + ranking) */}
+      {/* key={careerEpoch}: o save trocou por fora (nuvem, lápide, outra aba) →
+          remonta a carreira inteira [O0-28/O1-35]. Pagante (ou conta ainda
+          carregando) espera o sync da nuvem antes de montar. */}
       {screen === 'career' && (
-        <>
-          <CareerScreen dataset={dataset} founder={!!account?.founder} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
-        </>
+        !accountReady || (account?.paid && !careerSynced)
+          ? <Loader text="☁ …" />
+          : (
+            <ModeErrorBoundary mode="career" onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')}>
+              <CareerScreen key={careerEpoch} dataset={dataset} founder={!!account?.founder} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} onOpenEditor={() => openEditor('career')} />
+            </ModeErrorBoundary>
+          )
+      )}
+      {screen === 'editor' && (
+        <DatabaseEditor
+          onExit={() => setScreen('home')}
+          onPlayCareer={editorFrom === 'career' ? () => setScreen('career') : openCareerMode}
+        />
       )}
       {screen === 'careerCRM' && (
         <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>
@@ -1243,13 +1615,12 @@ export default function App() {
         </AdminGate>
       )}
 
-      {screen === 'draft' && draft && (
-        <AppFrame title={`Draft · ${draft.current < 5 ? `Pick ${draft.current + 1}/5` : 'Coach'}`} onExit={() => setScreen('home')}>
-          <Draft draft={draft} dataset={dataset} onPick={pickPlayer} onPickCoach={pickCoach} onReroll={rerollDraft} />
-        </AppFrame>
+      {screen === 'draft' && draft && majorShell('draft',
+        <Draft draft={draft} dataset={dataset} onPick={pickPlayer} onPickCoach={pickCoach} onReroll={rerollDraft} />,
+        { title: `Draft · ${draft.current < 5 ? `Pick ${draft.current + 1}/5` : ct('Coach')}` },
       )}
 
-      {screen === 'hub' && tournament && (
+      {screen === 'hub' && tournament && majorShell('hub',
         <Hub
           t={tournament}
           career={career}
@@ -1259,22 +1630,27 @@ export default function App() {
           onSimRound={simRound}
           onStats={() => setScreen('stats')}
           onOpenSeries={openSeries}
-        />
+        />,
       )}
 
-      {screen === 'matchdetail' && detail && (
-        <MatchDetail series={detail.series} teams={detail.teams} event={detail.event} onBack={() => setScreen(detailReturn)} />
+      {screen === 'matchdetail' && detail && majorShell(detailReturn === 'final' ? 'final' : 'hub',
+        <MatchDetail series={detail.series} teams={detail.teams} event={detail.event} onBack={() => setScreen(detailReturn)} />,
+        { title: ct('Detalhe da série') },
       )}
 
-      {screen === 'stats' && tournament && (
-        <TournamentStats t={tournament} onBack={() => setScreen(tournament.phase === 'done' ? 'final' : 'hub')} />
+      {screen === 'stats' && tournament && majorShell('stats',
+        <TournamentStats t={tournament} onBack={() => setScreen(tournament.phase === 'done' ? 'final' : 'hub')} />,
       )}
 
-      {screen === 'hall' && <HallScreen onBack={() => setScreen(tournament ? (tournament.phase === 'done' ? 'final' : 'hub') : 'home')} />}
+      {screen === 'hall' && manager && (
+        <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Hall da Fama')} crumbs={[{ label: ct('Progresso') }]} nav={homeNav('hall')} active="hall" onNav={onHomeNav} mobileNav={homeMobileNav}>
+          <HallScreen onBack={() => setScreen(tournament ? (tournament.phase === 'done' ? 'final' : 'hub') : 'home')} />
+        </GameShell>
+      )}
 
       {screen === 'lab' && <LabScreen dataset={eligible} onBack={() => setScreen('admin')} />}
 
-      {screen === 'transfer' && transferCtx && (
+      {screen === 'transfer' && transferCtx && majorShell('final',
         <TransferScreen
           user={transferCtx.baseTeam}
           season={career.season + 1}
@@ -1283,10 +1659,11 @@ export default function App() {
           evolution={transferCtx.evolution}
           offers={transferCtx.offers}
           onConfirm={confirmTransfer}
-        />
+        />,
+        { title: ct('Janela de transferências') },
       )}
 
-      {screen === 'veto' && tournament && vetoData && (
+      {screen === 'veto' && tournament && vetoData && majorShell('hub',
         <VetoScreen
           teams={vetoData.teams}
           userIdx={vetoData.userIdx}
@@ -1295,10 +1672,11 @@ export default function App() {
           bestOf={vetoData.bestOf}
           mapRecord={vetoData.mapRecord}
           onDone={onVetoDone}
-        />
+        />,
+        { variant: 'immersive', title: ct('Veto de mapas') },
       )}
 
-      {screen === 'match' && matchCtx && (
+      {screen === 'match' && matchCtx && majorShell('hub',
         <MatchScreen
           teams={matchCtx.teams}
           maps={matchCtx.maps}
@@ -1307,10 +1685,11 @@ export default function App() {
           phaseLabel={matchCtx.phase}
           bestOf={matchCtx.bestOf}
           onFinish={onMatchFinish}
-        />
+        />,
+        { variant: 'immersive', title: `${matchCtx.teams[0].name} × ${matchCtx.teams[1].name}` },
       )}
 
-      {screen === 'final' && tournament && (
+      {screen === 'final' && tournament && majorShell('final',
         <FinalScreen
           t={tournament}
           career={career}
@@ -1322,7 +1701,7 @@ export default function App() {
           onBracket={() => setScreen('hub')}
           onNextSeason={openTransferWindow}
           onDonate={() => setDonateOpen(true)}
-        />
+        />,
       )}
 
       {screen === 'admin' && (
@@ -1337,7 +1716,7 @@ export default function App() {
         </AdminGate>
       )}
       </Suspense>
-      </main>
+      </div>
 
       {/* Patrocinador sempre visível no rodapé (COPA ACE). Some sozinho se o
           asset falhar, se o link não estiver definido ou depois do início do

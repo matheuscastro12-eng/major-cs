@@ -18,6 +18,7 @@ import {
   getFinance, getRankingIntegrity, getRevenue, getWlBoard, grantAccess, listAccounts, lookupStripe, revokeAccess, settleWl, setUserPassword,
   type AccountsList, type AdminAccount, type FinanceData, type IntegrityData, type RevenueData, type RevenueDay, type StripeLookup, type TrendPoint, type WlAdminBoard, type WlSettlePaid,
 } from '../state/adminAccounts';
+import { priceCents } from '../state/price';
 
 // ── formatadores pt-BR ──────────────────────────────────────────────────────
 const money = (cents: number) => {
@@ -75,7 +76,7 @@ function MethodBars({ rows, total }: { rows: BarRow[]; total: number }) {
 }
 
 // ── derivação por dia: contagens cruas → receita em centavos ────────────────
-// Regra de receita da vitalícia: preço fixo (vitPriceCents = R$ 20). Contas
+// Regra de receita da vitalícia: preço configurado (vitPriceCents = PIX_PRICE_CENTS). Contas
 // 'admin' (concedidas) contam como conta mas NÃO geram receita. Método
 // 'desconhecido' (legado sem trilha de método) conta como PIX no split —
 // decisão do dono (2026-07-05): as vendas legadas sem sessão Stripe foram Pix.
@@ -202,6 +203,7 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'home-rtp': 'Home · card Road to Pro',
   'home-rtp-direto': 'Home · RtP, pulou a demo',
   'home-ultimate': 'Home · card Ultimate',
+  'ultimate-guest': 'Ultimate · aviso de convidado',
   'home-pill': 'Home · pill Fundador',
   'acct-chip': 'Chip de conta (dropdown)',
   'upsell-card': 'Card de upsell',
@@ -214,6 +216,7 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'pix-cartao-cedo': 'Pix · troca pro cartão (cedo)',
   'pix-troca-cartao': 'Pix · troca pro cartão (aos 25s, antigo)',
   'pix-wait-longo': 'Pix · reassurance de espera',
+  'pix-check-manual': 'Pix · "já paguei, verificar agora"',
   'upsell-pix-cartao-cedo': 'Upsell in-game · Pix→cartão (cedo)',
   profile: 'Perfil do manager',
   leaderboard: 'Leaderboard',
@@ -558,7 +561,7 @@ function AccountsSection() {
 
   const conv = data && data.total ? Math.round((data.paidTotal / data.total) * 100) : 0;
   const refPct = data && data.total ? Math.round(((data.withRefTotal ?? 0) / data.total) * 100) : 0;
-  const revenue = (data?.paidTotal ?? 0) * 20; // conta vitalícia = R$20
+  const revenue = ((data?.paidTotal ?? 0) * priceCents()) / 100; // contagem × preço configurado (PIX_PRICE_CENTS)
 
   const load = useCallback(async (q = '') => {
     setErr('');
@@ -760,6 +763,17 @@ function OrdersSection() {
   if (!data) return <div className="muted" style={{ padding: 16 }}>{busy ? ct('Carregando…') : ct('Sem dados.')}</div>;
   return (
     <>
+      {(coins?.attention ?? []).length > 0 && (
+        // [O0-24/O0-41] pagos que não creditaram nada: o jogador pagou e precisa de reembolso
+        <div className="crm-save-msg err" style={{ marginBottom: 12 }}>
+          <b>⚠ {ct('Pagamentos para reembolsar')}</b>
+          {(coins?.attention ?? []).map((o, i) => (
+            <div key={i} className="small">
+              {fmtWhen(o.at)} · {o.email} · {tierLabel(o.tier)} · {money(o.cents)} · {methodLabel(o.method)} · {o.status === 'duplicate' ? ct('passe já pago nesta temporada') : ct('valor diferente do pedido')}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="acc-stats">
         <Stat value={num(coins?.paidOrders ?? 0)} label={ct('Pedidos pagos')} />
         <Stat value={num(coins?.coinsSold ?? 0)} label={ct('Coins vendidos')} />
@@ -877,7 +891,7 @@ function WlSection() {
       {err && <div className="crm-save-msg err">{err}</div>}
       {result && (
         <div className="crm-save-msg" style={{ background: 'rgba(22,163,74,.12)', border: '1px solid #16a34a' }}>
-          ✓ {ct('Pagos')}: {result.length === 0 ? ct('ninguém (ranking vazio ou tudo já pago antes)') : result.map((p) => `${p.rank}º ${p.nick} +${num(p.prize)}${p.replayed ? ` (${ct('já pago — não duplicou')})` : ''}`).join(' · ')}
+          ✓ {ct('Pagos')}: {result.length === 0 ? ct('ninguém (ranking vazio ou tudo já pago antes)') : result.map((p) => `${p.rank}º ${p.nick} +${num(p.prize)}${p.replayed ? (p.priorPrize != null ? ` (⚠ ${ct('já pago antes com')} ${num(p.priorPrize)} — ${ct('valor diferente do prêmio; não duplicou')})` : ` (${ct('já pago — não duplicou')})`) : ''}`).join(' · ')}
         </div>
       )}
       {data.board.length === 0 ? (

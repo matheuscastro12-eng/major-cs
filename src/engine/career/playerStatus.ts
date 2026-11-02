@@ -5,7 +5,8 @@
 // formStatus (engine/career/form.ts) que já existe. Tudo derivado de campos que
 // o save já tem: nada novo pra migrar.
 
-import { playerAttributes, type PlayerForAttrs } from '../attributes';
+import type { PlayerForAttrs } from '../attributes';
+import { attrsOf, type PlayerAttrs } from '../attrs/model';
 
 export interface StatusPill {
   tier: string;
@@ -35,8 +36,8 @@ export function satisfactionStatus(satisfaction: number | undefined): StatusPill
 }
 
 // DISCIPLINA: lê o atributo derivado 1-20 (attributes.ts) do próprio jogador.
-export function disciplineStatus(p: PlayerForAttrs): StatusPill {
-  const d = playerAttributes(p).discipline;             // 1-20
+export function disciplineStatus(p: PlayerForAttrs & { attrs?: PlayerAttrs | null }): StatusPill {
+  const d = attrsOf(p).a.discipline; // 1-20 (fonte da verdade)
   const v = Math.round((d / 20) * 100);
   if (d >= 16) return { tier: 'pro', label: 'Profissional exemplar', color: 'var(--em-green)', value: v };
   if (d >= 12) return { tier: 'solid', label: 'Disciplinado', color: 'var(--em-green)', value: v };

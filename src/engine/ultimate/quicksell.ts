@@ -3,7 +3,7 @@
 // de "única" (1ª cópia vale 70% → incentiva guardar únicas, vender duplicatas).
 // Puro. Ver docs-but-map.md §2.2.
 
-import { rarityInfo, type UltRarity } from './rarities';
+import { rarityInfo, type UltRarity } from './rarities.js'; // .js: cadeia runtime-safe (o servidor recalcula o quicksell)
 
 export const QUICKSELL_RULES = {
   ovrBonusPerPoint: 0.05,

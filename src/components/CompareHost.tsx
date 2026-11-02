@@ -25,6 +25,11 @@ export function openCompare(players: Player[]): void {
   setAll(filtered);
 }
 
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+export function closeCompare(): void {
+  setAll(null);
+}
+
 export function CompareHost() {
   const [players, setPlayers] = useState<Player[] | null>(current);
 

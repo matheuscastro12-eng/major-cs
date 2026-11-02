@@ -30,7 +30,7 @@ interface Props {
 
 const TONE_COLORS: Record<NonNullable<UserBadge['tone']>, { bg: string; fg: string; border: string }> = {
   gold:    { bg: 'rgba(232, 193, 112, 0.16)', fg: '#e8c170', border: 'rgba(232, 193, 112, 0.5)' },
-  green:   { bg: 'rgba(94, 216, 138, 0.14)',  fg: '#5ed88a', border: 'rgba(94, 216, 138, 0.4)' },
+  green:   { bg: 'color-mix(in srgb, var(--c-win) 14%, transparent)',  fg: 'var(--c-win)', border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
   blue:    { bg: 'rgba(95, 164, 232, 0.14)',  fg: '#5fa4e8', border: 'rgba(95, 164, 232, 0.4)' },
   purple:  { bg: 'rgba(155, 111, 232, 0.14)', fg: '#9b6fe8', border: 'rgba(155, 111, 232, 0.4)' },
   neutral: { bg: 'var(--em-panel-2)',         fg: 'var(--em-text)', border: 'var(--em-border)' },
@@ -66,7 +66,7 @@ export function UserBadges({ badges, size = 'md' }: Props) {
               <CareerIcon name={b.icon} size={iconSize} />
             </span>
             <span style={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 1.1 }}>
-              <b style={{ color: colors.fg, fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, fontSize: fontValue }}>
+              <b style={{ color: colors.fg, fontFamily: 'var(--font-num)', fontWeight: 800, fontSize: fontValue }}>
                 {b.value}
               </b>
               <span style={{ color: 'var(--em-muted)', fontSize: fontLabel, textTransform: 'uppercase', letterSpacing: '0.5px' }}>

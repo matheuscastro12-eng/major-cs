@@ -45,7 +45,7 @@ export function IdentityCard({
             <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--em-border, #2a3340)', overflow: 'hidden' }}>
               <div style={{ width: pct(label.strength), height: '100%', background: readable ? 'var(--em-red, #e58a8a)' : 'var(--em-muted, #8a99ab)', transition: 'width .25s ease' }} />
             </div>
-            <span style={{ fontSize: '0.7rem', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace', color: 'var(--em-muted, #8a99ab)', minWidth: 34, textAlign: 'right' }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 800, fontFamily: 'var(--font-num)', color: 'var(--em-muted, #8a99ab)', minWidth: 34, textAlign: 'right' }}>
               {ct('força')} {pct(label.strength)}
             </span>
           </div>

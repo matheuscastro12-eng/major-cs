@@ -4,7 +4,7 @@
 // em três stages suíços mais Champions Stage. A interface usa PT como fonte e
 // traduz as strings da carreira com ct().
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles, orgRefSynergy } from '../engine/ratings';
+import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles, orgRefSynergy, draftSynergy } from '../engine/ratings';
 import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
 import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
 import { teamSeasonToTTeam } from '../engine/ratings';
@@ -14,13 +14,20 @@ import { mapRecordFromStats } from '../engine/teamMapStats';
 import { createSwissStage, createPlayoffStage, stageAdvancers, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
 // Hub: usado pela MajorTab; import movido pra page.
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
-import type { Coach, Difficulty, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
-import { DIFFICULTY_ECON, DIFFICULTY_LABELS, MAP_LABELS, MAP_POOL } from '../types';
+import type { Coach, CoachStyle, Difficulty, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TPlayer, TTeam } from '../types';
+import { COACH_STYLE_LABELS, DIFFICULTY_ECON, DIFFICULTY_LABELS, MAP_LABELS, MAP_POOL } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career/rivalries';
-import { applyFatigueForm, careerPlayerId, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
+import { careerPlayerId, updateMatchFatigue } from '../engine/career/fatigue';
+// [fase 2 · treino] treino semanal, condição (fitness/ritmo/lesão) e scrim com vazamento
+import {
+  gestaoOf, fatigueView, conditionWithFatigue, runTrainingWeek, applyRealScrim, closeTrainingSplit, recoverCondition,
+  trainingGrowthMul, leakAgainst, defaultTrainingState, withEntryCondition, defaultCondition, vodPrepPoints, INJURY_LABEL, LEGACY_FOCUS_ATTR, ROLE_FOCUS_ATTRS,
+} from '../engine/gestao/treino';
+import { applyConditionToTeam, substituteInjured, isInjured, type StandIn } from '../engine/gestao/condicao';
+import { ATTR_LABEL, type AttrKey } from '../engine/attributes';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { APPROVAL_DELTAS, applyBoardDelta, boardFiredDetail, type BoardLogEntry } from '../engine/career/boardApproval';
 import { evaluatePromise, appendPromiseOutcome, type BoardPromise, type PromiseOutcome } from '../engine/career/promises';
@@ -28,13 +35,13 @@ import { evaluatePromise, appendPromiseOutcome, type BoardPromise, type PromiseO
 import { evaluateScars, scarsEarnedAt, scarEffects, applyScarsOnMarket, type CoachScar, type ScarEvent } from '../engine/career/scars';
 import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/career/seasonStats';
 import { tryBreakthrough } from '../engine/career/breakthrough';
-import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
+import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT, moraleForm } from '../engine/career/happiness';
 import { tickListedSales, LISTING_MAX_RATIO } from '../engine/career/listedSales';
 import { unhappyDiscountFor } from '../engine/career/unhappyMarket';
 import { buyoutFloorOf } from '../engine/career/buyout';
 import { openStint, closeStint, stintsOf, type StintsMap } from '../engine/career/stints';
-import { applyBootcamp, canBootcamp, BOOTCAMP_COST } from '../engine/career/bootcamp';
-import { applyFocusBias, suggestFocus, TRAINING_FOCUS_LABEL, CORE_STATS, type CoreStat } from '../engine/career/training';
+import { applyBootcamp } from '../engine/career/bootcamp';
+import { suggestFocus, type CoreStat } from '../engine/career/training';
 import {
   judgePlayerPromises, hasOpenPromise, PLAYER_PROMISE_LABEL, PROMISE_MADE, PROMISE_KEPT, PROMISE_BROKEN,
   PROMISE_DEADLINE_SPLITS, tallyPlayerPromises, type PlayerPromise, type PlayerPromiseKind,
@@ -45,22 +52,51 @@ import {
 } from '../engine/career/watchlist';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
-import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
-import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
-import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
+import { FREE_TEAM_ID } from '../engine/career/transferAI';
+import { applyAnalystPrep, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
+import { personalityChemBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, setPersonalitySource, personalityProfileOf, FM_PERSONALITY_LABEL, FM_PERSONALITY_DESC, type PlayerPersonality } from '../engine/career/personality';
+// [fase 3 · vestiário] status no elenco, banco/escalação, hierarquia, grupos, reuniões e conflitos
+import { migrateClube } from '../engine/clube/clubeMigration';
+import { needsMarket } from '../engine/clube/fundacao';
+import type { ClubeState, ContractTerms, DressingRoomState, Negotiation, SquadStatus } from '../engine/clube/model';
+import {
+  dressingOf, resolveLineup, recordPlayTime, closeSplitDressing, statusesOf, toVPlayer, hierarchy, influencePull, socialGroups,
+  socialPairBonus, tickConflicts, conflictEffects, playTimeScore, roleScore, wageScore, promisesScore, staffScore, socialScore,
+  ambitionScore, effectivePlayShare, expectedPlayTime, playShareOf, talkUnrestDelta, applyUnrestDelta, wantsToLeave, benchValueFactor,
+  statusChangeMorale, SQUAD_MAX, STATUS_LABEL, STATUS_DESC, UNREST_LABEL, INFLUENCE_LABEL, SQUAD_STATUSES as SQUAD_STATUS_OPTS,
+  swapLineup, rosterLocked, isolatedIds, mediationChance, mediateConflict, canHoldMeeting, resolveTeamMeeting, recordMeeting,
+  languageOf, LANGUAGE_LABEL, MEETING_LABEL, type VPlayer, type UnrestLevel, type MeetingKind,
+} from '../engine/clube/vestiario';
+import { LineupPanel, DinamicaView, type VestModel, type VestRow, type VestActions } from '../pages/career/VestiarioViews';
+import { CircuitPicker, CircuitoTab, type MajorRouteInfo, type TeamLite } from '../pages/career/CircuitoViews';
 import { hydrateCareerDepth } from '../engine/career/save';
-import { closeMatchIdentity, type TeamIdentity } from '../engine/career/teamIdentity';
+import { closeMatchIdentity, scoutingOf, type TeamIdentity } from '../engine/career/teamIdentity';
+import { aiTactics, matchTacticsFor, tacticsAfterMatch, antiStratReveal, autoAntiStratReadiness, gainFamiliarity } from '../engine/gestao/tatica';
+import { GamePlanScreen } from '../pages/career/GamePlanScreen';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { isPlayerCommittedForExit, matchesNegotiationFilters, sortMarketEntries, type MarketSort } from '../engine/career/market';
 import {
-  academyAgeAfterSplit,
   ageFromCareerStart,
-  ageFromDebut,
+  effectiveAge,
   legacyYouthBaseAgeAtPromotion,
   youthDebutAtPromotion,
   type YouthDebut,
 } from '../engine/career/playerAge';
-import { applyCareerVrsDecay, aiRollingVrs, careerEventKey } from '../engine/career/progress';
+import { careerEventKey } from '../engine/career/progress';
+import { eventMeta, majorName, t1EventName, T1_EVENTS, T2_EVENTS, MAJOR_NAMES } from '../data/tournaments';
+// [fase 4 · circuito] calendário, VRS unificado, mundo em segundo plano, LAN × online, visto e bootcamp
+import {
+  buildEtapaEvents, qualifierOpponents, qualifierPlan, pressureFor, visaDenials, bootcampPlan,
+  etapaTime, majorTime, majorIdOf, eventHost, seasonOfSplit, buildSeasonCalendar, WEEKS_PER_ETAPA, MAJOR_PRESSURE, RMR_SLOTS, RMR_LABEL, MAJOR_EVERY, isMajorSplit, EVENTS_PER_SPLIT,
+  MAJOR_S1,
+  type RmrRegion, type EtapaEvent,
+} from '../engine/mundo/circuito';
+import { computeVrs } from '../engine/mundo/vrs';
+import {
+  closeWorld, simulateEtapaWorld, leaguePlacements, eventResult, majorFieldFromVrs, majorRouteOf, majorResults, worldHeadlines,
+  seedWorld, userRecordsFromHistory, withFreshCalendar, resolveRmrs, rmrQualifiedIds, nameUnofficialTeams, storedTagOf, withCircuit, USER_ID, type MajorFieldPlan,
+} from '../engine/mundo/mundoCarreira';
+import { completeMajor, type MajorProgress } from '../engine/mundo/mundoSim';
 import * as newsroom from '../engine/career/newsroom';
 import type { SeriesAngle } from '../engine/career/newsroom';
 // academyLeague: usado pela AcademyTab; import movido pra page.
@@ -70,294 +106,130 @@ import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 // FutCard: usado pela SquadTab; import movido pra page.
 import { DashCard } from './career/DashCard';
 import { CareerShell, CareerDashFrame } from './career/CareerShell';
-import { CareerPlayerPage } from './career/CareerPlayerPage';
+import { AnalystReportCard } from './AnalystReportCard';
+import { generateAnalystReport } from '../engine/analystReport';
+import type { SquadSection } from '../pages/career/SquadTab';
+import type { PaletteItem, ShellNavGroup, ShellNext, ShellPending, ShellTab, ShellTool } from './ds/shell/types';
+import { scoreMatch } from './ds/shell/CommandPalette';
+import { usePeekResolver, peekFromPlayer, type PeekData } from './ds/shell/PlayerPeek';
+import {
+  ArrowLeftRight, Award, Binoculars, BookOpen, Building2, CalendarCheck, CalendarDays, ChartColumn, ChartNoAxesColumn,
+  CircleHelp, Crosshair, DoorOpen, FileSignature, Globe, GraduationCap, Sprout, House, Inbox, Layers, ListOrdered, LogOut, MessageCircle,
+  Crown, Medal, Network, PenLine, RotateCcw, ScrollText, Search, Shield, ShieldHalf, Sparkles, Star, Swords, Target,
+  Trophy, UserRound, Users, Wallet, Megaphone,
+} from 'lucide-react';
+// [super atualização 2 · mídia viva] coletivas, feed da cena e narrativas
+import { MidiaTab, PressSlot } from '../pages/career/MidiaTab';
+import { useOverlayHeld } from '../state/overlayHold';
+import { midiaAfterSeries, answerPress, type MidiaSeriesArgs } from '../engine/midia/carreira';
+import { midiaOf, type MidiaState, type PressConf, type PressFx, type PressTone } from '../engine/midia/model';
+import { preMatchConference, koStageOf, openRumorOnSquad } from '../engine/midia/midia';
+import { CareerPlayerPage, PLAYER_TABS, type PlayerTab } from './career/CareerPlayerPage';
 import { CareerTeamPage } from './career/CareerTeamPage';
 // PlayerLink: usado pela SquadTab; import movido pra page.
 import { playerOrgId, playerRuntimeId } from '../state/career-player-route';
 import {
-  canCareerGoBack,
   careerHistoryBack,
-  careerHistoryForward,
   initCareerNav,
+  isCareerPlayerPath,
+  isCareerTeamPath,
   navigateCareerHub,
   navigateCareerPlayer,
   navigateCareerTeam,
   parseCareerPlayerId,
   parseCareerTeamId,
 } from '../state/career-nav';
+import { useSectionHistory } from '../state/app-history';
 // buildDashboardTasks + CareerOverview + RecentMatchRow: usados pela OverviewTab; imports movidos pra page.
 import { CareerIcon, type CareerIconName } from './career/CareerIcon';
 import { CareerConfirmProvider, useCareerConfirm } from './career/ConfirmModal';
 // OrgFlag: usado pelas pages (WorldTab/VrsTab); import removido daqui.
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
+import { careerMatchSeed } from '../engine/career/matchSeed';
 import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits, applyBo3PlayerEdit, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
+import { applyCustomDatabase, applyCustomPlayer, resolveCareerDatabase, withCareerDatabase } from '../engine/mundo/editor';
+import { migrateMundo } from '../engine/mundo/mundoMigration';
+import { loadCustomDbs } from '../state/customDb';
+import { CareerDatabaseChoice } from './editor/CareerDatabaseChoice';
 import { isAdminUnlocked } from './AdminGate';
 import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
 import { getManager } from '../state/manager';
 import { getActiveSlot } from '../state/careerSaves';
-import { useGame, type Hydrator } from '../state/gameStore';
-import type { VersionedSave } from '../state/saveMigrations';
-import bo3Ages from '../data/bo3-ages.json';
-import { useAccount } from '../state/account';
+import { useGame, installSaveMigrations, type Hydrator } from '../state/gameStore';
+import { compactCareerSave } from '../state/careerSaveCompact';
+import { migrateSave, type VersionedSave } from '../state/saveMigrations';
+import {
+  FILL_ROLES, REGION_CC, prospectIdentity, backfillPlayers, baseAge, playerPhase, regenYouth, aiClock, regenPotOvr, extraClock,
+  currentFreeAgents, BASE_PLAYER_IDS, buildAiWorld, applyMoves, nextAiDrift, agedFreeAgents, aiAgeOf, baseOvrOf, aiPotentialOvr, type PlayerPhase,
+} from '../engine/career/aiWorld';
+// [fase 4 · juventude] jovens gerados (newgens) no mundo da IA + tela Juventude
+import {
+  mundoOf, withNewgens, movableIdsWith, youthAffinity, tickJuventude, movesWithout, ensureYearIntake, academyIdForNewgen,
+  type UserYouthCtx, type JuventudeNews,
+} from '../engine/mundo/juventudeMundo';
+import { isNewgenId, newgenPlayer, careerYearOf, hasIntake, dropNewgens, storeNewgen } from '../engine/mundo/juventude';
+import { replayAttrs, worldEvoEntry, migrateWorldEvo as migrateWorldEvoSave, type WorldEvoMap } from '../engine/career/worldEvo';
+import { careerPotentialOvr, careerPotentialBaseOvr, registerCareerBase } from '../engine/career/potential';
+import { academyGrowthMul, evolveAcademyProspect } from '../engine/career/academyGrowth';
+import type { MundoState, WorldEventResult } from '../engine/mundo/model';
+import { JuventudeTab } from '../pages/career/JuventudeTab';
+// [SA2 · legado] linha do tempo, prêmios da cena, lendas, recordes, Hall do manager e cards
+import { LegadoTab } from '../pages/career/LegadoTab';
+import { LegadoCeremony } from './career/LegadoCeremony';
+import { legadoOf, unseenCeremony, withShirt, type LegadoState } from '../engine/legado/model';
+import { closeLegadoYear } from '../engine/legado/carreira';
+import { buildLegado } from '../engine/legado/historia';
+import { getToken, useAccount } from '../state/account';
 import { CustomRosterBuilder } from './CustomRosterBuilder';
+import {
+  BALANCE_FIX_ID, MODE_AI_EDGE, PLAN_STYLE, PLAN_STYLE_FIX, applyGamePlan, coachForMatch, coachMatchImpact, analystScoutingPrep, careerAiTeam, careerMode, careerUserTeam, estimateTenure, newOrgTeamwork, takeoverTeamwork, togetherSplits,
+  type CareerGamePlan,
+} from '../engine/career/equilibrio';
+import { setStyle, styleOf, STYLE_SHORT } from '../engine/gestao/estilo';
+// o gameStore nasce sem a cadeia de migrations (fora da carga inicial): esta
+// tela é quem carrega o save, então instala antes do primeiro loadFromSlot
+installSaveMigrations(migrateSave);
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
-// premiação mais enxuta: montar o time dos sonhos leva várias temporadas (antes
-// dava pra ter o melhor elenco com grana sobrando já no split 3)
-const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
-// VRS é ROLANTE (como o Valve ranking real): a cada evento os pontos antigos
-// decaem, então não acumulam pra sempre (acabou o usuário com 3000 e a IA com
-// 1200). No equilíbrio o VRS ganho ~ ganho/(1-decay), comparável ao field.
-// PLANO DE JOGO: a decisão pré-partida do usuário. Cada plano dá um buff REAL na
-// simulação (some você do "modo espectador": sua escolha muda a partida).
-export type GamePlan = 'disciplined' | 'antistrat' | 'mapfocus' | 'aggressive';
+// PLANO DE JOGO: atalho da decisão pré-partida. [integração] Sem bônus de força:
+// Disciplinado/Agressivo escrevem o estilo (Plano de jogo › estilos), Anti-strat
+// foca a preparação no adversário e Foco no mapa forte puxa o veto.
+export type GamePlan = CareerGamePlan;
 const GAME_PLANS: { id: GamePlan; icon: CareerIconName; label: string; desc: string }[] = [
-  { id: 'disciplined', icon: 'brain', label: ct('Disciplinado'), desc: ct('Jogo seguro e constante. Baixa variância, base sólida.') },
-  { id: 'antistrat', icon: 'search', label: 'Anti-strat', desc: ct('Estuda o adversário: defesa mais sólida. Bom contra times melhores.') },
+  { id: 'disciplined', icon: 'brain', label: ct('Disciplinado'), desc: ct('Atalho do estilo Controle nos dois lados: jogo lento e seguro.') },
+  { id: 'antistrat', icon: 'search', label: 'Anti-strat', desc: ct('Foca a preparação no adversário: lê as tendências dele (sem mudar o estilo).') },
   { id: 'mapfocus', icon: 'map', label: ct('Foco no mapa forte'), desc: ct('Puxa o veto pro seu melhor mapa e joga mais forte nele.') },
-  { id: 'aggressive', icon: 'swords', label: ct('Agressivo'), desc: ct('Pressão nas aberturas: teto alto, mais arriscado.') },
+  { id: 'aggressive', icon: 'swords', label: ct('Agressivo'), desc: ct('Atalho do estilo Agressivo nos dois lados: pressão e duelos de abertura, mais oscilante.') },
 ];
-// aplica o buff do plano no time do usuário antes da partida
-function applyGamePlanBuff(t: TTeam, plan: GamePlan): TTeam {
-  if (plan === 'aggressive') return { ...t, strength: t.strength + 2.5 };
-  if (plan === 'antistrat') return { ...t, strength: t.strength + 2 };
-  if (plan === 'mapfocus') {
-    const prefs: Record<string, number> = { ...t.mapPrefs };
-    const best = Object.entries(prefs).sort((a, b) => b[1] - a[1])[0];
-    if (best) prefs[best[0]] = Math.min(5, best[1] + 2); // reforça o melhor mapa (veto + força)
-    return { ...t, mapPrefs: prefs, strength: t.strength + 1 };
-  }
-  return { ...t, strength: t.strength + 1.5 }; // disciplined
-}
+// aplica o buff do plano no time do usuário antes da partida — mora em
+// engine/career/equilibrio.ts (o Agressivo ganhou custo: lado CT e variância).
+const applyGamePlanBuff = applyGamePlan;
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
-export const MAJOR_VRS_CUT = 32; // os 32 melhores do ranking VRS vão ao Major (3 stages)
-// o Major Mundial fecha a TEMPORADA: a cada N campeonatos/splits acontece um Major.
-// 4 = a temporada tem 3 campeonatos tier-1 + o Major encerrando o ano.
-export const MAJOR_EVERY = 4;
-// CADA SPLIT TEM VÁRIOS CAMPEONATOS (etapas). O "relógio do mundo" — idade dos
-// jogadores, mercado/transferências, renovações, decaimento de VRS, Major — só
-// avança ao FECHAR o split (a última etapa). As etapas intermediárias você joga
-// com o MESMO elenco, sem offseason: mais campeonatos antes do mundo mexer.
-const EVENTS_PER_SPLIT = 3;
-export const isMajorSplit = (split: number) => split % MAJOR_EVERY === 0;
-// VRS do Major por colocação (o prêmio em $ vem do pool real × fatia, ver eventPrize)
-const MAJOR_VRS: Record<PlacementCode, number> = {
-  champion: 600,
-  runnerup: 400,
-  semi: 280,
-  quarters: 180,
-  playoffs: 120,
-  swiss: 70,
-};
-// nomes reais de Majors (fonte: Liquipedia), rotacionando por split
-const MAJOR_NAMES = ['PGL Major Copenhagen', 'BLAST.tv Austin Major', 'IEM Major Rio', 'PGL Major Budapest', 'ESL One Major Cologne'];
-const MAJOR_NAME = (split: number) => MAJOR_NAMES[(split - 1) % MAJOR_NAMES.length];
-// CALENDÁRIO TIER 1 (Liquipedia/HLTV): cada split é um campeonato real DISTINTO do
-// ano, jogado em sequência (datas diferentes). Por serem em datas diferentes, os
-// mesmos melhores times disputam todos — sem "jogar dois ao mesmo tempo". O ciclo
-// é contínuo entre temporadas, então cada split traz um evento diferente.
-const T1_EVENTS = [
-  // Calendário expandido: ~35 eventos T1 do ano (rotação por split×etapa)
-  'IEM Katowice', 'ESL Pro League S20', 'IEM Cologne', 'IEM Dallas',
-  'PGL Cluj-Napoca', 'BLAST Premier World Final', 'IEM Chengdu', 'Esports World Cup',
-  'BLAST Open Lisboa', 'IEM Melbourne', 'PGL Astana', 'Thunderpick World Championship',
-  'IEM Rio', 'BLAST Spring Final', 'BLAST Fall Final', 'IEM Sydney',
-  'PGL Bucharest', 'IEM Fortaleza', 'BLAST Bounty', 'Gamers8 Riyadh',
-  'BLAST Open Spring', 'BLAST Premier Spring Final', 'PGL Wallachia', 'IEM World Champ',
-  'EPL Conference', 'ESL Pro League S21', 'BLAST Premier Fall', 'IEM Beijing',
-  'PGL Belgrade', 'IEM Atlanta', 'BetBoom Dacha Belgrade', 'BetBoom Dacha Dubai',
-  'Roobet Masters', 'YaLLa Compass Riyadh', 'IEM Berlin',
-];
-// Cada ETAPA do split é um evento distinto do calendário (não só por split).
-const evIndex = (split: number, ev: number, len: number) => ((((split - 1) * EVENTS_PER_SPLIT + (ev - 1)) % len) + len) % len;
-const t1EventName = (split: number, ev = 1) => T1_EVENTS[evIndex(split, ev, T1_EVENTS.length)];
+// [fase 4 · circuito] divisão pelo ranking VRS: top 32 = Tier 1, 33–64 = Tier 2
+// (a régua de sempre). O Major agora sai do VRS (1–24 direto) + RMRs regionais.
+export const MAJOR_VRS_CUT = 32;
+// relógio do circuito (engine/mundo/circuito.ts): 3 etapas por split, Major a
+// cada 4 splits. CADA SPLIT TEM VÁRIOS CAMPEONATOS (etapas); o "relógio do mundo"
+// (idade, mercado, renovações, Major) só avança ao FECHAR o split.
+export { MAJOR_EVERY, isMajorSplit };
+// nomes reais dos eventos: data/tournaments.ts (mesma rotação de sempre)
+const MAJOR_NAME = (split: number) => majorName(split);
 
-// Tier 2 mundial: circuitos de segundo escalão reais (sem trava de região).
-const T2_EVENTS = [
-  'ESL Challenger League', 'CCT Global Finals', 'Elisa Masters Espoo', 'YaLLa Compass',
-  'Thunderpick World Champ', 'Pinnacle Cup', 'CCT Season Finals', 'Skyesports Masters',
-  'ESL Challenger Valencia', 'CCT South America', 'CCT Europe', 'European Pro League S2',
-  'Roobet Cup', 'Snow Sweet Snow', 'Pinnacle Cup Championship', 'Fragadelphia',
-  'CCT Asia', 'CCT North America', 'Elisa Invitational', 'Esports Charts Cup',
-  'ESL Impact Finals', 'Skyesports Champions', 'United Masters League', 'Pinnacle Champ Cup',
-  'BLAST Bounty Spring', 'Akros Showmatch', 'GG.Bet Showdown', 'BetBoom Cup',
-  'CCT Online Finals', 'IceCold Cup',
-];
-const t2EventName = (split: number, ev = 1) => T2_EVENTS[evIndex(split, ev, T2_EVENTS.length)];
-
-// Tier 3: circuitos de acesso/qualificatórias (onde toda org começa).
-// AGORA segmentado por região — funções regionEventName() devolvem o nome do
-// evento certo pra região do user. Mantém T3_EVENTS como pool global default.
-const T3_EVENTS = [
-  'ESEA Advanced Season', 'CCT Open Series', 'European Pro League',
-  'Pinnacle Winter Series', 'Elisa Invitational Qual', 'ESL Challenger Open', 'CCT Series',
-  'ESEA Cash Cup', 'Aorus League', 'CBCS Series',
-  'ESEA Open Season', 'Pinnacle Summer Series', 'CCT Open Qualifier',
-  'ESL Open Cup', 'CCT Closed Qualifier', 'Esports Spring League',
-  'Akros League', 'GG.Bet Tide',
-];
-// Sub-arrays REGIONAIS pra T3 — usado quando region routing determina escopo.
-const T3_SA_EVENTS = [
-  'Gamers Club Liga Pro', 'Gamers Club Masters', 'CCT South America', 'CBCS Series',
-  'BB Masters Brasil', 'Aorus League BR', 'CazéTV Cup', 'Liga Gamers Club',
-  'Esportes da Sorte Cup', 'NSG Brasileirão CS', 'Aorus League SA', 'Loud Park BR',
-  'CCT South America S2', 'BB Masters Andinos', 'Liga Furiosa', 'Brasileirão CS',
-];
-const T3_EU_EVENTS = [
-  'European Pro League', 'ESEA Advanced Season', 'CCT Europe Series', 'Esportal Spring',
-  'Pinnacle Winter Series', 'Elisa Invitational Qual', 'ESL Challenger Open',
-  'GamersOrigin League', 'eXTREMESLAND EU', 'EVC EU Open', 'CCT Closed Qualifier',
-  'A1 League', 'Polskie Mistrzostwa', 'United Kingdom Open', 'Akros League EU',
-];
-const T3_ASIA_EVENTS = [
-  'Perfect World Asia League', 'Asia Championship', 'CCT Asia Series', 'Esports Charts Asia',
-  'Skyesports Stage', 'TIGER Asia League', 'Akros Asia', 'Mongolian Premier League',
-];
-const t3EventName = (split: number, ev = 1) => T3_EVENTS[evIndex(split, ev, T3_EVENTS.length)];
-// Picker por região: cai num pool regional específico (default = global).
-// Exportado pra ser usado pelo CircuitPicker (Frente 3 — region routing).
-export const t3RegionalEventName = (split: number, ev: number, region: 'sa' | 'eu' | 'asia' | 'global') => {
-  const pool = region === 'sa' ? T3_SA_EVENTS : region === 'eu' ? T3_EU_EVENTS : region === 'asia' ? T3_ASIA_EVENTS : T3_EVENTS;
-  return pool[evIndex(split, ev, pool.length)];
-};
-
-// IMERSÃO: prize pool real (USD) e sede de cada evento do calendário (fonte:
-// Liquipedia/HLTV). Só FLAVOR — o prêmio que entra no caixa segue a fórmula
-// balanceada (PRIZE_BY_POS × prizeMult), não o pool real, pra não estourar a
-// economia. Eventos sem entrada caem num default por tier.
-const EVENT_META: Record<string, { prize: number; venue: string }> = {
-  // Majors
-  'PGL Major Copenhagen': { prize: 1_250_000, venue: 'Copenhague 🇩🇰' },
-  'BLAST.tv Austin Major': { prize: 1_250_000, venue: 'Austin 🇺🇸' },
-  'IEM Major Rio': { prize: 1_250_000, venue: 'Rio de Janeiro 🇧🇷' },
-  'PGL Major Budapest': { prize: 1_250_000, venue: 'Budapeste 🇭🇺' },
-  'ESL One Major Cologne': { prize: 1_250_000, venue: 'Colônia 🇩🇪' },
-  // Tier 1
-  'IEM Katowice': { prize: 1_000_000, venue: 'Katowice 🇵🇱' },
-  'ESL Pro League': { prize: 850_000, venue: 'Malta 🇲🇹' },
-  'IEM Cologne': { prize: 1_000_000, venue: 'Colônia 🇩🇪' },
-  'IEM Dallas': { prize: 250_000, venue: 'Dallas 🇺🇸' },
-  'PGL Cluj-Napoca': { prize: 1_250_000, venue: 'Cluj-Napoca 🇷🇴' },
-  'BLAST Premier World Final': { prize: 1_000_000, venue: 'Singapura 🇸🇬' },
-  'IEM Chengdu': { prize: 500_000, venue: 'Chengdu 🇨🇳' },
-  'Esports World Cup': { prize: 1_250_000, venue: 'Riade 🇸🇦' },
-  'BLAST Open Lisboa': { prize: 200_000, venue: 'Lisboa 🇵🇹' },
-  'IEM Melbourne': { prize: 250_000, venue: 'Melbourne 🇦🇺' },
-  'PGL Astana': { prize: 500_000, venue: 'Astana 🇰🇿' },
-  'Thunderpick World Championship': { prize: 1_000_000, venue: 'Malta 🇲🇹' },
-  'IEM Rio': { prize: 250_000, venue: 'Rio de Janeiro 🇧🇷' },
-  'BLAST Spring Final': { prize: 425_000, venue: 'Londres 🇬🇧' },
-  'BLAST Fall Final': { prize: 425_000, venue: 'Copenhague 🇩🇰' },
-  'IEM Sydney': { prize: 250_000, venue: 'Sydney 🇦🇺' },
-  'PGL Bucharest': { prize: 1_000_000, venue: 'Bucareste 🇷🇴' },
-  'IEM Fortaleza': { prize: 250_000, venue: 'Fortaleza 🇧🇷' },
-  'BLAST Bounty': { prize: 300_000, venue: 'Copenhague 🇩🇰' },
-  'Gamers8 Riyadh': { prize: 1_000_000, venue: 'Riade 🇸🇦' },
-  // Tier 2
-  'CCT Global Finals': { prize: 200_000, venue: 'Belgrado 🇷🇸' },
-  'Elisa Masters Espoo': { prize: 75_000, venue: 'Espoo 🇫🇮' },
-  'Thunderpick World Champ': { prize: 250_000, venue: 'Malta 🇲🇹' },
-  'Pinnacle Cup': { prize: 100_000, venue: 'online 🌐' },
-  'CCT Season Finals': { prize: 150_000, venue: 'Belgrado 🇷🇸' },
-  'Skyesports Masters': { prize: 100_000, venue: 'Mumbai 🇮🇳' },
-  'ESL Challenger Valencia': { prize: 100_000, venue: 'Valência 🇪🇸' },
-  'Pinnacle Cup Championship': { prize: 200_000, venue: 'online 🌐' },
-  'Fragadelphia': { prize: 30_000, venue: 'Filadélfia 🇺🇸' },
-  // Tier 1 expandido
-  'BLAST Open Spring': { prize: 200_000, venue: 'Londres 🇬🇧' },
-  'BLAST Premier Spring Final': { prize: 400_000, venue: 'Singapura 🇸🇬' },
-  'PGL Wallachia': { prize: 600_000, venue: 'Bucareste 🇷🇴' },
-  'IEM World Champ': { prize: 1_000_000, venue: 'Katowice 🇵🇱' },
-  'EPL Conference': { prize: 100_000, venue: 'Malta 🇲🇹' },
-  'ESL Pro League S20': { prize: 850_000, venue: 'Malta 🇲🇹' },
-  'ESL Pro League S21': { prize: 850_000, venue: 'Malta 🇲🇹' },
-  'BLAST Premier Fall': { prize: 425_000, venue: 'Estocolmo 🇸🇪' },
-  'IEM Beijing': { prize: 500_000, venue: 'Pequim 🇨🇳' },
-  'PGL Belgrade': { prize: 1_250_000, venue: 'Belgrado 🇷🇸' },
-  'IEM Atlanta': { prize: 250_000, venue: 'Atlanta 🇺🇸' },
-  'BetBoom Dacha Belgrade': { prize: 300_000, venue: 'Belgrado 🇷🇸' },
-  'BetBoom Dacha Dubai': { prize: 300_000, venue: 'Dubai 🇦🇪' },
-  'Roobet Masters': { prize: 300_000, venue: 'online 🌐' },
-  'YaLLa Compass Riyadh': { prize: 200_000, venue: 'Riade 🇸🇦' },
-  'IEM Berlin': { prize: 750_000, venue: 'Berlim 🇩🇪' },
-  // Tier 2 expandido
-  'CCT Asia': { prize: 80_000, venue: 'online 🌐' },
-  'CCT North America': { prize: 80_000, venue: 'online 🌐' },
-  'Elisa Invitational': { prize: 60_000, venue: 'Helsinki 🇫🇮' },
-  'Esports Charts Cup': { prize: 50_000, venue: 'online 🌐' },
-  'ESL Impact Finals': { prize: 100_000, venue: 'Malta 🇲🇹' },
-  'Skyesports Champions': { prize: 100_000, venue: 'Bangalore 🇮🇳' },
-  'United Masters League': { prize: 75_000, venue: 'online 🌐' },
-  'Pinnacle Champ Cup': { prize: 150_000, venue: 'online 🌐' },
-  'BLAST Bounty Spring': { prize: 300_000, venue: 'Copenhague 🇩🇰' },
-  'Akros Showmatch': { prize: 50_000, venue: 'online 🌐' },
-  'GG.Bet Showdown': { prize: 60_000, venue: 'online 🌐' },
-  'BetBoom Cup': { prize: 80_000, venue: 'online 🌐' },
-  'CCT Online Finals': { prize: 100_000, venue: 'online 🌐' },
-  'IceCold Cup': { prize: 40_000, venue: 'online 🌐' },
-  // Tier 3 / locais
-  'Gamers Club Liga Pro': { prize: 15_000, venue: 'São Paulo 🇧🇷' },
-  'Gamers Club Masters': { prize: 25_000, venue: 'São Paulo 🇧🇷' },
-  'Aorus League': { prize: 15_000, venue: 'Buenos Aires 🇦🇷' },
-  'CBCS Series': { prize: 10_000, venue: 'Brasil 🇧🇷' },
-  'Liga Gamers Club': { prize: 10_000, venue: 'São Paulo 🇧🇷' },
-  // Tier 3 SA expandido
-  'BB Masters Brasil': { prize: 20_000, venue: 'São Paulo 🇧🇷' },
-  'Aorus League BR': { prize: 18_000, venue: 'São Paulo 🇧🇷' },
-  'CazéTV Cup': { prize: 15_000, venue: 'online 🇧🇷' },
-  'Esportes da Sorte Cup': { prize: 12_000, venue: 'online 🇧🇷' },
-  'NSG Brasileirão CS': { prize: 18_000, venue: 'online 🇧🇷' },
-  'Aorus League SA': { prize: 20_000, venue: 'Buenos Aires 🇦🇷' },
-  'Loud Park BR': { prize: 15_000, venue: 'São Paulo 🇧🇷' },
-  'CCT South America S2': { prize: 25_000, venue: 'online 🇧🇷' },
-  'BB Masters Andinos': { prize: 18_000, venue: 'Lima 🇵🇪' },
-  'Liga Furiosa': { prize: 15_000, venue: 'online 🇧🇷' },
-  'Brasileirão CS': { prize: 20_000, venue: 'São Paulo 🇧🇷' },
-  // Tier 3 EU expandido
-  'CCT Europe Series': { prize: 25_000, venue: 'online 🌐' },
-  'Esportal Spring': { prize: 15_000, venue: 'Estocolmo 🇸🇪' },
-  'GamersOrigin League': { prize: 20_000, venue: 'Paris 🇫🇷' },
-  'eXTREMESLAND EU': { prize: 25_000, venue: 'Bratislava 🇸🇰' },
-  'EVC EU Open': { prize: 18_000, venue: 'online 🌐' },
-  'A1 League': { prize: 15_000, venue: 'Viena 🇦🇹' },
-  'Polskie Mistrzostwa': { prize: 18_000, venue: 'Varsóvia 🇵🇱' },
-  'United Kingdom Open': { prize: 15_000, venue: 'Londres 🇬🇧' },
-  'Akros League EU': { prize: 18_000, venue: 'online 🌐' },
-  // Tier 3 Asia
-  'Perfect World Asia League': { prize: 50_000, venue: 'Xangai 🇨🇳' },
-  'Asia Championship': { prize: 60_000, venue: 'Seul 🇰🇷' },
-  'CCT Asia Series': { prize: 30_000, venue: 'online 🌐' },
-  'Esports Charts Asia': { prize: 25_000, venue: 'online 🌐' },
-  'Skyesports Stage': { prize: 30_000, venue: 'Mumbai 🇮🇳' },
-  'TIGER Asia League': { prize: 25_000, venue: 'Tóquio 🇯🇵' },
-  'Akros Asia': { prize: 20_000, venue: 'online 🌐' },
-  'Mongolian Premier League': { prize: 18_000, venue: 'Ulaanbaatar 🇲🇳' },
-  // Tier 3 fallbacks novos
-  'ESL Open Cup': { prize: 12_000, venue: 'online 🌐' },
-  'CCT Closed Qualifier': { prize: 8_000, venue: 'online 🌐' },
-  'Esports Spring League': { prize: 15_000, venue: 'online 🌐' },
-  'Akros League': { prize: 15_000, venue: 'online 🌐' },
-  'GG.Bet Tide': { prize: 12_000, venue: 'online 🌐' },
-};
-const TIER_DEFAULT_POOL: Record<number, { prize: number; venue: string }> = {
-  1: { prize: 500_000, venue: 'circuito mundial 🌐' },
-  2: { prize: 100_000, venue: 'circuito internacional 🌐' },
-  3: { prize: 15_000, venue: 'circuito de acesso 🌐' },
-};
-export const eventMeta = (name: string, tier: number) => EVENT_META[name] ?? TIER_DEFAULT_POOL[tier] ?? TIER_DEFAULT_POOL[3];
-// prize pool compacto em USD: $1.25M / $850k
-const fmtPool = (usd: number) => (usd >= 1_000_000 ? `$${(usd / 1_000_000).toFixed(usd % 1_000_000 === 0 ? 0 : 2)}M` : `$${Math.round(usd / 1000)}k`);
+// [fase 4 · circuito] prize pool real e sede de cada evento: data/tournaments.ts
+export { eventMeta };
 // PRÊMIO por colocação (caixa). Equilibrado pra não enriquecer fácil: o Major é o
 // grande pagador (campeão ~700k, na régua do ~$500k real), e os circuitos pagam
 // uma fração disso (campeão Tier-1 ~345k com o prizeMult). Subir de tier e ir ao
 // Major é o caminho do dinheiro; grindar circuito fraco rende pouco.
 const PRIZE_BY_POS = [260_000, 156_000, 95_000, 60_000, 36_000, 23_000, 15_000, 8_000];
 // premiação do Major por colocação (bem maior que o circuito)
+// [fase 4 · circuito] quem cai no RMR leva a fatia do regional (sem Major)
+const RMR_PRIZE = 20_000;
 const MAJOR_PRIZE: Record<PlacementCode, number> = {
   champion: 1_200_000,
   runnerup: 550_000,
@@ -371,6 +243,7 @@ export interface Signing {
   playerId: string;
   fromId: string;
   fee?: number; // valor negociado da transferência (se ausente, usa o de tabela)
+  contract?: ContractTerms; // [fase 3] termos negociados com o jogador (só enquanto o mercado está aberto; vira clube.contracts ao fechar o elenco)
   // Saves antigos guardavam apenas IDs. O snapshot evita que uma atualização da
   // base transforme um contratado em uma vaga invisível e bloqueie o mercado.
   playerSnapshot?: Player;
@@ -394,7 +267,8 @@ function signingWithSnapshot(signing: Signing, resolved: ResolvedSigning): Signi
   const { from, basePlayer } = resolved;
   return {
     ...signing,
-    playerSnapshot: { ...basePlayer },
+    // [realismo FM] o snapshot guarda os atributos da base (fonte da verdade)
+    playerSnapshot: withAttrs(basePlayer),
     fromSnapshot: {
       id: from.id,
       team: from.team,
@@ -419,6 +293,7 @@ interface PendingDeal {
   fee: number;          // dinheiro que VOCÊ paga (líquido, já descontada a troca)
   outPlayerIds: string[]; // seus jogadores que SAEM na troca (ids)
   outNicks: string[];   // nicks dos que saem (cache)
+  contract?: ContractTerms; // [fase 3] termos negociados com o jogador (entram em clube.contracts na janela)
 }
 
 // ---------- negociação de transferência (mercado) ----------
@@ -474,7 +349,7 @@ import { PlayerTalkModal } from './PlayerTalkModal';
 // O modifier no match strength fica aplicado dentro do ChemistryMatrix (avg
 // visível). Integração no engine de match (multiplicar strength) é PR
 // separado — não muda o sigmoid do simulateSeries por enquanto.
-import { tickPairChemAfterMatch, decayPairChemOnSplitChange, averageStarterChemistry, pairKey } from '../engine/chemistry';
+import { tickPairChemAfterMatch, decayPairChemOnSplitChange, averageStarterChemistry, pairKey, getPairChem } from '../engine/chemistry';
 import { recordSaveTick, type SaveSnapshot } from '../state/achievements';
 import {
   activeStint as activeCoachStint,
@@ -482,17 +357,20 @@ import {
   appendTrophy as appendCoachTrophy,
   type CoachStint,
 } from '../engine/coachCareer';
-import { tickAging, type AgingState } from '../engine/aging';
+import { retirementTick, evolveAttrs, type RetirementCandidate } from '../engine/attrs/progression';
+import { attrsOf, caFromOvr, legacyFromAttrs, ovrFromCa, withAttrs, type PlayerAttrs } from '../engine/attrs/model';
+import { activeAttrDelta, applyAttrDelta, attrDelta, normalizeAttrEvo, type AttrEvoMap } from '../engine/career/attrEvo';
+import { FACILITY_MAX_LEVEL } from '../engine/career/facilities';
 import { canScrimNow, runScrimVs, listScrimOpponents, type ScrimMatchReport } from '../engine/scrim';
 import { listJobOffers, applyForJob, rejectionReason, offerPitch, type JobOffer } from '../engine/career/jobHunt';
-import { playerAttributes } from '../engine/attributes';
+import { paRange } from '../engine/attrs/stars';
 import {
   generateScoutReports,
   scoutById,
   type ProspectCandidate,
   type ScoutReport,
 } from '../engine/scouting';
-import { useToast, Modal, Button } from './ds';
+import { useToast, Modal, Button, ProgressBar } from './ds';
 import { confirm as confirmDialog } from './ConfirmDialog';
 // T8.1 — abrir tutorial HowToPlay (host global montado no main.tsx)
 import { openHowToPlay } from './HowToPlayHost';
@@ -523,16 +401,51 @@ import { CalendarTab } from '../pages/career/CalendarTab';
 import { WorldTab } from '../pages/career/WorldTab';
 import { AcademyTab } from '../pages/career/AcademyTab';
 import { MajorTab } from '../pages/career/MajorTab';
+import { MajorCeremony, majorWorldChampion } from '../pages/career/major/MajorCeremony';
+import { EventFinaleLite } from '../pages/career/major/EventFinaleLite';
 import { FinanceTab } from '../pages/career/FinanceTab';
+import { ContractsTab } from '../pages/career/ContractsTab';
 import { SquadTab } from '../pages/career/SquadTab';
+import { TrainingTab } from '../pages/career/TrainingTab';
 import { OverviewTab } from '../pages/career/OverviewTab';
+import { cenarioById, createRun, recordEvent, brokenMods, startingSquad, type CenarioRun, type CenarioDef } from '../engine/cenarios';
+import { CenariosPicker, CenarioPanel, CenariosEntry, type CenarioChoice } from './cenarios/Cenarios';
+import { postCenStart } from '../state/cenariosApi';
+type CenHookCtx = { phase: 'e' | 's' | 'm'; split: number; budget: number; broken: import('../engine/cenarios').ModifierId[] };
+// [fase 2 · frente STAFF] comissão técnica
+import { StaffTab } from '../pages/career/StaffTab';
+import type { ClubStrategy, IncomingOffer, MarketLoan, MarketState } from '../engine/clube/model';
+import { tickMarketWindow, clubsSnapshot, clubNeeds, aiTierOf, squadOvr, AI_MARKET_BY_MODE, type ClubNeed, type WindowKind } from '../engine/clube/mercadoIA';
+import { quickSaleFee, sellToBuyer, releaseToFree, pickQuickSaleBuyer, settleSaleAtBuyer, displacedBy, endLoanOutMove, faReleaseRepair, FA_RELEASE_FIX, type BuyerCtx, type ExitBooks } from '../engine/clube/saidas';
+import {
+  marketOf, userLoans, expireOffers, generateIncomingOffers, applyWorldTick, withOffers, pushRumors, chainRumors, needRumors,
+  logWindow, windowItems, windowNews, NEED_LABEL, transferWindowOf, acceptOffer, rejectOffer, counterOffer, playerWillingness,
+  agreeLoan, cancelLoan, loanFee, standInCandidates, STRATEGY_HINT, STRATEGY_LABEL, withWindowStatus, type SquadEntry,
+} from '../engine/clube/mercado';
+import { releaseClauseOf, leaveRequests } from '../engine/clube/mercadoPontes';
+import { TransfersTab, type View as TransfersView, type RivalRow, type OfferRow, type TargetRow, type StandInRow } from '../pages/career/TransfersTab';
+import { aiContractSplitsLeft } from '../engine/career/buyout';
+import { migrateGestao } from '../engine/gestao/gestaoMigration';
+import type { GestaoState } from '../engine/gestao/model';
+import { staffEffects, staffSplitTick, syncHeadCoach } from '../engine/gestao/staff';
+import { aiStaffEdgeFor } from '../engine/gestao/staffData';
+// [fase 3 · CONTRATOS] contratos completos em clube.contracts (substitui o contracts antigo)
+import {
+  CONTRACT_TERM_DEFAULT, contractUntilOf, contractUntilMap, contractPayroll, contractWageOf, materializeContracts, ensureSquadContracts, signContract,
+  withoutContracts, keepContracts, defaultTerms, loyaltyPayouts, negoProfileFor, recordNegotiation, negotiationBlock, contractOf,
+  openClubNegotiation, clubNegotiationStep, decideRound, openPlayerNegotiation, termsFromOffer, offerFromDemand, type NegoProfile,
+} from '../engine/clube/contratos';
+import { ContractNegotiationModal, type ContractNegoSubject } from './career/ContractNegotiation';
 
 // ----- prestígio + fãs da org (estilo Brasval) -----
 // Derivados de conquistas (sem campo novo no save: não quebram saves e sobem ao
 // longo da carreira). Prestígio 5-99; fãs crescem junto.
 function careerPrestige(save: CareerSave): number {
   const h = aggregateHistory(save.history);
-  const v = 22 + save.titles * 7 + h.majorApps * 4 + h.circuitTitles * 3 + (3 - (save.tier ?? 3)) * 6 + (save.vrs ?? 0) / 40;
+  // [fase 4 · circuito] VRS unificado (pontos do ranking, ~0–2150): /200 dá a
+  // mesma faixa do rolante antigo /40 (0–~10 de prestígio)
+  const vrsPart = save.mundo?.vrs && Object.keys(save.mundo.vrs).length ? userVrsTotal(save) / 200 : (save.vrs ?? 0) / 40;
+  const v = 22 + save.titles * 7 + h.majorApps * 4 + h.circuitTitles * 3 + (3 - (save.tier ?? 3)) * 6 + vrsPart;
   return Math.max(5, Math.min(99, Math.round(v)));
 }
 export function careerFans(save: CareerSave): number {
@@ -627,20 +540,20 @@ function applyScoutingSplitTick(
 // Não muta o save. O `findSigning`/`effectiveAge` resolvem o player como
 // fonte de verdade dos dados (idade dinâmica via split count).
 function applyAgingTick(save: CareerSave, findSigning: (sig: Signing) => ResolvedSigning | null): Partial<CareerSave> {
-  const players: AgingState['players'] = [];
+  const players: RetirementCandidate[] = [];
   for (const sig of save.squad) {
     const f = findSigning(sig);
     if (!f) continue;
     const p = f.player;
     const age = effectiveAge(p, save.split, save.youthAge, save.youthDebut);
     if (age <= 0) continue;
-    players.push({ id: sig.playerId, nick: p.nick, ovr: playerOvr(p), age, role: p.role });
+    players.push({ id: sig.playerId, nick: p.nick, ovr: playerOvr(p), age });
   }
   if (players.length === 0) return {};
-  const result = tickAging({ split: save.split, retired: save.retired ?? [], players, applyDecline: false });
-  if (result.newRetirees.length === 0) return {};
-  const retired = [...(save.retired ?? []), ...result.newRetirees.map((r) => r.id)];
-  const lastRetirees = result.newRetirees.map((r) => ({ id: r.id, nick: r.nick, age: r.age }));
+  const newRetirees = retirementTick(players, save.retired ?? []);
+  if (newRetirees.length === 0) return {};
+  const retired = [...(save.retired ?? []), ...newRetirees.map((r) => r.id)];
+  const lastRetirees = newRetirees.map((r) => ({ id: r.id, nick: r.nick, age: r.age }));
 
   return { retired, lastRetirees };
 }
@@ -716,7 +629,7 @@ function applySponsorSplitTick(save: CareerSave, newSplit: number, rng: Rng): Pa
   // 2) limpa expirados (contrato terminou)
   cleanupExpiredSponsors(state, newSplit);
   // 3) tenta gerar nova oferta
-  const offer = trySponsorOffer(state, { split: newSplit, vrs: save.vrs ?? 0, clubeTier: save.tier ?? 3, chanceMul: DIFFICULTY_ECON[careerDiff(save.difficulty)].sponsorChanceMul }, rng);
+  const offer = trySponsorOffer(state, { split: newSplit, vrs: userVrsTotal(save), clubeTier: save.tier ?? 3, chanceMul: DIFFICULTY_ECON[careerDiff(save.difficulty)].sponsorChanceMul }, rng);
   if (offer) state.pendingSponsorOffer = offer;
   return {
     sponsors: state.sponsors,
@@ -769,6 +682,11 @@ interface CircuitChoice {
   prizeMult: number; // multiplicador de premiação
   vrsWeight: number; // peso de VRS do evento (força média dos adversários, 0.08-1.25)
   tier: number;      // 1 = elite (caminho do Major), 3 = liga de acesso
+  // [fase 4 · circuito] evento do calendário real (opcional: saves antigos não têm)
+  eventId?: string;
+  lan?: boolean;
+  host?: string | null;
+  prize?: number;
 }
 
 // tiers do cenário (como na vida real do CS): 1 = elite mundial, 3 = acesso.
@@ -781,65 +699,15 @@ function teamTier(t: TeamSeason): number {
 }
 
 // orgs reais SEM line de CS2 (saíram do jogo): o jogador assume a marca e monta
-// o elenco do zero, com verba alta. Logos via Liquipedia (proxy Photon).
-const PHOTON = (p: string) => `https://i0.wp.com/liquipedia.net${p}?w=240&ssl=1`;
-interface EmptyOrg { id: string; name: string; tag: string; colors: [string, string]; logoUrl: string; blurb: string; budget: number }
+// o elenco do zero, com verba alta. Logo: só a local (public/logos); sem ela → sigla.
+interface EmptyOrg { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; blurb: string; budget: number }
 const EMPTY_ORGS: EmptyOrg[] = [
-  { id: 'org_cloud9', name: 'Cloud9', tag: 'C9', colors: ['#0a1a2f', '#00aeef'], logoUrl: PHOTON('/commons/images/b/bb/Cloud9_2023_allmode.png'), blurb: ct('Gigante norte-americana fora do CS2. Marca enorme e caixa cheio pra reconstruir do zero.'), budget: 4_200_000 },
-  { id: 'org_eg', name: 'Evil Geniuses', tag: 'EG', colors: ['#101014', '#5b2be0'], logoUrl: PHOTON('/commons/images/1/14/Evil_Geniuses_2023_lightmode.png'), blurb: ct('Org lendária sem elenco ativo. Verba boa pra recolocar o nome no topo.'), budget: 3_600_000 },
-  { id: 'org_dignitas', name: 'Dignitas', tag: 'DIG', colors: ['#0b0b0b', '#e7b53b'], logoUrl: PHOTON('/commons/images/5/56/Dignitas_2021_allmode.png'), blurb: ct('Tradicional, sem line desde 2022. Orçamento mediano: monte com inteligência.'), budget: 2_900_000 },
+  { id: 'org_cloud9', name: 'Cloud9', tag: 'C9', colors: ['#0a1a2f', '#00aeef'], logoUrl: '/logos/cloud9.png', blurb: ct('Gigante norte-americana fora do CS2. Marca enorme e caixa cheio pra reconstruir do zero.'), budget: 4_200_000 },
+  { id: 'org_eg', name: 'Evil Geniuses', tag: 'EG', colors: ['#101014', '#5b2be0'], logoUrl: '/logos/eg.png', blurb: ct('Org lendária sem elenco ativo. Verba boa pra recolocar o nome no topo.'), budget: 3_600_000 },
+  { id: 'org_dignitas', name: 'Dignitas', tag: 'DIG', colors: ['#0b0b0b', '#e7b53b'], blurb: ct('Tradicional, sem line desde 2022. Orçamento mediano: monte com inteligência.'), budget: 2_900_000 },
 ];
 
-const FILL_ROLES = ['Rifler', 'Entry', 'Support', 'AWP', 'IGL'] as const;
 
-// ----- geração de jovens (prospectos): nicks/nomes/países por região -----
-// handles genéricos de jogador (estilo cena), pra reposição e academia
-const PROSPECT_NICKS = [
-  'zen', 'kyro', 'naxz', 'volt', 'riku', 'jaxx', 'pyro', 'nova', 'frost', 'dashy',
-  'exo', 'blaze', 'swiftz', 'aze', 'kibo', 'luca', 'vexx', 'm1ko', 'sond', 'ture',
-  'kez', 'byte', 'sied', 'raze', 'quad', 'lynx', 'orbz', 'myth', 'zeno', 'kova',
-  'tenz', 'flick', 'spark', 'nyx', 'rvn', 'clo', 'dize', 'wisp', 'koa', 'snax',
-  'arix', 'bld', 'ghoul', 'jin', 'maru', 'penny', 'qz', 'sero', 'twix', 'yel',
-];
-const PROSPECT_NAMES: Record<MacroRegion, string[]> = {
-  americas: ['Lucas Almeida', 'Gabriel Souza', 'Mateo Pérez', 'Thiago Lima', 'Diego Castro', 'Bryan Mendoza', 'Caio Rocha', 'Nicolás Díaz', 'Pedro Vieira', 'Joaquín Ramírez'],
-  europe: ['Lukas Novák', 'Mateusz Kowalski', 'Emil Johansson', 'Théo Laurent', 'Niklas Müller', 'Joonas Virtanen', 'Marco Rossi', 'Pedro Santos', 'Lars Andersen', 'Tomáš Horák'],
-  cis: ['Artem Volkov', 'Danil Sokolov', 'Nikita Orlov', 'Timur Aliyev', 'Ruslan Petrov', 'Yegor Smirnov', 'Bohdan Kovalenko', 'Maksim Ivanov', 'Vlad Romanov', 'Alikhan Bekov'],
-  asia: ['Wei Chen', 'Haoran Li', 'Jihoon Park', 'Kenta Sato', 'Arif Rahman', 'Minjun Kim', 'Zhang Yong', 'Rizki Putra', 'Hiroshi Tanaka', 'Faisal Noor'],
-  oceania: ['Jack Wilson', 'Liam Taylor', 'Ethan Brown', 'Noah Smith', 'Cooper Jones', 'Jayden Lee', 'Mason Clark', 'Riley Evans', 'Lachlan Hall', 'Hayden Ross'],
-  africa: ['Thabo Nkosi', 'Youssef Haddad', 'Karim Saidi', 'Sipho Dlamini', 'Omar Farouk', 'Tunde Adeyemi', 'Ayoub Benali', 'Liam van der Merwe', 'Kwame Mensah', 'Hassan Toure'],
-};
-export const REGION_CC: Record<MacroRegion, string[]> = {
-  americas: ['br', 'us', 'ar', 'cl', 'mx', 'ca', 'pe', 'uy'],
-  europe: ['se', 'dk', 'fr', 'de', 'pl', 'fi', 'pt', 'es', 'nl', 'cz'],
-  cis: ['ru', 'ua', 'kz', 'by'],
-  asia: ['cn', 'kr', 'jp', 'id', 'sa', 'mn'],
-  oceania: ['au', 'nz'],
-  africa: ['za', 'ma', 'eg', 'ng'],
-};
-// identidade determinística de um jovem (nick/nome/país) a partir de um seed
-// sufixos pra compor nicks: 50 bases x ~13 variações = centenas de nicks únicos,
-// evitando o "monte de jogador repetido" (com a renovação, muitos jovens nascem).
-const PROSPECT_NICK_SUFFIX = ['', '', 'zy', 'ko', 'ix', 'er', '1x', 'zin', 'oo', 'qt', 'on', 'sk', 'y0'];
-function prospectIdentity(seed: string, region: MacroRegion, homeCountry?: string): { nick: string; name: string; country: string } {
-  const h = hashStr(seed);
-  const names = PROSPECT_NAMES[region] ?? PROSPECT_NAMES.europe;
-  const ccs = REGION_CC[region] ?? REGION_CC.europe;
-  // IMPORTANTE: usar shift SEM sinal (>>>). hashStr retorna 0..2^32-1, e `h >> k`
-  // (com sinal) vira NEGATIVO p/ h >= 2^31, gerando índice negativo => undefined.
-  const base = PROSPECT_NICKS[(h >>> 4) % PROSPECT_NICKS.length];
-  const suffix = PROSPECT_NICK_SUFFIX[(h >>> 11) % PROSPECT_NICK_SUFFIX.length];
-  // NACIONALIDADE: uma base forma TALENTO LOCAL. Com homeCountry, ~78% dos jovens
-  // saem com a nacionalidade da casa e ~22% são "imports" da mesma macro-região
-  // (existem, mas são minoria) — assim um time BR não revela/regenera um polonês.
-  // Sem homeCountry, distribui pela macro-região como antes.
-  const country = homeCountry && (h % 100) < 78 ? homeCountry : ccs[h % ccs.length];
-  return {
-    nick: base + suffix,
-    name: names[(h >>> 7) % names.length],
-    country,
-  };
-}
 
 // ----- ACADEMIA: prospectos que você forma e promove quando quiser -----
 export const ACADEMY_MAX = 6;       // teto de prospectos na academia
@@ -851,9 +719,11 @@ export interface AcademyEntry {
   country: string;
   role: Role;
   aim: number; consistency: number; clutch: number; awp: number; igl: number;
-  age: number;        // idade do prospecto (cresce ~1 a cada 3 splits)
+  age: number;        // idade do prospecto (cresce 1 por temporada)
   joinedSplit: number;
   potential: number;  // OVR teto que pode atingir treinando
+  /** [evolução] atributos evoluídos (curva única); ausente = derivados dos 5 números */
+  attrs?: PlayerAttrs;
 }
 // gera um prospecto jovem (determinístico pelo seed) com potencial de evolução
 export function makeProspect(seed: string, region: MacroRegion, split: number, homeCountry?: string): AcademyEntry {
@@ -903,28 +773,6 @@ export function buildUserAcademyTeam(orgCountry: string, orgTag: string, split: 
     makeAcademyTeamPlayer(`acateam:${orgTag}:${role}:${i}:${split}`, orgCountry, role, split));
 }
 
-// reposição da base: quando você TIRA um jogador de um time (contratação), ele
-// não pode ficar nos dois lugares. O time perde o titular e promove um jovem da
-// base (OVR baixo, determinístico) pra manter 5 — o time fica realmente mais fraco.
-// O jovem tem nick/nome reais (não mais "TAG.jr1") pra parecer um prospecto de fato.
-function backfillPlayers(team: TeamSeason, n: number): Player[] {
-  const region = macroRegionOf(team.country) ?? 'europe';
-  const out: Player[] = [];
-  for (let i = 0; i < n; i++) {
-    const h = hashStr(`fill:${team.id}:${i}`);
-    const base = 64 + (h % 9); // 64-72
-    const ident = prospectIdentity(`fill:${team.id}:${i}`, region);
-    out.push({
-      id: `${team.id}__aca${i}`,
-      nick: ident.nick,
-      name: ident.name,
-      country: team.country, // herda o país do time (jovem da base local)
-      role: FILL_ROLES[h % FILL_ROLES.length],
-      aim: base + (h % 4), consistency: base - 2, clutch: base - 3, awp: base - 7, igl: base - 5,
-    });
-  }
-  return out;
-}
 
 // o que a escolha de org devolve pra carreira (assumir existente OU do zero)
 interface OrgStart {
@@ -938,6 +786,8 @@ interface OrgStart {
   board?: number;
   scenario?: NonNullable<CareerSave['scenario']>;
 }
+// [Modo Cenário] caixa inicial do cenário (override do catálogo ou a verba de quem assume)
+const cenarioBudget = (def: CenarioDef, tier: number) => def.start.budget ?? takeoverBudget(tier);
 // verba de quem ASSUME uma org com elenco: tier mais alto (time melhor) = menos
 // caixa; tier baixo = mais caixa. É a troca "elenco bom x dinheiro" que o user pediu.
 const takeoverBudget = (tier: number) => (tier === 1 ? 600_000 : tier === 2 ? 1_300_000 : 2_300_000);
@@ -945,23 +795,31 @@ const takeoverBudget = (tier: number) => (tier === 1 ? 600_000 : tier === 2 ? 1_
 // guarda contra valor corrompido no save (ex.: string fora do enum) — cai em 'normal'
 const careerDiff = (d: Difficulty | undefined): Difficulty => (d === 'hard' || d === 'legend' ? d : 'normal');
 
-// Seletor de dificuldade (eixo de gestão) reusado na fundação — Desafios e
-// "Assumir organização". Mostra o impacto econômico de cada nível em chips.
-const DIFF_HINTS: Record<Difficulty, string> = {
-  normal: ct('Caixa cheio, folha normal, patrocínios fartos.'),
-  hard: ct('Caixa −25%, folha +18%, menos patrocínios. Gestão aperta.'),
-  legend: ct('Caixa −45%, folha +32%, patrocínios raros. Só pros corajosos.'),
+// Seletor de dificuldade reusado na fundação — Desafios e "Assumir organização".
+// [equilíbrio] a dificuldade vale DENTRO do jogo (vantagem única da IA na força,
+// mercado mais duro) e na gestão (caixa, folha, patrocínios).
+// número com a vírgula do PT (en/es seguem com ponto)
+const decPt = (v: number, d: number) => { const x = v.toFixed(d); return ct('de força') === 'de força' ? x.replace('.', ',') : x; };
+const DIFF_MATCH: Record<Difficulty, string> = {
+  normal: 'Partida equilibrada, com leve vantagem pra você.',
+  hard: 'Rivais bem mais fortes na partida e mercado mais fechado.',
+  legend: 'Rivais muito mais fortes, estrelas que não saem e IA que contrata primeiro.',
+};
+const DIFF_ECON: Record<Difficulty, string> = {
+  normal: 'Caixa cheio, folha normal, patrocínios fartos.',
+  hard: 'Caixa −25%, folha +18%, menos patrocínios. Gestão aperta.',
+  legend: 'Caixa −45%, folha +32%, patrocínios raros. Só pros corajosos.',
 };
 function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d: Difficulty) => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '0 0 14px' }}>
       <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>
-        🎚️ {ct('Dificuldade de gestão')}
+        🎚️ {ct('Dificuldade')}
       </span>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {(['normal', 'hard', 'legend'] as Difficulty[]).map((d) => {
           const on = value === d;
-          const tone = d === 'normal' ? '#5ed88a' : d === 'hard' ? '#e8c170' : '#e58a8a';
+          const tone = d === 'normal' ? 'var(--c-win)' : d === 'hard' ? '#e8c170' : 'var(--c-loss)';
           return (
             <button
               key={d}
@@ -971,7 +829,7 @@ function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d
                 flex: '1 1 180px', textAlign: 'left', cursor: 'pointer', padding: '8px 12px',
                 borderRadius: 8, fontFamily: 'inherit',
                 border: `1px solid ${on ? tone : 'var(--em-border,#2a3340)'}`,
-                background: on ? `${tone}1f` : 'transparent',
+                background: on ? `color-mix(in srgb, ${tone} 12%, transparent)` : 'transparent',
                 boxShadow: on ? `0 0 0 1px ${tone}` : 'none',
               }}
             >
@@ -979,7 +837,10 @@ function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d
                 {ct(DIFFICULTY_LABELS[d])}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--em-muted,#8a99ab)', marginTop: 2, lineHeight: 1.35 }}>
-                {DIFF_HINTS[d]}
+                {ct(DIFF_MATCH[d])} {ct(DIFF_ECON[d])}
+              </div>
+              <div style={{ fontSize: '0.66rem', fontWeight: 700, color: on ? tone : 'var(--em-muted,#8a99ab)', marginTop: 4 }}>
+                {ct('IA na partida:')} {MODE_AI_EDGE[d] >= 0 ? '+' : '−'}{decPt(Math.abs(MODE_AI_EDGE[d]), 1)} {ct('de força')}
               </div>
             </button>
           );
@@ -1068,7 +929,7 @@ function scenarioTeam(sc: CareerScenario, current: TeamSeason[]): TeamSeason | n
   return null;
 }
 // avalia uma meta de cenário no fim do split, com os resultados já calculados
-type ScenarioCtx = { isChampion: boolean; circuitTier: number; finalPos: number; qualified: boolean; endTier: number; wonMajor: boolean };
+type ScenarioCtx = { isChampion: boolean; circuitTier: number; finalPos: number; qualified: boolean; endTier: number; wonMajor: boolean } & Partial<CenHookCtx>;
 function evalScenarioGoal(type: ScenarioGoalType, ctx: ScenarioCtx): boolean {
   switch (type) {
     case 'winCircuit': return ctx.isChampion;
@@ -1084,6 +945,11 @@ function evalScenarioGoal(type: ScenarioGoalType, ctx: ScenarioCtx): boolean {
 // marca como cumpridas as metas do desafio atingidas neste split
 function applyScenarioProgress(scenario: CareerSave['scenario'], ctx: ScenarioCtx): CareerSave['scenario'] {
   if (!scenario) return scenario ?? null;
+  // [Modo Cenário] registra o fechamento no log do run (objetivos com prazo/nota)
+  if (scenario.run && ctx.phase && ctx.split != null) {
+    const def = cenarioById(scenario.run.defId);
+    if (def) scenario = { ...scenario, run: recordEvent(def, scenario.run, { phase: ctx.phase, split: ctx.split, isChampion: ctx.isChampion, finalPos: ctx.finalPos, qualified: ctx.qualified, wonMajor: ctx.wonMajor, tier: ctx.endTier, budget: ctx.budget ?? 0, broken: ctx.broken }) };
+  }
   let changed = false;
   const goals = scenario.goals.map((g) => {
     if (g.done) return g;
@@ -1119,6 +985,8 @@ export interface Playoff {
   champion: string | null;
   runnerUp: string | null;
 }
+// [fase 4 · circuito] opções da série num evento LAN (online = sem opções: motor de antes)
+const pressureOpts = (pressure: number | undefined): { pressure: number } | undefined => (pressure && pressure > 0 ? { pressure } : undefined);
 const PO_SF_BO: 1 | 3 | 5 = 3;
 const PO_FINAL_BO: 1 | 3 | 5 = 5;
 
@@ -1208,10 +1076,9 @@ interface CareerSave {
   tier: number; // tier atual da organização (1 = elite). Começa em 3.
   tierChange?: 'up' | 'down' | null; // resultado da última temporada (promoção/rebaixamento)
   takeoverId?: string | null; // id do time real que o jogador assumiu (excluído dos adversários)
-  pendingOffer?: PoachOffer | null; // proposta de uma org maior por um jogador seu
   pendingDeals?: PendingDeal[]; // acordos fechados DURANTE a temporada; entram em vigor na janela (próximo split)
   renewals?: Renewal[]; // contratos vencendo: forçam a tela de renovação na abertura da janela
-  pendingSales?: { playerId: string; nick: string; fee: number; toTag: string; toId: string }[]; // propostas aceitas por jogadores SEUS: o jogador sai (e entra a grana) na janela. toId = id do clube COMPRADOR (pro applyMoves / extraOnTeam)
+  pendingSales?: { playerId: string; nick: string; fee: number; toTag: string; toId: string; outPlayerId?: string }[]; // propostas aceitas por jogadores SEUS: o jogador sai (e entra a grana) na janela. toId = id do clube COMPRADOR (pro applyMoves / extraOnTeam)
   rejectedOffers?: string[]; // ids de jogadores cuja proposta você recusou neste split (some até a virada)
   // jogadores VENDIDOS que NÃO existem no CS2_REAL_2026 (academy, FA, youth
   // promovido). applyMoves só move ids da base — pros customizados a gente
@@ -1225,7 +1092,10 @@ interface CareerSave {
   promise?: BoardPromise | null; // #10: promessa FORMAL firmada por você (aporte agora, julgamento no fim do split)
   lastPromise?: PromiseOutcome | null; // resultado da última promessa (dashboard/news citam)
   fired?: boolean; // demitido pela diretoria (confiança no chão)
-  contracts?: Record<string, number>; // playerId -> split em que o contrato termina (inclusive)
+  // [fase 3] vestiário, contratos completos (clube.contracts substitui o antigo
+  // `contracts`: playerId → split final), negociações e mercado. Save v29.
+  clube?: ClubeState;
+  foundingOpen?: boolean; // [integração] fundação sem o elenco confirmado no mercado: o F5 volta pro mercado
   lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
   roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
@@ -1237,9 +1107,19 @@ interface CareerSave {
   playerPromises?: Record<string, PlayerPromise[]>; // #10: promessas SUAS a jogadores (das conversas), com prazo e cobrança
   watchlist?: WatchlistEntry[]; // #41: alvos acompanhados — o conhecimento (revealLevel) sobe a cada fechamento
   stints?: StintsMap; // #40: passagens pelo SEU clube (entrada/saída com OVR)
+  fixes?: Record<string, number>; // reparos únicos já aplicados neste save (id → split em que rodou)
   bootcampSplit?: number; // #35: último split em que o bootcamp foi usado (1x por split)
   splitStart?: { split: number; cash: number; ovr: Record<string, number> } | null; // #39: snapshot do INÍCIO do split (review de fechamento)
   evoAttrBias?: Record<string, Partial<Record<CoreStat, number>>>; // #22: viés acumulado do foco (+1/split, cap +4)
+  // [realismo FM] evolução POR ATRIBUTO do elenco: variação acumulada de cada um
+  // dos 28 atributos sobre a base (vale enquanto `evo` tiver a chave do jogador —
+  // ver engine/career/attrEvo.ts). Substitui o evo escalar + viés no findSigning.
+  attrEvo?: AttrEvoMap;
+  // [evolução · out/2026] quem SAIU do seu elenco (venda, troca, liberação): a
+  // variação por atributo sobre a base no split da saída + o teto. A IA continua
+  // a evolução dali pela curva única (engine/career/worldEvo.ts) — sem isto o
+  // jogador voltava ao mundo com os atributos da base.
+  worldEvo?: WorldEvoMap;
   satisfaction?: Record<string, number>; // #16: satisfação composta SUAVIZADA (5 fatores, tick no fechamento)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   careerStatsEvent?: string; // último evento contabilizado, no formato split:event
@@ -1271,7 +1151,7 @@ interface CareerSave {
   youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
   youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
   youthDebut?: Record<string, YouthDebut>; // idade + split exatos da promoção
-  scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[] } | null; // desafio de carreira em curso
+  scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[]; run?: CenarioRun } | null; // desafio de carreira em curso (run = Modo Cenário, src/engine/cenarios)
   rivalries?: Record<string, number>; // intensidade por adversario; 4+ vira classico e gera foco extra
   fatigue?: Record<string, number>; // carga acumulada 0-100 por jogador
   // ----- MODO CUSTOM (Vitalícia) -----
@@ -1287,7 +1167,22 @@ interface CareerSave {
   scarEvents?: ScarEvent[]; // [W4] eventos pontuais que o fechamento não reconstrói (dispensa de estrela infeliz)
   identity?: TeamIdentity; // [W5] identidade tática emergente (histograma decaído das suas chamadas)
   promiseLog?: PromiseOutcome[]; // [W4] promessas à diretoria já julgadas (append-only, teto 24) — fita e cicatrizes leem
+  gestao?: GestaoState; // [realismo FM fase 2] treino semanal, tática por mapa, comissão técnica e condição (save v28)
+  // [fase 4 · circuito] o mundo (save v30): calendário, resultados do mundo (inclusive
+  // os eventos que você não joga), VRS publicado, vistos, qualificatórios e bootcamp
+  mundo?: MundoState;
+  // [fase 4 · circuito] Major em curso: field pelo VRS (ids) e a ordem final de cada
+  // stage/RMR já decidido — o resto do Major é completado em segundo plano no fim
+  majorPlan?: MajorFieldPlan | null;
+  majorLog?: { stage: number; field: string[]; order: string[] }[];
+  majorRegion?: RmrRegion | null; // RMR que você disputa (stage 0)
+  midia?: MidiaState; // [mídia viva] confronto direto, coletivas, rumores (bloco opcional e podado)
+  legado?: LegadoState; // [SA2 · legado] prêmios da cena por ano + camisas aposentadas (opcional, podado; sem subir SAVE_VERSION)
 }
+
+// [mídia viva] listas vazias estáveis (o feed é memoizado pela referência)
+const EMPTY_RESULTS: WorldEventResult[] = [];
+const EMPTY_MOVES: { nick: string; from: string; to: string }[] = [];
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
 export type NewsCat = 'result' | 'transfer' | 'board' | 'scene' | 'social' | 'scout';
@@ -1307,13 +1202,15 @@ export const NEWS_CATS: { key: NewsCat | 'all'; label: string }[] = [
 // conforme o jogador evolui e joga); quem edita atributo é o admin no CRM.
 interface CareerStatLine { k: number; d: number; a: number; dmg: number; kast: number; rounds: number; maps: number; splits: number; }
 
-export const CONTRACT_TERM = 3; // splits de contrato ao assinar/renovar
+export const CONTRACT_TERM = CONTRACT_TERM_DEFAULT; // splits de contrato ao assinar/renovar (padrão)
 
 // funções que o técnico pode atribuir a um jogador (gerenciamento estilo Brasval)
 export const ROLE_OPTS: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
 
 // proposta de uma org de elite (tier 1) por um jogador do seu elenco
-interface PoachOffer { orgId: string; orgName: string; orgTag: string; playerId: string; nick: string; ovr: number; fee: number }
+// [integração] a proposta de elite de fim de split é um IncomingOffer (reason 'elite')
+// em clube.market.incoming; as telas leem estes 4 campos
+interface EliteOfferView { orgName: string; nick: string; ovr: number; fee: number }
 
 // meta da diretoria por split (FM/Brasval): cumprir sobe a confiança e dá bônus;
 // falhar derruba a confiança — no fundo do poço você é demitido.
@@ -1332,6 +1229,18 @@ function objectiveFor(tier: number, split: number, majorNow: boolean): BoardObje
       : { type: 'top4', text: ct('Terminar no top 4 e brigar pelo acesso'), bonus: 250_000 };
   }
   return { type: 'noRelegation', text: ct('Não ser rebaixado (longe da zona)'), bonus: 150_000 };
+}
+
+// [fase 3] bloco `clube` do save (o v29 grava; carreira nova nasce sem ele)
+export function clubeOfSave(s: CareerSave): ClubeState {
+  return s.clube?.v === 1 ? s.clube : (migrateClube(s as unknown as Record<string, unknown>).clube as ClubeState);
+}
+// [fase 3] aplica o efeito do atrito na química dos pares (fechamento do split)
+function applyPairChemFx(pairChem: Record<string, number>, fx: { a: string; b: string; delta: number }[]): Record<string, number> {
+  if (!fx.length) return pairChem;
+  const out = { ...pairChem };
+  for (const f of fx) { const k = pairKey(f.a, f.b); out[k] = Math.max(0, Math.min(100, (out[k] ?? 30) + f.delta)); }
+  return out;
 }
 
 const emptySave = (): CareerSave => ({
@@ -1372,6 +1281,7 @@ const emptySave = (): CareerSave => ({
   listedPrices: {},
   trainingFocusAttr: {},
   evoAttrBias: {},
+  attrEvo: {},
   playerPromises: {},
   watchlist: [],
   stints: {},
@@ -1380,6 +1290,7 @@ const emptySave = (): CareerSave => ({
   lastObjective: null,
   fired: false,
   morale: {},
+  clube: migrateClube({}).clube as ClubeState,
   news: [],
   unread: 0,
   peakOvr: {},
@@ -1403,21 +1314,25 @@ const emptySave = (): CareerSave => ({
 // ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
 export const MAP_TRAIN_MAX = 2.6; // teto de domínio de um mapa
 export const MAP_TRAIN_MIN = -1.6; // piso (mapa abandonado vira fraqueza leve, não catástrofe)
-const MAP_TRAIN_GAIN = 1.3; // ganho no mapa em foco por split
 const MAP_TRAIN_DECAY = 0.3; // todo mapa decai por split (o não-treinado escorrega devagar)
 export const MAP_FOCUS_MAX = 3; // até 3 mapas em treino por split
 // nível de domínio de um mapa (0 = neutro se nunca treinado)
 export const mapLevel = (s: CareerSave, m: MapId) => s.mapTraining?.[m] ?? 0;
 // lista de mapas em foco (compat: aceita formato antigo de mapa único)
+// [fase 2 · treino] os mapas priorizados vivem no treino semanal (gestao.training.mapFocus)
 export const mapFocusList = (s: CareerSave): MapId[] =>
-  Array.isArray(s.mapFocus) ? s.mapFocus : s.mapFocus ? [s.mapFocus as unknown as MapId] : [];
+  s.gestao?.training?.mapFocus
+    ?? (Array.isArray(s.mapFocus) ? s.mapFocus : s.mapFocus ? [s.mapFocus as unknown as MapId] : []);
+// [fase 2 · integração] os mapas priorizados do treino semanal viraram
+// FAMILIARIDADE do plano (gestao.tactics, que pesa no motor). O domínio antigo
+// (mapTraining → mapPrefs) não cresce mais — senão priorizar um mapa contava
+// duas vezes — e o que um save antigo já tinha se desfaz aos poucos, split a split.
 function applyMapTraining(s: CareerSave): Partial<Record<MapId, number>> {
   const out: Partial<Record<MapId, number>> = {};
-  const focus = mapFocusList(s);
   for (const m of MAP_POOL) {
-    let v = (s.mapTraining?.[m] ?? 0) - MAP_TRAIN_DECAY; // decai todo split
-    if (focus.includes(m)) v += MAP_TRAIN_GAIN + MAP_TRAIN_DECAY; // foco: sobe (anula a decaída + ganha)
-    out[m] = Math.max(MAP_TRAIN_MIN, Math.min(MAP_TRAIN_MAX, Math.round(v * 10) / 10));
+    const v = s.mapTraining?.[m] ?? 0;
+    const next = v > 0 ? Math.max(0, v - MAP_TRAIN_DECAY) : Math.min(0, v + MAP_TRAIN_DECAY);
+    out[m] = Math.max(MAP_TRAIN_MIN, Math.min(MAP_TRAIN_MAX, Math.round(next * 10) / 10));
   }
   return out;
 }
@@ -1436,19 +1351,22 @@ export function moraleInfo(v: number): { label: string; cls: 'good' | 'warn' | '
   return { label: ct('Revoltado'), cls: 'bad', icon: 'mood-1' };
 }
 // forma inicial do split derivada da moral (sutil): 100→+0.07, 40→-0.07
-const moraleForm = (m: number) => Math.max(0.93, Math.min(1.07, 1 + (m - MORALE_DEFAULT) / 430));
+// [fase 3] a forma pela moral mora em career/happiness.ts (medida em scripts/measure-vestiario.mts)
 // nova moral no fim do split: reversão à média + rendimento (forma) + resultado
 // coletivo (título/objetivo) + insegurança de contrato vencendo.
 function nextMorale(
   prev: Record<string, number>,
   squad: { oid: string; form: number; expiring: boolean }[],
   ctx: { champion: boolean; objMet: boolean },
+  // [fase 2 · STAFF] staffEffects().moraleRecovery: psicólogo/técnico aceleram a
+  // volta de quem está abaixo da média (1 = como antes)
+  recovery = 1,
 ): Record<string, number> {
   const out: Record<string, number> = {};
   for (const s of squad) {
     const prevM = prev[s.oid] ?? MORALE_DEFAULT;
     let m = prevM;
-    m += (MORALE_DEFAULT - m) * 0.25; // reversão à média mais firme (não trava em baixa)
+    m += (MORALE_DEFAULT - m) * 0.25 * (m < MORALE_DEFAULT ? recovery : 1); // reversão à média mais firme (não trava em baixa)
     // forma só puxa pra CIMA: fase quente motiva, mas fase fria não realimenta a
     // queda de moral (senão vira má fase eterna num time que perde sempre).
     m += Math.max(0, (s.form ?? 1) - 1) * 55;
@@ -1462,6 +1380,22 @@ function nextMorale(
   return out;
 }
 // acrescenta manchetes (mais recentes primeiro, teto de 40) e conta as não lidas
+// [fase 2 · STAFF] manchetes da virada de split: quem da comissão saiu (contrato
+// vencido) e a renovação automática do técnico principal.
+function staffTickNews(t: ReturnType<typeof staffSplitTick>, split: number): NewsItem[] {
+  return [
+    ...t.left.map((m): NewsItem => ({
+      id: `${split}:staff-out:${m.id}`, split, icon: '📋', tone: 'bad', cat: 'board',
+      title: `${m.nick ?? m.name} ${ct('deixou a comissão técnica')}`,
+      body: ct('O contrato venceu e não foi renovado. A vaga está aberta em Time › Comissão técnica.'),
+    })),
+    ...t.renewed.map((m): NewsItem => ({
+      id: `${split}:staff-renew:${m.id}`, split, icon: '📋', tone: 'info', cat: 'board',
+      title: `${m.nick ?? m.name} ${ct('renovou como técnico principal')}`,
+      body: `${ct('Contrato estendido por 2 splits, com reajuste. Novo salário:')} ${formatMoney(m.wage)}.`,
+    })),
+  ];
+}
 function pushNews(save: CareerSave, items: NewsItem[]): Pick<CareerSave, 'news' | 'unread'> {
   if (items.length === 0) return { news: save.news ?? [], unread: save.unread ?? 0 };
   const news = [...items, ...(save.news ?? [])].slice(0, 40);
@@ -1473,7 +1407,7 @@ function splitNews(ctx: {
   split: number; org: string; champion: boolean; circuit: string;
   objMet: boolean; objText?: string;
   tierChange: 'up' | 'down' | null; tierName?: string;
-  releases: string[]; offer: PoachOffer | null;
+  releases: string[]; offer: EliteOfferView | null;
   risers: string[]; sliders: string[]; unhappy: string[];
   breakthroughs?: { nick: string; from: string; to: string }[]; // #17: furos de teto do split
   major?: { placement: number | string; champion: boolean } | null;
@@ -1549,210 +1483,61 @@ function socialNews(teams: TeamSeason[], split: number, org: string, champion: b
   return out;
 }
 
-// manchetes do que rolou nas OUTRAS regiões (cena viva enquanto você joga a sua)
-function worldNews(teams: TeamSeason[], split: number, userRegion: CareerRegion): NewsItem[] {
-  return worldScene(teams, split)
-    .filter((s) => s.reg !== userRegion)
-    .slice(0, 2)
-    .map((s) => {
-      const st = newsroom.storyWorldChampion(`${split}:world:${s.reg}`, s.champ.team, s.league, CAREER_REGION_LABELS[s.reg], s.runnerUp?.team);
-      return {
-        id: `${split}:world:${s.reg}`, split, icon: '🌐', tone: 'info' as const, cat: 'scene' as const,
-        title: st.title, body: st.body,
-      };
-    });
-}
-
 // ----- evolução de elenco entre temporadas -----
 // cada jogador tem uma fase de carreira (estável, derivada do id): em ascensão
 // melhora, no auge oscila, em declínio cai. Valor e salário acompanham os
 // atributos, então segurar um veterano caro vira decisão estratégica.
-export type PlayerPhase = 'rising' | 'prime' | 'declining';
+export type { PlayerPhase };
+export { REGION_CC, playerPhase };
 export const PHASE_LABEL: Record<PlayerPhase, string> = {
   rising: 'jovem em ascensão', prime: 'no auge', declining: 'veterano em declínio',
 };
 
 // ----- idade e potencial (jogadores vivos, estilo Brasval) -----
-// idades REAIS do bo3 (196/240) por nick; quem falta recebe uma idade plausível
-// determinística. A idade efetiva sobe ~1 ano a cada 3 splits de carreira.
-const REAL_AGES = bo3Ages as Record<string, { age: number; born: string }>;
-function baseAge(p: Pick<Player, 'id' | 'nick' | 'age'>, youthAge?: Record<string, number>): number {
-  // prospecto promovido da academia: idade-base guardada na promoção. Vem ANTES do
-  // lookup por nick (um prospecto pode ter um nick que colide com um pro real).
-  const y = youthAge?.[p.id];
-  if (y != null) return y;
-  // idade editada no CRM (override global): tem prioridade sobre a tabela por nick.
-  if (p.age != null && p.age >= 15 && p.age <= 45) return p.age;
-  const real = REAL_AGES[p.nick]?.age;
-  if (real && real >= 15 && real <= 45) return real;
-  // sem dado: assume AUGE (25-29), não juventude. Um pro de elenco real não pode
-  // virar ct('jovem em ascensão') só por falta de idade na tabela (bug do coldzera/fer).
-  // Jovens de verdade vêm da academia, que grava a idade na promoção (youthAge).
-  return 25 + (hashStr(`age:${p.id}`) % 5);
-}
 // jogador gerado pela base da IA (regen): o id carrega o split de estreia e a
 // idade de estreia, pra idade/evolução baterem com o relógio próprio dele.
-function regenInfo(id: string): { debut: number; a0: number } | null {
-  const parsed = parseRegenPlayerId(id);
-  return parsed ? { debut: parsed.debut, a0: parsed.ageAtDebut } : null;
+// [fase 4 · juventude] quem não pode aparecer como jovem livre no mundo: o seu
+// elenco, os vendidos com cópia no comprador (extraOnTeam) e a sua academia.
+function newgenExcludeOf(s: Pick<CareerSave, 'squad' | 'extraOnTeam' | 'academy' | 'academyTeam'>): Set<string> {
+  return new Set([
+    ...s.squad.map((x) => x.playerId),
+    ...Object.values(s.extraOnTeam ?? {}).flat().map((e) => e.player.id),
+    ...(s.academy ?? []).map((a) => a.id),
+    ...(s.academyTeam ?? []).map((a) => a.id),
+  ]);
 }
-export function effectiveAge(
-  p: Pick<Player, 'id' | 'nick'>,
-  split: number,
-  youthAge?: Record<string, number>,
-  youthDebut?: Record<string, YouthDebut>,
-): number {
-  const rg = regenInfo(p.id);
-  if (rg) return rg.a0 + Math.floor(Math.max(0, split - rg.debut) / 3);
-  const debut = youthDebut?.[p.id];
-  if (debut) return ageFromDebut(debut, split);
-  return ageFromCareerStart(baseAge(p, youthAge), split);
+// base do mundo da Carreira: dados + edições do admin + jovens gerados sem clube
+// `base` = a base da Carreira (oficial + edições do admin + base customizada: editedBase)
+function worldBaseFor(s: Pick<CareerSave, 'mundo' | 'squad' | 'extraOnTeam' | 'academy' | 'academyTeam'>, base: TeamSeason[]): TeamSeason[] {
+  return withNewgens(base, mundoOf(s), newgenExcludeOf(s));
 }
-// potencial = teto de OVR. Jovem bom tem espaço pra crescer (S/A); veterano já
-// está no teto (sem crescimento). Determinístico por jogador.
-export function playerPotentialOvr(p: Player, age: number): number {
-  const base = playerOvr(p);
-  const room = age <= 18 ? 9 : age <= 20 ? 7 : age <= 22 ? 4 : age <= 24 ? 2 : age <= 26 ? 1 : 0;
-  const talent = room > 0 ? hashStr(`pot:${p.id}`) % 4 : 0; // 0-3 de variação de talento
-  return Math.min(99, base + room + talent);
-}
+
+// idade efetiva: relógio canônico em engine/career/playerAge.ts (id normalizado)
+export { effectiveAge };
 export type PotTier = 'S' | 'A' | 'B' | 'C';
 export function potentialTier(potOvr: number): PotTier {
   return potOvr >= 90 ? 'S' : potOvr >= 86 ? 'A' : potOvr >= 82 ? 'B' : 'C';
 }
 
-// fase de carreira pela IDADE: jovem sobe, auge oscila, veterano cai.
-export function playerPhase(_pid: string, age: number): PlayerPhase {
-  if (age <= 21) return 'rising';
-  if (age <= 27) return 'prime';
-  return 'declining';
-}
-// delta da janela: por idade. Rising sobe rumo ao potencial e estabiliza ao
-// atingir o teto; declínio cai mais forte com a idade. Determinístico por split.
-function evoDelta(pid: string, split: number, age: number, atCeiling: boolean): number {
-  const phase = playerPhase(pid, age);
-  const r = hashStr(`evo:${pid}:${split}`) % 100;
-  if (phase === 'rising') {
-    if (atCeiling) return r < 70 ? 0 : 1; // já chegou no potencial: quase parado
-    return r < 40 ? 3 : r < 80 ? 2 : 1; // +1..+3
-  }
-  if (phase === 'prime') return r < 22 ? 1 : r < 82 ? 0 : -1; // -1..+1
-  // DECLÍNIO (28+): NÃO é universal. A longevidade (determinística por jogador)
-  // define quem segura o nível na casa dos 30 (lendas tipo s1mple/karrigan) e
-  // quem cai cedo. O declínio também é mais suave que antes (acabou o -3 fixo).
-  const longevity = hashStr(`long:${pid}`) % 100;        // 0-99 (maior = envelhece melhor)
-  const declineFrom = 31 + Math.floor(longevity / 20);   // 31..35: idade em que o declínio realmente começa
-  if (age < declineFrom) return r < 82 ? 0 : -1;         // "prime estendido": quase sempre estável, raríssimo -1
-  const over = age - declineFrom;                        // anos desde o início do declínio
-  if (over === 0) return r < 50 ? 0 : -1;               // 1º ano de declínio: metade segura
-  if (over <= 2) return r < 55 ? -1 : 0;               // declínio brando
-  return r < 55 ? -2 : -1;                              // declínio tardio, mais firme (mas nunca -3)
+
+// [evolução] quem foi vendido antes do worldEvo existir: migração idempotente
+// (engine/career/worldEvo.ts#migrateWorldEvo), sem subir o SAVE_VERSION
+const BASE_PLAYER_BY_ID = new Map<string, Player>(CS2_REAL_2026.flatMap((t) => t.players.map((p) => [p.id, p] as [string, Player])));
+function migrateWorldEvo(s: CareerSave): WorldEvoMap {
+  return migrateWorldEvoSave(s, BASE_PLAYER_BY_ID);
 }
 
-// idade em que um jogador da IA se aposenta (determinístico, mesmo eixo de
-// longevidade do evoDelta): a maioria sai por volta de 35-38.
-function aiRetireAge(pid: string): number {
-  return 35 + Math.floor((hashStr(`long:${pid}`) % 100) / 25); // 35..38
-}
-
-// drift de OVR entre o split de estreia e o atual, pelo relógio de idade próprio
-// do jogador (serve tanto pro titular original quanto pro jovem da base).
-function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, split: number, potCap?: number): number {
-  if (split <= debut) return 0;
-  const room = a0 <= 18 ? 9 : a0 <= 20 ? 7 : a0 <= 22 ? 4 : a0 <= 24 ? 2 : a0 <= 26 ? 1 : 0;
-  const talent = room > 0 ? hashStr(`pot:${pid}`) % 4 : 0;
-  const pot = Math.min(99, potCap ?? 99, baseOvr + room + talent);
-  let cur = baseOvr;
-  for (let s = debut; s < split; s++) {
-    const age = a0 + Math.floor((s - debut) / 3);
-    cur = Math.max(40, Math.min(99, cur + evoDelta(pid, s, age, cur >= pot)));
-  }
-  return Math.round(Math.max(-12, Math.min(12, cur - baseOvr)));
-}
-
-// drift de envelhecimento que reproduz o OVR de MERCADO ao contratar (do BASE até o
-// split atual). Regen usa o relógio próprio (estreia gravada no id) com o MESMO teto
-// do aiSlotPlayer; os demais usam o MESMO driftFrom que aiSlotPlayer aplica pra IA
-// (debut=1, sem teto extra). Assim o contratado entra no MESMO OVR que aparecia no
-// mercado — antes aiAttrDrift clampava ±10 e driftFrom ±12, causando "contrata 86
-// chega 84" pra jogadores no extremo da escala.
-function signingDrift(player: Player, split: number, youthDebut?: Record<string, YouthDebut>): number {
-  const r = parseRegenPlayerId(player.id);
-  if (r) {
-    const orig = CS2_REAL_2026.find((t) => t.id === r.teamId)?.players[r.slot];
-    return driftFrom(player.id, playerOvr(player), r.ageAtDebut, r.debut, split, orig ? playerOvr(orig) + 2 : undefined);
-  }
-  // prospecto promovido / custom com idade editada: o relógio de drift começa na
-  // PROMOÇÃO (youthDebut.split), não no split 1. Sem isso, debut=1 simulava toda a
-  // evolução desde o começo da carreira e o jovem "teleportava" +9..+12 OVR ao
-  // ser escalado (pulando o desenvolvimento gradual da academia).
-  const yd = youthDebut?.[player.id];
-  if (yd) return driftFrom(player.id, playerOvr(player), yd.age, yd.split, split);
-  return driftFrom(player.id, playerOvr(player), baseAge(player), 1, split);
-}
+// ─── POTENCIAL HONESTO (evolução · out/2026) ────────────────────────────────
+// Helper ÚNICO do teto (engine/career/potential.ts): o evolveSquad usa como PA e
+// TODAS as telas mostram o mesmo número. A base vigente (oficial + admin +
+// customizada) é registrada pelo CareerScreen (registerCareerBase).
+export { careerPotentialOvr, careerPotentialBaseOvr, registerCareerBase };
 
 // idade de ESTREIA usada pra calcular o teto de potencial (room-to-grow). baseAge()
 // não conhece regen nem youthDebut → cairia no fallback 25-29, dando room≈0 e
 // travando regens/prospectos contratados "no teto" pra sempre. Aqui resolvemos a
 // idade de estreia correta pra cada tipo: regen (id) > youthDebut (promoção) > dataset.
-function potBaseAge(player: Player, youthAge?: Record<string, number>, youthDebut?: Record<string, YouthDebut>): number {
-  const r = parseRegenPlayerId(player.id);
-  if (r) return r.ageAtDebut;
-  const yd = youthDebut?.[player.id];
-  if (yd) return yd.age;
-  return baseAge(player, youthAge);
-}
 
-// jovem da base que assume a vaga de um titular aposentado. OVR de estreia abaixo
-// do nível do time (cru, com espaço pra crescer). Determinístico por time/vaga/geração.
-function regenYouth(team: TeamSeason, slot: number, gen: number, debut: number, a0: number, orig: Player): Player {
-  const seed = `regen:${team.id}:${slot}:${gen}`;
-  const region = macroRegionOf(team.country) ?? 'europe';
-  // o substituto herda a nacionalidade do titular que saiu (a base do time forma
-  // talento local) — um AWPer BR aposentado abre vaga pra um jovem BR, não um
-  // polonês aleatório. orig.country > país do time (cobre imports do elenco).
-  const ident = prospectIdentity(seed, region, orig.country || team.country);
-  const h = hashStr(seed);
-  // herda o PERFIL do titular que saiu (mesma função/estilo) e entra um pouco abaixo:
-  // quanto mais forte a vaga, menor o gap — o time mantém a firepower ao renovar.
-  const anchor = playerOvr(orig);
-  const gap = (anchor >= 90 ? 4 : anchor >= 86 ? 5 : anchor >= 82 ? 6 : 8) + (h % 2);
-  const at = (v: number) => Math.max(40, Math.min(95, v - gap));
-  return {
-    id: `${team.id}~rg${slot}.${gen}.${debut}.${a0}`,
-    nick: ident.nick, name: ident.name, country: ident.country, role: orig.role,
-    aim: at(orig.aim), consistency: at(orig.consistency), clutch: at(orig.clutch), awp: at(orig.awp), igl: at(orig.igl),
-  };
-}
-
-// resolve o jogador ATUAL de uma vaga da IA no split dado: o titular original
-// envelhece até se aposentar; aí um jovem da base (academia) assume e evolui no
-// lugar dele — e assim por diante. Mantém os elencos da IA vivos e renovados.
-function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split: number, skip: Set<string>): Player {
-  const clamp = (v: number) => Math.max(40, Math.min(99, v));
-  const anchor = playerOvr(orig); // nível da vaga: a base entra perto disso
-  let curPlayer = orig, curId = orig.id, curBaseOvr = anchor, curA0 = baseAge(orig), debut = 1, gen = 0, isYouth = false;
-  for (let guard = 0; guard < 8; guard++) {
-    const need = aiRetireAge(curId) - curA0;
-    const retireSplit = need <= 0 ? debut + 1 : debut + 3 * need;
-    if (split < retireSplit) break; // titular atual ainda em atividade
-    gen++; debut = retireSplit;
-    const a0 = 17 + (hashStr(`yage:${team.id}:${slot}:${gen}:${debut}`) % 3); // estreia 17-19
-    curPlayer = regenYouth(team, slot, gen, debut, a0, orig);
-    curId = curPlayer.id; curBaseOvr = playerOvr(curPlayer); curA0 = a0; isYouth = true;
-  }
-  if (skip.has(curId)) return curPlayer; // se o usuário contratou esse jovem, ele evolui pelo save.evo
-  // jovem da base pode crescer até um pouco acima do titular que saiu (não vira monstro)
-  const d = driftFrom(curId, curBaseOvr, curA0, debut, split, isYouth ? anchor + 2 : undefined);
-  if (!d) return isYouth ? curPlayer : orig;
-  const p = curPlayer;
-  return { ...p, aim: clamp(p.aim + d), consistency: clamp(p.consistency + d), clutch: clamp(p.clutch + d), awp: clamp(p.awp + d), igl: clamp(p.igl + d) };
-}
-
-function applyAiAging(teams: TeamSeason[], split: number, skip: Set<string>): TeamSeason[] {
-  if (split <= 1) return teams;
-  return teams.map((t) => ({ ...t, players: t.players.map((p, i) => (skip.has(p.id) ? p : aiSlotPlayer(p, t, i, split, skip))) }));
-}
 
 // ----- helpers do playoff (mata-mata do circuito) -----
 function buildPlayoff(table: TTeam[], circuit: string): Playoff {
@@ -1819,7 +1604,8 @@ function poProgressKey(p: Playoff): string {
   ].join('|');
 }
 // resolve em cascata todas as partidas que NÃO envolvem o usuário
-function poRunAI(p: Playoff, team: (id: string) => TTeam, rng: Rng): void {
+// [fase 4 · circuito] `pressure`: evento LAN pesa o oculto bigMatch (0 = online, motor de antes)
+function poRunAI(p: Playoff, team: (id: string) => TTeam, rng: Rng, pressure = 0): void {
   for (let guard = 0; guard < 16; guard++) {
     poAdvance(p);
     const m = poMatches(p).find((x) => !x.result && x.a !== 'user' && x.b !== 'user');
@@ -1827,7 +1613,7 @@ function poRunAI(p: Playoff, team: (id: string) => TTeam, rng: Rng): void {
     const a = team(m.a);
     const b = team(m.b);
     const bo = p.final === m ? PO_FINAL_BO : PO_SF_BO;
-    m.result = simulateSeries(rng, a, b, autoVeto([a, b], rng, bo), bo);
+    m.result = pressure > 0 ? simulateSeries(rng, a, b, autoVeto([a, b], rng, bo), bo, { pressure }) : simulateSeries(rng, a, b, autoVeto([a, b], rng, bo), bo);
   }
   poAdvance(p);
 }
@@ -1844,86 +1630,22 @@ function poUserRank(p: Playoff | null): number {
 }
 
 // ---------- cenário competitivo: VRS por região e Top 20 HLTV ----------
-// VRS determinístico de um time da IA. Curva PROGRESSIVA: o miolo do field
-// (entrosamento ~78-82, onde se amontoam quase todos os times) fica ~480-540,
-// mas a elite (~85+) dispara via termo quadrático, abrindo distância do bolo.
-// Esse buraco entre miolo e topo é DE PROPÓSITO: é maior do que um campeão de
-// Tier 2 consegue somar, então vencer o acesso te leva ao top-10, nunca a #1.
-// núcleo determinístico do VRS pela qualidade do elenco (entrosamento). É a base
-// tanto do VRS da IA quanto da "força dos adversários" (Opponent Network) de um evento.
-function vrsCore(tw: number): number {
-  const elite = Math.max(0, tw - 82);
-  return Math.max(0, tw - 61) * 25 + elite * elite * 10;
+// [fase 4 · circuito] VRS UNIFICADO: um ranking só, a mesma fórmula pra IA e pro
+// usuário (engine/mundo/vrs.ts — premiação real, rede de adversários batidos,
+// LAN; decaimento pela idade do resultado), publicado em save.mundo.vrs a cada
+// etapa e no Major. Substitui o núcleo por entrosamento + rolante sorteado da IA
+// e a base + rolante + legado do usuário (não existem mais dois VRS).
+function vrsPointsOf(save: Pick<CareerSave, 'mundo'>, id: string): number {
+  return save.mundo?.vrs?.[id]?.points ?? 0;
 }
-// VRS da org rival = núcleo pela qualidade do elenco + jitter estável + ROLANTE
-// do split (engine/career/progress.ts). O rolante é o que faz o mundo se MEXER:
-// sem ele o ranking era uma tabela congelada onde só o jogador andava, e passar
-// do #12 pro #11 era atravessar uma placa em vez de ganhar de alguém.
-// `split` opcional: chamadas legadas sem contexto de temporada seguem valendo o
-// número estático (nenhuma passa a mentir).
-function aiTeamVrs(t: TeamSeason, split?: number): number {
-  const core = vrsCore(t.teamwork);
-  const base = Math.round(core + (hashStr(t.id) % 55));
-  return split == null ? base : base + aiRollingVrs(t.id, core, split);
+/** Nota de ranking de um clube da IA pro mercado: ranqueado sempre acima de quem não tem VRS (esses, pela força). */
+function clubVrsScore(save: Pick<CareerSave, 'mundo'>, t: TeamSeason): number {
+  const p = vrsPointsOf(save, t.id);
+  return p > 0 ? 100 + p : t.teamwork / 100;
 }
-// "Opponent Network" do VRS real (Valve): o peso de um evento vem da FORÇA MÉDIA
-// dos adversários. Campo fraco (Tier 3) ~0.2; elite (Tier 1/Major) ~1.2. É isso
-// que faz ganhar um campeonato fraco render quase nada no ranking mundial.
-function opponentMult(fieldAvgCore: number): number {
-  return Math.max(0.08, Math.min(1.25, (fieldAvgCore - 250) / 450));
-}
-// embaralhamento determinístico (Fisher-Yates com semente) — mesmo seed, mesma
-// ordem. Usado pra variar o field dos torneios por split sem perder estabilidade.
-function seededShuffle<T>(arr: T[], seed: number): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = hashStr(`${seed}:${i}`) % (i + 1);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-// VRS-BASE do usuário: um PISO modesto pela qualidade do elenco (um time forte
-// não começa em último), mas pequeno o bastante pra que o RANKING seja movido
-// pelos RESULTADOS (save.vrs, que decai). O ranking = base + pontos ganhos.
-// Com isso: time bom recém-montado entra no meio-baixo da tabela; temporada
-// ruim faz o save.vrs decair e o time DESPENCA pro piso; só chega a #1 quem
-// vence de verdade (Tier 1 + Major), não quem ganhou um campeonato de acesso.
-// Semente do VRS do jogador. Os dois caminhos da carreira precisam de curvas
-// DIFERENTES, porque `teamwork` significa coisas diferentes em cada um:
-//
-// TAKEOVER — você herda a posição REAL da org. Mesma expressão do aiTeamVrs e
-//   mesmo id, então assumir a Yawara te deixa EXATAMENTE onde ela estava (o
-//   jitter `hash % 55` importa: vrsCore tem piso em teamwork 61, e sem ele todo
-//   time fraco empata em 0 e o jogador cai pro último lugar).
-// DRAFT / org nova — mantém a curva própria, mais achatada. O teamwork de um
-//   elenco recém-montado NÃO é um rating holístico; passá-lo pelo vrsCore o
-//   leria como se a org já tivesse resultado, e um time novo (teamwork ~90)
-//   estrearia perto do #3 do mundo.
-function userBaseVrsFor(teamwork: number, takeoverOrg?: TeamSeason): number {
-  if (takeoverOrg) return Math.round(vrsCore(teamwork) + (hashStr(takeoverOrg.id) % 55));
-  return Math.round(Math.max(0, teamwork - 60) * 14);
-}
-// LEGADO: dominância sustentada (Majors vencidos + títulos tier-1) deixa uma marca
-// que NÃO decai. O VRS rolante sozinho tinha teto ~2.5x o ganho de 1 split, então
-// um campeão em série estacionava abaixo do #1. Com o legado, quem vence DE
-// VERDADE e SEGUIDO sobe acima do field (1 título sozinho ainda rende pouco).
-function userLegacyVrs(save: CareerSave): number {
-  const h = aggregateHistory(save.history);
-  return (h.majorTitles ?? 0) * 130 + h.circuitTitles * 28;
-}
-// VRS COMPLETO do usuário (base do elenco + rolante + legado) — o mesmo número do
-// ranking. Versão self-contained pra telas que não têm o buildTeam no closure.
-function userVrsTotal(save: CareerSave, findSigning: (s: Signing) => ResolvedSigning | null, coaches: TeamSeason[]): number {
-  const picks = save.squad.map(findSigning).filter(Boolean) as { player: Player; from: TeamSeason }[];
-  // mesma herança do buildTeam — este caminho alimenta o VRS dos patrocínios,
-  // e divergir dele faria a oferta usar um ranking diferente do exibido.
-  const org = save.takeoverId ? coaches.find((t) => t.id === save.takeoverId) : undefined;
-  let teamwork = org?.teamwork ?? 78;
-  if (save.org && picks.length >= 5 && save.coachFromId) {
-    const coach = coaches.find((t) => t.id === save.coachFromId)?.coach ?? ROOKIE_COACH;
-    teamwork = buildUserTeam(save.org.name, picks.slice(0, 5), coach, org?.teamwork, org ? orgRefSynergy(org) : 0).teamwork;
-  }
-  return userBaseVrsFor(teamwork, org) + (save.vrs ?? 0) + userLegacyVrs(save);
+/** VRS do usuário (o mesmo número do ranking) — patrocínios, prestígio, telas. */
+function userVrsTotal(save: Pick<CareerSave, 'mundo'>): number {
+  return vrsPointsOf(save, USER_ID);
 }
 // Região de circuito no modo carreira (Américas N/S/Central = uma só). Tipos e
 // helpers ficam em data/regions.ts (compartilhados com as bandeiras).
@@ -1943,10 +1665,12 @@ const REGION_LEAGUE: Record<CareerRegion, string> = {
   americas: 'Gamers Club Masters', europe: 'ESL Challenger League EU', cis: 'CCT Europe Series',
   asia: 'ESL Challenger League Asia', oceania: 'ESL Challenger League Oceania', africa: 'CCT Africa',
 };
-// "cena mundial": o que rola nas OUTRAS regiões enquanto você joga a sua. Campeão
-// determinístico por split (estável no F5) sorteado entre os 4 melhores da região.
+// "cena mundial": o que rola nas OUTRAS regiões enquanto você joga a sua.
+// [fase 4 · circuito] tudo REAL: o campeão da região é quem venceu o evento
+// mais recente do mundo (segundo plano) entre os times dela; a ordem é o VRS.
 export interface RegionScene { reg: CareerRegion; league: string; champ: TeamSeason; runnerUp: TeamSeason | null; top: TeamSeason[]; }
-export function worldScene(teams: TeamSeason[], split: number): RegionScene[] {
+export function worldScene(teams: TeamSeason[], _split: number, mundo?: MundoState | null): RegionScene[] {
+  const pts = (id: string) => mundo?.vrs?.[id]?.points ?? 0;
   const byRegion = new Map<CareerRegion, TeamSeason[]>();
   for (const t of teams) {
     const r = teamRegion(t);
@@ -1954,16 +1678,20 @@ export function worldScene(teams: TeamSeason[], split: number): RegionScene[] {
     arr.push(t);
     byRegion.set(r, arr);
   }
+  // o título mais recente e mais pesado: etapa mais nova primeiro, depois o maior prize pool
+  const recent = [...(mundo?.results ?? [])].filter((r) => r.kind !== 'qualifier')
+    .sort((a, b) => Math.floor(b.t ?? 0) - Math.floor(a.t ?? 0) || (b.prizePool ?? 0) - (a.prizePool ?? 0));
   const out: RegionScene[] = [];
   for (const reg of CAREER_REGION_ORDER) {
-    const pool = (byRegion.get(reg) ?? []).slice().sort((a, b) => b.teamwork - a.teamwork);
+    const pool = (byRegion.get(reg) ?? []).slice().sort((a, b) => pts(b.id) - pts(a.id) || b.teamwork - a.teamwork);
     if (pool.length < 2) continue;
-    // campeão sorteado entre os 4 melhores, com seed por ID (estável por split
-    // mesmo que a ordem/contenders mudem após transferências)
-    const contenders = pool.slice(0, 4);
-    const champ = contenders.slice().sort((a, b) => (hashStr(`world:${split}:${reg}:${b.id}`) % 1000) - (hashStr(`world:${split}:${reg}:${a.id}`) % 1000))[0];
-    const runnerUp = contenders.find((t) => t.id !== champ.id) ?? null;
-    out.push({ reg, league: REGION_LEAGUE[reg], champ, runnerUp, top: pool.slice(0, 6) });
+    const ids = new Set(pool.map((t) => t.id));
+    const won = recent.find((r) => { const c = r.placements.find((p) => p.place === 1)?.teamId; return !!c && ids.has(c); });
+    const champId = won?.placements.find((p) => p.place === 1)?.teamId;
+    const champ = pool.find((t) => t.id === champId) ?? pool[0];
+    const ruId = won?.placements.find((p) => p.place === 2)?.teamId;
+    const runnerUp = pool.find((t) => t.id === ruId) ?? pool.find((t) => t.id !== champ.id) ?? null;
+    out.push({ reg, league: won?.name ?? REGION_LEAGUE[reg], champ, runnerUp, top: pool.slice(0, 6) });
   }
   return out;
 }
@@ -2141,31 +1869,6 @@ interface TransferItem { nick: string; cc: string; from: string; to: string; fee
 // gated pela forma REAL de clube de engine/career/teamForm.ts. O pseudo-form
 // antigo por hash de teamwork+split foi aposentado no gap #23.)
 
-// reconstrói os elencos aplicando as transferências acumuladas (playerId -> teamId).
-// Como cada transferência é um swap balanceado, todo time se mantém com 5.
-function applyMoves(teams: TeamSeason[], moves: Record<string, string> | undefined): TeamSeason[] {
-  if (!moves || Object.keys(moves).length === 0) return teams;
-  const all: { p: Player; orig: string }[] = [];
-  for (const t of teams) for (const p of t.players) all.push({ p, orig: t.id });
-  const valid = new Set(teams.map((t) => t.id));
-  const teamOf = (pid: string, orig: string) => {
-    const m = moves[pid];
-    return m && valid.has(m) ? m : orig;
-  };
-  return teams.map((t) => ({ ...t, players: all.filter((ap) => teamOf(ap.p.id, ap.orig) === t.id).map((ap) => ap.p) }));
-}
-
-// pool ATUAL de free agents: o __free__ da base com save.moves aplicado — a IA
-// pode ter contratado FAs (saem do pool) e liberado deslocados (entram). Antes
-// o pool era o snapshot estático da base, então um FA contratado pela IA ainda
-// apareceria de graça no mercado do usuário (duplicado).
-function currentFreeAgents(base: TeamSeason[], moves: Record<string, string> | undefined): Player[] {
-  return applyMoves(base, moves).find((t) => t.id === FREE_TEAM_ID)?.players ?? [];
-}
-
-// ids endereçáveis por save.moves (jogadores REAIS da base — backfill sintético
-// e extraOnTeam ficam fora do mercado da IA porque applyMoves não os move)
-const BASE_PLAYER_IDS: ReadonlySet<string> = new Set(CS2_REAL_2026.flatMap((t) => t.players.map((p) => p.id)));
 
 // MIGRAÇÃO: prospectos/jovens gerados antes do fix do shift (>>) podiam ser
 // salvos SEM nick/name/role (só o country sobrevivia). Regenera de forma
@@ -2255,13 +1958,22 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     'lastTalkAt', 'pairChem', 'extraOnTeam', 'academyPlayed', 'rivalries',
     'fatigue', 'facilities', 'mapStats', 'aiDrift', 'careerStatsYearStart',
     'recentRatings',
-    'stints',
+    'stints', 'attrEvo', 'fixes', 'worldEvo',
   ].forEach(defaultInvalidRecord);
   [
     'org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult',
     'pendingSplit', 'scenario', 'pendingOffer', 'objective', 'lastObjective',
-    'academyPlayoff', 'pendingYearAwards', 'customCoach',
+    'academyPlayoff', 'pendingYearAwards', 'customCoach', 'mundo', 'majorPlan',
   ].forEach(defaultInvalidNullableRecord);
+  ['majorLog'].forEach(defaultInvalidArray);
+  // [fase 4 · circuito] bloco do mundo com shape quebrado: cura campo a campo
+  if (record.mundo && typeof record.mundo === 'object') {
+    const m = { ...(record.mundo as Record<string, unknown>) };
+    if (!Array.isArray(m.calendar)) m.calendar = [];
+    if (!Array.isArray(m.results)) m.results = [];
+    if (!m.vrs || typeof m.vrs !== 'object' || Array.isArray(m.vrs)) m.vrs = {};
+    record.mundo = m;
+  }
   [
     'budget', 'vrs', 'split', 'eventInSplit', 'titles', 'tier', 'board',
     'careerStatsThru', 'unread', 'playbookXp', 'academyTrophies',
@@ -2271,6 +1983,12 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
   const s = record as unknown as CareerSave;
   const merged = { ...emptySave(), ...s, ...hydrateCareerDepth(record) };
   merged.split = Math.max(1, Math.floor(merged.split));
+  merged.attrEvo = normalizeAttrEvo(merged.attrEvo);
+  merged.worldEvo = migrateWorldEvo(merged);
+  { // o evo guarda só o elenco (quem saiu está no worldEvo)
+    const ids = new Set((merged.squad ?? []).map((x) => x.playerId));
+    if (merged.evo && Object.keys(merged.evo).some((k) => !ids.has(k))) merged.evo = Object.fromEntries(Object.entries(merged.evo).filter(([k]) => ids.has(k)));
+  }
   merged.eventInSplit = Math.max(1, Math.min(EVENTS_PER_SPLIT, Math.floor(merged.eventInSplit ?? 1)));
   merged.tier = Math.max(1, Math.min(3, Math.floor(merged.tier)));
   merged.board = Math.max(0, Math.min(100, merged.board));
@@ -2318,7 +2036,37 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     if (age != null) youthDebut[id] = youthDebutAtPromotion(age, merged.split);
   }
   merged.youthDebut = youthDebut;
-  return merged;
+  // [fase 3 · CONTRATOS] o `contracts` antigo não é mais lido: o que ainda
+  // estiver nele (save de cliente antigo) entra em clube.contracts com salário
+  // a materializar, e o campo sai do save.
+  const legacyContracts = record.contracts && typeof record.contracts === 'object' ? record.contracts as Record<string, number> : null;
+  const clubeOk = merged.clube && typeof merged.clube === 'object' && merged.clube.contracts && typeof merged.clube.contracts === 'object';
+  const baseClube = clubeOk ? merged.clube! : (migrateClube({ contracts: legacyContracts ?? {} }).clube as ClubeState);
+  merged.clube = materializeContracts({ clube: baseClube, contracts: legacyContracts }, []) ?? baseClube;
+  delete (merged as { contracts?: unknown }).contracts;
+  // [integração] rede de segurança: jogador do elenco sem contrato (save que pulou
+  // o mercado da fundação, caminho que esqueceu de gravar) ganha o contrato padrão
+  // da fundação; o salário (playerWage) é gravado no primeiro render, igual à migração
+  if (merged.org && merged.squad.length > 0 && !merged.foundingOpen) {
+    const loanedIn = new Set(marketOf(merged).loans.filter((l) => l.kind === 'in').map((l) => l.playerId));
+    merged.clube = ensureSquadContracts(merged, merged.squad.map((sig) => sig.playerId), merged.split, { exclude: loanedIn }) ?? merged.clube;
+  }
+  // [integração] proposta de elite do caminho antigo (save.pendingOffer) vira um
+  // IncomingOffer 'elite' no mercado — mesma decisão antes do mercado de pré-temporada
+  const legacyOffer = record.pendingOffer as { orgId?: string; orgName?: string; orgTag?: string; playerId?: string; nick?: string; ovr?: number; fee?: number } | null | undefined;
+  if (legacyOffer && legacyOffer.playerId && legacyOffer.orgId && Number.isFinite(legacyOffer.fee)) {
+    const m = marketOf(merged);
+    const id = `elite:${merged.split}:${legacyOffer.playerId}`;
+    if (!m.incoming.some((o) => o.id === id)) {
+      merged.clube = { ...merged.clube!, market: withOffers(m, [{
+        id, playerId: legacyOffer.playerId, fromTeamId: legacyOffer.orgId, fee: legacyOffer.fee!, split: merged.split, expiresSplit: merged.split, status: 'open',
+        nick: legacyOffer.nick, ovr: legacyOffer.ovr, fromTag: legacyOffer.orgTag, fromName: legacyOffer.orgName, reason: 'elite', strategy: 'starBuyer',
+      }]) };
+    }
+  }
+  delete (merged as { pendingOffer?: unknown }).pendingOffer;
+  // [fase 4 · integração] save existente abre já enxuto (killFeed fora; idempotente)
+  return compactCareerSave(merged as unknown as Record<string, unknown>) as unknown as CareerSave;
 };
 
 // Carrega o save do slot ativo via gameStore. O store cuida de:
@@ -2346,7 +2094,8 @@ function wipeActiveSlot(): void {
 // + mantém backup .bak. Toda a logística vive no gameStore agora.
 function persist(s: CareerSave): void {
   // double-cast: idem loadSave — CareerSave não declara index signature.
-  useGame.getState().setSave(s as unknown as VersionedSave);
+  // [fase 4 · integração] grava sem o killFeed das séries (só a partida ao vivo lê)
+  useGame.getState().setSave(compactCareerSave(s as unknown as Record<string, unknown>) as unknown as VersionedSave);
 }
 
 // preço do técnico: curva acelerada (não linear). Iniciante é barato, mas técnico
@@ -2359,7 +2108,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: ct('Técnico Iniciante'), co
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar' | 'stats';
+type HubTab = 'legado' | 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar' | 'stats' | 'youth' | 'circuito' | 'midia';
 
 // time sintético ct('Academia') usado como origem de um prospecto promovido ao elenco
 const ACADEMY_FROM: TeamSeason = {
@@ -2388,6 +2137,7 @@ interface MajorResult {
   prize: number;
   vrs: number;
   champion: boolean;
+  rmrOut?: boolean; // [fase 4 · circuito] caiu no RMR (não chegou ao Major)
 }
 
 const HALL_PLACEMENT: Record<PlacementCode, string> = {
@@ -2398,6 +2148,7 @@ interface Props {
   dataset: TeamSeason[];
   onExit: () => void;
   founder?: boolean; // conta Fundador: pode subir logo própria ao fundar a org
+  onOpenEditor?: () => void; // [fase 4] editor de base (escolha da base na criação)
 }
 
 export function CareerScreen(props: Props) {
@@ -2408,7 +2159,7 @@ export function CareerScreen(props: Props) {
   );
 }
 
-function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
+function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: Props) {
   const { lang } = useLang();
   setCareerLang(lang); // idioma a nivel de modulo: ct() funciona em todos os subcomponentes
   const { account } = useAccount();
@@ -2467,7 +2218,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // outros useEffect deste componente; o de #1 do VRS roda quando vrsAll estiver
   // em escopo lá embaixo).
   const upsellWorld1Ref = useRef(false);
-  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario' | 'custom'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
+  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario' | 'custom' | 'cenarios'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
   // dificuldade da carreira (eixo de GESTÃO): escolhida na fundação, grava no save
   // e remodela caixa inicial / folha / patrocínios. Default 'normal'.
   const [careerDifficulty, setCareerDifficulty] = useState<Difficulty>('normal');
@@ -2475,7 +2226,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const s = loadSave();
     if (!s.org) return 'found';
     // sem elenco fechado = janela de mercado/transferências
-    if (s.squad.length < 5 || !s.coachFromId) return 'market';
+    // [integração] fundação ainda não confirmada no mercado (F5 no meio): volta pro
+    // mercado, onde os contratos são assinados
+    if (needsMarket(s)) return 'market';
     // elenco pronto mas sem liga = escolha do campeonato (qual convite aceitar)
     if (!s.league) return 'circuit';
     if (s.majorResult) return 'major'; // Major encerrado: reidrata a tela de resultado (F5-safe)
@@ -2513,14 +2266,27 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setSave((s) => { const n = { ...s, majorT: t, ...patch }; persist(n); return n; });
   };
   const [hubTab, setHubTab] = useState<HubTab>(() => (loadSave().majorT ? 'major' : 'overview'));
+  const [circuitoSel, setCircuitoSel] = useState<string | null>(null); // [fase 4 · circuito] evento aberto na tela Circuito
+  // subseções da sidebar estilo FM que vivem dentro de uma aba (Elenco, Finanças)
+  const [squadSec, setSquadSec] = useState<string>('sq');
+  const [finSec, setFinSec] = useState<string>('fi');
+  const [tfView, setTfView] = useState<TransfersView>('geral'); // [fase 3] seção da tela Transferências
+  const [negoFocus, setNegoFocus] = useState<{ q: string; n: number } | null>(null); // "Negociar" a partir de um alvo
+  // peek de jogador (hover card): refs "career:<id>" resolvidos pelo hub da
+  // liga (a função é preenchida lá embaixo, quando a liga existe)
+  const peekFnRef = useRef<(id: string) => PeekData | null>(() => null);
+  usePeekResolver((ref) => (ref.startsWith('career:') ? peekFnRef.current(ref.slice(7)) : null));
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
+  const overlayHeldNow = useOverlayHeld(); // [integração] o tour espera a abertura do Major
   const [showOnb, setShowOnb] = useState(() => { try { return !localStorage.getItem('rtm-onboarded-v1'); } catch { return false; } });
   const dismissOnb = () => { try { localStorage.setItem('rtm-onboarded-v1', '1'); } catch { /* sem storage */ } setShowOnb(false); };
   const [promoting, setPromoting] = useState<string | null>(null); // prospecto escolhendo quem sai do elenco
   const [playerRouteId, setPlayerRouteId] = useState<string | null>(() => parseCareerPlayerId());
   const [teamRouteId, setTeamRouteId] = useState<string | null>(() => parseCareerTeamId());
-  const [canNavBack, setCanNavBack] = useState(() => canCareerGoBack());
+  // aba do perfil de jogador (subnav do shell); volta pra "Perfil" a cada jogador
+  const [ppTabFor, setPpTabFor] = useState<{ id: string | null; tab: PlayerTab }>({ id: null, tab: 'profile' });
+  const ppTab: PlayerTab = ppTabFor.id === playerRouteId ? ppTabFor.tab : 'profile';
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
   const [newsCat, setNewsCat] = useState<NewsCat | 'all'>('all'); // filtro da Inbox
   const [vrsMode, setVrsMode] = useState<'regiao' | 'geral'>('geral'); // ranking VRS: por região ou geral
@@ -2570,12 +2336,56 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const lastSplitTickedRef = useRef<number>(save.split);
   // T3.7: player com modal de conversa aberto. null = nenhum.
   const [talkPlayer, setTalkPlayer] = useState<{ oid: string; nick: string; age?: number } | null>(null);
+  const [ceremonyYear, setCeremonyYear] = useState<number | null>(null); // [SA2 · legado] cerimônia aberta
+  const [legadoCards, setLegadoCards] = useState(0); // [SA2 · legado] >0 = abrir o Legado direto nos cards
   // T3.8: toast pra resultado de scrim (e outros eventos pontuais)
   const toast = useToast();
 
   const update = (patch: Partial<CareerSave>) => {
     setSave((s) => {
-      const next = { ...s, ...patch };
+      // [integração] o plano é atalho de estilo: escolher Agressivo/Disciplinado escreve tactics.style
+      const style = patch.gamePlan && patch.gamePlan !== s.gamePlan ? PLAN_STYLE[patch.gamePlan] : null;
+      const withStyle = style ? { ...patch, gestao: { ...gestaoOf(s), ...(patch.gestao ?? {}), tactics: setStyle(gestaoOf(s).tactics, style) } } : patch;
+      const next = { ...s, ...withStyle };
+      persist(next);
+      return next;
+    });
+  };
+  // [fase 3] altera o bloco `clube` lendo o estado VIVO (cliques rápidos não se perdem)
+  const updateClube = (fn: (s: CareerSave) => ClubeState, extra?: (s: CareerSave) => Partial<CareerSave>) => {
+    setSave((s) => {
+      const next = { ...s, ...(extra?.(s) ?? {}), clube: fn(s) };
+      persist(next);
+      return next;
+    });
+  };
+  // [fase 2] altera o bloco `gestao` lendo o estado VIVO (cliques rápidos não se perdem)
+  const updateGestao = (fn: (g: GestaoState) => GestaoState) => {
+    setSave((s) => {
+      const next = { ...s, gestao: fn(gestaoOf(s)) };
+      persist(next);
+      return next;
+    });
+  };
+  // [fase 3 · vestiário] status no elenco: rebaixar dói na moral, promover anima
+  const setSquadStatus = (oid: string, status: SquadStatus) => {
+    updateDressing((d, s) => {
+      const vc = vestiarioCtx(s);
+      const from = vc.statuses[oid] ?? 'starter';
+      const vp = vc.vps.find((p) => p.id === oid);
+      const dm = vp ? statusChangeMorale(from, status, vp) : 0;
+      const m = s.morale?.[oid] ?? MORALE_DEFAULT;
+      return {
+        dressing: { ...d, status: { ...d.status, [oid]: status } },
+        patch: dm ? { morale: { ...(s.morale ?? {}), [oid]: Math.max(0, Math.min(100, m + dm)) } } : undefined,
+      };
+    });
+  };
+  // [fase 3 · vestiário] altera o vestiário (e, se preciso, moral/vínculo) lendo o estado VIVO
+  const updateDressing = (fn: (d: DressingRoomState, s: CareerSave) => { dressing: DressingRoomState; patch?: Partial<CareerSave> }) => {
+    setSave((s) => {
+      const r = fn(dressingOf(s), s);
+      const next = { ...s, ...(r.patch ?? {}), clube: { ...clubeOfSave(s), dressing: r.dressing } };
       persist(next);
       return next;
     });
@@ -2707,6 +2517,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       return next;
     });
     void startSplit; // referenciado pra TS não reclamar de unused
+    // intencional: prêmios do ano fecham só na virada de split (deps = split).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.split]);
 
   // T3.11: no mount, garante que existe stint ativo do coach atual.
@@ -2727,17 +2539,57 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const snap = buildAchievementSnapshot(save, starterIds);
     recordSaveTick(snap);
     lastSplitTickedRef.current = save.split;
+    // intencional: lista explícita de campos que mudam conquistas (não o save inteiro).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.split, save.tier, save.budget, save.board, save.sponsors.length,
       save.resolvedTeamEvents?.length, save.lastTalkAt, save.yearAwardsHistory?.length, save.pairChem, save.squad]);
 
   // T3.12: contrata/troca scout. Substitui o anterior (sem multa).
 
-  // #35: bootcamp do time — intensivo pago, 1x por split (+moral, -fadiga)
+  // #35 → [fase 4 · circuito] BOOTCAMP antes de LAN: viajar antes e treinar perto
+  // da sede. Custa (mais caro fora do continente), junta o grupo (+química entre
+  // os titulares, +familiaridade nos mapas do plano), +moral e condição. Uma vez
+  // por evento LAN, antes da sua primeira partida nele. Online não tem bootcamp.
+  const bootcampNow = (() => {
+    const inMajor = !!majorT && majorT.phase !== 'done';
+    const ev = inMajor
+      ? { id: majorIdOf(save.split), lan: true, tier: 1, kind: 'major' as const, host: eventHost(MAJOR_NAME(save.split), 1).cc, name: MAJOR_NAME(save.split) }
+      : save.circuit ? (() => {
+        // circuito de save antigo não carrega sede: a sede real sai do nome do evento
+        const h = eventHost(save.circuit.name, save.circuit.tier);
+        return { id: save.circuit.eventId ?? `legacy:${save.split}:${save.eventInSplit ?? 1}`, lan: save.circuit.lan ?? h.lan, tier: save.circuit.tier, kind: 'gsl' as const, host: save.circuit.host ?? h.cc, name: save.circuit.name };
+      })() : null;
+    const plan = bootcampPlan(ev, save.region);
+    const played = inMajor ? (save.majorHistory?.length ?? 0) + (majorT?.history.some((h) => h.pairing.a === USER_ID || h.pairing.b === USER_ID) ? 1 : 0) > 0
+      : !!save.league?.rounds.some((r) => r.some((m) => !!m.result && (m.a === USER_ID || m.b === USER_ID)));
+    const used = !!ev && save.mundo?.bootcamp?.eventId === ev.id;
+    return { ev, plan, played, used, ok: !!ev && plan.available && !played && !used && save.budget >= plan.cost };
+  })();
   const doBootcamp = () => {
-    if (!canBootcamp(save.budget, save.split, save.bootcampSplit)) return;
+    const b = bootcampNow;
+    if (!b.ok || !b.ev) return;
     const ids = save.squad.map((sg) => sg.playerId);
-    const r = applyBootcamp(ids, save.morale, save.fatigue, MORALE_DEFAULT);
-    update({ budget: save.budget - BOOTCAMP_COST, morale: r.morale, fatigue: r.fatigue, bootcampSplit: save.split });
+    const r = applyBootcamp(ids, save.morale, fatigueView(save, ids), MORALE_DEFAULT);
+    const g = gestaoOf(save);
+    // química: todos os pares dos titulares ganham `chem`
+    const starters = resolveLineup(ids, dressingOf(save).lineup).starters;
+    const pairChem = { ...(save.pairChem ?? {}) };
+    for (let i = 0; i < starters.length; i++) for (let j = i + 1; j < starters.length; j++) {
+      const k = pairKey(starters[i], starters[j]);
+      pairChem[k] = Math.min(100, (pairChem[k] ?? 30) + b.plan.chem);
+    }
+    // familiaridade: os 3 mapas mais trabalhados do plano de jogo
+    const top = (Object.entries(g.tactics.maps) as [MapId, { familiarity: number }][])
+      .sort((x, y) => (y[1]?.familiarity ?? 0) - (x[1]?.familiarity ?? 0)).slice(0, 3).map(([m]) => m);
+    let tactics = g.tactics;
+    for (const m of top) tactics = gainFamiliarity(tactics, m, b.plan.familiarity);
+    update({
+      budget: save.budget - b.plan.cost, morale: r.morale, pairChem,
+      gestao: { ...g, tactics, condition: conditionWithFatigue(g.condition, r.fatigue) },
+      bootcampSplit: save.split,
+      mundo: { ...mundoOf(save), bootcamp: { eventId: b.ev.id, cost: b.plan.cost } },
+    });
+    toast.success(`${ct('Bootcamp feito:')} ${b.ev.name}`);
   };
   const hireScout = (scoutId: string) => {
     const def = scoutById(scoutId);
@@ -2761,7 +2613,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const doScrimVs = (oppId: string) => {
     const me = buildTeam(save);
     if (!me) { toast.error(ct('Elenco incompleto (precisa 5 titulares)')); return; }
-    const oppSeason = currentEra.find((t) => t.id === oppId);
+    const oppSeason = oppEra.find((t) => t.id === oppId && t.id !== save.takeoverId);
     if (!oppSeason) return;
     const starterIds = save.squad.map((s) => s.playerId);
     const stateArg = {
@@ -2770,7 +2622,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       scrimsThisSplit: save.scrimsThisSplit ?? 0,
       starterIds,
       pairChem: save.pairChem,
-      fatigue: save.fatigue,
+      fatigue: fatigueView(save, starterIds),
     };
     const check = canScrimNow(stateArg);
     if (!check.ok) {
@@ -2778,11 +2630,23 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       return;
     }
     const { report, patch } = runScrimVs(stateArg, me, teamSeasonToTTeam(oppSeason), rngRef.current);
+    // [fase 2 · treino] scrim de verdade: ritmo sobe, desgasta um pouco, rende
+    // familiaridade no mapa jogado e — contra time do SEU circuito — pode vazar.
+    const g = gestaoOf(save);
+    const inCircuit = !!save.league?.teams.some((t) => t.id === oppId);
+    const sc = applyRealScrim(g, starterIds, {
+      oppId, map: report.map, oppInCircuit: inCircuit, seed: `${save.split}:${save.scrimsThisSplit ?? 0}:${oppId}`, staff: staffEffects(g.staff),
+    });
     update({
       budget: save.budget + patch.budgetDelta,
       scrimsThisSplit: patch.scrimsThisSplitNext,
       pairChem: patch.pairChem,
-      fatigue: patch.fatigue,
+      gestao: { ...g, training: sc.training, condition: sc.condition, tactics: sc.tactics },
+      ...(sc.leaked ? pushNews(save, [{
+        id: `${save.split}:leak:${oppId}:${save.scrimsThisSplit ?? 0}`, split: save.split, icon: '👀', tone: 'bad', cat: 'scout',
+        title: `${ct('Scrim vazou:')} ${report.oppTag} ${ct('leu seus defaults')}`,
+        body: ct('O sparring é do seu circuito e saiu da scrim com anotações sobre o seu time. Eles chegam com anti-strat contra o seu plano de jogo nas próximas semanas.'),
+      }]) : {}),
     });
     setScrimReport(report);
     (report.won ? toast.success : toast.error)(
@@ -2829,14 +2693,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         return next;
       });
     });
-  }, [save.pendingSponsorOffer]);
+  }, [save.pendingSponsorOffer, setSave]);
 
   useEffect(() => {
     initCareerNav(window.location.pathname);
     const syncRoutes = () => {
       setPlayerRouteId(parseCareerPlayerId());
       setTeamRouteId(parseCareerTeamId());
-      setCanNavBack(canCareerGoBack());
     };
     window.addEventListener('popstate', syncRoutes);
     syncRoutes();
@@ -2848,7 +2711,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       navigateCareerHub();
       setPlayerRouteId(null);
       setTeamRouteId(null);
-      setCanNavBack(canCareerGoBack());
     }
   };
 
@@ -2861,7 +2723,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const routeId = isOwn ? playerRuntimeId(p.id) : baseId;
     navigateCareerPlayer(routeId);
     setPlayerRouteId(routeId);
-    setCanNavBack(canCareerGoBack());
   };
 
   const closePlayerProfile = () => {
@@ -2871,7 +2732,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const openTeamProfile = (teamId: string) => {
     navigateCareerTeam(teamId);
     setTeamRouteId(teamId);
-    setCanNavBack(canCareerGoBack());
   };
 
   const closeTeamProfile = () => {
@@ -2882,7 +2742,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (stage !== 'playoffHub' || !save.playoff || !save.league) return;
     const clone: Playoff = structuredClone(save.playoff);
     const before = poProgressKey(clone);
-    poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
+    poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current, save.league?.pressure ?? 0);
     if (poProgressKey(clone) === before) return;
 
     const next = { ...save, playoff: clone };
@@ -2892,10 +2752,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       if (clone.champion) setStage('seasonEnd');
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [save, stage]);
+  }, [save, stage, setSave]);
 
   useEffect(() => {
-    if (!majorResult || !save.org) return;
+    if (!majorResult || !save.org || majorResult.rmrOut) return; // [fase 4] cair no RMR não é campanha de Major
     const tournament = majorResult.tournament;
     const hallKey = `career-major-hall-${save.org.name}-${save.split}-${majorResult.placement}-${tournament.history.length}`;
     try {
@@ -2907,6 +2767,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
     const user = tournament.teams.find((team) => team.id === 'user');
     if (!user) return;
+    // [O0-36] o Hall exige conta: sem login, não registra (e não mostra erro).
+    const token = getToken();
+    if (!token) return;
     const champion = tournament.championId
       ? tournament.teams.find((team) => team.id === tournament.championId)?.name
       : majorResult.champion ? save.org.name : ct('Campanha encerrada');
@@ -2917,6 +2780,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        token,
         player: getManager()?.nick || save.org.tag,
         teamName: save.org.name,
         pool: 'world',
@@ -2943,19 +2807,44 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // partida (o snapshot da liga/major não sabe das trocas feitas no meio do
   // split). Times da IA passam direto.
   const roleOf = (oid: string): Role | undefined => save.roles?.[oid];
-  const syncUser = (team: TTeam): TTeam => {
-    if (!team.isUser) return team;
+  // [fase 3 · vestiário] troca de titular no meio do split (entre séries): o
+  // snapshot da liga tem os 5 do começo do split — quem saiu do cinco dá lugar ao
+  // escalado agora. Quem continua mantém o estado da temporada (forma etc.).
+  const lineupUser = (team: TTeam): TTeam => {
+    const want = resolveLineup(save.squad.map((sg) => sg.playerId), dressingOf(save).lineup).starters;
+    const have = team.players.map((p) => careerPlayerId(p.id));
+    if (want.length < 5 || want.every((id) => have.includes(id))) return team;
+    const fresh = buildTeam(save);
+    if (!fresh) return team;
+    const players = fresh.players.map((fp) => {
+      const kept = team.players.find((p) => p.id === fp.id);
+      return kept ?? { ...fp, form: moraleForm(save.morale?.[careerPlayerId(fp.id)] ?? MORALE_DEFAULT) };
+    });
+    return { ...team, players, strength: fresh.strength, teamwork: fresh.teamwork };
+  };
+  const syncUser = (teamIn: TTeam, oppId?: string): TTeam => {
+    if (!teamIn.isUser) return teamIn;
+    const team = lineupUser(teamIn);
     // herda o entrosamento da org assumida (ver buildTeam) — senão o resync
     // reestampava o 78 do draft e desfazia o fix no meio do split.
     const org = save.takeoverId ? currentEra.find((ct2) => ct2.id === save.takeoverId) : undefined;
-    const t = resyncUserRoles(team, roleOf, org?.teamwork, org ? orgRefSynergy(org) : 0);
+    const resynced = resyncUserRoles(team, roleOf, org?.teamwork, org ? orgRefSynergy(org) : 0, !balanceOn(save));
+    // [equilíbrio] força recalculada a cada partida (o snapshot da liga não manda)
+    const t = balanceOn(save)
+      ? careerUserTeam(resynced, careerTeamwork(save, resynced.players.map((p) => careerPlayerId(p.id)), resynced.players), userCoach(save, resynced.coach))
+      : resynced;
     // aplica também o domínio de mapa e o playbook atuais (valem se mudarem no
     // meio do split — o snapshot da liga não saberia sozinho)
+    // [fase 2] tática por mapa (Plano de jogo) vai junto com o time pra partida
+    // [equilíbrio] o analista alimenta a leitura automática de anti-strat
+    const prepRead = balanceOn(save) ? analystScoutingPrep(staffEffects(save.gestao?.staff).antiStratRead) : 0;
+    const mt = matchTacticsFor(save.gestao?.tactics, save.gamePlan, oppId, autoAntiStratReadiness(scoutingOf(team, prepRead)));
     const synced: TTeam = {
       ...t,
       mapPrefs: { ...t.mapPrefs, ...(save.mapTraining ?? {}) },
       playbook: save.playbook,
       playbookFam: Math.max(0, Math.min(1, (save.playbookXp ?? 0) / 100)),
+      tactics: mt.tactics,
     };
     // PLANO DE JOGO da partida: buff real escolhido pelo usuário antes de jogar
     return applyAnalystPrep(applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined'), normalizeFacilities(save.facilities).analyst);
@@ -2966,8 +2855,41 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // saves antigos (criados antes do fix do seedGroups) onde o match referencia
     // um time que sumiu do grupo. Bug 'isUser' undefined no Continue.
     if (!rawA || !rawB) return null;
-    let a = applyFatigueForm(syncUser(rawA), save.fatigue, save.restingPlayers);
-    let b = applyFatigueForm(syncUser(rawB), save.fatigue, save.restingPlayers);
+    // [fase 2] condição (fitness/ritmo) no duelo, lesionado fora do cinco (entra o
+    // jovem da base) e a tática por mapa. A IA joga com tática coerente
+    // (técnico/IGL/playbook) e estuda você pelo scouting — e mais ainda se te viu
+    // em scrim (vazamento do treino vira prontidão de anti-strat DELA).
+    const g = gestaoOf(save);
+    // [fase 4 · circuito] visto negado pro evento em curso = fora, como lesionado
+    const visa = save.mundo?.visa;
+    const visaOut = new Set(visa && (visa.eventId === save.circuit?.eventId || (!!majorT && visa.eventId.startsWith('major:'))) ? visa.denied : []);
+    const injured = new Set(save.squad.map((sg) => sg.playerId).filter((id) => isInjured(g.condition[id]) || visaOut.has(id)));
+    // [fase 3 · integração] cadeia ÚNICA de cobertura da lesão: 1) banco da
+    // escalação (G) → 2) stand-in emprestado (I) → 3) reserva do elenco → 4) jovem
+    // da base → 5) reserva genérico (substituteInjured). Cada um numa faixa só.
+    const lu = resolveLineup(save.squad.map((sg) => sg.playerId), dressingOf(save).lineup);
+    const asStandIn = (id: string): StandIn | null => { const sg = save.squad.find((x) => x.playerId === id); const f = sg ? findSigning(sg) : null; return f ? { ...f.player, id } : null; };
+    const chosenBench = new Set(dressingOf(save).lineup?.bench ?? []);
+    const loanedIn = new Set(marketOf(save).loans.filter((l) => l.kind === 'in' && l.state === 'active').map((l) => l.playerId));
+    const tierOf = (ok: (id: string) => boolean) => lu.bench.filter(ok).map(asStandIn).filter((x): x is StandIn => !!x);
+    const benchTiers: StandIn[][] = [
+      tierOf((id) => chosenBench.has(id)),
+      tierOf((id) => !chosenBench.has(id) && loanedIn.has(id)),
+      tierOf((id) => !chosenBench.has(id) && !loanedIn.has(id)),
+    ];
+    const squadIdSet = new Set(save.squad.map((sg) => sg.playerId));
+    const standIns: StandIn[] = [...(save.academyTeam ?? []), ...(save.academy ?? [])].filter((x) => !squadIdSet.has(x.id));
+    const prep = (raw: TTeam, other: TTeam): TTeam => {
+      if (!raw.isUser) {
+        const leak = other.isUser ? leakAgainst(g.training, raw.id) : 0;
+        // [equilíbrio] IA na régua única + comissão + a vantagem do modo (sem AI_EDGE)
+        const ai = balanceOn(save) ? careerAiTeam(raw, modeOf(save), staffEdgeById(raw.id)) : raw;
+        return { ...ai, tactics: aiTactics(ai, { id: other.id, scouting: scoutingOf(ai), leak }) };
+      }
+      return substituteInjured(applyConditionToTeam(syncUser(raw, other.id), g.condition, save.restingPlayers), injured, standIns, benchTiers).team;
+    };
+    let a = prep(rawA, rawB);
+    let b = prep(rawB, rawA);
     if (a.isUser) a = applyRivalryFocus(a, rivalryScore(save.rivalries, b.id));
     if (b.isUser) b = applyRivalryFocus(b, rivalryScore(save.rivalries, a.id));
     return [a, b];
@@ -2978,8 +2900,57 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const rivalry = recordRivalry(current.rivalries, opponent.id, series);
       const userTeam = teams[userIdx];
       const psychologist = normalizeFacilities(current.facilities).psychologist;
-      const load = updateMatchFatigue(current.fatigue, userTeam.players, series.maps.length, current.restingPlayers, current.morale, psychologist);
+      const g0 = gestaoOf(current);
+      const squadIds = current.squad.map((sg) => sg.playerId);
+      const load = updateMatchFatigue(fatigueView(current, squadIds), userTeam.players.filter((p) => squadIds.includes(careerPlayerId(p.id))), series.maps.length, current.restingPlayers, current.morale, psychologist);
+      // [fase 2 · treino] a série fecha a SEMANA: treino da agenda, condição,
+      // lesões, familiaridade dos mapas priorizados e vazamento das scrims.
+      const played: Record<string, number> = {};
+      for (const p of userTeam.players) { const id = careerPlayerId(p.id); if (squadIds.includes(id)) played[id] = series.maps.length; }
+      const weekPlayers = current.squad.map((sg) => {
+        const f = findSigning(sg);
+        return { id: sg.playerId, nick: f?.player.nick ?? sg.playerId, proneness: f ? attrsOf(f.player).h.injuryProneness : undefined };
+      });
+      // [fase 2 · tática] fim de série: mapas jogados ganham familiaridade, os
+      // outros decaem (só aqui — o treino não decai) e a preparação de anti-strat
+      // contra este adversário foi usada. Depois a semana de treino soma a
+      // familiaridade dos mapas priorizados e o VOD prepara o próximo alvo.
+      const tactics0 = tacticsAfterMatch(g0.tactics, series.maps.map((m) => m.map), opponent.id, staffEffects(g0.staff).familiarityGain);
+      const wk = runTrainingWeek({
+        training: g0.training,
+        condition: conditionWithFatigue(g0.condition, load.fatigue),
+        tactics: tactics0,
+        players: weekPlayers,
+        maps: played,
+        staff: staffEffects(g0.staff),
+        split: current.split,
+        leakTargets: (current.league?.teams ?? []).map((t) => t.id).filter((id) => id !== 'user'),
+      });
+      const gestao: GestaoState = { ...g0, training: wk.training, condition: wk.condition, tactics: wk.tactics };
       const items: NewsItem[] = [];
+      for (const inj of wk.report.injuries) {
+        const w = Math.ceil(inj.weeks);
+        items.push({
+          id: `${current.split}:inj:${inj.playerId}:${wk.report.weekNo}`, split: current.split, icon: '🩹', tone: 'bad', cat: 'board',
+          title: `${inj.nick} ${ct('lesionado')}: ${ct(INJURY_LABEL[inj.kind])}`,
+          body: `${ct('Departamento médico: fora por cerca de')} ${w} ${w > 1 ? ct('semanas') : ct('semana')}. ${inj.kind === 'burnout' ? ct('A carga acumulada estourou — alivie a intensidade e ponha folgas na agenda.') : ct('Um jovem da base entra no lugar dele enquanto isso.')}`,
+        });
+      }
+      for (const rec of wk.report.recovered) {
+        items.push({
+          id: `${current.split}:healed:${rec.playerId}:${wk.report.weekNo}`, split: current.split, icon: '✅', tone: 'good', cat: 'board',
+          title: `${rec.nick} ${ct('liberado pelo departamento médico')}`,
+          body: ct('Volta ao time, mas sem ritmo de jogo: a sharpness sobe de novo com partidas, tática e scrim.'),
+        });
+      }
+      if (wk.report.leak) {
+        const lt = current.league?.teams.find((t) => t.id === wk.report.leak!.teamId);
+        items.push({
+          id: `${current.split}:leakw:${wk.report.weekNo}`, split: current.split, icon: '👀', tone: 'bad', cat: 'scout',
+          title: `${ct('Scrim vazou:')} ${lt?.tag ?? ct('um rival')} ${ct('leu seus defaults')}`,
+          body: ct('Alguém da scrim da semana repassou suas execuções. Esse time chega com anti-strat contra o seu plano de jogo nas próximas semanas.'),
+        });
+      }
       const highlight = bestSeriesMoment(series, teams, userIdx);
       const userWon = series.winner === userIdx;
       const mapGap = Math.abs(series.mapScore[0] - series.mapScore[1]);
@@ -3059,10 +3030,60 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         userWon ? APPROVAL_DELTAS.matchWin : APPROVAL_DELTAS.matchLoss,
         `${userWon ? ct('Vitória') : ct('Derrota')} ${series.mapScore[userIdx]}-${series.mapScore[oppI]} vs ${opponent.tag} · ${shortLabel}`,
       );
-      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, recentRatings, board: bd.board, boardLog: bd.boardLog, ...pushNews(current, items) };
+      // [fase 3 · vestiário] tempo de jogo da série: quem estava disponível × quem jogou
+      const dressing = recordPlayTime(dressingOf(current), {
+        squadIds,
+        playedIds: userTeam.players.map((p) => careerPlayerId(p.id)).filter((id) => squadIds.includes(id)),
+        maps: series.maps.length,
+        unavailable: new Set(squadIds.filter((id) => isInjured(g0.condition[id]))),
+      });
+      // [mídia viva] confronto direto, narrativas, coletiva e rumores da série
+      const md = midiaAfterSeries(current.midia, midiaSeriesArgs(current, { series, teams, userIdx, label: shortLabel, fullLabel: label, rivalScore: rivalry.score, recentRatings, mvp: highlight?.nick, board: bd.board }));
+      items.push(...md.news.map((x) => ({ ...x, split: current.split })));
+      const next = { ...current, rivalries: rivalry.rivalries, fatigue: {}, gestao, restingPlayers: [], mapStats, recentRatings, board: bd.board, boardLog: bd.boardLog, clube: { ...clubeOfSave(current), dressing }, midia: md.midia, ...pushNews(current, items) };
       persist(next);
       return next;
     });
+  };
+
+  // [mídia viva] argumentos da mídia para a série (lidos do save VIVO)
+  const midiaSeed = (s: CareerSave) => `${s.org?.name ?? ''}|${s.org?.tag ?? ''}|${s.mundo?.seed ?? ''}`;
+  const midiaSeriesArgs = (s: CareerSave, x: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; fullLabel: string; rivalScore: number; recentRatings: Record<string, number[]>; mvp?: string; board: number }): MidiaSeriesArgs => {
+    const u = x.teams[x.userIdx], o = x.teams[x.userIdx === 0 ? 1 : 0];
+    const won = x.series.winner === x.userIdx;
+    const nickOf = (id: string) => u.players.find((p) => careerPlayerId(p.id) === id)?.nick ?? findSigning(s.squad.find((sg) => sg.playerId === id)!)?.player.nick ?? id;
+    const squadIds = s.squad.map((sg) => sg.playerId);
+    return {
+      lang, seed: midiaSeed(s), split: s.split, tag: s.org?.tag ?? 'ORG',
+      opp: { id: o.id, tag: o.tag, nicks: o.players.map((p) => p.nick) },
+      label: x.fullLabel, shortLabel: x.label, won, sc: `${x.series.mapScore[x.userIdx]}-${x.series.mapScore[x.userIdx === 0 ? 1 : 0]}`,
+      upset: won ? u.strength + 2 < o.strength : o.strength + 2 < u.strength,
+      mvp: x.mvp, rivalScore: x.rivalScore, board: x.board,
+      squad: squadIds.map((id) => { const w = x.recentRatings[id]; return { id, nick: nickOf(id), avg: w && w.length >= 3 ? w.reduce((a, b) => a + b, 0) / w.length : undefined }; }),
+      offers: (clubeOfSave(s).market?.incoming ?? []).filter((of) => of.status === 'open').map((of) => ({ pid: of.playerId, nick: of.nick ?? nickOf(of.playerId), toId: of.fromTeamId, to: of.fromTag ?? tagOfTeam(of.fromTeamId) })),
+      world: () => oppEra.filter((t) => !t.id.startsWith('__') && t.players.length)
+        .map((t) => ({ id: t.id, tag: t.tag, players: t.players.map((p) => ({ id: p.id, nick: p.nick, ovr: playerOvr(p) })) }))
+        .sort((a, b) => b.players.reduce((q, p) => q + p.ovr, 0) / b.players.length - a.players.reduce((q, p) => q + p.ovr, 0) / a.players.length),
+      // [integração] estilo T/CT fora do padrão vira pergunta na coletiva de crise
+      style: (() => { const st = styleOf(gestaoOf(s).tactics); return st.t !== 'standard' ? `${ct(STYLE_SHORT[st.t])} (T)` : st.ct !== 'standard' ? `${ct(STYLE_SHORT[st.ct])} (CT)` : undefined; })(),
+      teamOf: (pid) => (squadIds.includes(pid) ? 'user' : oppEra.find((t) => t.players.some((p) => p.id === pid))?.id ?? null),
+    };
+  };
+  const midiaSquad = (s: CareerSave) => s.squad.map((sg) => {
+    const w = s.recentRatings?.[sg.playerId];
+    return { id: sg.playerId, nick: findSigning(sg)?.player.nick ?? sg.playerId, avg: w && w.length >= 3 ? w.reduce((a, b) => a + b, 0) / w.length : undefined };
+  });
+  // [mídia viva] responde (ou dispensa) a coletiva: moral, diretoria e imprensa
+  const answerMidiaPress = (conf: PressConf, picks: PressTone[] | null): PressFx => {
+    const reason = `${ct('Coletiva')}${conf.o ? ` · ${conf.o}` : ''}`;
+    const fx = answerPress(save, conf, picks, save.squad.map((sg) => sg.playerId), reason, MORALE_DEFAULT).fx;
+    setSave((s) => {
+      const r = answerPress(s, conf, picks, s.squad.map((sg) => sg.playerId), reason, MORALE_DEFAULT);
+      const next = { ...s, ...r.patch };
+      persist(next);
+      return next;
+    });
+    return fx;
   };
 
   // SÓ tempos atuais: usa EXCLUSIVAMENTE os elencos REAIS de CS2 (2026) do
@@ -3089,50 +3110,72 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     });
     return () => { alive = false; };
   }, []);
-  // BUG FIX (caça-bugs): quando o App restaura o save da nuvem (login pago com a
-  // carreira já aberta), re-hidrata o store a partir do disco já atualizado —
-  // senão o próximo autosave sobrescreve o save da nuvem com o estado velho.
+  // Restore da nuvem / lápide / outra aba: o App relê o store do disco e REMONTA
+  // esta tela (key={epoch} do gameStore). Antes só o save era re-hidratado e
+  // stage/majorT/hubTab ficavam do save velho e eram gravados de volta [O0-28].
+  // [fase 4 · editor] BASE DA CARREIRA: a oficial (dados + edições do admin) ou a
+  // customizada por cima dela, CONGELADA no save na criação (mundo.database).
+  // Sem base customizada, rawBase/editedBase são exatamente os de antes.
+  const [storedDbs] = useState(() => loadCustomDbs(CS2_REAL_2026));
+  // só o id e a cópia congelada importam (o resto do bloco mundo muda toda etapa)
+  const mundoDbId = save.mundo?.databaseId ?? null;
+  const mundoDbSnap = save.mundo?.database ?? null;
+  const careerDb = useMemo(
+    () => resolveCareerDatabase({ databaseId: mundoDbId, database: mundoDbSnap }, CS2_REAL_2026, storedDbs.map((x) => x.db)),
+    [mundoDbId, mundoDbSnap, storedDbs],
+  );
+  const rawBase = useMemo(() => applyCustomDatabase(CS2_REAL_2026, careerDb.db), [careerDb.db]);
+  const editedBase = useMemo(() => applyCustomDatabase(applyBo3Edits(CS2_REAL_2026, bo3Edits), careerDb.db), [bo3Edits, careerDb.db]);
+  registerCareerBase(editedBase); // [evolução] base do teto (careerPotentialOvr)
+  const baseMovable = useMemo<ReadonlySet<string>>(
+    () => (careerDb.db ? new Set(rawBase.flatMap((t) => t.players.map((p) => p.id))) : BASE_PLAYER_IDS),
+    [careerDb.db, rawBase],
+  );
+  // save sem a cópia da base (só o id): congela a do aparelho a partir de agora
   useEffect(() => {
-    const onRestored = () => setSave(loadSave());
-    window.addEventListener('rtm:cloud-restored', onRestored);
-    return () => window.removeEventListener('rtm:cloud-restored', onRestored);
-  }, []);
+    if (careerDb.status !== 'storage' || !careerDb.db) return;
+    const db = careerDb.db;
+    setSave((s) => {
+      const next = { ...s, mundo: withCareerDatabase(s.mundo ?? (migrateMundo({}).mundo as MundoState), db) };
+      persist(next);
+      return next;
+    });
+  }, [careerDb, setSave]);
+  // base customizada sumiu/ficou inválida: a Carreira segue na oficial e avisa uma vez
+  const dbWarnedRef = useRef(false);
+  useEffect(() => {
+    if (dbWarnedRef.current || !save.org || (careerDb.status !== 'missing' && careerDb.status !== 'invalid')) return;
+    dbWarnedRef.current = true;
+    toast.info(`${ct('A base de dados desta carreira não está disponível:')} ${careerDb.name ?? careerDb.id ?? ''}. ${ct('A carreira continua na base oficial.')}`);
+  }, [careerDb, save.org, toast]);
+  // [fase 4 · juventude × editor] a base do mundo = a base da Carreira (oficial +
+  // admin + customizada) + os jovens gerados sem clube (mercado livre); movíveis
+  // pelo mercado = jogadores da base da Carreira + jovens do mundo.
+  const worldBase = useMemo(
+    () => worldBaseFor({ mundo: save.mundo, squad: save.squad, extraOnTeam: save.extraOnTeam, academy: save.academy, academyTeam: save.academyTeam }, editedBase),
+    [save.mundo, save.squad, save.extraOnTeam, save.academy, save.academyTeam, editedBase],
+  );
+  const movableIds = useMemo(() => movableIdsWith(save.mundo, baseMovable), [save.mundo, baseMovable]);
   const currentEra = useMemo(
     // aplica as transferências já realizadas (save.moves) por cima da base, e o
     // ENVELHECIMENTO da IA por split (pulando seus jogadores, que evoluem pelo evo).
-    () => {
-      const skip = new Set(save.squad.map((s) => s.playerId));
-      return applyAiAging(applyMoves(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves), save.split, skip)
-        .filter((t) => t.id !== '__free__')
-        // times com <5 jogadores (Legacy/Galorys/RED Canids no dataset atual) somem
-        // do circuito porque a UI/engine assume 5 titulares. Antes a gente filtrava
-        // (= 'legacy sumiu'); agora completa o line com prospects sintéticos do
-        // mesmo país via backfillPlayers — o time fica vivo e mantém o resto do
-        // elenco intacto (ninguém troca de função, atributos preservados).
-        .map((t) => t.players.length >= 5 ? t : ({ ...t, players: [...t.players, ...backfillPlayers(t, 5 - t.players.length)] }))
-        // INJETA os jogadores vendidos pelo user que NÃO existem no CS2_REAL_2026
-        // (academy/youth/FA): apêndice no roster do clube comprador. Antes esses
-        // somiam do mundo após a venda — bug do 'jogador academy não aparece no
-        // time que comprou'. Snapshot é congelado no momento da venda.
-        .map((t) => {
-          const extras = save.extraOnTeam?.[t.id];
-          if (!extras || extras.length === 0) return t;
-          // evita duplicar com quem já está no roster (regen colidir com snapshot)
-          const have = new Set(t.players.map((p) => p.id));
-          const fresh = extras.filter((e) => !have.has(e.player.id)).map((e) => e.player);
-          return fresh.length === 0 ? t : { ...t, players: [...t.players, ...fresh] };
-        })
-        // MERCADO VIVO: aplica o drift de força acumulado (save.aiDrift) sobre o
-        // teamwork base. Times em ascensão sustentada ficam mais fortes (e podem
-        // subir de tier), os em queda enfraquecem. Não toca o time do user.
-        .map((t) => {
-          const d = save.aiDrift?.[t.id];
-          if (!d || t.id === save.takeoverId) return t;
-          const tw = Math.max(40, Math.min(95, t.teamwork + d));
-          return tw === t.teamwork ? t : { ...t, teamwork: tw };
-        });
-    },
-    [save.moves, save.extraOnTeam, save.aiDrift, save.takeoverId, bo3Edits, save.split, save.squad],
+    // Times com <5 são completados com a base, os vendidos customizados entram no
+    // comprador (extraOnTeam) e o drift de força (aiDrift) mexe no teamwork — o
+    // pipeline inteiro mora em engine/career/aiWorld.ts (buildAiWorld), o mesmo
+    // que o mercado da IA e a medição de equilíbrio usam.
+    () => buildAiWorld({
+      base: worldBase,
+      moves: save.moves,
+      split: save.split,
+      skip: new Set(save.squad.map((s) => s.playerId)),
+      takeoverId: save.takeoverId,
+      extraOnTeam: save.extraOnTeam,
+      aiDrift: save.aiDrift,
+      arrivals: save.clube?.market.arrivals,
+      worldEvo: save.worldEvo,
+      youthDebut: save.youthDebut,
+    }),
+    [save.moves, save.extraOnTeam, save.aiDrift, save.takeoverId, worldBase, save.split, save.squad, save.clube?.market.arrivals, save.worldEvo, save.youthDebut],
   );
   // pool de ADVERSÁRIOS: tira o time que você assumiu E remove qualquer jogador
   // que está no SEU elenco do time de origem (sem duplicar ninguém), repondo com
@@ -3145,135 +3188,82 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         if (squadIds.size === 0) return t;
         const kept = t.players.filter((p) => !squadIds.has(p.id));
         if (kept.length === t.players.length) return t;
-        const fill = backfillPlayers(t, t.players.length - kept.length);
+        // continua a numeração dos jovens que o currentEra já pôs (senão o
+        // `${t.id}__aca0` aparece duas vezes no mesmo time)
+        const acaUsed = t.players.filter((p) => p.id.startsWith(`${t.id}__aca`)).length;
+        const fill = backfillPlayers(t, t.players.length - kept.length, acaUsed);
         return { ...t, players: [...kept, ...fill] };
       });
   }, [currentEra, save.takeoverId, save.squad]);
 
-  // Campeonatos disponíveis a cada split: o jogador escolhe qual convite aceitar,
-  // já sabendo quais times vai enfrentar em cada um. Cada circuito tem força,
-  // premiação e número de vagas pro Major diferentes.
-  const circuits = useMemo(() => {
+  // Campeonatos disponíveis a cada etapa: o jogador escolhe qual disputar, já
+  // sabendo quais times vai enfrentar em cada um. [fase 4 · circuito] Os 8 eventos
+  // da etapa saem do calendário real (engine/mundo/circuito.ts): faixa de força de
+  // sempre (a dificuldade não muda) com os CONVITES pelo VRS publicado; cada evento
+  // é LAN ou online pela sede real, e você entra pelo seu tier, por convite ou
+  // pelo qualificatório (fechado no tier 1, aberto no tier 2).
+  const circuits = useMemo((): CircuitOption[] => {
     const pool = oppEra.filter((t) => t.id !== 'user');
-    const byStrength = [...pool].sort((a, b) => b.teamwork - a.teamwork);
-    // TIERS GLOBAIS (espelham o ranking HLTV), não por região. Cada torneio tem um
-    // NÚCLEO (os melhores da faixa, que quase sempre comparecem) + vagas ROTATIVAS
-    // de uma janela mais ampla, embaralhadas POR SPLIT. Assim o Tier 1 às vezes
-    // recebe um Tier 2, o Tier 2 recebe um Tier 3, e o field muda de split pra
-    // split — sem ser sempre os mesmos. Montados em sequência removendo quem já foi
-    // sorteado, então os campos ficam disjuntos (ninguém em dois eventos no split).
-    const used = new Set<string>();
     const ev = save.eventInSplit ?? 1;
-    // ROTAÇÃO POR ETAPA: cada evento do split pega um conjunto diferente da faixa,
-    // deslocando a banda de força. Assim os 3 eventos do split não repetem os
-    // mesmos times nem a mesma 1ª rodada (o GSL semeia por força, então mudar o
-    // conjunto de times muda os grupos e os confrontos de abertura).
-    // BANDA DE FORÇA POR TIER (por índice no ranking, não rotação global): o Tier-1
-    // sai SÓ da faixa de elite, o Tier-3 SÓ da faixa de acesso. O núcleo é sempre o
-    // mais forte da faixa; a rotação por etapa mexe apenas nas vagas rotativas DENTRO
-    // da banda. Bandas com leve sobreposição (ex.: um Tier-2 forte às vezes sobe ao
-    // Tier-1), mas elite NUNCA despenca pro acesso. Antes a rotação da banda inteira
-    // empurrava um time de elite pro Tier-3 (Falcons na CCT Open Series).
-    const bandField = (lo: number, hi: number, coreN: number, n: number, seed: number, rotBy: number): TeamSeason[] => {
-      const band = byStrength.slice(lo, hi).filter((t) => !used.has(t.id));
-      const core = band.slice(0, coreN);                  // os mais fortes da faixa, fixos
-      const windowPart = band.slice(coreN);               // vagas rotativas (variam por etapa)
-      const off = windowPart.length ? (((rotBy % windowPart.length) + windowPart.length) % windowPart.length) : 0;
-      const rotatedWindow = [...windowPart.slice(off), ...windowPart.slice(0, off)];
-      const rot = seededShuffle(rotatedWindow, seed).slice(0, Math.max(0, n - core.length));
-      const field = [...core, ...rot];
-      for (const t of field) used.add(t.id);
-      return field;
+    const DESC: Record<string, (n: string) => string> = {
+      t1: (n) => `${ct('Tier 1 mundial ·')} ${n}${ct(': fase de grupos (GSL) + playoffs com a elite. Principal caminho pro Major; paga muito.')}`,
+      't1-alt': (n) => `${ct('Tier 1 alt ·')} ${n}${ct(': field diferente da elite (vagas mais profundas, mesmas regras).')}`,
+      t2: (n) => `${ct('Tier 2 mundial ·')} ${n}${ct(': segundo escalão do ranking, grupos GSL + playoffs. Vença pra subir ao Tier 1.')}`,
+      't2-alt': (n) => `${ct('Tier 2 alt ·')} ${n}${ct(': segundo escalão com field rotativo (mais regional).')}`,
+      t3: (n) => `Tier 3 · ${n}${ct(': circuito de acesso mundial. Onde toda org começa.')}`,
+      't3-sa': (n) => `${ct('Tier 3 SA ·')} ${n}${ct(': circuito regional sulamericano (Brasil, Argentina, Chile, etc).')}`,
+      't3-eu': (n) => `${ct('Tier 3 EU ·')} ${n}${ct(': circuito regional europeu (Alemanha, França, Polônia, Nórdicos).')}`,
+      't3-asia': (n) => `${ct('Tier 3 Ásia ·')} ${n}${ct(': circuito regional asiático (China, Mongólia, Coreia, Sudeste).')}`,
     };
-    const evSeed = ev * 7;          // cada etapa do split sorteia um field diferente
-    const evRot = (ev - 1) * 4;     // desloca as vagas rotativas por etapa (1ª rodada diferente)
-    const t1Teams = bandField(0, 24, 9, 15, save.split * 101 + 1 + evSeed, evRot);       // elite (ranking ~top 24)
-    const t2Teams = bandField(15, 42, 9, 15, save.split * 101 + 2 + evSeed, evRot + 1);  // segundo escalão (~15-42)
-    const t3Teams = bandField(34, 80, 9, 15, save.split * 101 + 3 + evSeed, evRot + 2);  // acesso (~34+)
-    // FRENTE 2/3: VARIANTES + REGIONAIS
-    // bandFieldRegional: aceita filtro de país (filtra dentro da banda + skip já-usados).
-    // Permite criar circuitos T3 regionais (SA/EU/Ásia) que cobrem os times "regionais"
-    // — geralmente country BR/AR/etc com teamwork baixo, que não devem cair em pools EU.
-    const bandFieldRegional = (lo: number, hi: number, n: number, seed: number, countrySet: Set<string>): TeamSeason[] => {
-      const band = byStrength.slice(lo, hi).filter((t) => !used.has(t.id) && countrySet.has(t.country.toLowerCase()));
-      const picked = seededShuffle(band, seed).slice(0, n);
-      for (const t of picked) used.add(t.id);
-      return picked;
-    };
-    // Sets de países por macro-região (cobertura ampla pra não excluir times válidos).
-    const SA_COUNTRIES = new Set(['br','ar','cl','pe','uy','co','ec','bo','py','ve','mx']);
-    const EU_COUNTRIES = new Set(['de','fr','gb','es','it','pl','dk','se','fi','no','nl','be','at','cz','ro','hu','bg','pt','ie','ch','sk','rs','hr','si','ba','mk','al','gr','md','is','lu','mt','ee','lv','lt']);
-    const ASIA_COUNTRIES = new Set(['cn','jp','kr','mn','vn','th','id','ph','my','sg','in','pk','tw','hk','kz','uz','tr']);
+    return buildEtapaEvents(pool, save.split, ev, save.mundo?.vrs ?? null).map((e) => ({
+      id: e.slot, name: e.name, desc: DESC[e.slot](e.name), teams: e.teams, spots: e.spots, prizeMult: e.prizeMult,
+      vrsWeight: e.vrsWeight, tier: e.tier, region: e.region, eventId: e.id, lan: e.lan, venue: e.venue, host: e.host,
+      prize: e.prize, invited: e.invited, etapa: e,
+    }));
+  }, [oppEra, save.split, save.eventInSplit, save.mundo?.vrs]);
 
-    const mk = (
-      id: string,
-      name: string,
-      desc: string,
-      teams: TeamSeason[],
-      spots: number,
-      prizeMult: number,
-      tier: number,
-      region?: 'global' | 'sa' | 'eu' | 'asia',
-    ) => {
-      const ai = teams.slice(0, 15);
-      const favg = ai.length ? ai.reduce((a, t) => a + vrsCore(t.teamwork), 0) / ai.length : 400;
-      return { id, name, desc, teams: ai, spots, prizeMult, vrsWeight: opponentMult(favg), tier, region: region ?? 'global' };
-    };
-    const t1Name = t1EventName(save.split, ev);
-    const t1AltName = t1EventName(save.split, ev + 7);   // 2ª opção T1 (deslocada)
-    const t2Name = t2EventName(save.split, ev);
-    const t2AltName = t2EventName(save.split, ev + 5);   // 2ª opção T2
-    const t3Name = t3EventName(save.split, ev);
-    const t3SaName = t3RegionalEventName(save.split, ev, 'sa');
-    const t3EuName = t3RegionalEventName(save.split, ev, 'eu');
-    const t3AsiaName = t3RegionalEventName(save.split, ev, 'asia');
-
-    // Variante T1/T2 paralela: pega vagas mais profundas da banda (com seed diferente).
-    // Times em comum são removidos via `used` set (bandField é destrutivo).
-    const t1AltTeams = bandField(8, 28, 4, 15, save.split * 101 + 21 + evSeed, evRot + 3);
-    const t2AltTeams = bandField(20, 50, 4, 15, save.split * 101 + 22 + evSeed, evRot + 5);
-
-    // Pools regionais (T3): puxam de 30-95 pra incluir os times mais fracos (BR
-    // pequenos, regional only). Cada um filtrado pelos países da região.
-    const t3SaTeams = bandFieldRegional(30, 95, 15, save.split * 101 + 31, SA_COUNTRIES);
-    const t3EuTeams = bandFieldRegional(30, 95, 15, save.split * 101 + 32, EU_COUNTRIES);
-    const t3AsiaTeams = bandFieldRegional(30, 95, 15, save.split * 101 + 33, ASIA_COUNTRIES);
-
-    const out: CircuitOption[] = [
-      mk('t1', t1Name, `${ct('Tier 1 mundial ·')} ${t1Name}${ct(': fase de grupos (GSL) + playoffs com a elite. Principal caminho pro Major; paga muito.')}`, t1Teams, 2, 1.8, 1),
-      mk('t1-alt', t1AltName, `${ct('Tier 1 alt ·')} ${t1AltName}${ct(': field diferente da elite (vagas mais profundas, mesmas regras).')}`, t1AltTeams, 1, 1.6, 1),
-      mk('t2', t2Name, `${ct('Tier 2 mundial ·')} ${t2Name}${ct(': segundo escalão do ranking, grupos GSL + playoffs. Vença pra subir ao Tier 1.')}`, t2Teams, 2, 1, 2),
-      mk('t2-alt', t2AltName, `${ct('Tier 2 alt ·')} ${t2AltName}${ct(': segundo escalão com field rotativo (mais regional).')}`, t2AltTeams, 1, 0.9, 2),
-      mk('t3', t3Name, `Tier 3 · ${t3Name}${ct(': circuito de acesso mundial. Onde toda org começa.')}`, t3Teams, 1, 0.6, 3),
-      mk('t3-sa', t3SaName, `${ct('Tier 3 SA ·')} ${t3SaName}${ct(': circuito regional sulamericano (Brasil, Argentina, Chile, etc).')}`, t3SaTeams, 1, 0.55, 3, 'sa'),
-      mk('t3-eu', t3EuName, `${ct('Tier 3 EU ·')} ${t3EuName}${ct(': circuito regional europeu (Alemanha, França, Polônia, Nórdicos).')}`, t3EuTeams, 1, 0.55, 3, 'eu'),
-      mk('t3-asia', t3AsiaName, `${ct('Tier 3 Ásia ·')} ${t3AsiaName}${ct(': circuito regional asiático (China, Mongólia, Coreia, Sudeste).')}`, t3AsiaTeams, 1, 0.5, 3, 'asia'),
-    ];
-    return out.filter((c) => c.teams.length >= 5);
-  }, [oppEra, save.split, save.eventInSplit]);
-
+  // [evolução · curva única] atributos ATUAIS de um jogador no mundo da IA (fora
+  // do seu elenco), pela MESMA conta do buildAiWorld: titular da base desde o
+  // split 1, jovem da base (regen) pela vaga, vendido sem id na base pela cópia
+  // da venda — e quem saiu do seu elenco continua do save.worldEvo. null = o
+  // mundo não evolui esse jogador (newgen: a cópia do mundo já é a atual;
+  // academia/custom/base sintética).
+  const worldAttrsNow = (sv: CareerSave, base: Player): PlayerAttrs | null => {
+    const id = base.id;
+    if (isNewgenId(id) || id.includes('__aca') || sv.academy?.some((a) => a.id === id) || sv.customPlayers?.[id]) return null;
+    for (const list of Object.values(sv.extraOnTeam ?? {})) {
+      const e = list.find((x) => x.player.id === id);
+      if (e) return replayAttrs(e.player, sv.split, extraClock(e, sv.worldEvo, sv.youthDebut));
+    }
+    if (sv.youthDebut?.[id] || sv.youth?.[id]) return null; // base promovida que nunca saiu
+    const rg = parseRegenPlayerId(id);
+    if (rg) {
+      const orig = editedBase.find((t) => t.id === rg.teamId)?.players[rg.slot];
+      if (!orig) return null;
+      return replayAttrs(base, sv.split, aiClock(rg.debut, rg.ageAtDebut, regenPotOvr(id, playerOvr(orig)), sv.worldEvo?.[id]));
+    }
+    const a0 = baseAge(base, sv.youthAge);
+    return replayAttrs(base, sv.split, aiClock(1, a0, aiPotentialOvr(id, playerOvr(base), a0), sv.worldEvo?.[id]));
+  };
+  // o jogador como o mundo o tem agora (mercado: free agents e vitrines)
+  const worldPlayerNow = (p: Player): Player => {
+    const now = worldAttrsNow(save, p);
+    return now ? withAttrs(p, now) : p;
+  };
   // mercado: jogadores reais dos elencos atuais (CS2) + FREE AGENTS (pros sem
   // time), com preço de mercado. Free agents saem 25% mais barato (sem multa).
   const market = useMemo(
     () => {
       const squadIds = new Set(save.squad.map((s) => s.playerId));
-      // jogador que CAIU de OVR enquanto era seu (declínio acumulado em save.evo)
-      // não pode voltar pro mercado com o OVR antigo, alto. Aplica o evo sobre a
-      // BASE (mesma conta do findSigning) pra mostrar o OVR ATUAL, caído.
-      const evoMap = save.evo ?? {};
-      const baseById = new Map<string, Player>(CS2_REAL_2026.flatMap((t) => t.players.map((p) => [p.id, p] as const)));
-      const clampA = (v: number) => Math.max(40, Math.min(99, v));
-      const withDecline = (p: Player): Player => {
-        const d = evoMap[p.id];
-        if (d == null || d >= 0) return p; // só caída (negativa); sem evo, segue igual
-        const base = baseById.get(p.id) ?? p;
-        return { ...base, aim: clampA(base.aim + d), consistency: clampA(base.consistency + d), clutch: clampA(base.clutch + d), awp: clampA(base.awp + d), igl: clampA(base.igl + d) };
-      };
-      const fromTeams = currentEra.flatMap((t) => t.players.map((p) => { const pl = withDecline(p); return { player: pl, from: t, price: playerValue(pl) }; }));
+      // [evolução] quem saiu do seu elenco já vem no estado certo do currentEra
+      // (save.worldEvo: a IA continua dali) — o withDecline (só a queda, escalar)
+      // saiu. Free agents evoluem pela mesma curva única.
+      const fromTeams = currentEra.flatMap((t) => t.players.map((p) => ({ player: p, from: t, price: playerValue(p) })));
       // pool VIVO: com o mercado da IA (gap #23), FAs contratados pela IA somem
       // daqui (aparecem no clube via fromTeams) e deslocados liberados entram.
-      const freeAgents = currentFreeAgents(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves)
+      const freeAgents = currentFreeAgents(worldBase, save.moves)
         .filter((p) => !squadIds.has(p.id)) // some do mercado quando já contratado
+        .map(worldPlayerNow)
         // FREE agents são free — em CS real você assina sem taxa de transferência,
         // só salário. User Guilherme reportou: '"free agents" é considerado um
         // time, para contratar voce precisa comprá-lo'. Antes era 0.75x do valor,
@@ -3296,12 +3286,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       }
       return [...byId.values()].sort((a, b) => a.price - b.price);
     },
-    [currentEra, save.squad, save.evo, save.moves, bo3Edits],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentEra, save.squad, save.evo, save.moves, save.worldEvo, save.split, worldBase, rawBase],
   );
 
-  const findSigning = (s: Signing): ResolvedSigning | null => {
+  // [Modo Cenário] contexto do fechamento pro log do run (caixa + regras dos mods)
+  const cenCtx = (phase: 'e' | 's' | 'm'): CenHookCtx => {
+    const mods = save.scenario?.run?.mods ?? [];
+    const squad = mods.length ? save.squad.slice(0, 5).map((sg) => { const f = findSigning(sg); return { id: sg.playerId, age: f ? effectiveAge(f.player, save.split, save.youthAge, save.youthDebut) : 99, country: f?.player.country ?? '??' }; }) : [];
+    return { phase, split: save.split, budget: save.budget, broken: brokenMods(mods, squad) };
+  };
+  const findSigningIn = (sv: CareerSave, s: Signing): ResolvedSigning | null => {
     // O jogador é resolvido SEMPRE pelos atributos da BASE (não-envelhecida); o
-    // envelhecimento é aplicado UMA vez abaixo (signingDrift). Resolver pelo
+    // envelhecimento é aplicado UMA vez abaixo (worldAttrsNow). Resolver pelo
     // currentEra (já envelhecido) e ainda aplicar drift causava queda dupla de OVR
     // (86 -> 78) e, com a base regenerada, troca de função entre splits.
     let from = currentEra.find((t) => t.id === s.fromId);
@@ -3312,18 +3309,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!from) {
       if (s.fromId === FREE_AGENTS_FROM.id) from = FREE_AGENTS_FROM;
       else if (s.fromId === ACADEMY_FROM.id) from = ACADEMY_FROM;
-      else from = CS2_REAL_2026.find((t) => t.id === s.fromId);
+      else from = rawBase.find((t) => t.id === s.fromId);
     }
-    let player = CS2_REAL_2026.find((t) => t.id === s.fromId)?.players.find((p) => p.id === s.playerId);
+    let player = rawBase.find((t) => t.id === s.fromId)?.players.find((p) => p.id === s.playerId);
     if (!player) {
-      for (const t of CS2_REAL_2026) {
+      for (const t of rawBase) {
         const p = t.players.find((pp) => pp.id === s.playerId);
         if (p) { from = from ?? currentEra.find((ct) => ct.id === t.id) ?? t; player = p; break; }
       }
     }
     // 4) free agent (pro sem time): resolve da lista de free agents
     if (!player) {
-      const fa = FREE_AGENT_PLAYERS.find((p) => p.id === s.playerId);
+      const fa = (careerDb.db ? rawBase.find((t) => t.id === '__free__')?.players ?? [] : FREE_AGENT_PLAYERS).find((p) => p.id === s.playerId);
       if (fa) { from = FREE_AGENTS_FROM; player = fa; }
     }
     // 4b) rookie GRÁTIS (custo 0): vem do backfill determinístico do free agent.
@@ -3332,28 +3329,35 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const rk = backfillPlayers(FREE_AGENTS_FROM, 8).find((p) => p.id === s.playerId);
       if (rk) { from = FREE_AGENTS_FROM; player = rk; }
     }
-    // 5) prospecto promovido da academia (não está na base): resolve do save.youth
-    if (!player && save.youth?.[s.playerId]) {
-      player = save.youth[s.playerId];
+    // 5) prospecto promovido da academia (não está na base): resolve do sv.youth
+    if (!player && sv.youth?.[s.playerId]) {
+      player = sv.youth[s.playerId];
       from = ACADEMY_FROM;
     }
+    // 5d) [fase 4] jovem gerado pelo mundo (newgen): a cópia do bloco `mundo`
+    // (congelada enquanto está no seu elenco — a evolução vem do attrEvo). Vem
+    // ANTES do resgate por nick (7c): um nick gerado pode colidir com um pro real.
+    if (!player && isNewgenId(s.playerId)) {
+      const ng = newgenPlayer(mundoOf(sv), s.playerId);
+      if (ng) { player = ng; from = from ?? FREE_AGENTS_FROM; }
+    }
     // 5c) jogador CUSTOM (criado pelo user no Custom Roster Builder — Vitalícia):
-    // resolve do save.customPlayers. fromId no signing é '__custom__'.
-    if (!player && save.customPlayers?.[s.playerId]) {
-      player = save.customPlayers[s.playerId];
+    // resolve do sv.customPlayers. fromId no signing é '__custom__'.
+    if (!player && sv.customPlayers?.[s.playerId]) {
+      player = sv.customPlayers[s.playerId];
       from = ACADEMY_FROM; // reusa pseudo-time pra não infectar applyMoves; UI mostra a org do user
     }
     // 5b) prospecto AINDA na academia (promovido direto na janela de transferências,
-    // antes de virar youth): resolve da lista save.academy pra entrar no elenco.
+    // antes de virar youth): resolve da lista sv.academy pra entrar no elenco.
     if (!player) {
-      const ac = save.academy?.find((a) => a.id === s.playerId);
+      const ac = sv.academy?.find((a) => a.id === s.playerId);
       if (ac) { player = ac; from = ACADEMY_FROM; }
     }
     // 6) jovens gerados por versões anteriores. O ID carrega todos os dados para
     // reconstruí-los, mesmo quando a geração atual da IA já trocou aquele atleta.
     if (!player) {
       const generated = parseRegenPlayerId(s.playerId);
-      const origin = generated && CS2_REAL_2026.find((t) => t.id === generated.teamId);
+      const origin = generated && rawBase.find((t) => t.id === generated.teamId);
       const original = generated && origin?.players[generated.slot];
       if (generated && origin && original) {
         player = regenYouth(origin, generated.slot, generated.generation, generated.debut, generated.ageAtDebut, original);
@@ -3366,7 +3370,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const academy = parseAcademyPlayerId(s.playerId);
       const origin = academy?.teamId === FREE_AGENTS_FROM.id
         ? FREE_AGENTS_FROM
-        : academy && (currentEra.find((t) => t.id === academy.teamId) ?? CS2_REAL_2026.find((t) => t.id === academy.teamId));
+        : academy && (currentEra.find((t) => t.id === academy.teamId) ?? rawBase.find((t) => t.id === academy.teamId));
       if (academy && origin) {
         player = backfillPlayers(origin, academy.index + 1)[academy.index];
         from = origin;
@@ -3377,7 +3381,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // resolver no seu eu vivo (atualizado) em vez de ser perdido / virar vaga.
     if (!player && s.playerSnapshot?.nick) {
       const nk = s.playerSnapshot.nick.toLowerCase();
-      for (const t of CS2_REAL_2026) {
+      for (const t of rawBase) {
         const p = t.players.find((pp) => pp.nick.toLowerCase() === nk);
         if (p) { from = currentEra.find((ct) => ct.id === t.id) ?? t; player = p; break; }
       }
@@ -3406,7 +3410,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     }
     // função definida pelo técnico (override do dado da base; corrige dados
     // errados e dá controle de tática igual ao gerenciamento do Brasval)
-    const ovrRole = save.roles?.[player.id];
+    const ovrRole = sv.roles?.[player.id];
     if (ovrRole && ovrRole !== player.role) player = { ...player, role: ovrRole };
     // aplica a evolução acumulada do SEU elenco (atributos sobem/caem entre
     // temporadas; valor e salário acompanham automaticamente). Jogador recém-contratado
@@ -3414,13 +3418,26 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // "cai" do OVR mostrado no mercado pro OVR base ao ser contratado).
     // aplica as edições do admin (bo3Edits) no BASE — sem isso, o mercado mostrava
     // o jogador editado (saffee 84) mas a squad do user mostrava o cru (saffee 79).
-    // Bug do "vendi saffe 79, mercado mostra 84 — me senti tapeado": signingDrift
+    // Bug do "vendi saffe 79, mercado mostra 84 — me senti tapeado": a evolução do mundo
     // e o evo ficam calculados em cima da MESMA base que o `currentEra` enxerga.
     player = applyBo3PlayerEdit(player, bo3Edits);
+    // [fase 4 · editor] a base customizada vence as edições do admin
+    player = applyCustomPlayer(player, careerDb.db);
     const basePlayer = player;
-    const d = save.evo?.[player.id] ?? signingDrift(player, save.split, save.youthDebut);
+    // [realismo FM] evolução POR ATRIBUTO: atributos da base + variação acumulada;
+    // os 5 números (e o OVR, valor, salário) saem dos atributos evoluídos.
+    const attrD = activeAttrDelta(sv.attrEvo, sv.evo, player.id);
+    if (attrD) return { player: withAttrs(basePlayer, applyAttrDelta(attrsOf(basePlayer), attrD)), from, basePlayer };
+    // [evolução] ainda sem evolução gravada no seu elenco (recém-contratado, ou o
+    // jogador visto fora dele): os atributos que o MUNDO tem dele agora, pela
+    // curva única — o mesmo jogador que o mercado mostrava (nada de escalar).
+    if (!(player.id in (sv.evo ?? {}))) {
+      const now = worldAttrsNow(sv, basePlayer);
+      if (now) return { player: withAttrs(basePlayer, now), from, basePlayer };
+    }
+    const d = sv.evo?.[player.id] ?? 0;
     // #22: viés do FOCO DE TREINO — o atributo trabalhado abre distância do resto.
-    const bias = save.evoAttrBias?.[player.id];
+    const bias = sv.evoAttrBias?.[player.id];
     if (!d && !bias) return { player, from, basePlayer };
     const clamp = (v: number) => Math.max(40, Math.min(99, v));
     return {
@@ -3436,6 +3453,46 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       basePlayer,
     };
   };
+
+  const findSigning = (s: Signing): ResolvedSigning | null => findSigningIn(save, s);
+
+  // [evolução] quem SAI do seu elenco grava o estado em save.worldEvo (a IA
+  // continua dali) e o jovem gerado devolve os atributos ao bloco do mundo.
+  // Central: compara o elenco de antes com o de agora (venda, troca, liberação,
+  // fim de contrato, empréstimo, promoção com troca, edição do elenco).
+  const exitEvoPatch = (prev: CareerSave, next: CareerSave): Partial<CareerSave> | null => {
+    const now = new Set(next.squad.map((x) => x.playerId));
+    const left = prev.squad.filter((x) => !now.has(x.playerId));
+    if (left.length === 0) return null;
+    const worldEvo = { ...(next.worldEvo ?? {}) };
+    let mundo = next.mundo;
+    let changed = false;
+    for (const sig of left) {
+      const r = findSigningIn(prev, sig);
+      if (!r) continue;
+      const id = sig.playerId;
+      const x = attrsOf(r.player);
+      const pot = careerPotentialOvr(prev, r.player);
+      worldEvo[id] = worldEvoEntry(r.basePlayer, x, prev.split, pot);
+      changed = true;
+      if (isNewgenId(id) && mundo) {
+        const ng = newgenPlayer(mundoOf(next), id);
+        if (ng) mundo = storeNewgen(mundoOf(next), { ...ng, ...legacyFromAttrs(x), attrs: { ...x, pa: Math.max(x.ca, ng.attrs?.pa ?? x.pa) } }) as typeof mundo;
+      }
+    }
+    return changed ? { worldEvo, ...(mundo !== next.mundo ? { mundo } : {}) } : null;
+  };
+  const prevSaveRef = useRef(save);
+  useEffect(() => {
+    const prev = prevSaveRef.current;
+    prevSaveRef.current = save;
+    if (prev === save || prev.squad === save.squad) return;
+    // outro save (troca de slot, nuvem): não é saída de jogador
+    if ((prev.org?.name ?? '') !== (save.org?.name ?? '') || save.split < prev.split || save.split > prev.split + 1) return;
+    const patch = exitEvoPatch(prev, save);
+    if (patch) update(patch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save]);
 
   // AUTO-CURA: garante que todo jogador do elenco que AINDA resolve tenha um
   // snapshot gravado. Assim, se a base do bo3 for reimportada (troca de ids) num
@@ -3460,6 +3517,79 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.squad]);
+
+  // [saídas] REPARO ÚNICO (fixes.faRelease202609): antes da correção, dispensar
+  // na janela e deixar o contrato vencer não gravavam destino — o jogador voltava
+  // pro time da base e recontratá-lo cobrava taxa (relato do Techno na MGZ). Quem
+  // já passou pelo seu elenco (rastros: química de dupla, vínculo com o técnico,
+  // evolução, passagens), está fora dele, sem move, sem venda/troca/empréstimo
+  // pendente e hoje aparece num clube vai pro mercado livre. Roda uma vez por
+  // save (a flag fica gravada); é idempotente de qualquer forma.
+  const faRepairDue = !!save.org && save.fixes?.[FA_RELEASE_FIX] == null;
+  useEffect(() => {
+    if (!faRepairDue) return;
+    setSave((s) => {
+      if (!s.org || s.fixes?.[FA_RELEASE_FIX] != null) return s;
+      const clubOf = new Map<string, string>();
+      for (const t of applyMoves(worldBase, s.moves)) for (const p of t.players) clubOf.set(p.id, t.id);
+      const r = faReleaseRepair({
+        moves: s.moves, squadIds: new Set(s.squad.map((x) => x.playerId)),
+        pendingSales: s.pendingSales, pendingDeals: s.pendingDeals, loans: marketOf(s).loans,
+        traces: { pairChem: s.pairChem, coachBond: s.coachBond, attrEvo: s.attrEvo, evo: s.evo, stints: s.stints },
+        movable: (id) => movableIds.has(id), clubOf: (id) => clubOf.get(id),
+      });
+      const next: CareerSave = { ...s, moves: r.repaired.length ? r.moves : s.moves, fixes: { ...(s.fixes ?? {}), [FA_RELEASE_FIX]: s.split } };
+      persist(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save (flag)
+  }, [faRepairDue]);
+
+  // [integração] plano antigo → estilo: quem escolheu Agressivo passa a jogar o
+  // estilo Agressivo/Agressivo (o bônus de força do plano acabou). Disciplinado é
+  // o padrão de todo save, então não força Controle em quem nunca escolheu nada.
+  const planStyleDue = !!save.org && save.fixes?.[PLAN_STYLE_FIX] == null;
+  useEffect(() => {
+    if (!planStyleDue) return;
+    setSave((s) => {
+      if (!s.org || s.fixes?.[PLAN_STYLE_FIX] != null) return s;
+      const g = gestaoOf(s);
+      const cur = styleOf(g.tactics);
+      const migrate = s.gamePlan === 'aggressive' && cur.t === 'standard' && cur.ct === 'standard';
+      const next: CareerSave = {
+        ...s,
+        ...(migrate ? { gestao: { ...g, tactics: setStyle(g.tactics, PLAN_STYLE.aggressive!) } } : {}),
+        fixes: { ...(s.fixes ?? {}), [PLAN_STYLE_FIX]: s.split },
+      };
+      persist(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save (flag)
+  }, [planStyleDue]);
+
+  // [equilíbrio] saves de antes da régua única: a mudança vale a partir do
+  // PRÓXIMO split (o split em curso termina com as forças que já tinha), com uma
+  // notícia na caixa de entrada explicando. Carreira nova (split 1, sem
+  // histórico nem torneio) já nasce na régua nova, sem aviso.
+  const balanceDue = !!save.org && save.fixes?.[BALANCE_FIX_ID] == null;
+  useEffect(() => {
+    if (!balanceDue) return;
+    setSave((s) => {
+      if (!s.org || s.fixes?.[BALANCE_FIX_ID] != null) return s;
+      const fresh = s.split === 1 && !(s.history?.length) && !s.league && !s.majorT;
+      const busy = !!(s.league || s.majorT || s.playoff);
+      const from = fresh ? s.split : busy ? s.split + 1 : s.split;
+      const item: NewsItem = {
+        id: `${s.split}:equilibrio`, split: s.split, icon: '⚖️', tone: 'info', cat: 'board',
+        title: ct('Mudança no equilíbrio da Carreira'),
+        body: `${ct('A partir do split')} ${from}, ${ct('a força do seu time passa a usar a mesma régua dos times da IA: jogadores, entrosamento e técnico. A sinergia do elenco agora vale pelo entrosamento, que cresce +2 por split que os titulares jogam juntos (até +12). O seu entrosamento foi estimado pelo tempo de casa de cada jogador. A dificuldade escolhida passa a valer também dentro do jogo.')}`,
+      };
+      const next: CareerSave = { ...s, fixes: { ...(s.fixes ?? {}), [BALANCE_FIX_ID]: from }, ...(fresh ? {} : pushNews(s, [item])) };
+      persist(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save (flag)
+  }, [balanceDue]);
 
   // AUTO-CURA da LIGA: saves criados ANTES do fix do padding podem ter grupos
   // com menos de 4 times — o opening match referencia s[3] = undefined e o user
@@ -3497,20 +3627,108 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.league?.name]);
 
+  // [fase 3 · vestiário] o elenco visto pelo vestiário (ocultos, tempo de casa, idade)
+  const vPlayersOf = (s: CareerSave): VPlayer[] => {
+    const out: VPlayer[] = [];
+    for (const sg of s.squad) {
+      const f = findSigning(sg);
+      if (!f) continue;
+      const p = f.player;
+      const st = stintsOf(s.stints, sg.playerId);
+      const act = st.length ? st[st.length - 1] : null;
+      const tenure = act && act.to == null ? Math.max(0, s.split - act.from) : 0;
+      out.push(toVPlayer({ ...p, id: sg.playerId }, { ovr: playerOvr(p), age: effectiveAge(p, s.split, s.youthAge, s.youthDebut), tenure }));
+    }
+    return out;
+  };
+  // contexto do vestiário (status efetivo, grupos, comissão) para a felicidade e as telas
+  const vestiarioCtx = (s: CareerSave) => {
+    const vps = vPlayersOf(s);
+    const dr = dressingOf(s);
+    return { vps, dr, statuses: statusesOf(dr, vps), groups: socialGroups(vps), staffMR: staffEffects(s.gestao?.staff).moraleRecovery };
+  };
+  // entradas da felicidade unificada (os 5 fatores de sempre + os do vestiário)
+  const happinessInputsFor = (s: CareerSave, oid: string, results01: number, bond: number, vc: ReturnType<typeof vestiarioCtx>) => {
+    const ids = s.squad.map((x) => x.playerId);
+    const chemPair = ids.length >= 2 ? averageStarterChemistry({ pairChem: s.pairChem }, ids) : 50;
+    const until = contractUntilOf(s, oid);
+    const vp = vc.vps.find((p) => p.id === oid);
+    const sg = s.squad.find((x) => x.playerId === oid);
+    const f = sg ? findSigning(sg) : null;
+    const status = vc.statuses[oid] ?? 'starter';
+    const terms = s.clube?.contracts?.[oid];
+    return {
+      ratings: s.recentRatings?.[oid],
+      results01,
+      contractSplitsLeft: until != null ? until - s.split : null,
+      bond,
+      chemistry: Math.round(((s.playbookXp ?? 50) + chemPair) / 2),
+      playTime: playTimeScore(effectivePlayShare(vc.dr, oid), status),
+      role: vp ? roleScore(vp.role, vp.role2, s.roles?.[oid]) : undefined,
+      wage: f ? wageScore(terms?.wage, playerWage(f.player)) : undefined,
+      promises: promisesScore(s.playerPromises?.[oid], s.split, terms?.statusPromise, status),
+      staff: staffScore(vc.staffMR),
+      social: socialScore(oid, vc.groups, vc.dr.conflicts),
+      ambition: vp ? ambitionScore(vp.ambition, s.tier) : undefined,
+    };
+  };
+
+  // ───────── [equilíbrio] régua única, entrosamento por convivência ─────────
+  // Saves de antes passam a valer no split seguinte (save.fixes[BALANCE_FIX_ID]).
+  const balanceOn = (s: CareerSave) => (s.fixes?.[BALANCE_FIX_ID] ?? Number.POSITIVE_INFINITY) <= s.split;
+  // escala antiga, só no split de transição (o buildUserTeam ainda a calcula)
+  const legacyUserTeam = (t: TTeam): TTeam => t;
+  // tempo de casa (splits completos no clube): a passagem ativa manda; sem ela,
+  // a química média com os outros titulares (saves antigos)
+  const tenureOf = (s: CareerSave, id: string, starterIds: string[]): number => {
+    const st = stintsOf(s.stints, id);
+    const act = st.length ? st[st.length - 1] : null;
+    if (act && act.to == null) return estimateTenure(s.split - act.from, null);
+    const others = starterIds.filter((x) => x !== id);
+    const chem = s.pairChem && others.length ? others.reduce((a, o) => a + getPairChem({ pairChem: s.pairChem }, id, o), 0) / others.length : null;
+    return estimateTenure(null, chem);
+  };
+  const careerTeamwork = (s: CareerSave, starterIds: string[], players: TPlayer[]): number => {
+    const syn = draftSynergy(players).total;
+    const ten = starterIds.map((id) => tenureOf(s, id, starterIds));
+    const org = s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) ?? rawBase.find((t) => t.id === s.takeoverId) : undefined;
+    if (org) {
+      const orig = new Set((rawBase.find((t) => t.id === s.takeoverId) ?? org).players.map((p) => p.id));
+      const fresh = starterIds.flatMap((id, i) => (orig.has(id) ? [] : [ten[i]]));
+      return takeoverTeamwork(org.teamwork, syn - orgRefSynergy(org), fresh);
+    }
+    return newOrgTeamwork(syn, togetherSplits(ten));
+  };
+  // técnico que o motor lê: estilo escolhido e potência pelo atributo da função
+  const userCoach = (s: CareerSave, coach: Coach): Coach =>
+    coachForMatch(coach, s.gestao?.staff?.members.find((m) => m.role === 'headCoach'));
+  const modeOf = (s: CareerSave): Difficulty => careerMode(s.difficulty);
+  const staffEdgeById = (id: string): number => { const ts = currentEra.find((t) => t.id === id); return ts ? aiStaffEdgeFor(ts) : 0; };
+
   const buildTeam = (s: CareerSave): TTeam | null => {
     if (!s.org || s.squad.length < 5 || !s.coachFromId) return null;
-    const picks = s.squad.map(findSigning).filter(Boolean) as { player: Player; from: TeamSeason }[];
+    // [fase 3 · vestiário] joga a ESCALAÇÃO (5 titulares); sem escalação salva,
+    // os 5 primeiros do elenco — exatamente como antes
+    const lineup = resolveLineup(s.squad.map((sg) => sg.playerId), dressingOf(s).lineup);
+    const picks = lineup.starters
+      .map((id) => s.squad.find((sg) => sg.playerId === id))
+      .map((sg) => (sg ? findSigning(sg) : null))
+      .filter(Boolean) as { player: Player; from: TeamSeason }[];
     if (picks.length < 5) return null;
     // '__rookie__' = técnico iniciante barato (opção de entrada da carreira)
     // '__custom__' = coach criado no Custom Roster Builder (Vitalícia)
     const coach = s.coachFromId === '__custom__' && s.customCoach
       ? s.customCoach
-      : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
+      : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? rawBase.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
     // TAKEOVER herda o entrosamento real da org (o 78 do buildUserTeam é a
     // premissa do draft). Sem isso, assumir a Yawara (teamwork 60) já a
     // promovia no ranking sem jogar nada — o teamwork é a semente do VRS.
     const org = s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined;
-    const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach, org?.teamwork, org ? orgRefSynergy(org) : 0);
+    const built = buildUserTeam(s.org.name, picks.slice(0, 5), coach, org?.teamwork, org ? orgRefSynergy(org) : 0);
+    // [equilíbrio] régua única: força = jogadores(entrosamento por convivência) + técnico
+    const team = balanceOn(s)
+      ? careerUserTeam(built, careerTeamwork(s, picks.slice(0, 5).map((pk) => pk.player.id), built.players), userCoach(s, coach))
+      : legacyUserTeam(built);
     return {
       ...team, tag: s.org.tag, colors: s.org.colors, logoUrl: s.org.logo,
       mapPrefs: { ...team.mapPrefs, ...(s.mapTraining ?? {}) }, // domínio treinado por mapa
@@ -3518,15 +3736,53 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     };
   };
 
+  // [fase 2 · STAFF] técnico do save ⇄ headCoach da comissão técnica. Cobre o
+  // save migrado (o técnico de time real só se resolve com a base, que não entra
+  // na migração), a carreira nova (nasce sem o bloco gestao) e a troca de técnico
+  // no mercado. Idempotente: só grava quando algo muda.
+  useEffect(() => {
+    if (!save.org || !save.coachFromId) return;
+    const id = save.coachFromId;
+    const coach = id === '__custom__' && save.customCoach
+      ? save.customCoach
+      : currentEra.find((t) => t.id === id)?.coach ?? rawBase.find((t) => t.id === id)?.coach ?? ROOKIE_COACH;
+    const gestao = save.gestao ?? (migrateGestao(save as unknown as Record<string, unknown>).gestao as GestaoState);
+    const synced = syncHeadCoach(gestao.staff, coach, id, save.split);
+    if (!synced && save.gestao) return;
+    update({ gestao: { ...gestao, staff: synced ?? gestao.staff } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.org, save.coachFromId, save.customCoach?.nick, currentEra]);
+
   // #6: sparrings elegíveis pro scrim (banda de força + disponibilidade
   // determinística por split/uso). Depende de buildTeam — fica declarado aqui.
+  // Sparrings saem do oppEra (sem o time que você assumiu e sem os SEUS
+  // jogadores nos elencos rivais); a lista nunca fica vazia com elenco completo.
   const scrimOpponents = useMemo(() => {
     const me = buildTeam(save);
     if (!me) return [];
-    return listScrimOpponents(me.strength, currentEra.map(teamSeasonToTTeam), save.split, save.scrimsThisSplit ?? 0);
+    return listScrimOpponents(me.strength, oppEra.map(teamSeasonToTTeam), save.split, save.scrimsThisSplit ?? 0, [save.takeoverId]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [save.squad, save.scrimsThisSplit, save.split, currentEra]);
+  }, [save.squad, save.scrimsThisSplit, save.split, save.takeoverId, save.coachFromId, save.customCoach, save.clube, save.mapTraining, save.playbook, save.playbookXp, currentEra, oppEra]);
 
+  // [fase 4 · circuito] VISTO pra LAN: chance pequena de negação por região (no
+  // máximo um por evento); o jogador não viaja e o stand-in entra (banco →
+  // emprestado → reserva → jovem da base). Determinístico por evento × jogador.
+  const visaCheck = (s: CareerSave, eventId: string, host: string | null | undefined, name: string, venue?: string): { denied: string[]; news: NewsItem[] } => {
+    const starters = resolveLineup(s.squad.map((sg) => sg.playerId), dressingOf(s).lineup).starters;
+    const denied = visaDenials(eventId, host, starters
+      .map((id) => { const sg = s.squad.find((x) => x.playerId === id); const f = sg ? findSigning(sg) : null; return f ? { id, country: f.player.country } : null; })
+      .filter((x): x is { id: string; country: string } => !!x));
+    const news: NewsItem[] = denied.map((id) => {
+      const sg = s.squad.find((x) => x.playerId === id);
+      const nick = (sg ? findSigning(sg)?.player.nick : null) ?? id;
+      return {
+        id: `${s.split}:visa:${eventId}:${id}`.slice(0, 80), split: s.split, icon: '🛂', tone: 'bad' as const, cat: 'board' as const,
+        title: `${ct('Visto negado:')} ${nick} ${ct('fora do')} ${name}`,
+        body: `${ct('A embaixada negou o visto pra LAN em')} ${venue ?? name}. ${ct('Um stand-in joga no lugar dele neste evento (banco, emprestado, reserva ou jovem da base).')}`,
+      };
+    });
+    return { denied, news };
+  };
   const startSplit = (s: CareerSave, circuit: (typeof circuits)[number]) => {
     const user = buildTeam(s);
     if (!user) return;
@@ -3540,10 +3796,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // invicta), com teto baixo pra força do circuito ficar igual à do Major, que
     // é a referência correta. Tiers de acesso (3/2) sobem ainda mais devagar.
     const tierScale = s.tier === 3 ? 0.6 : s.tier === 2 ? 0.85 : 1;
-    const aiBoost = CIRCUIT_AI_BOOST + Math.min(2.5, (s.split - 1) * 0.35 * tierScale);
+    // [equilíbrio] com a régua nova a IA não tem boost de circuito nem rampa: a
+    // vantagem é só a do modo, aplicada na partida (prepareTeams)
+    const aiBoost = balanceOn(s) ? 0 : CIRCUIT_AI_BOOST + Math.min(2.5, (s.split - 1) * 0.35 * tierScale);
     const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 15).map((t) => {
       const tt = teamSeasonToTTeam(t);
-      tt.strength += aiBoost;
+      tt.strength += aiBoost + aiStaffEdgeFor(t); // [fase 2 · STAFF] comissão da IA (|δ| ≤ 0,5)
       return tt;
     });
     // PAD: garante que [user, ...ai] tenha 16 times (= 4 grupos de 4 perfeitos
@@ -3561,7 +3819,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         .slice(0, 15 - ai.length)
         .map((t) => {
           const tt = teamSeasonToTTeam(t);
-          tt.strength += aiBoost;
+          tt.strength += aiBoost + aiStaffEdgeFor(t); // [fase 2 · STAFF]
           return tt;
         });
       ai.push(...filler);
@@ -3570,6 +3828,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // avançam) → playoffs mata-mata. Nada de pontos corridos (isso é futebol).
     const ev = s.eventInSplit ?? 1;
     const league = createGSLStage(`${circuit.name} · Etapa ${ev}/${EVENTS_PER_SPLIT} (Split ${s.split})`, [user, ...ai]);
+    // [fase 4 · circuito] LAN pesa o oculto bigMatch (pressão) no motor; online não
+    const press = pressureFor({ lan: !!circuit.lan, kind: 'gsl' });
+    if (press > 0) league.pressure = press;
     const choice: CircuitChoice = {
       id: circuit.id,
       name: circuit.name,
@@ -3577,7 +3838,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       prizeMult: circuit.prizeMult,
       vrsWeight: circuit.vrsWeight,
       tier: circuit.tier,
+      eventId: circuit.eventId,
+      lan: !!circuit.lan,
+      host: circuit.host ?? null,
+      prize: circuit.prize,
     };
+    // [fase 4 · circuito] VISTO: LAN fora da região do jogador tem chance pequena de
+    // negação — ele não viaja e o stand-in (banco → emprestado → reserva → base) entra
+    const m0 = mundoOf(s);
+    const { denied, news: visaNews } = circuit.lan && circuit.eventId ? visaCheck(s, circuit.eventId, circuit.host, circuit.name, circuit.venue) : { denied: [], news: [] };
+    const mundoNext: MundoState = { ...m0, visa: denied.length && circuit.eventId ? { eventId: circuit.eventId, denied } : null, bootcamp: null };
     // a meta da diretoria é do SPLIT inteiro: define na 1ª etapa e mantém nas demais
     const objective = ev === 1 || !s.objective ? objectiveFor(circuit.tier, s.split, isMajorSplit(s.split)) : s.objective;
     const startItem: NewsItem = {
@@ -3592,10 +3862,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       title: `Olheiros: ${toughest.name} ${ct('é o time a temer')}`,
       body: `O favorito do ${circuit.name} ${ct('é a')} ${toughest.name} ${ct('(força')} ${toughest.strength.toFixed(1)}), perigosa em ${MAP_LABELS[scoutMaps(toughest)[0].m]}${ct('. Pré-jogo: confira o relatório do adversário na Visão geral antes de cada partida.')}`,
     }] : [];
+    // [integração] início do split: todo jogador do elenco tem contrato (rede de
+    // segurança; o padrão da fundação, salário de mercado)
+    const withContracts = squadContractsPatch(s);
     const next = {
-      ...s, league, circuit: choice, tierChange: null, objective,
+      ...s, ...withContracts, league, circuit: choice, tierChange: null, objective,
       inviteAccepted: choice.tier < s.tier || s.inviteAccepted, // jogou acima do tier por convite
-      ...pushNews(s, [startItem, ...scoutItem]),
+      mundo: mundoNext,
+      ...pushNews(s, [startItem, ...scoutItem, ...visaNews]),
     };
     persist(next);
     setSave(next);
@@ -3603,42 +3877,260 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setStage('hub');
   };
 
+  // [fase 4 · circuito] QUALIFICATÓRIO: pra jogar um evento um tier acima sem
+  // convite, passe pelo qualificatório (online) — fechado: 1 série MD3 contra quem
+  // disputava a vaga; aberto: MD1 + MD3. Cada série conta como semana (treino,
+  // condição). Passou: o evento abre pra você na escolha de campeonato.
+  const playQualifier = (c: CircuitOption, route: 'closed' | 'open') => {
+    const ev = c.etapa;
+    const evId = c.eventId;
+    const user = buildTeam(save);
+    if (!ev || !evId || !user) return;
+    const opps = qualifierOpponents(ev, oppEra.filter((t) => t.id !== USER_ID), route, `${evId}:${save.org?.tag ?? ''}`);
+    const plan = qualifierPlan(route);
+    const label = `${c.name} · ${route === 'closed' ? ct('Qualificatório fechado') : ct('Qualificatório aberto')}`;
+    const finish = (won: boolean, lastOpp: string) => {
+      setSave((cur) => {
+        const m = mundoOf(cur);
+        const item: NewsItem = won
+          ? { id: `${cur.split}:quali:${evId}`, split: cur.split, icon: '🎟️', tone: 'good', cat: 'result', title: `${ct('Classificado:')} ${c.name}`, body: `${ct('Vaga conquistada no')} ${label.split(' · ')[1]}. ${ct('O evento abre na escolha de campeonato.')}` }
+          : { id: `${cur.split}:quali:${evId}`, split: cur.split, icon: '🚪', tone: 'bad', cat: 'result', title: `${ct('Fora do')} ${c.name}`, body: `${lastOpp} ${ct('ficou com a vaga do qualificatório. Escolha outro evento desta etapa.')}` };
+        const next = { ...cur, mundo: { ...m, qualifiers: { ...(m.qualifiers ?? {}), [evId]: won ? 'won' as const : 'lost' as const } }, ...pushNews(cur, [item]) };
+        persist(next);
+        return next;
+      });
+      toast[won ? 'success' : 'info'](won ? `${ct('Classificado:')} ${c.name}` : `${ct('Fora do')} ${c.name}`);
+    };
+    if (opps.length < plan.length) { finish(true, ''); return; } // ninguém disputando a vaga: passa direto
+    const step = (i: number) => {
+      const oppTs = opps[i];
+      const oppT = teamSeasonToTTeam(oppTs);
+      oppT.strength += (balanceOn(save) ? 0 : CIRCUIT_AI_BOOST) + aiStaffEdgeFor(oppTs);
+      const pair = prepareTeams(user, oppT);
+      if (!pair) return;
+      const [a, b] = pair;
+      const bo = plan[i].bo;
+      rngRef.current = makeRng(careerMatchSeed(save, `q:${evId}:${i}`));
+      const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+      setQuickSim({
+        series, teams: [a, b], userIdx: 0, label: `${label} · ${i + 1}/${plan.length}`,
+        onDone: () => {
+          setQuickSim(null);
+          recordCareerMatch(series, [a, b], 0, label);
+          const won = series.winner === 0;
+          if (won && i + 1 < plan.length) { step(i + 1); return; }
+          finish(won, oppT.name);
+        },
+      });
+    };
+    step(0);
+  };
+
   // folha salarial do split (soma dos salários do elenco contratado). Na
   // dificuldade hard/legend a folha pesa mais (encargos de operação) — eixo de
   // gestão da dificuldade, sem mexer no salário base de cada jogador.
+  // [fase 3] folha REAL: o salário vem do contrato (clube.contracts); sem
+  // contrato/salário a materializar, cai no playerWage (a régua de antes).
+  // [integração] contrato padrão (salário de mercado) pra quem está no elenco sem
+  // contrato — stand-in emprestado fica de fora (não é seu)
+  const squadContractsPatch = (s: CareerSave): Pick<CareerSave, 'clube'> | Record<string, never> => {
+    const loanedIn = new Set(marketOf(s).loans.filter((l) => l.kind === 'in').map((l) => l.playerId));
+    const clube = ensureSquadContracts(s, s.squad.map((sig) => sig.playerId), s.split, {
+      exclude: loanedIn,
+      wageOf: (id) => { const sig = s.squad.find((x) => x.playerId === id); const f = sig ? findSigning(sig) : null; return f ? playerWage(f.player) : undefined; },
+    });
+    return clube ? { clube } : {};
+  };
+  const squadWages = (s: CareerSave): { id: string; marketWage: number }[] =>
+    s.squad.map((sig) => {
+      const f = findSigning(sig);
+      return f ? { id: sig.playerId, marketWage: playerWage(f.player) } : null;
+    }).filter(Boolean) as { id: string; marketWage: number }[];
   const payroll = useMemo(() => {
-    const picks = save.squad.map(findSigning).filter(Boolean) as { player: Player }[];
-    const base = picks.reduce((acc, p) => acc + playerWage(p.player), 0);
+    const base = contractPayroll(save, squadWages(save));
     return Math.round(base * DIFFICULTY_ECON[careerDiff(save.difficulty)].salaryMul);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [save.squad, save.evo, save.difficulty]);
+  }, [save.squad, save.evo, save.difficulty, save.clube?.contracts]);
+  // [fase 3] perfil do jogador na mesa de negociação (contratação/renovação):
+  // CA, idade, ocultos, lugar no SEU elenco, tier do clube, contrato e status atuais.
+  const contractProfile = (s: CareerSave, player: Player, kind: NegoProfile['kind'], opts: { squadOvrs?: number[]; split?: number } = {}): NegoProfile => {
+    const squadOvrs = opts.squadOvrs ?? s.squad.filter((x) => x.playerId !== player.id).map((sig) => {
+      const f = findSigning(sig);
+      return f ? playerOvr(f.player) : null;
+    }).filter((v): v is number => v != null);
+    return negoProfileFor(player, {
+      age: effectiveAge(player, s.split, s.youthAge, s.youthDebut),
+      clubTier: s.tier,
+      squadOvrs,
+      kind,
+      split: opts.split ?? s.split,
+      current: kind === 'renewal' ? contractOf(s, player.id) ?? null : null,
+      currentStatus: s.clube?.dressing?.status?.[player.id] ?? null,
+      morale: s.morale?.[player.id] ?? MORALE_DEFAULT,
+    });
+  };
+  const renewalProfileFor = (r: Renewal): NegoProfile | null => {
+    const sig = save.squad.find((x) => x.playerId === r.playerId);
+    const f = sig ? findSigning(sig) : null;
+    return f ? contractProfile(save, { ...f.player, id: r.playerId }, 'renewal') : null;
+  };
+  // [fase 3] bônus de lealdade de quem cumpre o contrato até o fim no split
+  // que fecha (quem está saindo vendido/trocado não recebe).
+  const loyaltyDue = (s: CareerSave): number => {
+    const leaving = new Set([...(s.pendingDeals ?? []).flatMap((d) => d.outPlayerIds), ...(s.pendingSales ?? []).map((x) => x.playerId)]);
+    return loyaltyPayouts(s, s.split, s.squad.map((x) => x.playerId).filter((id) => !leaving.has(id))).reduce((a, x) => a + x.amount, 0);
+  };
+  // [fase 3] mesa de contrato para contratações (mercado da janela e da temporada)
+  const signingCtx = (contractSplit: number): ContractCtx => ({
+    profileFor: (player, squadOvrs) => contractProfile(save, player, 'signing', { split: contractSplit, squadOvrs }),
+    payrollNow: contractPayroll(save, squadWages(save)),
+    blockedFor: (pid, party) => negotiationBlock(save, pid, party, save.split),
+    onRecord: (n) => updateClube((s) => recordNegotiation(s, n)),
+    split: save.split,
+    difficulty: careerDiff(save.difficulty),
+  });
+  const renewalBlockedFor = (pid: string): Negotiation | null => negotiationBlock(save, pid, 'player', save.split);
+  // [fase 3] save migrado: grava o salário real (playerWage do jogador ATUAL)
+  // nos contratos com salário a materializar — a folha fica idêntica à de antes.
+  useEffect(() => {
+    if (!save.org) return;
+    const clube = materializeContracts(save, squadWages(save));
+    if (clube) update({ clube });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.org, save.squad, save.clube?.contracts]);
 
-  // evolução da janela: cada jogador do elenco sobe/cai conforme a fase da
-  // carreira (em ascensão / no auge / em declínio). Roda ao fechar o split.
-  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo' | 'dynamicPotBonus' | 'evoAttrBias'> => {
+  // ───────── [fase 4 · circuito] O MUNDO: calendário, VRS e segundo plano ─────────
+  // Força de cada time da IA pro mundo em segundo plano: o mesmo TTeam.strength
+  // que o motor usa (+ comissão técnica, como no circuito).
+  const strengthById = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of currentEra) m.set(t.id, teamSeasonToTTeam(t).strength + aiStaffEdgeFor(t));
+    return m;
+  }, [currentEra]);
+  const strengthOf = (id: string) => strengthById.get(id) ?? 72;
+  // [integração J×K×L] o mundo é a base INTEGRADA (oficial + admin + customizada
+  // congelada + jovens): times de uma base customizada aparecem no circuito e no
+  // VRS; time que saiu do mundo (ou da base) segue legível pelo nome guardado
+  // no próprio resultado (WorldEventResult.names).
+  const officialTeamIds = useMemo(() => new Set(CS2_REAL_2026.map((t) => t.id)), []);
+  const storedTag = (id: string): string | null => storedTagOf(save.mundo?.results, id);
+  const tagOfTeam = (id: string): string => {
+    if (id === USER_ID) return save.org?.tag ?? ct('Você');
+    const t = currentEra.find((x) => x.id === id) ?? worldBase.find((x) => x.id === id) ?? CS2_REAL_2026.find((x) => x.id === id);
+    return t?.tag ?? storedTag(id) ?? id;
+  };
+  // grava o nome (tag) de quem não é da base oficial (base customizada) no resultado
+  const namedResults = (rs: WorldEventResult[]): WorldEventResult[] => nameUnofficialTeams(rs, (id) => officialTeamIds.has(id), tagOfTeam);
+  // Semeadura (save migrado / carreira nova): o mundo nasce com as 6 etapas de
+  // passado (modelo calibrado) e o ranking publicado; num save migrado os SEUS
+  // resultados das últimas etapas entram nos eventos da época; num takeover sem
+  // histórico você herda a posição da org. O calendário renova a cada split.
+  useEffect(() => {
+    if (!save.org || save.foundingOpen || save.squad.length < 5) return;
+    const m0 = mundoOf(save);
+    const needSeed = m0.results.length === 0 && Object.keys(m0.vrs).length === 0;
+    const m1 = withFreshCalendar(m0, save.split);
+    if (!needSeed && m1 === m0 && save.mundo) return;
+    let m = m1;
+    if (needSeed) {
+      const now = etapaTime(save.split, save.eventInSplit ?? 1);
+      const hasHistory = save.history.length > 0;
+      const pool = [...oppEra, ...(save.takeoverId && !hasHistory ? currentEra.filter((t) => t.id === save.takeoverId) : [])]
+        .filter((t) => t.id !== USER_ID && t.players.length >= 5);
+      const tierOf = (name: string): 1 | 2 | 3 => (T1_EVENTS.includes(name) || MAJOR_NAMES.includes(name) ? 1 : T2_EVENTS.includes(name) ? 2 : 3);
+      const seeded = seedWorld({
+        pool, strengthOf, now,
+        takeoverId: hasHistory ? null : save.takeoverId,
+        userRecords: hasHistory ? userRecordsFromHistory(save.history, now, tierOf) : [],
+      });
+      m = { ...m, results: seeded.results, vrs: seeded.vrs, vrsAt: seeded.vrsAt };
+    }
+    // funcional: o bloco `mundo` também é escrito pela juventude (K) e pela base (L) —
+    // aqui só entram o calendário, os resultados e o VRS, por cima do estado VIVO
+    const patch = needSeed ? { calendar: m.calendar, results: namedResults(m.results), vrs: m.vrs, vrsAt: m.vrsAt } : { calendar: m.calendar };
+    setSave((cur) => {
+      const next = { ...cur, mundo: { ...(cur.mundo ?? (migrateMundo({}).mundo as MundoState)), ...patch }, ...(needSeed ? { vrs: m.vrs[USER_ID]?.points ?? 0 } : {}) };
+      persist(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.org, save.foundingOpen, save.squad.length, save.split, save.mundo?.calendar, save.mundo?.vrs]);
+
+  // FECHAMENTO DA ETAPA: o SEU evento (liga + playoffs) e os outros eventos da
+  // etapa (segundo plano) entram no mundo e o VRS é republicado. Calculado na
+  // tela de fim de etapa; os botões gravam exatamente isto (determinístico).
+  const etapaClose = useMemo(() => {
+    if (stage !== 'seasonEnd' || !save.league || !save.org) return null;
+    const ev = save.eventInSplit ?? 1;
+    const t = etapaTime(save.split, ev);
+    const m0 = mundoOf(save);
+    const opt = circuits.find((c) => c.eventId === save.circuit?.eventId) ?? circuits.find((c) => c.id === save.circuit?.id);
+    const myId = save.circuit?.eventId ?? opt?.eventId ?? `ev:${save.split}:${ev}:${save.circuit?.id ?? 'x'}`;
+    const bgEvents = circuits.map((c) => c.etapa).filter((e): e is EtapaEvent => !!e);
+    const bg = (m0.vrsAt ?? -1e9) >= t ? [] : simulateEtapaWorld(bgEvents, save.split, ev, strengthOf, new Set([myId]));
+    const mine = eventResult({
+      id: myId, name: save.circuit?.name ?? save.league.name, tier: ((save.circuit?.tier ?? save.tier) as 1 | 2 | 3), kind: 'gsl',
+      lan: save.circuit?.lan ?? opt?.lan ?? false, prize: save.circuit?.prize ?? opt?.prize ?? eventMeta(save.circuit?.name ?? '', save.circuit?.tier ?? 3).prize,
+      split: save.split, t,
+    }, leaguePlacements(save.league, save.playoff));
+    const closed = closeWorld({ ...m0, visa: null, bootcamp: null, qualifiers: {} }, namedResults([...bg, mine]), t);
+    const me = closed.table.entries[USER_ID];
+    const lastEv = ev >= EVENTS_PER_SPLIT;
+    const plan = lastEv && isMajorSplit(save.split)
+      ? majorFieldFromVrs(closed.mundo.vrs, oppEra.filter((x) => x.id !== USER_ID && x.players.length >= 5), { region: save.region })
+      : null;
+    const favRank = (eventId: string, teamId: string) => {
+      const e = bgEvents.find((x) => x.id === eventId);
+      return e ? [...e.teams].sort((a, b) => strengthOf(b.id) - strengthOf(a.id)).findIndex((x) => x.id === teamId) + 1 : 0;
+    };
+    return {
+      mundo: closed.mundo,
+      table: closed.table,
+      rank: me?.rank ?? Object.keys(closed.mundo.vrs).length + 1,
+      points: me?.points ?? 0,
+      contribution: me?.rows.find((r) => r.eventId === myId)?.contribution ?? 0,
+      plan,
+      route: plan ? majorRouteOf(plan) : null,
+      headlines: worldHeadlines(bg, save.split, tagOfTeam, favRank),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, save.league, save.playoff, save.mundo, save.circuit, save.split, save.eventInSplit, circuits, strengthById]);
+  const headlineNews = (hs: { id: string; icon: string; tone: 'good' | 'bad' | 'info'; title: string; body: string }[], split: number): NewsItem[] =>
+    hs.map((h) => ({ id: h.id, split, icon: h.icon, tone: h.tone, cat: 'scene' as const, title: h.title, body: h.body }));
+  // Major em segundo plano (você não foi): RMRs + 3 stages + playoffs pelo modelo
+  const backgroundMajor = (m: MundoState, plan: MajorFieldPlan, split: number): { mundo: MundoState; news: NewsItem[] } => {
+    const w = completeMajor(plan, strengthOf, `bg:${split}`);
+    const res = majorResults(split, w);
+    const closed = closeWorld(m, namedResults(res), majorTime(split)).mundo;
+    return { mundo: closed, news: headlineNews(worldHeadlines(res, split, tagOfTeam), split) };
+  };
+
+  // evolução da janela: cada jogador do elenco evolui ATRIBUTO A ATRIBUTO
+  // (engine/attrs/progression.ts): a idade pesa por classe (reflexo cai cedo,
+  // leitura de jogo cresce até ~30), o treino (foco no jogador, foco no grupo,
+  // estrutura do CT), a rodagem no split e o profissionalismo (oculto) aceleram,
+  // e o teto é o PA (potencial da idade + furos de teto por performance).
+  // Valor e salário acompanham os atributos. Roda ao fechar o split.
+  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo' | 'dynamicPotBonus' | 'evoAttrBias' | 'attrEvo'> => {
     // só jogadores do elenco ATUAL carregam evolução: quem foi vendido volta
     // aos atributos base (evita recomprar barato um jogador ainda evoluído)
     const evo: Record<string, number> = {};
+    const attrEvo: AttrEvoMap = {};
     const lastEvo: CareerSave['lastEvo'] = [];
     const dynamicPotBonus: Record<string, number> = { ...(s.dynamicPotBonus ?? {}) };
     const evoAttrBias: CareerSave['evoAttrBias'] = { ...(s.evoAttrBias ?? {}) };
+    const trainingLevel = normalizeFacilities(s.facilities).training;
     for (const sig of s.squad) {
       const f = findSigning(sig);
       if (!f) continue;
-      // recém-contratado sem evo herda o drift da IA (mesmo OVR do mercado).
-      // Usa o BASE (não-envelhecido) + o drift acumulado; f.player já vem driftado,
-      // então somar prev de novo contava o envelhecimento em dobro.
-      const prev = s.evo?.[sig.playerId] ?? signingDrift(f.basePlayer, s.split, s.youthDebut);
-      const ovr = playerOvr(f.basePlayer) + prev; // OVR efetivo atual (base + evolução)
+      // f.player já é o jogador ATUAL: base + evolução por atributo (ou, antes da
+      // 1ª virada no sistema novo, base + evo escalar/drift herdado do mercado).
+      const current = attrsOf(f.player);
+      const ovr = playerOvr(f.player);
       const age = effectiveAge(f.basePlayer, s.split, s.youthAge, s.youthDebut);
-      // teto é calculado pela idade de ESTREIA (igual aiAttrDrift faz pra IA). Usar a
-      // idade CORRENTE encolhia o teto a cada virada de bloco etário (21→22, 22→23...)
-      // e travava o jogador "no teto" pra sempre. IMPORTANTE: baseAge NÃO conhece
-      // regen/youthDebut (cai no fallback 25-29), o que dava room≈0 e travava regens
-      // e prospectos contratados no OVR de mercado — potBaseAge resolve a idade de
-      // estreia correta pra cada tipo (regen id / youthDebut / dataset).
-      const baseAgeForPot = potBaseAge(f.basePlayer, s.youthAge, s.youthDebut);
-      const potBase = playerPotentialOvr(f.basePlayer, baseAgeForPot);
+      // teto: o helper ÚNICO do potencial (careerPotentialOvr) — o mesmo número
+      // que as telas mostram. Sai da BASE (OVR e idade de estreia), não do atual.
+      const potBase = careerPotentialBaseOvr(s, f.basePlayer);
       // #17 POTENCIAL DINÂMICO: quem joga muito acima do previsto FURA O TETO.
       // Avaliado antes do teto valer nesta virada — o breakthrough abre espaço já.
       const bonus0 = dynamicPotBonus[sig.playerId] ?? 0;
@@ -3650,35 +4142,40 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       });
       const bonus = bonus0 + gained;
       if (bonus > 0) dynamicPotBonus[sig.playerId] = bonus;
-      const pot = Math.min(99, potBase + bonus);
+      const pot = careerPotentialOvr({ ...s, dynamicPotBonus }, f.player);
       const breakthrough = gained > 0
         ? { from: potentialTier(Math.min(99, potBase + bonus0)), to: potentialTier(pot) }
         : undefined;
-      const atCeiling = ovr >= pot;
-      let d = evoDelta(sig.playerId, s.split, age, atCeiling);
-      // foco de treino: o jogador escolhido desenvolve mais rápido. Jovem/auge
-      // ganha +1 (não ultrapassa o potencial); veterano treina pra perder menos.
-      const focused = s.trainingFocus === sig.playerId;
-      if (focused) {
-        if (!atCeiling) d += 1;
-        else if (d < 0) d += 1; // mitiga o declínio do veterano
-      }
-      if (!atCeiling && d > 0) d += developmentBonus(sig.playerId, s.split, normalizeFacilities(s.facilities).training);
-      if (!atCeiling && d > 0) d += personalityDevelopmentBonus(sig.playerId, s.split, age);
-      // CONVITE: encarar um tier acima acelera os jovens (rodagem contra os grandes)
-      if (s.inviteAccepted && !atCeiling && d > 0 && age <= 22) d += 2;
-      if (d > 0) d = Math.min(d, Math.max(0, pot - ovr));
-      const total = prev + d;
-      if (total !== 0) evo[sig.playerId] = total;
-      // #22: FOCO DE TREINO — split de desenvolvimento com foco definido acumula
-      // +1 no atributo escolhido (cap no engine). Veterano em declínio não especializa.
-      const focusAttr = s.trainingFocusAttr?.[sig.playerId];
-      if (focusAttr && d > 0 && !atCeiling) {
-        evoAttrBias[sig.playerId] = applyFocusBias(evoAttrBias[sig.playerId], focusAttr);
-      }
+      // multiplicadores de crescimento: estrutura de treino do CT, prodígio e o
+      // CONVITE (encarar um tier acima acelera os jovens — rodagem contra os grandes)
+      let growthMul = 1 + 0.35 * (trainingLevel / FACILITY_MAX_LEVEL);
+      if (playerPersonality(sig.playerId) === 'prodigy' && age <= 23) growthMul *= 1.2;
+      if (s.inviteAccepted && age <= 22) growthMul *= 1.5;
+      // rodagem: mapas jogados neste split (sem histórico → rodagem normal)
+      const lines = s.seasonStats?.[`user__${sig.playerId}`];
+      const mapsPlayed = lines ? lines.filter((l) => l.split === s.split).reduce((a, l) => a + l.maps, 0) : undefined;
+      // [evolução · desempenho] rating recente (janela de séries): acelera o
+      // crescimento e segura a queda; sem jogos, neutro
+      const rr = s.recentRatings?.[sig.playerId];
+      const rating = rr && rr.length ? rr.reduce((a, b) => a + b, 0) / rr.length : undefined;
+      // [fase 2 · treino] o treino semanal do split vira multiplicador POR
+      // ATRIBUTO (agenda × intensidade × foco individual × comissão; padrão = 1)
+      const tr = gestaoOf(s).training;
+      const r = evolveAttrs({ ...current, pa: Math.max(current.ca, caFromOvr(pot)) }, {
+        playerId: sig.playerId, split: s.split, age, role: f.player.role,
+        mapsPlayed, growthMul, rating,
+        focusPlayer: s.trainingFocus === sig.playerId,
+        trainMul: trainingGrowthMul(tr.progress?.[sig.playerId], tr.weeks),
+      });
+      const d = r.ovrAfter - r.ovrBefore;
+      // atributos evoluídos guardados como VARIAÇÃO sobre a base (edições da base
+      // e a base real de atributos continuam chegando ao jogador do elenco)
+      attrEvo[sig.playerId] = attrDelta(r.attrs.a, attrsOf(f.basePlayer).a);
+      // evo segue gravado (OVR atual − OVR base): mercado, prêmios e telas leem
+      evo[sig.playerId] = r.ovrAfter - playerOvr(f.basePlayer);
       lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age), ...(breakthrough ? { breakthrough } : {}) });
     }
-    return { evo, lastEvo, dynamicPotBonus, evoAttrBias };
+    return { evo, lastEvo, dynamicPotBonus, evoAttrBias, attrEvo };
   };
 
 
@@ -3702,9 +4199,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   ): { playerPromises: CareerSave['playerPromises']; morale: Record<string, number>; coachBond: Record<string, number>; news: NewsItem[]; hits: { nick: string; ovr: number; kept: boolean }[] } => {
     const { promises, outcomes } = judgePlayerPromises(s.playerPromises, {
       split: s.split,
-      contractUntil: (pid) => s.contracts?.[pid] ?? null,
+      contractUntil: (pid) => contractUntilOf(s, pid) ?? null,
       squadIds: s.squad.map((x) => x.playerId),
-      fatigue: (pid) => s.fatigue?.[pid] ?? 0,
+      fatigue: (pid) => fatigueView(s, [pid])[pid] ?? 0,
+      // [fase 3 · vestiário] jogou o que o status promete neste split
+      playTimeMet: (pid) => {
+        const share = playShareOf(dressingOf(s), pid);
+        const vc = vestiarioCtx(s);
+        return share != null && share >= expectedPlayTime(vc.statuses[pid] ?? 'starter') - 0.05;
+      },
     });
     const morale = { ...moraleIn };
     const coachBond = { ...bondIn };
@@ -3767,55 +4270,161 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     s: CareerSave,
     results01: number,
     moraleIn: Record<string, number>,
-  ): { satisfaction: Record<string, number>; coachBond: Record<string, number>; morale: Record<string, number> } => {
+  ): {
+    satisfaction: Record<string, number>; coachBond: Record<string, number>; morale: Record<string, number>;
+    clube: ClubeState; news: NewsItem[]; pairChemFx: { a: string; b: string; delta: number }[];
+  } => {
     const satisfaction: Record<string, number> = { ...(s.satisfaction ?? {}) };
     const coachBond: Record<string, number> = { ...(s.coachBond ?? {}) };
     const morale: Record<string, number> = { ...moraleIn };
     const psych = normalizeFacilities(s.facilities).psychologist;
-    const ids = s.squad.map((x) => x.playerId);
-    const chemPair = ids.length >= 2 ? averageStarterChemistry({ pairChem: s.pairChem }, ids) : 50;
+    // [fase 3 · vestiário] felicidade UNIFICADA: os 5 fatores de sempre + tempo de
+    // jogo × status, papel tático, salário, promessas, comissão, grupo e ambição
+    const vc = vestiarioCtx(s);
     for (const sig of s.squad) {
       const oid = sig.playerId;
       const bond = stabilizeBond(coachBond[oid] ?? BOND_DEFAULT, psych);
       coachBond[oid] = bond;
-      const until = s.contracts?.[oid];
-      const { overall } = computeHappiness({
-        ratings: s.recentRatings?.[oid],
-        results01,
-        contractSplitsLeft: until != null ? until - s.split : null,
-        bond,
-        chemistry: Math.round(((s.playbookXp ?? 50) + chemPair) / 2),
-      });
+      const { overall } = computeHappiness(happinessInputsFor(s, oid, results01, bond, vc));
       satisfaction[oid] = tickSatisfaction(satisfaction[oid], overall);
       const m = morale[oid] ?? MORALE_DEFAULT;
       morale[oid] = Math.max(0, Math.min(100, m + satisfactionMoraleDrift(m, satisfaction[oid])));
     }
-    return { satisfaction, coachBond, morale };
+    // [fase 3 · vestiário] fechamento: tempo de jogo → incômodo; influentes arrastam
+    // a moral do grupo; conflitos escalam/abrem e cobram moral e química
+    const closed = closeSplitDressing(vc.dr, vc.vps, s.split);
+    const hier = hierarchy(vc.vps, vc.statuses);
+    for (const [id, d] of Object.entries(influencePull(hier, morale, MORALE_DEFAULT))) {
+      morale[id] = Math.max(0, Math.min(100, (morale[id] ?? MORALE_DEFAULT) + d));
+    }
+    const conf = tickConflicts(closed.dressing, vc.vps, {
+      split: s.split, results01, statuses: vc.statuses,
+      pairChem: (a, b) => getPairChem({ pairChem: s.pairChem }, a, b),
+    });
+    const fx = conflictEffects(conf.dressing.conflicts);
+    for (const [id, d] of Object.entries(fx.morale)) morale[id] = Math.max(0, Math.min(100, (morale[id] ?? MORALE_DEFAULT) + d));
+    const nick = (id: string) => vc.vps.find((p) => p.id === id)?.nick ?? id;
+    const news: NewsItem[] = [];
+    for (const e of closed.events) {
+      if (e.kind === 'talkRequest') news.push({
+        id: `${s.split}:vest-talk:${e.playerId}`, split: s.split, icon: '🗣️', tone: 'bad', cat: 'board',
+        title: `${nick(e.playerId)} ${ct('pediu uma conversa sobre tempo de jogo')}`,
+        body: ct('Ele está jogando menos do que o status dele no elenco promete. Converse (tópico tempo de jogo), prometa minutos, mude o status ou a escalação — senão o próximo passo é pedir para sair.'),
+      });
+      else if (e.kind === 'leaveRequest') news.push({
+        id: `${s.split}:vest-leave:${e.playerId}`, split: s.split, icon: '🚪', tone: 'bad', cat: 'transfer',
+        title: `${nick(e.playerId)} ${ct('pediu para ser negociado')}`,
+        body: ct('Cansado do banco, ele quer sair. O mercado fica sabendo e as propostas por ele ficam mais prováveis. Dá para reverter com tempo de jogo e conversa.'),
+      });
+      else news.push({
+        id: `${s.split}:vest-ok:${e.playerId}`, split: s.split, icon: '🤝', tone: 'good', cat: 'board',
+        title: `${nick(e.playerId)} ${ct('está satisfeito com o tempo de jogo')}`,
+        body: ct('Voltou a jogar o que o status promete e o incômodo passou.'),
+      });
+    }
+    for (const c of conf.started) news.push({
+      id: `${s.split}:vest-fight:${c.a}:${c.b}`, split: s.split, icon: '💢', tone: 'bad', cat: 'board',
+      title: `${ct('Atrito no vestiário:')} ${nick(c.a)} × ${nick(c.b)}`,
+      body: ct('Os dois se estranharam nos treinos. Enquanto durar, os dois perdem moral e a dupla perde química. Resolva em Time › Dinâmica (mediar ou reunião para acalmar) ou vendendo um deles.'),
+    });
+    for (const c of conf.escalated) news.push({
+      id: `${s.split}:vest-worse:${c.a}:${c.b}`, split: s.split, icon: '🔥', tone: 'bad', cat: 'board',
+      title: `${ct('O atrito piorou:')} ${nick(c.a)} × ${nick(c.b)}`,
+      body: ct('Sem intervenção, a briga cresceu. O custo em moral e química aumenta a cada split.'),
+    });
+    return { satisfaction, coachBond, morale, clube: { ...clubeOfSave(s), dressing: conf.dressing }, news, pairChemFx: fx.pairChem };
   };
 
   // evolui os prospectos da academia ao virar o split: jovens sobem rumo ao
   // potencial; o que está em foco 🎯 desenvolve mais rápido. Cresce nos atributos
   // base guardados (eles não vêm do dataset, então a evolução fica neles mesmos).
-  const evolveAcademyEntries = (entries: AcademyEntry[], s: CareerSave): AcademyEntry[] =>
-    entries.map((a) => {
-      // A idade exibida no split N representa o começo daquele split. Portanto
-      // o aniversário acontece ao fechar 3, 6, 9... (antes acontecia em 2, 5,
-      // 8..., um split adiantado).
-      const aged = academyAgeAfterSplit(a.age, s.split);
-      const ovr = playerOvr(a);
-      if (ovr >= a.potential) return { ...a, age: aged }; // teto atingido: só envelhece
-      const r = hashStr(`acaevo:${a.id}:${s.split}`) % 100;
-      let d = r < 35 ? 3 : r < 75 ? 2 : 1;
-      if (s.academyFocus === a.id) d += 1; // treino focado acelera
-      d += developmentBonus(a.id, s.split, normalizeFacilities(s.facilities).training);
-      d = Math.min(d, a.potential - ovr); // não ultrapassa o potencial
-      const clamp = (v: number) => Math.max(40, Math.min(99, v));
-      return {
-        ...a, age: aged,
-        aim: clamp(a.aim + d), consistency: clamp(a.consistency + d), clutch: clamp(a.clutch + d),
-        awp: clamp(a.awp + d), igl: clamp(a.igl + d),
-      };
+  // [evolução · curva única] a academia evolui pela MESMA evolveAttrs do elenco
+  // (antes: +1..+3 de OVR por split, outra curva): titular da equipe de base
+  // (12 mapas), o centro de treino e a formação de jovens da comissão aceleram,
+  // o prospecto em foco treina mais; o teto é o potencial do prospecto.
+  const evolveAcademyEntries = (entries: AcademyEntry[], s: CareerSave): AcademyEntry[] => {
+    // treino de base intenso (engine/career/academyGrowth.ts): estrutura + comissão
+    const mul = academyGrowthMul(normalizeFacilities(s.facilities).training, staffEffects(s.gestao?.staff).youthGrowth);
+    return entries.map((a) => {
+      const r = evolveAcademyProspect(a, s.split, mul, s.academyFocus === a.id);
+      return { ...a, age: r.age, ...legacyFromAttrs(r.attrs), attrs: r.attrs };
     });
+  };
+
+  // ── [fase 4 · juventude] ──────────────────────────────────────────────────
+  // a SUA geração: país dominante do elenco, região e qualidade da comissão
+  // (formação de jovens) somada à estrutura de treino do CT
+  const userYouthCtx = (s: CareerSave): UserYouthCtx | null => {
+    if (!s.org) return null;
+    const counts = new Map<string, number>();
+    for (const sig of s.squad) { const c = findSigning(sig)?.player.country; if (c) counts.set(c, (counts.get(c) ?? 0) + 1); }
+    let country = '', best = 0;
+    for (const [c, k] of counts) if (k > best) { country = c; best = k; }
+    const region: MacroRegion = (country ? macroRegionOf(country) : undefined) ?? s.region ?? 'europe';
+    if (!country) country = (REGION_CC[region] ?? REGION_CC.europe)[0];
+    const quality = staffEffects(s.gestao?.staff).youthGrowth + 0.1 * (normalizeFacilities(s.facilities).training / FACILITY_MAX_LEVEL);
+    return { country, region, quality };
+  };
+  // manchetes da juventude (aposentadorias do mundo, promessas, leva do ano)
+  const juventudeNewsItems = (list: JuventudeNews[]): NewsItem[] => list.map((n): NewsItem => {
+    const id = `${n.split}:juv:${n.kind}:${n.playerId ?? n.count ?? ''}`;
+    if (n.kind === 'retire') {
+      const club = n.teamId ? oppEra.find((t) => t.id === n.teamId)?.tag : undefined;
+      const role = n.staffRole === 'headCoach' ? ct('técnico') : n.staffRole === 'analyst' ? ct('analista') : ct('auxiliar técnico');
+      return {
+        id, split: n.split, icon: '🎙️', tone: 'info', cat: 'scene',
+        title: `${n.nick}${club ? ` (${club})` : ''} ${ct('anuncia a aposentadoria')}`,
+        body: n.staffRole
+          ? `${ct('Aos')} ${n.age} ${ct('anos, pendura o mouse e entra no mercado de comissão técnica como')} ${role}.`
+          : `${ct('Aos')} ${n.age} ${ct('anos, encerra a carreira.')}`,
+      };
+    }
+    if (n.kind === 'breakout') {
+      return {
+        id, split: n.split, icon: '🌱', tone: 'good', cat: 'scout',
+        title: `${n.nick} ${ct('desponta como promessa')}`,
+        body: `${ct('O jovem de')} ${n.age} ${ct('anos chegou a')} ${n.ovr} ${ct('de OVR. Os olheiros já ligam.')}`,
+      };
+    }
+    return {
+      id, split: n.split, icon: '🎓', tone: 'info', cat: 'scout',
+      title: `${ct('Nova geração:')} ${n.count} ${ct('jovens surgem na cena')}`,
+      body: ct('Os olheiros já circulam os relatórios da leva do ano. Veja em Mercado › Juventude.'),
+    };
+  });
+  // fechamento do split: aposentadorias do mundo, evolução e poda dos jovens e,
+  // na virada do ano, a leva nova. Recebe o save JÁ com a janela aplicada.
+  const juventudeClose = (s: CareerSave): { mundo: MundoState; moves: Record<string, string>; news: NewsItem[]; extraOnTeam: CareerSave['extraOnTeam'] } => {
+    const r = tickJuventude({
+      mundo: mundoOf(s), split: s.split, base: editedBase, // [fase 4] base da Carreira (oficial + admin + customizada)
+      moves: s.moves, arrivals: s.clube?.market.arrivals, aiDrift: s.aiDrift, takeoverId: s.takeoverId, extraOnTeam: s.extraOnTeam,
+      skip: newgenExcludeOf(s), save: s, user: userYouthCtx(s), youthGrowth: staffEffects(s.gestao?.staff).youthGrowth, youthDebut: s.youthDebut, worldEvo: s.worldEvo,
+    });
+    // extraOnTeam: vendidos presos no banco do comprador voltaram ao mercado livre
+    return { mundo: r.mundo, moves: movesWithout(s.moves, r.removed) ?? s.moves, news: juventudeNewsItems(r.news), extraOnTeam: r.extraOnTeam ?? s.extraOnTeam };
+  };
+  // leva um jovem da SUA geração para a academia (vira prospecto)
+  const takeNewgenToAcademy = (id: string) => {
+    const m = mundoOf(save);
+    const p = newgenPlayer(m, id);
+    if (!p || (save.academy ?? []).length >= ACADEMY_MAX) return;
+    const pa = p.attrs?.pa ?? caFromOvr(playerOvr(p));
+    const entry: AcademyEntry = {
+      id: academyIdForNewgen(id), nick: p.nick, name: p.name, country: p.country, role: p.role,
+      aim: p.aim, consistency: p.consistency, clutch: p.clutch, awp: p.awp, igl: p.igl,
+      age: effectiveAge(p, save.split), joinedSplit: save.split,
+      potential: Math.max(playerOvr(p), ovrFromCa(pa)),
+    };
+    update({ academy: [...(save.academy ?? []), entry], mundo: dropNewgens(m, [id]), moves: movesWithout(save.moves, [id]) ?? save.moves });
+  };
+  // save migrado / Carreira nova: a leva do ano corrente nasce na abertura
+  useEffect(() => {
+    if (!save.org) return;
+    const m = mundoOf(save);
+    if (hasIntake(m, careerYearOf(save.split))) return;
+    update({ mundo: ensureYearIntake(m, { split: save.split, save, world: currentEra, user: userYouthCtx(save) }) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.org, save.split, save.mundo]);
 
   const evolveAcademy = (s: CareerSave): Pick<CareerSave, 'academy' | 'academyTeam'> => ({
     academy: evolveAcademyEntries(s.academy ?? [], s),
@@ -3830,11 +4439,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const promoteProspect = (prospectId: string, replaceOid?: string) => {
     const a = (save.academy ?? []).find((x) => x.id === prospectId);
     if (!a) return;
-    if (save.squad.length >= 5 && !replaceOid) { setPromoting(prospectId); return; }
+    if (save.squad.length >= SQUAD_MAX && !replaceOid) { setPromoting(prospectId); return; } // [fase 3] elenco de até 7
     const player: Player = {
       id: a.id, nick: a.nick, name: a.name, country: a.country, role: a.role,
       age: a.age,
       aim: a.aim, consistency: a.consistency, clutch: a.clutch, awp: a.awp, igl: a.igl,
+      ...(a.attrs ? { attrs: a.attrs } : {}), // [evolução] promovido com os atributos da academia
     };
     const youth = { ...(save.youth ?? {}), [a.id]: player };
     // guarda a idade-base (equivalente ao split 1) pra ele continuar JOVEM e evoluindo
@@ -3843,11 +4453,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const youthDebut = { ...(save.youthDebut ?? {}), [a.id]: youthDebutAtPromotion(a.age, save.split) };
     const academy = (save.academy ?? []).filter((x) => x.id !== prospectId);
     let squad = save.squad;
-    if (squad.length >= 5 && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
+    if (squad.length >= SQUAD_MAX && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
     squad = [...squad, { playerId: a.id, fromId: '__youth__' }];
-    const contracts = { ...(save.contracts ?? {}), [a.id]: save.split + CONTRACT_TERM - 1 };
+    // [fase 3] base promovida assina o contrato padrão (salário de mercado, 3 splits)
+    const clube = signContract(replaceOid ? { clube: withoutContracts(save, [replaceOid]) } : save, a.id, defaultTerms(playerWage(player), save.split));
     const academyFocus = save.academyFocus === prospectId ? null : save.academyFocus;
-    const next = { ...save, academy, youth, youthAge, youthDebut, squad, contracts, academyFocus };
+    const next = withSquadCondition({ ...save, academy, youth, youthAge, youthDebut, squad, clube, academyFocus }); // [integração] condição na entrada
     persist(next);
     setSave(next);
     setPromoting(null);
@@ -3891,21 +4502,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const promoteAcaTeamToSquad = (acaId: string, replaceOid?: string) => {
     const a = (save.academyTeam ?? []).find((x) => x.id === acaId);
     if (!a) return;
-    if (save.squad.length >= 5 && !replaceOid) return; // UI decide
+    if (save.squad.length >= SQUAD_MAX && !replaceOid) return; // UI decide (elenco de até 7)
     const player: Player = {
       id: a.id, nick: a.nick, name: a.name, country: a.country, role: a.role,
       age: a.age,
       aim: a.aim, consistency: a.consistency, clutch: a.clutch, awp: a.awp, igl: a.igl,
+      ...(a.attrs ? { attrs: a.attrs } : {}), // [evolução] promovido com os atributos da academia
     };
     const youth = { ...(save.youth ?? {}), [a.id]: player };
     const youthAge = { ...(save.youthAge ?? {}), [a.id]: legacyYouthBaseAgeAtPromotion(a.age, save.split) };
     const youthDebut = { ...(save.youthDebut ?? {}), [a.id]: youthDebutAtPromotion(a.age, save.split) };
     const acaTeam = (save.academyTeam ?? []).filter((x) => x.id !== acaId);
     let squad = save.squad;
-    if (squad.length >= 5 && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
+    if (squad.length >= SQUAD_MAX && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
     squad = [...squad, { playerId: a.id, fromId: '__youth__' }];
-    const contracts = { ...(save.contracts ?? {}), [a.id]: save.split + CONTRACT_TERM - 1 };
-    const next = { ...save, academyTeam: acaTeam, youth, youthAge, youthDebut, squad, contracts };
+    const clube = signContract(replaceOid ? { clube: withoutContracts(save, [replaceOid]) } : save, a.id, defaultTerms(playerWage(player), save.split));
+    const next = withSquadCondition({ ...save, academyTeam: acaTeam, youth, youthAge, youthDebut, squad, clube }); // [integração] condição na entrada
     persist(next);
     setSave(next);
   };
@@ -3943,52 +4555,183 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     };
   };
 
-  // Mercado VIVO da IA (gap #23): um tick de tickAIMarketActivity sobre o estado
-  // atual — quem age (gate pela forma REAL de clube + stagger por hash), contrata
-  // do mercado livre ou rouba de rival, tudo determinístico por (save, split).
-  // O SEU org não participa (protectedIds): roubar do usuário continua passando
-  // SÓ pelas propostas com consentimento (incomingOffers/pendingSales).
-  const runAIMarketTick = (s: CareerSave) => {
-    const pool = currentEra.filter((t) => t.id !== s.takeoverId);
-    return tickAIMarketActivity({
-      save: s,
-      split: s.split,
-      teams: pool,
-      freeAgents: currentFreeAgents(applyBo3Edits(CS2_REAL_2026, bo3Edits), s.moves),
-      protectedIds: new Set(s.squad.map((x) => x.playerId)),
-      movableIds: BASE_PLAYER_IDS,
+  // ─── [fase 3 · MERCADO] IA de mercado ─────────────────────────────────────
+  // A janela da IA (engine/clube/mercadoIA.ts): orçamento e estratégia por clube,
+  // necessidades por função, vários movimentos com cadeia (quem vende repõe) e
+  // stand-ins. Roda no fechamento do split (pré-temporada) e depois da etapa 1
+  // (janela curta); no roster lock do Major não roda. O SEU elenco não entra no
+  // tick (protectedIds): clube da IA só leva jogador seu por proposta
+  // (clube.market.incoming) com o seu aceite — ou pagando a cláusula.
+  const clubeOf = clubeOfSave;
+  // [integração] quem entra no elenco ganha a condição padrão (defaultCondition)
+  function withSquadCondition<T extends CareerSave>(s: T): T {
+    const condition = withEntryCondition(gestaoOf(s).condition, s.squad.map((x) => x.playerId));
+    return condition ? { ...s, gestao: { ...gestaoOf(s), condition } } : s;
+  }
+  const withMarket = (s: CareerSave, m: MarketState): Pick<CareerSave, 'clube'> => ({ clube: { ...clubeOf(s), market: m } });
+  const worldTick = (s: CareerSave, kind: WindowKind, opts: { maxMoves?: number } = {}) => {
+    const m = marketOf(s);
+    const squadIds = new Set(s.squad.map((x) => x.playerId));
+    // seus empréstimos (emprestado por você ou stand-in acertado) também são
+    // intocáveis: a IA não contrata quem já tem acordo com o seu clube
+    const loanIds = userLoans(m).map((l) => l.playerId);
+    // [equilíbrio] quem já tem acordo fechado com você (entra na janela) também
+    const dealIds = (s.pendingDeals ?? []).map((d) => d.inPlayerId);
+    const protectedIds = new Set([...squadIds, ...loanIds, ...dealIds]);
+    const mm = AI_MARKET_BY_MODE[careerDiff(s.difficulty)];
+    const teams = oppEra.filter((t) => t.id !== s.takeoverId);
+    const byId = new Map(teams.map((t) => [t.id, t]));
+    const forms = computeAllTeamForms(s);
+    const skip = new Set(squadIds);
+    return tickMarketWindow({
+      teams,
+      freeAgents: agedFreeAgents(worldBaseFor(s, editedBase), s.moves, s.split, skip, s.worldEvo).filter((p) => !protectedIds.has(p.id)),
+      split: kind === 'offseason' ? s.split + 1 : s.split,
+      kind,
+      formOf: (id) => forms[id] ?? 50,
+      vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(s, t) : 0; },
+      ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut),
+      baseOvrOf,
+      movableIds: movableIdsWith(mundoOf(s), baseMovable), // [fase 4] jovens gerados também se movem
+      affinity: youthAffinity(mundoOf(s)),    // [fase 4] clube prefere o jovem da própria academia
+      protectedIds,
+      budgets: kind === 'mid' && Object.keys(m.budgets).length ? m.budgets : undefined,
+      loans: m.loans.filter((l) => l.kind === 'ai'),
+      arrivals: m.arrivals,
+      maxMoves: opts.maxMoves,
+      seed: mundoOf(s).seed,                  // cada Carreira tem o seu mercado
+      budgetMul: mm.budgetMul,                // [equilíbrio] IA mais rica no Difícil/Lendário
+      faFirstOvr: mm.faFirstOvr,              // [equilíbrio] e chega antes nos free agents ≥ 80
     });
   };
-
-  // aplica a janela de transferências do split que está fechando: os movimentos
-  // do tick da IA viram persistentes (save.moves — a MESMA rota das vendas do
-  // usuário), o resumo vai pra lastMoves e as manchetes saem em marketNews
-  // (cat 'transfer', mescladas no pushNews da virada pelos call sites).
-  const applyTransferWindow = (s: CareerSave): Pick<CareerSave, 'moves' | 'lastMoves' | 'aiDrift'> & { marketNews: NewsItem[] } => {
-    const tick = runAIMarketTick(s);
-    const moves = { ...(s.moves ?? {}), ...tick.moves };
-    const lastMoves = tick.log.slice(0, 8).map((m) => ({ nick: m.nick, from: m.fromTag, to: m.toTag }));
-    // MERCADO VIVO — drift de força: cada time da IA move o teamwork conforme a
-    // forma REAL de clube (teamForm.ts) + ruído determinístico por split (sem o
-    // ruído, form deriva de drift*4 pra quem não está na liga e o roll viraria
-    // moto-perpétuo: drift +2 ⇒ form 58 ⇒ +1 pra sempre). Forma alta empurra +1
-    // (até +6), baixa -1 (até -6), neutra decai rumo a 0. currentEra JÁ aplica o
-    // drift no teamwork → feedback auto-corretivo ao longo dos anos.
-    const forms = computeAllTeamForms(s);
-    const aiDrift = { ...(s.aiDrift ?? {}) };
-    for (const t of currentEra.filter((x) => x.id !== s.takeoverId)) {
-      const noise = (hashStr(`drift:${t.id}:${s.split}`) % 31) - 15; // -15..+15
-      const roll = (forms[t.id] ?? 50) + noise;
-      const prev = aiDrift[t.id] ?? 0;
-      let next = prev;
-      if (roll >= 62) next = Math.min(6, prev + 1);
-      else if (roll <= 38) next = Math.max(-6, prev - 1);
-      else next = prev > 0 ? prev - 1 : prev < 0 ? prev + 1 : 0; // decai rumo a 0
-      if (next === 0) delete aiDrift[t.id];
-      else aiDrift[t.id] = next;
-    }
-    return { moves, lastMoves, aiDrift, marketNews: tick.news };
+  // propostas pelos SEUS jogadores (depois dos movimentos da IA)
+  const squadEntries = (s: CareerSave): SquadEntry[] => {
+    const m = marketOf(s);
+    const committed = new Set([
+      ...(s.pendingSales ?? []).map((x) => x.playerId),
+      ...(s.pendingDeals ?? []).flatMap((d) => d.outPlayerIds),
+      ...m.loans.filter((l) => l.kind === 'out' || l.kind === 'in').map((l) => l.playerId),
+    ]);
+    const clube = clubeOf(s);
+    const leaving = new Set(leaveRequests(s as unknown as Record<string, unknown>, s.squad.map((x) => x.playerId)));
+    return s.squad.map((sig): SquadEntry | null => {
+      const f = findSigning(sig);
+      if (!f) return null;
+      const wage = contractWageOf(s, sig.playerId, () => playerWage(f.player)); // [integração] salário do contrato (H)
+      return {
+        player: { ...f.player, id: sig.playerId }, wage,
+        clause: releaseClauseOf(s as unknown as Record<string, unknown>, sig.playerId),
+        wantsLeave: leaving.has(sig.playerId) || wantsToLeave(s as unknown as Record<string, unknown>, sig.playerId),
+        committed: committed.has(sig.playerId),
+        valueFactor: benchValueFactor(clube.dressing, sig.playerId),
+      };
+    }).filter((x): x is SquadEntry => !!x);
   };
+  const runMarketWindow = (s: CareerSave, kind: WindowKind): { patch: Pick<CareerSave, 'moves' | 'lastMoves' | 'clube' | 'pendingSales'>; news: NewsItem[] } => {
+    const tick = worldTick(s, kind);
+    const offerSplit = kind === 'offseason' ? s.split + 1 : s.split;
+    let m = expireOffers(marketOf(s), offerSplit);
+    const forms = computeAllTeamForms(s);
+    const off = generateIncomingOffers({
+      split: offerSplit, kind, squad: squadEntries(s), teams: tick.teams, budgets: tick.budgets, strategies: tick.strategies,
+      formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut), userTier: s.tier ?? 3, existing: m.incoming,
+      seed: mundoOf(s).seed,
+    });
+    m = applyWorldTick(m, tick, offerSplit, kind === 'offseason' ? 1 : (s.eventInSplit ?? 1), kind);
+    m = withOffers(m, off.offers);
+    m = pushRumors(m, [...chainRumors(tick.log, offerSplit), ...needRumors(tick.needs, tick.teams, offerSplit), ...off.rumors]);
+    m = withWindowStatus(m, { split: offerSplit, eventInSplit: kind === 'offseason' ? 1 : 2, inMajor: false, majorSplit: isMajorSplit(offerSplit) });
+    m = logWindow(m, { split: offerSplit, kind, moves: tick.log.length, chains: tick.chains, standIns: tick.standIns, offers: off.offers.length, items: windowItems(tick.log) });
+    const openOffers = off.offers.filter((o) => o.status === 'open').length;
+    const news: NewsItem[] = [...windowNews(tick, offerSplit, kind, openOffers)];
+    for (const o of off.offers.filter((x) => x.viaReleaseClause)) {
+      news.push(o.playerRefused
+        ? { id: `${offerSplit}:clause:${o.playerId}`, split: offerSplit, icon: '🔒', tone: 'good', cat: 'transfer', title: `${o.nick} ${ct('recusou a')} ${o.fromName}`, body: `${ct('O clube pagou a cláusula de rescisão, mas o jogador não quis ir e fica.')}` }
+        : { id: `${offerSplit}:clause:${o.playerId}`, split: offerSplit, icon: '🔓', tone: 'bad', cat: 'transfer', title: `${o.fromName} ${ct('paga a cláusula de')} ${o.nick}`, body: `${formatMoney(o.fee)} ${ct('na mesa: com a multa paga, o clube não pode recusar. Ele sai na janela.')}` });
+    }
+    return {
+      patch: {
+        moves: { ...(s.moves ?? {}), ...tick.moves },
+        lastMoves: tick.log.slice(0, 8).map((mv) => ({ nick: mv.nick, from: mv.fromTag, to: mv.toTag })),
+        ...withMarket(s, m),
+        pendingSales: [...(s.pendingSales ?? []), ...off.sales],
+      },
+      news,
+    };
+  };
+
+  // aplica a janela de pré-temporada do split que está fechando: os movimentos da
+  // IA viram persistentes (save.moves — a MESMA rota das vendas do usuário), as
+  // propostas pelos seus jogadores chegam em clube.market e o drift de força
+  // (aiWorld.nextAiDrift) mexe no teamwork pela forma REAL de clube.
+  const applyTransferWindow = (s: CareerSave): Pick<CareerSave, 'moves' | 'lastMoves' | 'aiDrift' | 'clube' | 'pendingSales'> & { marketNews: NewsItem[] } => {
+    const w = runMarketWindow(s, 'offseason');
+    const forms = computeAllTeamForms(s);
+    const aiDrift = nextAiDrift(currentEra.filter((x) => x.id !== s.takeoverId).map((t) => t.id), forms, s.split, s.aiDrift, mundoOf(s).seed);
+    return { ...w.patch, aiDrift, marketNews: w.news };
+  };
+
+  // EMPRÉSTIMOS na janela: os acertados entram (você empresta = sai do elenco e
+  // joga pelo outro clube; stand-in = entra no seu elenco pagando a taxa) e os
+  // que venceram voltam. Roda depois do consummateDeals nas duas janelas.
+  const applyLoanWindow = (s: CareerSave, kind: WindowKind): CareerSave => {
+    const m = marketOf(s);
+    if (!userLoans(m).length) return s;
+    let squad = [...s.squad];
+    let budget = s.budget;
+    const moves = { ...(s.moves ?? {}) };
+    const extraOnTeam = { ...(s.extraOnTeam ?? {}) };
+    const news: NewsItem[] = [];
+    const loans: MarketLoan[] = [];
+    const nameOf = (id: string | undefined) => (id === FREE_TEAM_ID ? ct('mercado livre') : oppEra.find((t) => t.id === id)?.team ?? id ?? '');
+    for (const l of m.loans) {
+      if (l.kind !== 'out' && l.kind !== 'in') { loans.push(l); continue; }
+      const until = s.split + (l.splits ?? 1) - 1;
+      if (l.state === 'agreed' && l.kind === 'out') {
+        const sig = squad.find((x) => x.playerId === l.playerId);
+        if (!sig || squad.length <= 5) {
+          news.push({ id: `${s.split}:loanfail:${l.playerId}`, split: s.split, icon: '⚠️', tone: 'bad', cat: 'transfer', title: `${ct('Empréstimo cancelado:')} ${l.nick ?? l.playerId}`, body: ct('Emprestar deixaria o elenco com menos de 5. Contrate antes de emprestar.') });
+          continue;
+        }
+        const resolved = findSigning(sig);
+        squad = squad.filter((x) => x.playerId !== l.playerId);
+        budget += l.fee ?? 0;
+        if (movableIds.has(l.playerId)) moves[l.playerId] = l.toTeamId;
+        else if (resolved) extraOnTeam[l.toTeamId] = [...(extraOnTeam[l.toTeamId] ?? []).filter((e) => e.player.id !== l.playerId), { player: resolved.player, arrival: s.split }];
+        loans.push({ ...l, state: 'active', startSplit: s.split, untilSplit: until, signing: (resolved ? signingWithSnapshot(sig, resolved) : sig) as unknown as Record<string, unknown> });
+        news.push({ id: `${s.split}:loanout:${l.playerId}`, split: s.split, icon: '↗️', tone: 'info', cat: 'transfer', title: `${l.nick} ${ct('emprestado à')} ${nameOf(l.toTeamId)}`, body: `${ct('Joga por lá até o fim do Split')} ${until} ${ct('e volta ao elenco. Taxa recebida:')} ${formatMoney(l.fee ?? 0)}.` });
+      } else if (l.state === 'agreed' && l.kind === 'in') {
+        // stand-in entra na janela CURTA e fica até o fim do split (o fechamento o devolve)
+        if (kind !== 'mid') { loans.push(l); continue; }
+        if (budget < (l.fee ?? 0) || squad.some((x) => x.playerId === l.playerId) || squad.length >= SQUAD_MAX) {
+          news.push({ id: `${s.split}:standinfail:${l.playerId}`, split: s.split, icon: '⚠️', tone: 'bad', cat: 'transfer', title: `${ct('Stand-in cancelado:')} ${l.nick ?? l.playerId}`, body: squad.length >= SQUAD_MAX ? ct('Elenco cheio (7): libere uma vaga antes do stand-in.') : ct('Sem caixa para a taxa do empréstimo na janela.') });
+          continue;
+        }
+        const base: Signing = { playerId: l.playerId, fromId: l.fromTeamId ?? FREE_TEAM_ID, fee: 0 };
+        const resolved = findSigning(base);
+        squad = [...squad, resolved ? signingWithSnapshot(base, resolved) : base];
+        budget -= l.fee ?? 0;
+        loans.push({ ...l, state: 'active', startSplit: s.split, untilSplit: s.split });
+        news.push({ id: `${s.split}:standin:${l.playerId}`, split: s.split, icon: '🩹', tone: 'good', cat: 'transfer', title: `${ct('Stand-in:')} ${l.nick} ${ct('chega por empréstimo')}`, body: `${ct('Emprestado pela')} ${nameOf(l.fromTeamId)} ${ct('até o fim do Split')} ${s.split}. ${ct('Taxa paga:')} ${formatMoney(l.fee ?? 0)}.` });
+      } else if (l.state === 'active' && l.untilSplit < s.split) {
+        if (l.kind === 'out') {
+          const sig = l.signing as unknown as Signing | undefined;
+          if (sig && !squad.some((x) => x.playerId === l.playerId)) squad = [...squad, sig];
+          endLoanOutMove(moves, l.playerId); // [saídas] voltou: o move do empréstimo não vale mais
+          if (extraOnTeam[l.toTeamId]) extraOnTeam[l.toTeamId] = extraOnTeam[l.toTeamId].filter((e) => e.player.id !== l.playerId);
+          news.push({ id: `${s.split}:loanback:${l.playerId}`, split: s.split, icon: '↩️', tone: 'info', cat: 'transfer', title: `${l.nick} ${ct('volta do empréstimo')}`, body: `${ct('O empréstimo à')} ${nameOf(l.toTeamId)} ${ct('acabou: ele está de novo no seu elenco.')}` });
+        } else {
+          squad = squad.filter((x) => x.playerId !== l.playerId);
+          news.push({ id: `${s.split}:standinback:${l.playerId}`, split: s.split, icon: '↩️', tone: 'info', cat: 'transfer', title: `${l.nick} ${ct('volta ao clube dono')}`, body: `${ct('O stand-in acabou: ele volta para')} ${nameOf(l.fromTeamId)}.` });
+        }
+      } else loans.push(l);
+    }
+    const next: CareerSave = withSquadCondition({ ...s, squad, budget, moves, extraOnTeam, ...withMarket(s, { ...m, loans }) }); // [integração] stand-in chega com condição
+    return news.length ? { ...next, ...pushNews(next, news) } : next;
+  };
+
+  // [saídas] o jogador está hoje no clube da IA `teamId` (mundo atual, sem o seu elenco)
+  const isAtClub = (teamId: string) => (pid: string) => oppEra.find((t) => t.id === teamId)?.players.some((p) => p.id === pid) ?? false;
 
   // janela aberta: consuma os acordos fechados durante a temporada (pendingDeals).
   // Roda sobre o save JÁ montado da virada (split novo, contratos vencidos, etc.).
@@ -4001,7 +4744,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!dirty) return s;
     let squad = [...s.squad];
     let budget = s.budget;
-    const contracts = { ...(s.contracts ?? {}) };
+    let clube: ClubeState = s.clube ?? (migrateClube({}).clube as ClubeState); // [fase 3] contratos
     const morale = { ...(s.morale ?? {}) };
     const peakOvr = { ...(s.peakOvr ?? {}) };
     const evo = { ...(s.evo ?? {}) };
@@ -4014,10 +4757,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const arrivals: string[] = [];
     const departures: string[] = [];
     const failedDeals: string[] = []; // acordos que caíram (sem caixa) — vão pro feed
+    const fullDeals: string[] = []; // [fase 3] acordos que caíram por elenco cheio (7)
     // checa se o id existe na base real (pra decidir se applyMoves cobre,
     // ou se precisa ir pro extraOnTeam). Roda 1x antes do loop.
     const baseHasPlayer = (pid: string): boolean => {
-      for (const t of CS2_REAL_2026) {
+      for (const t of rawBase) {
         if (t.players.some((p) => p.id === pid)) return true;
       }
       return false;
@@ -4032,7 +4776,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const resolved = findSigning(sig);
       squad = squad.filter((x) => x.playerId !== sale.playerId);
       stints = closeStint(stints, sale.playerId, s.split, resolved ? playerOvr(resolved.player) : undefined);
-      delete contracts[sale.playerId]; delete morale[sale.playerId]; delete peakOvr[sale.playerId]; delete evo[sale.playerId];
+      clube = withoutContracts({ clube }, [sale.playerId]);
+      delete morale[sale.playerId]; delete peakOvr[sale.playerId]; delete evo[sale.playerId];
       // BUG FIX (caça-bugs): fee não-finito (save antigo/parcial/cloud-merge)
       // tornava budget = NaN, que era persistido e no reload caía pra
       // STARTING_BUDGET — perda silenciosa e irreversível do caixa.
@@ -4049,16 +4794,31 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           extraOnTeam[sale.toId] = [...list, { player: resolved.player, arrival: s.split }];
         }
       }
+      // [saídas] chega no comprador como reforço do split (nas duas rotas) e quem
+      // perdeu a vaga lá vai pro mercado livre — senão o vendido mofava no banco
+      // e o comprador ainda ia atrás de outro pra mesma função
+      const settled = settleSaleAtBuyer({
+        moves, arrivals: clube.market.arrivals, playerId: sale.playerId, buyerId: sale.toId, split: s.split,
+        outPlayerId: sale.outPlayerId, movable: (id) => movableIds.has(id), isAtBuyer: isAtClub(sale.toId),
+      });
+      Object.assign(moves, settled.moves);
+      clube = { ...clube, market: { ...clube.market, arrivals: settled.arrivals } };
       departures.push(`${sale.nick} (${sale.toTag})`);
     }
     // ACORDOS DE COMPRA: tira a troca, traz o alvo e desconta o dinheiro
     for (const d of deals) {
       if (squad.some((x) => x.playerId === d.inPlayerId)) continue; // já está no elenco
       const dealFee = Number.isFinite(d.fee) ? d.fee : 0; // BUG FIX: fee não-finito → NaN no budget
-      if (budget < dealFee) {
+      const dealBonus = d.contract?.signingBonus ?? 0; // [fase 3] luvas negociadas com o jogador
+      if (budget < dealFee + dealBonus) {
         // sem caixa agora: acordo cai, mas o usuário precisa SABER (antes era silencioso
         // e o jogador "sumia" sem aviso). NÃO mexe no elenco: kye continua, n1ssim não vem.
         failedDeals.push(d.inNick);
+        continue;
+      }
+      // [fase 3 · vestiário] elenco de no máximo 7 (5 titulares + 2 no banco)
+      if (squad.length - d.outPlayerIds.filter((id) => squad.some((x) => x.playerId === id)).length >= SQUAD_MAX) {
+        fullDeals.push(d.inNick);
         continue;
       }
       for (const out of d.outPlayerIds) {
@@ -4070,7 +4830,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const outResolved = outSig ? findSigning(outSig) : null;
         squad = squad.filter((x) => x.playerId !== out);
         stints = closeStint(stints, out, s.split, outResolved ? playerOvr(outResolved.player) : undefined);
-        delete contracts[out]; delete morale[out]; delete peakOvr[out]; delete evo[out];
+        clube = withoutContracts({ clube }, [out]);
+        delete morale[out]; delete peakOvr[out]; delete evo[out];
         if (baseHasPlayer(out)) {
           moves[out] = d.inFromId;
         } else if (outResolved?.player) {
@@ -4089,17 +4850,84 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         : { playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee };
       squad.push(newSig);
       stints = openStint(stints, d.inPlayerId, s.org?.name ?? 'Sua org', s.split, resolved ? playerOvr(resolved.player) : 0);
-      contracts[d.inPlayerId] = s.split + CONTRACT_TERM - 1;
-      budget -= dealFee;
+      // [fase 3] termos negociados com o jogador (acordo antigo sem termos: contrato padrão)
+      clube = signContract({ clube }, d.inPlayerId, d.contract ?? defaultTerms(resolved ? playerWage(resolved.player) : 20000, s.split));
+      budget -= dealFee + dealBonus;
       arrivals.push(d.inNick);
     }
-    let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, moves, extraOnTeam, stints, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
+    let next: CareerSave = withSquadCondition({ ...s, squad, budget, clube, morale, peakOvr, evo, moves, extraOnTeam, stints, pendingDeals: [], pendingSales: [], rejectedOffers: [] }); // [integração] reforço chega com condição
     const news: NewsItem[] = [];
     if (arrivals.length) news.push({ id: `${s.split}:deals`, split: s.split, icon: '🤝', tone: 'good', cat: 'board', title: ct('Reforços confirmados na janela'), body: `${ct('Acordos fechados na temporada passada entraram em vigor:')} ${arrivals.join(', ')}.` });
     if (departures.length) news.push({ id: `${s.split}:sales`, split: s.split, icon: '💸', tone: 'info', cat: 'transfer', title: ct('Vendas confirmadas na janela'), body: `${ct('Saíram por proposta aceita:')} ${departures.join(', ')}.` });
     if (failedDeals.length) news.push({ id: `${s.split}:dealsFail`, split: s.split, icon: '⚠️', tone: 'bad', cat: 'board', title: ct('Acordos cancelados (sem caixa)'), body: `${ct('A diretoria não fechou esses reforços por falta de caixa na janela:')} ${failedDeals.join(', ')}. ${ct('Tente de novo no próximo mercado.')}` });
+    if (fullDeals.length) news.push({ id: `${s.split}:dealsFull`, split: s.split, icon: '⚠️', tone: 'bad', cat: 'board', title: ct('Acordos cancelados (elenco cheio)'), body: `${ct('O elenco já tem 7 jogadores (5 titulares + 2 no banco). Libere uma vaga para trazer:')} ${fullDeals.join(', ')}.` });
     if (news.length) next = { ...next, ...pushNews(next, news) };
     return next;
+  };
+
+  // [saídas] VENDA RÁPIDA na janela ("vender a 85%"): quem sai do elenco na tela
+  // de mercado vai REALMENTE pra um clube comprador (escolhido pela mesma régua
+  // do mercado da IA: necessidade por função, caixa e estratégia). Antes só saía
+  // do squad, sem move, e voltava pro time da base — recontratar cobrava taxa.
+  // Venda já acertada (proposta aceita esperando a janela) é honrada pelo valor
+  // e pelo clube dela. Stand-in emprestado não é seu: volta pro dono (sem venda).
+  const quickSaleBuyerCtx = (s: CareerSave): BuyerCtx => {
+    const teams = oppEra.filter((t) => t.id !== s.takeoverId);
+    const forms = computeAllTeamForms(s);
+    const m = marketOf(s);
+    const byId = new Map(teams.map((t) => [t.id, t]));
+    const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
+    const snap = stored
+      ? { budgets: m.budgets, strategies: m.strategies ?? {} }
+      : clubsSnapshot({ teams, split: s.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(s, t) : 0; }, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut), budgetMul: AI_MARKET_BY_MODE[careerDiff(s.difficulty)].budgetMul });
+    return { teams, split: s.split, budgets: snap.budgets, strategies: snap.strategies, formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s.split, s.youthDebut), baseOvrOf };
+  };
+  const applyQuickSales = (s: CareerSave, leavingIds: string[]) => {
+    const m = marketOf(s);
+    const loanedIn = new Set(m.loans.filter((l) => l.kind === 'in').map((l) => l.playerId));
+    let books: ExitBooks<PendingDeal> = { moves: { ...(s.moves ?? {}) }, stints: s.stints ?? {}, pendingSales: s.pendingSales ?? [], pendingDeals: s.pendingDeals ?? [], incoming: m.incoming };
+    const extraOnTeam = { ...(s.extraOnTeam ?? {}) };
+    let arrivals = { ...(m.arrivals ?? {}) };
+    const sold: { playerId: string; nick: string; toName: string; toTag: string; fee: number }[] = [];
+    const ids = leavingIds.filter((id) => !loanedIn.has(id));
+    if (ids.length === 0) return null;
+    const ctx = quickSaleBuyerCtx(s);
+    const budgets = { ...ctx.budgets }; // caixa dos clubes (o comprador paga a taxa)
+    const taken = new Set<string>();
+    for (const pid of ids) {
+      const sig = s.squad.find((x) => x.playerId === pid);
+      const f = sig ? findSigning(sig) : null;
+      if (!f) continue;
+      const pending = books.pendingSales?.find((x) => x.playerId === pid);
+      const fee = quickSaleFee(pid, f.player, s.pendingSales);
+      const pick = pending ? null : pickQuickSaleBuyer({ ...f.player, id: pid }, fee, { ...ctx, budgets, taken });
+      const buyerId = pending?.toId ?? pick?.team.id ?? null;
+      const movable = movableIds.has(pid);
+      const endOvr = playerOvr(f.player);
+      if (!buyerId) {
+        books = releaseToFree(books, { playerId: pid, split: s.split, endOvr, movable });
+        continue;
+      }
+      books = sellToBuyer(books, { playerId: pid, buyerId, split: s.split, endOvr, movable });
+      // chega como reforço do split e quem perdeu a vaga no comprador vai pro mercado livre
+      const settled = settleSaleAtBuyer({
+        moves: books.moves, arrivals, playerId: pid, buyerId, split: s.split,
+        outPlayerId: pending ? pending.outPlayerId : pick?.outPlayerId, movable: (id) => movableIds.has(id), isAtBuyer: isAtClub(buyerId),
+      });
+      books = { ...books, moves: settled.moves };
+      arrivals = settled.arrivals;
+      if (!movable) {
+        // academia/youth/custom não existem na base: a cópia entra no comprador
+        const list = extraOnTeam[buyerId] ?? [];
+        if (!list.some((e) => e.player.id === pid)) extraOnTeam[buyerId] = [...list, { player: f.player, arrival: s.split }];
+      }
+      if (budgets[buyerId] != null) budgets[buyerId] = Math.max(0, budgets[buyerId] - fee);
+      taken.add(buyerId);
+      const team = ctx.teams.find((t) => t.id === buyerId);
+      sold.push({ playerId: pid, nick: f.player.nick, toName: team?.team ?? pending?.toTag ?? buyerId, toTag: team?.tag ?? pending?.toTag ?? '', fee });
+    }
+    // só grava o caixa se o mercado já tinha um (senão ele é recalculado na tela)
+    return { books, extraOnTeam, budgets: Object.keys(m.budgets).length ? budgets : m.budgets, arrivals, sold };
   };
 
   // contratos vencidos: o jogador cujo contrato acaba SAI de graça no próximo
@@ -4116,10 +4944,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const out: Renewal[] = [];
     for (const sig of s.squad) {
       if (inDeal.has(sig.playerId)) continue;
-      const until = s.contracts?.[sig.playerId];
+      const until = contractUntilOf(s, sig.playerId);
       if (until !== undefined && until < newSplit) {
         const f = findSigning(sig);
-        if (f) out.push({ playerId: sig.playerId, nick: f.player.nick, ovr: playerOvr(f.player), wage: playerWage(f.player), country: f.player.country, role: f.player.role });
+        if (f) out.push({ playerId: sig.playerId, nick: f.player.nick, ovr: playerOvr(f.player), wage: contractWageOf(s, sig.playerId, () => playerWage(f.player)), country: f.player.country, role: f.player.role });
       }
     }
     return out;
@@ -4128,7 +4956,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // assédio do topo: uma org de ELITE (tier 1) pode fazer proposta pelo seu
   // melhor jogador entre temporadas. Só acontece se você ainda não é tier 1
   // (do contrário você JÁ é o topo). Determinístico por split+jogador.
-  const makeOffer = (s: CareerSave, newTier: number): PoachOffer | null => {
+  const makeOffer = (s: CareerSave, newTier: number): IncomingOffer | null => {
     if (newTier <= 1) return null;
     // exclui quem já está saindo numa venda/troca deste split — senão o assédio
     // paga fee POR CIMA da venda já consumada (dinheiro duplicado pelo mesmo
@@ -4139,25 +4967,34 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     ]);
     const picks = s.squad.filter((sig) => !inDeal.has(sig.playerId)).map(findSigning).filter(Boolean) as { player: Player }[];
     const best = picks.map((p) => p.player).sort((a, b) => {
-      const aScore = playerOvr(a) + personalityOfferBonus(a.id, s.morale?.[a.id] ?? MORALE_DEFAULT) / 8;
-      const bScore = playerOvr(b) + personalityOfferBonus(b.id, s.morale?.[b.id] ?? MORALE_DEFAULT) / 8;
+      // [fase 3 · vestiário] quem pediu para sair vira alvo (o mercado fica sabendo)
+      const aScore = playerOvr(a) + personalityOfferBonus(a.id, s.morale?.[a.id] ?? MORALE_DEFAULT) / 8 + (wantsToLeave(s, a.id) ? 6 : 0);
+      const bScore = playerOvr(b) + personalityOfferBonus(b.id, s.morale?.[b.id] ?? MORALE_DEFAULT) / 8 + (wantsToLeave(s, b.id) ? 6 : 0);
       return bScore - aScore;
     })[0];
     if (!best || playerOvr(best) < 78) return null; // ninguém assedia jogador mediano
     const h = hashStr(`offer:${s.split}:${best.id}`);
-    const offerChance = 50 + personalityOfferBonus(best.id, s.morale?.[best.id] ?? MORALE_DEFAULT);
+    const offerChance = 50 + personalityOfferBonus(best.id, s.morale?.[best.id] ?? MORALE_DEFAULT) + (wantsToLeave(s, best.id) ? 30 : 0);
     if (h % 100 >= Math.max(20, Math.min(80, offerChance))) return null;
     const elite = oppEra.filter((t) => teamTier(t) === 1 && t.id !== s.takeoverId);
     if (elite.length === 0) return null;
     const org = elite[h % elite.length];
-    const fee = Math.round(playerValue(best) * (1.4 + (h % 35) / 100)); // 1.4x a 1.75x
-    return { orgId: org.id, orgName: org.team, orgTag: org.tag, playerId: best.id, nick: best.nick, ovr: playerOvr(best), fee };
+    // [fase 3] quem vive no banco vale menos (até −15%)
+    const fee = Math.round(playerValue(best) * benchValueFactor(dressingOf(s), best.id) * (1.4 + (h % 35) / 100)); // 1.4x a 1.75x
+    // [integração] entra no fluxo único de propostas (clube.market.incoming) com o
+    // motivo "proposta de elite": decide-se antes do mercado de pré-temporada
+    // (como antes) e, se ficar aberta, em Mercado › Transferências.
+    const wage = contractWageOf(s, best.id, () => playerWage(best));
+    return {
+      id: `elite:${s.split + 1}:${best.id}`, playerId: best.id, fromTeamId: org.id, fee,
+      wageOffered: Math.round((wage * 1.35) / 5000) * 5000, split: s.split + 1, expiresSplit: s.split + 1, status: 'open',
+      nick: best.nick, ovr: playerOvr(best), role: best.role, fromTag: org.tag, fromName: org.team, reason: 'elite', strategy: 'starBuyer',
+    };
   };
 
   // clubForm: usado pela OverviewTab; helper movido pra page.
 
 
-  const userPosition = (l: League): number => leagueTable(l).findIndex((t) => t.id === 'user') + 1;
 
   // resolve a rodada atual após a partida do usuário (jogada ou simulada)
   const finishUserRound = (l: League, series?: SeriesResult) => {
@@ -4207,7 +5044,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       seedTable = leagueTable(l);
     }
     const p = buildPlayoff(seedTable, save.circuit?.name ?? l.name);
-    poRunAI(p, (id) => leagueTeam(l, id), rngRef.current); // sima o que não envolve o usuário
+    poRunAI(p, (id) => leagueTeam(l, id), rngRef.current, l.pressure ?? 0); // sima o que não envolve o usuário
     const next = { ...save, league: { ...l }, playoff: p };
     persist(next);
     setSave(next);
@@ -4220,7 +5057,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!p || !save.league) return;
     const m = poUserMatch(p);
     if (!m) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `po:${p.circuit}:${m.a}:${m.b}`));
     const pair = prepareTeams(leagueTeam(save.league, m.a), leagueTeam(save.league, m.b));
     if (!pair) return; // save corrompido (team id no match não está em league.teams)
     const [a, b] = pair;
@@ -4242,7 +5079,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const clone: Playoff = structuredClone(p);
     const m = poFindMatch(clone, playedIds);
     if (series && m) m.result = series;
-    poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
+    poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current, save.league?.pressure ?? 0);
     const next = { ...save, playoff: clone };
     persist(next);
     setSave(next);
@@ -4251,7 +5088,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   };
 
   const applyPlayoff = (clone: Playoff) => {
-    poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
+    poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current, save.league?.pressure ?? 0);
     const next = { ...save, playoff: clone };
     persist(next);
     setSave(next);
@@ -4262,13 +5099,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!p || !save.league) return;
     const live = poUserMatch(p);
     if (!live) { applyPlayoff(structuredClone(p)); return; }
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `po:${p.circuit}:${live.a}:${live.b}`));
     const pair = prepareTeams(leagueTeam(save.league, live.a), leagueTeam(save.league, live.b));
     if (!pair) { applyPlayoff(structuredClone(p)); return; }
     const [a, b] = pair;
     const isFinal = p.final === live;
     const bo = isFinal ? PO_FINAL_BO : PO_SF_BO;
-    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo, pressureOpts(save.league.pressure));
     setQuickSim({
       series, teams: [a, b], userIdx: live.a === 'user' ? 0 : 1,
       label: `${p.circuit} · ${isFinal ? ct('Final') : ct('Semifinal')}`,
@@ -4289,12 +5126,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const l = structuredClone(save.league);
     const m = userLeagueMatch(l);
     if (!m) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `lg:${l.name}:${l.current}:${m.a}:${m.b}`));
     const pair = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
     if (!pair) return;
     const [a, b] = pair;
     const bo = m.bo ?? LEAGUE_BO; // GSL: abertura Bo1, resto Bo3
-    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo, pressureOpts(l.pressure));
     setQuickSim({
       series, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1,
       label: `${l.name} · ${l.gsl ? ct(GSL_ROUND_LABELS[l.current] ?? 'Fase de grupos') : `${ct('Rodada')} ${l.current + 1}`}`,
@@ -4308,7 +5145,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const simWholeSplit = () => {
     if (!save.league) return;
     const l = structuredClone(save.league);
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `split:${l.name}:${l.current}`));
     let guard = 0;
     const simulated: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string }[] = [];
     if (l.gsl) {
@@ -4319,7 +5156,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           if (pair) {
             const [a, b] = pair;
             const bo = m.bo ?? 3;
-            m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+            m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo, pressureOpts(l.pressure));
             simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct(GSL_ROUND_LABELS[l.current] ?? 'Fase de grupos')}` });
           }
         }
@@ -4335,7 +5172,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const pair = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
         if (pair) {
           const [a, b] = pair;
-          m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
+          m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO, pressureOpts(l.pressure));
           simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct('Rodada')} ${l.current + 1}` });
         }
       }
@@ -4345,47 +5182,95 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     simulated.forEach((match) => recordCareerMatch(match.series, match.teams, match.userIdx, match.label));
   };
 
-  // Major: o time vai pro Major mundial (16 times) e disputa Suíça + playoffs
-  // AO VIVO, com bracket de verdade (mesmo motor/UI do modo draft).
-  const playMajor = (s: CareerSave) => {
+  // Major: o time vai pro Major mundial e disputa Suíça + playoffs AO VIVO, com
+  // bracket de verdade (mesmo motor/UI do modo draft).
+  // [fase 4 · circuito] CICLO REAL DO MAJOR pelo VRS publicado: 1–8 entram no
+  // Stage 3, 9–16 no Stage 2, 17–24 no Stage 1; os próximos de cada região
+  // disputam o RMR (Europa 4 vagas, Américas 2, Ásia-Pacífico 2), que completa o
+  // Stage 1. Tudo LAN (pressão do Major no motor). O que você não joga (outros
+  // RMRs, stages antes da sua entrada, o resto do Major se você cair) roda em
+  // segundo plano e vira resultado do mundo no fim.
+  // o save guarda só o field (o ranking inteiro é derivável e pesa ~6 KB)
+  const slimPlan = (pl: MajorFieldPlan): MajorFieldPlan => ({ ...pl, ranked: [] });
+  const majorTeamOf = (id: string, user: TTeam): TTeam | null => {
+    if (id === USER_ID) return user;
+    const t = oppEra.find((x) => x.id === id);
+    if (!t) return null;
+    const tt = teamSeasonToTTeam(t);
+    tt.strength += aiStaffEdgeFor(t); // [fase 2 · STAFF] comissão da IA
+    return tt;
+  };
+  // ordem final de um suíço (classificados por menos derrotas, depois os eliminados)
+  const swissOrderOf = (t: Tournament): string[] => {
+    const adv = stageAdvancers(t).map((x) => x.id);
+    const rest = t.teams.filter((x) => !adv.includes(x.id))
+      .sort((x, y) => y.wins - x.wins || x.losses - y.losses || y.roundDiff - x.roundDiff).map((x) => x.id);
+    return [...adv, ...rest];
+  };
+  // termina (motor de verdade) o que falta do stage quando você já saiu dele
+  const finishTournament = (t: Tournament): Tournament => {
+    const c: Tournament = structuredClone(t);
+    let g = 0;
+    while (c.phase !== 'done' && g++ < 16) resolveRound(c, rngRef.current);
+    return c;
+  };
+  const playMajor = (s: CareerSave, planIn?: MajorFieldPlan | null) => {
     const user = buildTeam(s);
     if (!user) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(s, 'major'));
     const rng = rngRef.current;
-    // Major real (32 times, 3 stages de Swiss + playoffs). O field é ordenado por
-    // VRS; o usuário entra no STAGE do seu tier: top 8 = Stage 3, 9-16 = Stage 2,
-    // 17-32 = Stage 1. Os stages antes do seu são AUTO-SIMULADOS.
-    const aiSorted = oppEra
-      .filter((t) => t.id !== 'user' && t.id !== s.takeoverId)
-      .map((t) => ({ tt: teamSeasonToTTeam(t), vrs: aiTeamVrs(t, s.split) }))
-      .sort((a, b) => b.vrs - a.vrs);
-    const userVrs = userBaseVrsFor(user.teamwork, s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined) + s.vrs + userLegacyVrs(s);
-    const userRank = aiSorted.filter((x) => x.vrs > userVrs).length + 1; // posição mundial
-    const userStage = userRank <= 8 ? 3 : userRank <= 16 ? 2 : 1;
-    const field: TTeam[] = aiSorted.map((x) => x.tt).slice(0, 31);
-    field.splice(Math.min(userRank - 1, field.length), 0, user); // insere o usuário pela posição VRS
-    const fieldT = field.slice(0, 32);
-    const s3band = fieldT.slice(0, 8);
-    const s2band = fieldT.slice(8, 16);
-    const s1band = fieldT.slice(16, 32);
+    const pool = oppEra.filter((t) => t.id !== USER_ID && t.players.length >= 5);
+    const plan = planIn ?? majorFieldFromVrs(mundoOf(s).vrs, pool, { region: s.region });
+    const route = majorRouteOf(plan);
+    const T = (ids: string[]) => ids.map((id) => majorTeamOf(id, user)).filter((x): x is TTeam => !!x);
+    const name = MAJOR_NAME(s.split);
+    // visto pro Major (LAN na sede do Major)
+    const host = eventHost(name, 1);
+    const visa = visaCheck(s, majorIdOf(s.split), host.cc, name, host.venue);
+    const visaPatch: Partial<CareerSave> = {
+      mundo: { ...mundoOf(s), visa: visa.denied.length ? { eventId: majorIdOf(s.split), denied: visa.denied } : null, bootcamp: null },
+      ...(visa.news.length ? pushNews(s, visa.news) : {}),
+    };
+    if (route.kind === 'rmr') {
+      // você disputa o RMR da sua região (stage 0): top N dos 16 vão ao Stage 1
+      const live = createSwissStage(T(plan.rmr[route.region]?.field ?? []), rng, `${name} · RMR ${ct(RMR_LABEL[route.region])}`);
+      live.pressure = MAJOR_PRESSURE;
+      setHubTab('major');
+      setStage('hub');
+      setMajorState(live, {
+        majorStage: 0, majorUserStage: 0, majorSeed2: [], majorSeed3: [], majorPre: [], majorHistory: [],
+        majorPlan: slimPlan(plan), majorLog: [], majorRegion: route.region, ...visaPatch,
+      });
+      return;
+    }
+    // convite direto: os RMRs já rodaram (segundo plano) e completam o Stage 1
+    const planR = resolveRmrs(plan, strengthOf, `${s.split}`);
+    const userStage = route.kind === 'stage' ? route.stage : 1;
+    const s1band = T([...planR.s1Invites, ...rmrQualifiedIds(planR)]);
+    const s2band = T(planR.s2);
+    const s3band = T(planR.s3);
     const pre: NonNullable<CareerSave['majorPre']> = [];
-    const runAuto = (teams: TTeam[], label: string): TTeam[] => {
+    const log: NonNullable<CareerSave['majorLog']> = [];
+    const runAuto = (teams: TTeam[], label: string, k: number): TTeam[] => {
       const st = createSwissStage(teams, rng, label);
+      st.pressure = MAJOR_PRESSURE;
       let g = 0;
       while (st.phase !== 'done' && g++ < 12) resolveRound(st, rng);
+      log.push({ stage: k, field: teams.map((t) => t.id), order: swissOrderOf(st) });
       return stageAdvancers(st);
     };
     let carry: TTeam[] = [];
     if (userStage >= 2) {
-      carry = runAuto(s1band, 'Stage 1');
+      carry = runAuto(s1band, 'Stage 1', 1);
       pre.push({ stage: 1, advancers: carry.map((t) => ({ tag: t.tag, name: t.name })) });
     }
     if (userStage === 3) {
-      carry = runAuto([...carry, ...s2band], 'Stage 2');
+      carry = runAuto([...carry, ...s2band], 'Stage 2', 2);
       pre.push({ stage: 2, advancers: carry.map((t) => ({ tag: t.tag, name: t.name })) });
     }
     const liveTeams = userStage === 1 ? s1band : userStage === 2 ? [...carry, ...s2band] : [...carry, ...s3band];
-    const live = createSwissStage(liveTeams, rng, `${MAJOR_NAME(s.split)} · Stage ${userStage}`);
+    const live = createSwissStage(liveTeams, rng, `${name} · Stage ${userStage}`);
+    live.pressure = MAJOR_PRESSURE;
     setHubTab('major');
     setStage('hub');
     setMajorState(live, {
@@ -4394,32 +5279,89 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       majorSeed3: userStage <= 2 ? s3band : [],
       majorPre: pre,
       majorHistory: [],
+      majorPlan: slimPlan(planR), majorLog: log, majorRegion: null, ...visaPatch,
     });
   };
 
+  // o Major no MUNDO: completa (segundo plano) o que você não jogou e publica o VRS
+  const majorWorldAtEnd = (t: Tournament, opts: { rmrOut?: boolean; plan?: MajorFieldPlan; log?: CareerSave['majorLog'] }) => {
+    const pool = oppEra.filter((x) => x.id !== USER_ID && x.players.length >= 5);
+    const plan = opts.plan ?? save.majorPlan ?? majorFieldFromVrs(mundoOf(save).vrs, pool, { region: save.region });
+    const stageNow = save.majorStage ?? 1;
+    const stages: NonNullable<MajorProgress['stages']> = {};
+    for (const l of opts.log ?? save.majorLog ?? []) if (l.stage >= 1 && l.stage <= 3) stages[l.stage as 1 | 2 | 3] = { field: l.field, order: l.order };
+    let playoffs: MajorProgress['playoffs'];
+    if (!opts.rmrOut && stageNow >= 1 && stageNow <= 3) {
+      stages[stageNow as 1 | 2 | 3] = { field: t.teams.map((x) => x.id), order: swissOrderOf(t.phase === 'done' ? t : finishTournament(t)) };
+    } else if (!opts.rmrOut && stageNow >= 4) {
+      const done = t.phase === 'done' ? t : finishTournament(t);
+      const PL: Record<PlacementCode, number> = { champion: 1, runnerup: 2, semi: 3, quarters: 5, playoffs: 5, swiss: 5 };
+      playoffs = { seeds: done.teams.map((x) => x.id), places: Object.fromEntries(done.teams.map((x) => [x.id, PL[placementCode(done, x.id)]])) };
+    }
+    const userS = buildTeam(save)?.strength ?? 80;
+    const w = completeMajor({ ...plan, stages, playoffs }, (id) => (id === USER_ID ? userS : strengthOf(id)), `major:${save.split}`);
+    const res = majorResults(save.split, w);
+    const closed = closeWorld(mundoOf(save), namedResults(res), majorTime(save.split));
+    const mine = closed.table.entries[USER_ID];
+    const contribution = (mine?.rows ?? []).filter((r) => r.eventId === majorIdOf(save.split) || r.eventId.startsWith(`rmr:${save.split}:`)).reduce((a, r) => a + r.contribution, 0);
+    return { mundo: closed.mundo, points: mine?.points ?? 0, contribution, news: headlineNews(worldHeadlines(res, save.split, tagOfTeam), save.split) };
+  };
+
   // encerra o Major do usuário: colocação, prêmio e VRS
-  const concludeMajor = (t: Tournament, placement: PlacementCode) => {
+  const concludeMajor = (t: Tournament, placement: PlacementCode, opts: { rmrOut?: boolean; plan?: MajorFieldPlan; log?: CareerSave['majorLog'] } = {}) => {
     const tournament = { ...t, history: [...(save.majorHistory ?? []), ...t.history] };
+    const world = majorWorldAtEnd(t, opts);
     const result: MajorResult = {
       tournament,
       placement,
-      prize: MAJOR_PRIZE[placement],
-      vrs: MAJOR_VRS[placement],
-      champion: placement === 'champion',
+      prize: opts.rmrOut ? RMR_PRIZE : MAJOR_PRIZE[placement],
+      vrs: world.contribution,
+      champion: !opts.rmrOut && placement === 'champion',
+      ...(opts.rmrOut ? { rmrOut: true } : {}),
     };
     setMajorResult(result);
     setMajorTState(tournament);
     // persiste o resultado: se o jogador der F5 na tela de resultado, reidrata aqui
     // em vez de voltar pro hub com o Major "vivo" e re-jogar a última série
-    setSave((s) => { const n = { ...s, majorT: tournament, majorResult: result }; persist(n); return n; });
+    setSave((s) => {
+      // [fase 4 · integração] o histórico do Major vive só no resultado (antes ficava
+      // em três cópias: majorHistory, majorT e majorResult — metade do save)
+      const n = { ...s, majorT: { ...tournament, history: [] }, majorHistory: [], majorResult: result, mundo: world.mundo, vrs: world.points, ...pushNews(s, world.news) };
+      persist(n);
+      return n;
+    });
     setStage('major');
   };
 
-  // avança o Major em STAGES: transiciona stage->stage->playoffs e encerra quando
-  // o usuário é eliminado ou vence o Champions Stage.
+  // avança o Major em STAGES: RMR (0) → Stage 1/2/3 → playoffs; encerra quando o
+  // usuário é eliminado ou vence o Champions Stage.
   const progressMajor = (clone: Tournament) => {
     const u = getTeam(clone, 'user');
     const stageNow = save.majorStage ?? 1;
+    const majorHistory = [...(save.majorHistory ?? []), ...clone.history];
+    if (stageNow === 0) {
+      // [fase 4 · circuito] RMR: termina o suíço (a ordem final decide as vagas)
+      if ((!u || u.status !== 'eliminated') && clone.phase !== 'done') { setMajorState(clone); setHubTab('major'); setStage('hub'); return; }
+      const done = clone.phase === 'done' ? clone : finishTournament(clone);
+      const order = swissOrderOf(done);
+      const reg: RmrRegion = save.majorRegion ?? 'europe';
+      const pool = oppEra.filter((x) => x.id !== USER_ID && x.players.length >= 5);
+      const plan0 = save.majorPlan ?? majorFieldFromVrs(mundoOf(save).vrs, pool, { region: save.region });
+      const planR = resolveRmrs({ ...plan0, rmr: { ...plan0.rmr, [reg]: { field: done.teams.map((x) => x.id), order } } }, strengthOf, `${save.split}`);
+      if (!order.slice(0, RMR_SLOTS[reg]).includes(USER_ID)) {
+        concludeMajor(done, 'swiss', { rmrOut: true, plan: planR });
+        return;
+      }
+      const user = buildTeam(save);
+      if (!user) return;
+      const T = (ids: string[]) => ids.map((id) => done.teams.find((x) => x.id === id) ?? majorTeamOf(id, user)).filter((x): x is TTeam => !!x);
+      const next = createSwissStage(T([...planR.s1Invites, ...rmrQualifiedIds(planR)]), rngRef.current, `${MAJOR_NAME(save.split)} · Stage 1`);
+      next.pressure = MAJOR_PRESSURE;
+      setMajorState(next, { majorStage: 1, majorHistory, majorPlan: slimPlan(planR), majorSeed2: T(planR.s2), majorSeed3: T(planR.s3) });
+      setHubTab('major');
+      setStage('hub');
+      return;
+    }
     if (u && u.status === 'eliminated') {
       // eliminado: encerra na colocação alcançada (passar do Stage 3 = playoffs)
       const placement: PlacementCode = clone.stageOnly ? (stageNow >= 3 ? 'playoffs' : 'swiss') : placementCode(clone, 'user');
@@ -4430,14 +5372,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (clone.stageOnly) {
       // stage encerrado e usuário classificado: monta o próximo stage (ou playoffs)
       const advancers = stageAdvancers(clone);
-      const majorHistory = [...(save.majorHistory ?? []), ...clone.history];
+      const majorLog = [...(save.majorLog ?? []).filter((l) => l.stage !== stageNow), { stage: stageNow, field: clone.teams.map((x) => x.id), order: swissOrderOf(clone) }];
       if (stageNow < 3) {
         const seeds = stageNow === 1 ? (save.majorSeed2 ?? []) : (save.majorSeed3 ?? []);
         const next = createSwissStage([...advancers, ...seeds], rngRef.current, `${MAJOR_NAME(save.split)} · Stage ${stageNow + 1}`);
-        setMajorState(next, { majorStage: stageNow + 1, majorHistory });
+        next.pressure = MAJOR_PRESSURE;
+        setMajorState(next, { majorStage: stageNow + 1, majorHistory, majorLog });
       } else {
         const po = createPlayoffStage(advancers, `${MAJOR_NAME(save.split)} · Champions Stage`);
-        setMajorState(po, { majorStage: 4, majorHistory });
+        po.pressure = MAJOR_PRESSURE;
+        setMajorState(po, { majorStage: 4, majorHistory, majorLog });
       }
       setHubTab('major');
       setStage('hub');
@@ -4506,8 +5450,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!pair) return;
     const [a, b] = pair;
     const bo = up.bestOf ?? 3;
-    rngRef.current = makeRng(randomSeed());
-    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+    rngRef.current = makeRng(careerMatchSeed(save, `mj:${majorT.name}:${majorT.phase}:${majorT.swissRound}:${up.a}:${up.b}`));
+    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo, pressureOpts(majorT.pressure));
     setQuickSim({
       series, teams: [a, b], userIdx: up.a === 'user' ? 0 : 1,
       label: `${majorT.name} · ${up.label}`,
@@ -4567,7 +5511,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const careerTop20Memo = useMemo(() => {
     const cs = save.careerStats ?? {};
     const byId = new Map<string, Player>();
-    for (const t of CS2_REAL_2026) for (const p of t.players) byId.set(p.id, p);
+    for (const t of rawBase) for (const p of t.players) byId.set(p.id, p);
     for (const t of currentEra) for (const p of t.players) byId.set(p.id, p); // inclui transferidos/custom
     const teamById = new Map<string, TeamSeason>();
     for (const t of currentEra) for (const p of t.players) teamById.set(p.id, t);
@@ -4587,60 +5531,97 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       });
     }
     return rows.sort((a, b) => b.rating - a.rating).slice(0, 20);
-  }, [save.careerStats, save.roles, save.org, currentEra]);
-  // feed do mercado da IA: PROJEÇÃO viva do tick que vai fechar este split —
-  // reage aos resultados da liga em andamento (forma real de clube) e, no
-  // momento do fechamento, é exatamente o que applyTransferWindow aplica.
+  }, [save.careerStats, save.roles, save.org, currentEra, rawBase]);
+  // [SA2 · legado] fechamento do ano: prêmios da cena do último ano fechado (uma vez por ano)
+  const userCoachNick = save.coachFromId === '__custom__' ? save.customCoach?.nick : (currentEra.find((t) => t.id === save.coachFromId)?.coach.nick ?? ROOKIE_COACH.nick);
+  useEffect(() => {
+    if (!save.org || !userTeamSeason) return;
+    const next = closeLegadoYear(save.legado, save.split, {
+      teams: top20Pool, ovrOf: playerOvr, ageOf: (p) => aiAgeOf(p, save.split, save.youthDebut),
+      roleOf: (p, tid) => (tid === 'user' ? (save.roles?.[p.id] ?? p.role) : p.role) as Role,
+      userCoachNick, seasonStats: save.seasonStats, results: save.mundo?.results ?? [],
+    });
+    if (next) update({ legado: next });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fecha só quando o split vira (idempotente por ano)
+  }, [save.org, save.split, save.legado, userTeamSeason]);
+  // feed do mercado da IA. No resumo do split (seasonEnd) é a PROJEÇÃO exata da
+  // janela de pré-temporada que o fechamento vai aplicar (mesmo tick, mesmas
+  // entradas); no resto da carreira é o que aconteceu na última janela.
+  const lastWindowFeed = marketOf(save).windows?.[0]?.items;
   const feedMemo = useMemo<TransferItem[]>(
-    () => runAIMarketTick(save).log.map((m) => ({ nick: m.nick, cc: m.country, from: m.fromTag, to: m.toTag, fee: m.fee, reason: m.reason })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runAIMarketTick é puro sobre (save, currentEra, bo3Edits)
-    [save, currentEra, bo3Edits],
+    () => (stage === 'seasonEnd' && save.org && save.squad.length >= 5
+      ? worldTick(save, 'offseason').log.map((m) => ({ nick: m.nick, cc: m.country, from: m.fromTag, to: m.toTag, fee: m.fee, reason: NEED_LABEL[m.reason] }))
+      : (lastWindowFeed ?? []).map((m) => ({ nick: m.nick, cc: m.cc, from: m.from, to: m.to, fee: m.fee, reason: m.reason }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- worldTick é puro sobre (save, oppEra, bo3Edits)
+    [stage, save, oppEra, bo3Edits, lastWindowFeed],
   );
-  // propostas que CHEGAM pelos seus jogadores: clubes assediam seus melhores nomes.
-  // Determinístico por split; some quem você já vendeu ou recusou.
-  const incomingOffers = (() => {
-    const sold = new Set([
-      ...(save.pendingSales ?? []).map((x) => x.playerId),
-      ...(save.rejectedOffers ?? []),
-      ...(save.pendingDeals ?? []).flatMap((d) => d.outPlayerIds),
-    ]);
-    const buyers = currentEra.filter((t) => t.id !== save.takeoverId).sort((a, b) => b.teamwork - a.teamwork);
-    if (!buyers.length) return [];
-    // toId = id do clube comprador. ANTES era guardado só toTag/toName (string),
-    // então na hora de consumar a venda a gente não sabia pra onde o jogador
-    // ia REALMENTE — `moves` ficava sem entrada e o atleta voltava pro time
-    // original via applyMoves (bug do 'vende real, vai pro time antigo').
-    const out: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toId: string; toName: string }[] = [];
-    for (const sig of save.squad) {
-      if (sold.has(sig.playerId)) continue;
-      const p = findSigning(sig)?.player;
-      if (!p) continue;
-      const ovr = playerOvr(p);
-      if (ovr < 75) continue; // só os bons atraem proposta
-      const h = hashStr(`offer:${save.split}:${p.id}`);
-      // chance de proposta sobe com o OVR (estrela é mais assediada)
-      const chance = Math.min(70, 18 + (ovr - 75) * 4);
-      if (h % 100 >= chance) continue;
-      const buyer = buyers[h % Math.min(14, buyers.length)];
-      const fee = Math.round(playerValue(p) * (1.05 + (h % 35) / 100)); // 1.05x..1.39x do valor
-      out.push({ playerId: p.id, nick: p.nick, ovr, country: p.country, fee, toTag: buyer.tag, toId: buyer.id, toName: buyer.team });
-    }
-    return out;
-  })();
+  // [fase 3 · mercado] leitura dos clubes pra tela Transferências (caixa,
+  // estratégia e necessidades por função). Usa o que a última janela gravou;
+  // sem janela ainda (save antigo, carreira nova) calcula na hora.
+  const marketClubsMemo = useMemo(() => {
+    if (hubTab !== 'market' || !save.org) return null;
+    const teams = oppEra.filter((t) => t.id !== save.takeoverId);
+    const forms = computeAllTeamForms(save);
+    const m = marketOf(save);
+    const byId = new Map(teams.map((t) => [t.id, t]));
+    const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
+    const snap = stored
+      ? { budgets: m.budgets, strategies: m.strategies ?? {} }
+      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf: (p) => aiAgeOf(p, save.split, save.youthDebut), seed: mundoOf(save).seed, budgetMul: AI_MARKET_BY_MODE[careerDiff(save.difficulty)].budgetMul });
+    const ageOf = (p: Player) => aiAgeOf(p, save.split, save.youthDebut);
+    const rows: RivalRow[] = teams.map((t) => {
+      const strategy = snap.strategies[t.id] ?? 'balanced';
+      const form = forms[t.id] ?? 50;
+      return {
+        id: t.id, team: t.team, tag: t.tag, tier: aiTierOf(t), country: t.country, strategy, budget: snap.budgets[t.id] ?? 0, form,
+        squadOvr: squadOvr(t.players), needs: clubNeeds(t, { split: save.split, form, strategy, ageOf, baseOvrOf, movable: (p) => movableIds.has(p.id) }),
+      };
+    });
+    return { rows, byId: new Map(rows.map((r) => [r.id, r])), strategies: snap.strategies, budgets: snap.budgets };
+  }, [hubTab, oppEra, save, movableIds]);
+
+  // [fase 3 · mercado] save que ainda não passou por nenhuma janela (migrado da
+  // v28 ou carreira nova): abre o mercado com caixa/estratégia dos rivais e as
+  // primeiras propostas — sem mexer no mundo (nenhum movimento da IA).
+  const marketNeedsBoot = !!save.org && save.squad.length >= 5 && !!save.league && !marketOf(save).lastWindow;
+  useEffect(() => {
+    if (!marketNeedsBoot) return;
+    const m = marketOf(save);
+    const teams = oppEra.filter((t) => t.id !== save.takeoverId);
+    const forms = computeAllTeamForms(save);
+    const byId = new Map(teams.map((t) => [t.id, t]));
+    const ageOf = (p: Player) => aiAgeOf(p, save.split, save.youthDebut);
+    const snap = clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(save, t) : 0; }, ageOf, seed: mundoOf(save).seed, budgetMul: AI_MARKET_BY_MODE[careerDiff(save.difficulty)].budgetMul });
+    const win = transferWindowOf({ split: save.split, eventInSplit: save.eventInSplit ?? 1, inMajor: !!save.majorT && save.majorT.phase !== 'done', majorSplit: isMajorSplit(save.split) });
+    // na abertura ninguém paga cláusula: o mundo não força venda ao carregar o save
+    const squad = squadEntries(save).map((e) => ({ ...e, clause: null }));
+    const off = win.rosterLocked
+      ? { offers: [], rumors: [] }
+      : generateIncomingOffers({ split: save.split, kind: 'boot', squad, teams, budgets: snap.budgets, strategies: snap.strategies, formOf: (id) => forms[id] ?? 50, ageOf, userTier: save.tier ?? 3, existing: m.incoming, max: 2, seed: mundoOf(save).seed });
+    let next: MarketState = { ...m, budgets: snap.budgets, strategies: snap.strategies, lastWindow: { split: save.split, event: save.eventInSplit ?? 1, kind: 'boot' }, window: { open: win.open, rosterLocked: win.rosterLocked, label: win.label } };
+    next = withOffers(next, off.offers);
+    const needs = teams.map((t) => clubNeeds(t, { split: save.split, form: forms[t.id] ?? 50, strategy: snap.strategies[t.id] ?? 'balanced', ageOf, baseOvrOf })[0]).filter((n): n is ClubNeed => !!n);
+    next = pushRumors(next, [...needRumors(needs, teams, save.split), ...off.rumors]);
+    update(withMarket(save, next));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save sem janela
+  }, [marketNeedsBoot]);
+
   const vrsByRegionMemo = useMemo(() => {
     // bandeira E região de cada time saem do CORE do elenco (o país do header da
     // base é furado). A org usa a região que escolheu competir (save.region).
     type Row = { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; players: { country: string }[]; region: CareerRegion; vrs: number; isUser: boolean };
-    const rows: Row[] = oppEra.map((t) => ({
+    // [fase 4 · circuito] o ranking publicado (save.mundo.vrs): só quem tem
+    // resultado na janela é ranqueado (como o VRS de verdade); você sempre aparece
+    const vrs = save.mundo?.vrs ?? {};
+    const rows: Row[] = oppEra.filter((t) => (vrs[t.id]?.points ?? 0) > 0).map((t) => ({
       id: t.id, name: `${t.team}`, tag: t.tag, colors: t.colors, logoUrl: t.logoUrl ?? logoForTeam(t),
-      players: t.players, region: teamRegion(t), vrs: aiTeamVrs(t, save.split), isUser: false,
+      players: t.players, region: teamRegion(t), vrs: vrs[t.id].points, isUser: false,
     }));
     const ut = buildTeam(save);
     const orgPlayers = ut?.players ?? [];
     if (orgPlayers.length && save.org) {
       const reg = save.region ?? macroRegionPlurality(orgPlayers.map((p) => p.country));
-      const takeoverOrg = save.takeoverId ? currentEra.find((t) => t.id === save.takeoverId) : undefined;
-      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: userBaseVrsFor(ut?.teamwork ?? takeoverOrg?.teamwork ?? 78, takeoverOrg) + save.vrs + userLegacyVrs(save), isUser: true });
+      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: userVrsTotal(save), isUser: true });
     }
     const groups = new Map<CareerRegion, Row[]>();
     for (const r of rows) {
@@ -4677,6 +5658,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     upsellWorld1Ref.current = true;
     window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'world-1' } }));
   }, [myVrsRankEarly]);
+  // Voltar/Avançar (shell, Alt+←/→ e navegador) passam pelas seções: cada
+  // troca de seção/aba é uma entrada do histórico do app (state/app-history).
+  // Hook: fica antes dos early returns, como os de cima.
+  useSectionHistory(
+    'carreira',
+    hubTab === 'squad' ? `squad:${squadSec}` : hubTab === 'finance' ? `finance:${finSec}` : hubTab,
+    (v) => {
+      const [tab, sub] = v.split(':') as [HubTab, string | undefined];
+      setSelSeries(null);
+      if (tab === 'squad' && sub) setSquadSec(sub);
+      if (tab === 'finance' && sub) setFinSec(sub);
+      setHubTab(tab);
+    },
+    (path) => path === '/carreira' || isCareerPlayerPath(path) || isCareerTeamPath(path),
+  );
 
   // overlay de simulação rápida (mini partida acelerada), sobrepõe qualquer tela
   if (quickSim) {
@@ -4774,9 +5770,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           fired: false,
           morale: {},
           fatigue: {},
+          gestao: { ...gestaoOf(save), training: defaultTrainingState(), condition: {} },
           restingPlayers: [],
-          contracts: {},
-          pendingOffer: null,
+          // [fase 3] clube novo: sem contratos herdados nem propostas/empréstimos do elenco antigo
+          clube: { ...(save.clube ?? (migrateClube({}).clube as ClubeState)), contracts: {}, negotiations: [], market: { ...marketOf(save), incoming: [], loans: marketOf(save).loans.filter((l) => l.kind === 'ai') } },
           pendingDeals: [],
           renewals: [],
           pendingSales: [],
@@ -4824,7 +5821,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     </div>
                     {!rejected && (
                       <>
-                        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: o.chance >= 0.55 ? 'var(--em-green)' : o.chance >= 0.3 ? 'var(--em-gold)' : 'var(--em-red)' }}>
+                        <b style={{ fontFamily: 'var(--font-num)', color: o.chance >= 0.55 ? 'var(--em-green)' : o.chance >= 0.3 ? 'var(--em-gold)' : 'var(--em-red)' }}>
                           {Math.round(o.chance * 100)}%
                         </b>
                         <Button variant="primary" size="sm" onClick={() => tryApply(o)}>{ct('Candidatar-se')}</Button>
@@ -4889,6 +5886,20 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         </CareerDashFrame>
       );
     }
+    // [fase 4 · editor] a base do mundo é escolhida aqui, antes de fundar/assumir
+    // (a carreira começada não troca de base)
+    const dbSlot = (
+      <CareerDatabaseChoice
+        databases={storedDbs}
+        selectedId={save.mundo?.databaseId ?? null}
+        status={careerDb.status}
+        onSelect={(db) => {
+          if (save.org) return;
+          update({ mundo: withCareerDatabase(save.mundo ?? (migrateMundo({}).mundo as MundoState), db) });
+        }}
+        onOpenEditor={onOpenEditor}
+      />
+    );
     const startFromOrg = (s: OrgStart) => {
       // dificuldade remodela o caixa INICIAL (hard/legend começam mais pobres)
       const startBudget = Math.round(s.budget * DIFFICULTY_ECON[careerDifficulty].startBudgetMul);
@@ -4897,12 +5908,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         tier: s.tier, takeoverId: s.takeoverId, region: s.region,
         board: s.board ?? 60, scenario: s.scenario ?? null,
         difficulty: careerDifficulty,
+        foundingOpen: true, // [integração] o elenco ainda não passou pelo mercado (contratos)
       });
       setStage('market');
     };
     if (orgChoice === 'fictional') {
       return <FoundOrg founder={founder} onExit={() => setOrgChoice('select')} onFound={(org) => {
-        update({ org, takeoverId: null, scenario: null, difficulty: careerDifficulty });
+        update({ org, takeoverId: null, scenario: null, difficulty: careerDifficulty, foundingOpen: true });
         setStage('market');
       }} />;
     }
@@ -4923,13 +5935,41 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             takeoverId: null,
             scenario: null,
             difficulty: careerDifficulty,
+            foundingOpen: true,
           });
           setStage('market');
         }}
       />;
     }
+    if (orgChoice === 'cenarios') {
+      // [Modo Cenário] largada: elenco filtrado pelos mods, caixa/diretoria do cenário;
+      // Desafio da Semana = seed fixa do mundo + dificuldade normal (justo pra todos)
+      const startCenario = (c: CenarioChoice) => {
+        const tier = teamTier(c.team);
+        const base = c.team.players.slice(0, 5).map((p) => ({ p, id: p.id, age: effectiveAge(p, save.split, save.youthAge, save.youthDebut), country: p.country }));
+        const kept = startingSquad(c.mods, base);
+        const diff: Difficulty = c.weekly ? 'normal' : careerDifficulty;
+        const budget = c.mods.includes('zeroBudget') ? 0 : Math.round(cenarioBudget(c.def, tier) * DIFFICULTY_ECON[diff].startBudgetMul);
+        const run = createRun(c.def, { startSplit: save.split, startTier: tier, mods: c.mods, weekly: c.weekly?.id, seed: c.weekly?.seed });
+        const mundo0 = save.mundo ?? (migrateMundo({}).mundo as MundoState);
+        update({
+          org: { name: c.team.team, tag: c.team.tag, colors: c.team.colors, logo: c.team.logoUrl ?? logoForTeam(c.team) },
+          squad: kept.map((k) => ({ playerId: k.id, fromId: c.team.id })),
+          coachFromId: c.team.id, budget, tier, takeoverId: c.team.id,
+          region: macroRegionPlurality(c.team.players.slice(0, 5).map((p) => p.country)),
+          board: c.def.start.board ?? 60,
+          scenario: { id: c.def.id, cat: 'atual', title: c.def.title.pt, context: c.def.context.pt, goals: [], run },
+          difficulty: diff,
+          ...(c.weekly ? { mundo: { ...mundo0, seed: c.weekly.seed } } : {}),
+          foundingOpen: true,
+        });
+        if (c.weekly) void postCenStart(c.weekly.id); // largada no servidor (tempo mínimo real)
+        setStage('market');
+      };
+      return <CenariosPicker current={currentEra} tierOf={teamTier} budgetOf={cenarioBudget} logoOf={(t) => t.logoUrl ?? logoForTeam(t)} onBack={() => setOrgChoice('scenario')} onStart={startCenario} />;
+    }
     if (orgChoice === 'scenario') {
-      return <ScenarioPicker current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} difficulty={careerDifficulty} onDifficulty={setCareerDifficulty} />;
+      return <ScenarioPicker onCenarios={() => setOrgChoice('cenarios')} current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} difficulty={careerDifficulty} onDifficulty={setCareerDifficulty} dbSlot={dbSlot} />;
     }
     return (
       <CareerDashFrame onExit={onExit} title={ct('Assumir organização')}>
@@ -4946,6 +5986,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           onStart={startFromOrg}
           difficulty={careerDifficulty}
           onDifficulty={setCareerDifficulty}
+          dbSlot={dbSlot}
         />
       </CareerDashFrame>
     );
@@ -4960,33 +6001,44 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         <RenewalScreen
           renewals={save.renewals}
           budget={save.budget}
-          onConfirm={(renewIds) => {
-            const keep = new Set(renewIds);
+          payrollBase={contractPayroll(save, squadWages(save))}
+          profileFor={renewalProfileFor}
+          blockedFor={renewalBlockedFor}
+          onRecord={(n) => updateClube((s) => recordNegotiation(s, n))}
+          onConfirm={(decisions) => {
             let squad = [...save.squad];
-            const contracts = { ...(save.contracts ?? {}) };
+            let clube: ClubeState = save.clube ?? (migrateClube({}).clube as ClubeState);
             const morale = { ...(save.morale ?? {}) };
             const peakOvr = { ...(save.peakOvr ?? {}) };
             const evo = { ...(save.evo ?? {}) };
             let budget = save.budget;
             let stintsAcc = { ...(save.stints ?? {}) }; // #40
+            let moves = { ...(save.moves ?? {}) };
             const released: string[] = [];
             for (const r of save.renewals ?? []) {
-              if (keep.has(r.playerId)) {
-                contracts[r.playerId] = save.split + CONTRACT_TERM - 1; // renova: estende e paga 1 salário
-                budget = Math.max(0, budget - r.wage);
+              const d = decisions[r.playerId];
+              if (d?.kind === 'keep') {
+                // [fase 3] renova nos termos negociados; as luvas saem do caixa agora
+                clube = signContract({ clube }, r.playerId, d.terms);
+                budget = Math.max(0, budget - (d.terms.signingBonus ?? 0));
               } else {
                 squad = squad.filter((x) => x.playerId !== r.playerId); // libera de graça
-                stintsAcc = closeStint(stintsAcc, r.playerId, save.split, r.ovr);
-                delete contracts[r.playerId]; delete morale[r.playerId]; delete peakOvr[r.playerId]; delete evo[r.playerId];
+                // sem renovação = mercado livre (sem receita). Sem o move ele
+                // voltava pro time da base e custava taxa pra recontratar.
+                const ex = releaseToFree({ moves, stints: stintsAcc }, { playerId: r.playerId, split: save.split, endOvr: r.ovr, movable: movableIds.has(r.playerId) });
+                moves = ex.moves;
+                stintsAcc = ex.stints ?? stintsAcc;
+                clube = withoutContracts({ clube }, [r.playerId]);
+                delete morale[r.playerId]; delete peakOvr[r.playerId]; delete evo[r.playerId];
                 released.push(r.nick);
               }
             }
-            let next: CareerSave = { ...save, squad, contracts, morale, peakOvr, evo, budget, stints: stintsAcc, renewals: [] };
+            let next: CareerSave = { ...save, squad, clube, morale, peakOvr, evo, budget, stints: stintsAcc, moves, renewals: [] };
             if (released.length) {
               next = { ...next, ...pushNews(next, [{
                 id: `${save.split}:rel`, split: save.split, icon: '👋', tone: 'info', cat: 'transfer',
                 title: ct('Saídas por fim de contrato'),
-                body: `${ct('Sem renovação, saíram do elenco:')} ${released.join(', ')}.`,
+                body: `${ct('Sem renovação, saíram do elenco:')} ${released.join(', ')}. ${ct('Estão no mercado livre.')}`,
               }]) };
             }
             persist(next);
@@ -4997,48 +6049,53 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     }
     // proposta de uma org grande pendente: resolve ANTES do mercado (assim o
     // mercado já abre com o elenco certo e você repõe quem saiu)
-    if (save.pendingOffer) {
-      const off = save.pendingOffer;
+    // [integração] proposta de ELITE pendente (IncomingOffer 'elite' do split):
+    // resolve ANTES do mercado, como antes — assim o mercado já abre com o elenco
+    // certo e você repõe quem saiu. Mesma venda imediata do caminho antigo.
+    const eliteOpen = marketOf(save).incoming.find((o) => o.reason === 'elite' && o.status === 'open' && o.split === save.split);
+    if (eliteOpen) {
+      const off = eliteOpen;
+      const mk = marketOf(save);
       return (
         <OfferScreen
-          offer={off}
+          offer={{ orgName: off.fromName ?? '', nick: off.nick ?? '', ovr: off.ovr ?? 0, fee: off.fee }}
           orgName={save.org?.name ?? 'sua org'}
           onAccept={() => {
-            // GUARD defensivo: se o alvo do assédio JÁ saiu do elenco (venda in-season
-            // consumada na virada), aceitar não pode creditar fee de novo nem mover o
-            // jogador pro clube errado — só limpa a proposta órfã.
+            const accepted = acceptOffer(mk, off.id).market;
+            // GUARD defensivo: se o alvo JÁ saiu do elenco (venda consumada na virada),
+            // aceitar não credita fee de novo nem move o jogador — só fecha a proposta.
             if (!save.squad.some((s) => s.playerId === off.playerId)) {
-              const cleared = { ...save, pendingOffer: null };
+              const cleared = { ...save, ...withMarket(save, accepted) };
               persist(cleared);
               setSave(cleared);
               return;
             }
-            // vende: sai do elenco e entra a grana. Você fica com 4 e repõe no
-            // mercado (a org compradora leva o jogador "de cena"; não forçamos
-            // ele num 6º slot do roster dela pra não quebrar o time).
+            // vende: sai do elenco e entra a grana. Você repõe no mercado.
             const morale = { ...(save.morale ?? {}) };
             delete morale[off.playerId];
             const peakOvr = { ...(save.peakOvr ?? {}) };
             delete peakOvr[off.playerId];
-            // zera a evolução acumulada: se voltar a contratá-lo, ele entra no OVR
-            // de mercado (base), não com o declínio antigo grudado
             const evo = { ...(save.evo ?? {}) };
             delete evo[off.playerId];
-            // BUG FIX (caça-bugs): registrar o MOVE pro clube comprador e tirar o
-            // contrato. Antes só removia do squad → o jogador real reaparecia no
-            // time original no próximo render (currentEra) como se a venda nunca
-            // tivesse acontecido. off.orgId é o id do clube assediante (makeOffer).
             const moves = { ...(save.moves ?? {}) };
-            moves[off.playerId] = off.orgId;
-            const contracts = { ...(save.contracts ?? {}) };
-            delete contracts[off.playerId];
+            moves[off.playerId] = off.fromTeamId;
+            // [saídas] chega no comprador como reforço e quem perde a vaga vai pro mercado livre
+            const eliteBuyer = oppEra.find((t) => t.id === off.fromTeamId);
+            const eliteSig = save.squad.find((s) => s.playerId === off.playerId);
+            const eliteRes = eliteSig ? findSigning(eliteSig) : null;
+            const settled = settleSaleAtBuyer({
+              moves, arrivals: accepted.arrivals, playerId: off.playerId, buyerId: off.fromTeamId, split: save.split,
+              outPlayerId: off.outPlayerId ?? (eliteBuyer && eliteRes ? displacedBy(eliteBuyer, { ...eliteRes.player, id: off.playerId }) : undefined),
+              movable: (id) => movableIds.has(id), isAtBuyer: isAtClub(off.fromTeamId),
+            });
+            const clube = { ...withoutContracts(save, [off.playerId]), market: { ...accepted, arrivals: settled.arrivals } };
             const next: CareerSave = {
               ...save,
               squad: save.squad.filter((s) => s.playerId !== off.playerId),
               budget: save.budget + off.fee,
-              pendingOffer: null,
-              moves,
-              contracts,
+              moves: settled.moves,
+              stints: closeStint(save.stints, off.playerId, save.split, eliteRes ? playerOvr(eliteRes.player) : undefined),
+              clube,
               morale,
               peakOvr,
               evo,
@@ -5047,7 +6104,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             setSave(next);
           }}
           onRefuse={() => {
-            const next = { ...save, pendingOffer: null };
+            // recusar quem queria ir custa moral (mesma regra das outras propostas)
+            const wage = contractWageOf(save, off.playerId, () => Math.round((off.wageOffered ?? 0) / 1.35));
+            const willingness = playerWillingness({ wage, wageOffered: off.wageOffered, buyerTier: 1, userTier: save.tier ?? 3, wantsLeave: wantsToLeave(save, off.playerId) });
+            const r = rejectOffer(mk, off.id, { wantsLeave: wantsToLeave(save, off.playerId), willingness });
+            const morale = { ...(save.morale ?? {}) };
+            if (r.moraleDelta < 0) morale[off.playerId] = Math.max(0, (morale[off.playerId] ?? MORALE_DEFAULT) + r.moraleDelta);
+            const next = { ...save, morale, ...withMarket(save, r.market) };
             persist(next);
             setSave(next);
           }}
@@ -5061,33 +6124,42 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         market={market}
         coaches={currentEra}
         findSigning={findSigning}
+        contract={signingCtx(save.split)}
         onExit={onExit}
         onConfirm={(squad, coachFromId, budget, sponsors, sponsorUntil) => {
           const stableSquad = squad.map((signing) => {
             const resolved = findSigning(signing);
             return resolved ? signingWithSnapshot(signing, resolved) : signing;
           });
-          // todo jogador do elenco fechado tem contrato; novos ganham CONTRACT_TERM
-          const contracts = { ...(save.contracts ?? {}) };
+          // [fase 3] todo jogador do elenco fechado tem contrato: quem chegou
+          // assina os termos negociados (sig.contract) ou o padrão; quem saiu
+          // perde o contrato. As luvas dos novos já saíram do caixa (budget).
           const ids = new Set(stableSquad.map((x) => x.playerId));
+          // [saídas] quem saiu do elenco foi VENDIDO (85% ou a venda já acertada):
+          // vai pro clube comprador — o caixa já veio somado no `budget` da tela
+          const qs = applyQuickSales(save, save.squad.map((x) => x.playerId).filter((id) => !ids.has(id)));
+          let clube = keepContracts(save, ids);
           for (const sig of stableSquad) {
-            if (!(sig.playerId in contracts) || contracts[sig.playerId] < save.split) {
-              contracts[sig.playerId] = save.split + CONTRACT_TERM - 1;
+            const cur = clube.contracts[sig.playerId];
+            if (sig.contract) clube = signContract({ clube }, sig.playerId, sig.contract);
+            else if (!cur || cur.until < save.split) {
+              const f = findSigning(sig);
+              clube = signContract({ clube }, sig.playerId, defaultTerms(f ? playerWage(f.player) : 20000, save.split));
             }
           }
-          for (const k of Object.keys(contracts)) if (!ids.has(k)) delete contracts[k];
+          if (qs) clube = { ...clube, market: { ...clube.market, incoming: qs.books.incoming ?? clube.market.incoming, budgets: qs.budgets, arrivals: qs.arrivals } };
+          const cleanSquad = stableSquad.map((sig) => { if (!sig.contract) return sig; const rest = { ...sig }; delete rest.contract; return rest; });
           // poda chaves de quem saiu do elenco (não crescem pra sempre no save;
           // se voltar a contratar, começa com moral padrão de novo)
           const morale = { ...(save.morale ?? {}) };
           for (const k of Object.keys(morale)) if (!ids.has(k)) delete morale[k];
           const peakOvr = { ...(save.peakOvr ?? {}) };
           for (const k of Object.keys(peakOvr)) if (!ids.has(k)) delete peakOvr[k];
-          // quem saiu do elenco: MANTÉM o declínio acumulado (evo negativo) pra não
-          // "ressuscitar" no OVR base, alto, quando volta ao mercado (bug do veterano
-          // que caiu e voltava caro/forte). Só o GANHO (evo positivo) é zerado, pra
-          // ninguém recontratar barato um jogador que você desenvolveu.
+          // [evolução] quem saiu do elenco leva o estado para o save.worldEvo (a IA
+          // continua dali, ganho E queda — sem "ressuscitar" nem recontratar barato
+          // um jogador desenvolvido): o evo do elenco guarda só o elenco
           const evo = { ...(save.evo ?? {}) };
-          for (const k of Object.keys(evo)) if (!ids.has(k) && (evo[k] ?? 0) >= 0) delete evo[k];
+          for (const k of Object.keys(evo)) if (!ids.has(k)) delete evo[k];
           // prospectos PROMOVIDOS da academia dentro da janela: move academia -> youth
           // (mesma conta do promoteProspect) pra eles persistirem e seguirem evoluindo.
           const youth = { ...(save.youth ?? {}) };
@@ -5117,7 +6189,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             squadIds: stableSquad.map((x) => x.playerId),
             coachBond: save.coachBond, pairChem: save.pairChem, bondDefault: BOND_DEFAULT, chemDefault: 30, pairKey,
           });
-          const next = { ...save, squad: stableSquad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem };
+          const exits = qs ? { moves: qs.books.moves, stints: qs.books.stints, pendingSales: qs.books.pendingSales, pendingDeals: qs.books.pendingDeals, extraOnTeam: qs.extraOnTeam } : {};
+          let next = withSquadCondition({ ...save, ...exits, foundingOpen: false, squad: cleanSquad, coachFromId, budget, sponsors, sponsorUntil, clube, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem }); // [integração] condição na entrada
+          if (qs?.sold.length) {
+            next = { ...next, ...pushNews(next, qs.sold.map((x) => ({
+              id: `${save.split}:qsale:${x.playerId}`, split: save.split, icon: '💸', tone: 'info' as const, cat: 'transfer' as const,
+              title: `${x.nick} ${ct('foi vendido para')} ${x.toName}`,
+              body: `${ct('Venda fechada na janela por')} ${formatMoney(x.fee)}. ${ct('Ele joga pela')} ${x.toName} ${ct('a partir de agora.')}`,
+            }))) };
+            toast.success(qs.sold.map((x) => `${x.nick} → ${x.toTag || x.toName}`).join(' · '));
+          }
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -5133,22 +6214,27 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const orgPlayers = buildTeam(save)?.players ?? [];
     const coreReg = orgPlayers.length ? macroRegionPlurality(orgPlayers.map((p) => p.country)) : undefined;
     const relocate = save.region && coreReg && coreReg !== save.region ? { from: save.region, to: coreReg } : null;
-    // CONVITE: às vezes (determinístico por split) um time recebe convite pra
-    // disputar o circuito UM tier acima, mesmo sem estar classificado pelo VRS.
-    // Chance maior pra quem já está perto do topo da sua divisão (forte no split).
-    const inviteTier = save.tier > 1 && hashStr(`invite:${save.org?.tag ?? ''}:${save.split}`) % 100 < 35 ? save.tier - 1 : null;
+    // [fase 4 · circuito] ROTA de cada evento pelo VRS publicado: o seu tier (direto),
+    // um abaixo (opcional), um acima por CONVITE (top do VRS) ou pelo QUALIFICATÓRIO
+    // (fechado no tier 1 pra quem está perto; aberto no tier 2).
+    const worldRankNow = save.mundo?.vrs?.[USER_ID]?.rank ?? 999;
+    const qualis = save.mundo?.qualifiers ?? {};
     return (
       <CareerDashFrame onExit={onExit} title={ct('Escolher campeonato')}>
       <CircuitPicker
         circuits={circuits}
         split={save.split}
+        etapa={save.eventInSplit ?? 1}
         playerTier={save.tier}
-        inviteTier={inviteTier}
+        worldRank={worldRankNow}
+        qualifiers={qualis}
         userRegion={save.region ?? null}
+        squadCountries={orgPlayers.map((p) => p.country)}
         relocate={relocate}
         onRelocate={() => coreReg && update({ region: coreReg })}
         onBack={() => setStage('market')}
         onPick={(c) => startSplit(save, c)}
+        onQualifier={(c, route) => playQualifier(c, route)}
       />
       </CareerDashFrame>
     );
@@ -5179,34 +6265,31 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const mySquadOidsM = new Set(save.squad.map((s) => s.playerId));
     const seasonTop3 = seasonTopPlayersYear(top20Pool, save.split, 3);
     const seasonTop20 = seasonTopPlayersYear(top20Pool, save.split, 20);
-    const PLACE_PT: Record<PlacementCode, string> = {
-      champion: ct('CAMPEÃO DO MAJOR'),
-      runnerup: ct('VICE-CAMPEÃO'),
-      semi: ct('SEMIFINAL'),
-      quarters: ct('QUARTAS DE FINAL'),
-      playoffs: ct('FASE DE PLAYOFFS'),
-      swiss: ct('FASE SUÍÇA'),
-    };
     return (
       <CareerDashFrame title={ct('Major Mundial — resultado')} onExit={onExit}>
         <div className="em-stage-page">
+          {/* [Major espetáculo] cerimônia: troféu, confete, MVP, elenco e números */}
+          <MajorCeremony result={mr} org={save.org} split={save.split} worldChampion={majorWorldChampion(save.mundo, save.split)} />
           <div className="em-stage-card center">
-            <div className="trophy">{mr.champion ? '🏆' : mr.placement === 'runnerup' ? '🥈' : '★'}</div>
-            <h2>{save.org?.name}: {PLACE_PT[mr.placement]}</h2>
+            {/* [integração] fora do RMR a cerimônia já mostra troféu e colocação */}
+            {mr.rmrOut && <div className="trophy">★</div>}
+            {mr.rmrOut && <h2>{save.org?.name}: {ct('ELIMINADO NO RMR')}</h2>}
             <div className="prize-banner">
               {ct('Premiação:')} <b>+{formatMoney(mr.prize)}</b> · VRS: <b>+{mr.vrs} pts</b>
               {mr.champion ? ` · ${ct('+1 título!')}` : ''}
             </div>
-            <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
+            {mr.rmrOut && <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
               {mr.champion
                 ? ct('Sua organização é CAMPEÃ MUNDIAL! O nome entrou para a história do CS.')
-                : ct('Sua org representou o circuito no Major mundial. Volte mais forte no próximo split.')}
-            </p>
-            <div className={`career-hall-status ${careerHallStatus}`}>
+                : mr.rmrOut
+                  ? ct('O regional (RMR) não deu a vaga: o Major segue sem você. O resultado do RMR ainda conta no VRS.')
+                  : ct('Sua org representou o circuito no Major mundial. Volte mais forte no próximo split.')}
+            </p>}
+            {!mr.rmrOut && <div className={`career-hall-status ${careerHallStatus}`}>
               {careerHallStatus === 'saving' && ct('Registrando a campanha no Hall da Fama…')}
               {careerHallStatus === 'saved' && ct('Campanha registrada no Hall da Fama com elenco, MVP e recordes.')}
               {careerHallStatus === 'error' && ct('Hall indisponível agora. O registro será tentado novamente ao reabrir este resultado.')}
-            </div>
+            </div>}
 
             {/* o Major encerra a temporada: aqui sai a premiação do Top 20 HLTV do ano */}
             <div className="se-awards">
@@ -5234,27 +6317,31 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               className="btn gold big"
               onClick={() => {
                 const rec = save.pendingSplit ?? null;
+                // [fase 4 · circuito] cair no RMR não é campanha de Major (sem `major` no histórico)
+                const majorRec = mr.rmrOut ? {} : { major: { placement: mr.placement, champion: mr.champion } };
                 const finished: SplitRecord = rec
                   ? {
                       ...rec,
                       prize: rec.prize + mr.prize,
                       vrs: rec.vrs + mr.vrs,
-                      major: { placement: mr.placement, champion: mr.champion },
+                      ...majorRec,
                     }
                   : {
                       split: save.split, circuit: save.circuit?.name ?? 'Major', position: 0,
                       wins: 0, losses: 0, roundDiff: 0, prize: mr.prize, vrs: mr.vrs, champion: false,
-                      major: { placement: mr.placement, champion: mr.champion },
+                      ...majorRec,
                     };
                 setMajorT(null);
                 // chegar ao Major já cumpriu o objetivo da diretoria do split;
                 // ganhar o Major dá um respeito extra
                 const majObj = save.objective;
-                const majBonus = majObj ? majObj.bonus + (mr.champion ? 400_000 : 0) : 0;
+                // [fase 4 · circuito] cair no RMR = não chegou ao Major: objetivo "Major" falhou
+                const rmrMiss = !!mr.rmrOut;
+                const majBonus = majObj && !(rmrMiss && majObj.type === 'major') ? majObj.bonus + (mr.champion ? 400_000 : 0) : 0;
                 const majBd = applyBoardDelta(
                   save.board, save.boardLog, save.split,
-                  mr.champion ? APPROVAL_DELTAS.majorChampion : APPROVAL_DELTAS.majorRun,
-                  mr.champion ? ct('CAMPEÃO do Major — a diretoria está em êxtase') : ct('Campanha no Major encheu os olhos da diretoria'),
+                  rmrMiss ? (majObj?.type === 'major' ? APPROVAL_DELTAS.objectiveMissed : 0) : mr.champion ? APPROVAL_DELTAS.majorChampion : APPROVAL_DELTAS.majorRun,
+                  rmrMiss ? ct('Caiu no RMR: o Major ficou pelo caminho') : mr.champion ? ct('CAMPEÃO do Major — a diretoria está em êxtase') : ct('Campanha no Major encheu os olhos da diretoria'),
                 );
                 const majBoard = majBd.board;
                 const renewals = dueRenewals(save, save.split + 1);
@@ -5267,10 +6354,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 for (const p of uTeam?.players ?? []) nickByOid[p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id] = p.nick;
                 const squadInfo = save.squad.map((sg) => {
                   const rp = uTeam?.players.find((p) => p.id === `user__${sg.playerId}`);
-                  const until = save.contracts?.[sg.playerId];
+                  const until = contractUntilOf(save, sg.playerId);
                   return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                 });
-                const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }), normalizeFacilities(save.facilities).psychologist);
+                const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: !rmrMiss }, staffEffects(save.gestao?.staff).moraleRecovery), normalizeFacilities(save.facilities).psychologist);
                 // #16: campanha de Major como fator de resultados (1º=1.0 … fundo=0.45)
                 const majResults01 = mr.champion ? 1 : typeof mr.placement === 'number' ? (mr.placement <= 4 ? 0.8 : mr.placement <= 8 ? 0.6 : 0.45) : 0.6;
                 const hap = tickHappiness(save, majResults01, morale0);
@@ -5281,13 +6368,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                 const items = splitNews({
                   split: save.split, org: save.org?.name ?? 'Sua org', champion: mr.champion,
-                  circuit: save.circuit?.name ?? ct('circuito'), objMet: true, objText: majObj?.text,
+                  circuit: save.circuit?.name ?? ct('circuito'), objMet: !(rmrMiss && majObj?.type === 'major'), objText: majObj?.text,
                   tierChange: null, releases: [], offer: null,
                   risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                   sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
                   breakthroughs: (evo.lastEvo ?? []).filter((e) => e.breakthrough).map((e) => ({ nick: e.nick, ...e.breakthrough! })),
                   unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
-                  major: { placement: mr.placement, champion: mr.champion },
+                  major: rmrMiss ? null : { placement: mr.placement, champion: mr.champion },
                   boardConfidence: majBoard,
                   star: userSplitStar(uTeam, save.split),
                 });
@@ -5315,7 +6402,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     prize: mr.prize + sponsorMajorBonus,
                     flavor: `${save.org?.name ?? 'A org'} agora é campeã mundial. O caixa fica com ${formatMoney(mr.prize + sponsorMajorBonus)} e o legado começa a ser escrito.`,
                   });
-                } else {
+                } else if (!rmrMiss) {
                   setEliminationModal({
                     tournamentName: mr.tournament.name,
                     placement: mr.placement,
@@ -5325,7 +6412,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 const sponsorTick = applySponsorSplitTick(save, save.split + 1, rngRef.current);
                 const teamEventTick = applyTeamEventSplitTick(save, save.split + 1, rngRef.current);
                 // T3.4: decay leve de química no fim do split (pares ociosos perdem 1)
-                const decayedPairChem = decayPairChemOnSplitChange({ pairChem: save.pairChem });
+                const decayedPairChem = applyPairChemFx(decayPairChemOnSplitChange({ pairChem: save.pairChem }), hap.pairChemFx);
                 // T3.11: registra troféu de Major no stint do coach se foi campeão
                 const coachStintsAfterMajor = mr.champion
                   ? appendCoachTrophy(save.coachStints ?? [], `Major ${save.split}`)
@@ -5335,12 +6422,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 // T3.12: scouting tick — salário + relatórios
                 const scoutingPatchMajor = applyScoutingSplitTick(save, oppEra, rngRef.current);
                 const scoutSalaryMajor = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
+                // [fase 2 · STAFF] folha da comissão + contratos que vencem
+                const staffTickMajor = staffSplitTick(save.gestao?.staff, save.split);
                 // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
                 const { marketNews: majorMarketNews, ...majorWindowPatch } = applyTransferWindow(save);
+                const juvMajor = juventudeClose({ ...save, ...majorWindowPatch }); // [fase 4] juventude do fechamento
                 const next = {
                   ...save,
-                  budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) - scoutSalaryMajor + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
-                  vrs: applyCareerVrsDecay(save.vrs, mr.vrs), // Major também é um evento do ranking rolante
+                  budget: Math.max(0, save.budget + mr.prize - payroll - loyaltyDue(save) - facilityUpkeep(save.facilities) - scoutSalaryMajor - staffTickMajor.payroll + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
+                  ...(save.gestao ? { gestao: { ...save.gestao, staff: staffTickMajor.staff } } : {}),
+                  // [fase 4 · circuito] o VRS já foi republicado no fim do Major (concludeMajor)
+                  ...(save.mundo ? { mundo: withFreshCalendar(save.mundo, save.split + 1) } : {}),
+                  majorPlan: null, majorLog: undefined, majorRegion: null,
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
                   eventInSplit: 1, // o Major fecha o split: próximo split começa na etapa 1
@@ -5370,31 +6463,36 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     isChampion: rec?.champion ?? false,
                     circuitTier: save.circuit?.tier ?? save.tier,
                     finalPos: rec?.position ?? 99,
-                    qualified: true, endTier: save.tier, wonMajor: mr.champion,
+                    qualified: !mr.rmrOut, endTier: save.tier, wonMajor: mr.champion,
+                    ...cenCtx('m'),
                   }),
                   ...evo,
                   ...majorWindowPatch,
-                  pendingOffer: null, // vindo do Major (tier 1): ninguém te assedia "pra cima"
+                  // [fase 4] jovens + aposentadorias do mundo (K) com o circuito/VRS do Major (J)
+                  mundo: save.mundo ? withCircuit(juvMajor.mundo, withFreshCalendar(mundoOf(save), save.split + 1)) : juvMajor.mundo, moves: juvMajor.moves, extraOnTeam: juvMajor.extraOnTeam,
                   board: majBoard,
                   boardLog: majBd.boardLog,
-                  lastObjective: majObj ? { text: majObj.text, met: true, delta: majBoard - save.board } : null,
+                  lastObjective: majObj ? { text: majObj.text, met: !(rmrMiss && majObj.type === 'major'), delta: majBoard - save.board } : null,
                   objective: null,
                   renewals,
                   morale,
                   satisfaction: hap.satisfaction,
+                  // [integração] mercado da janela (I) + vestiário do fechamento (G) — os dois saem do mesmo clube
+                  clube: { ...hap.clube, market: (majorWindowPatch.clube ?? hap.clube).market },
                   coachBond: pj.coachBond,
                   playerPromises: pj.playerPromises,
                   splitStart: snapshotSplitStart(save, save.split + 1, save.budget),
                   // FIM DE TEMPORADA (pós-Major): pré-temporada longa, quase zera a
                   // fadiga — é o reset que evita a espiral de burnout em carreira longa.
-                  fatigue: recoverFatigue(save.fatigue, 70, normalizeFacilities(save.facilities).psychologist * 4),
+                  fatigue: {},
+                  gestao: (() => { const g = gestaoOf(save); return { ...g, training: closeTrainingSplit(g.training), condition: recoverCondition(g.condition, 70, normalizeFacilities(save.facilities).psychologist * 4) }; })(),
                   restingPlayers: [],
                   peakOvr,
                   mapTraining: applyMapTraining(save),
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                  ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...pj.news, ...sc.news, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
+                  ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...pj.news, ...hap.news, ...sc.news, ...staffTickNews(staffTickMajor, save.split), ...majorMarketNews, ...juvMajor.news, ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
                 };
-                const fin = consummateDeals(next);
+                const fin = applyLoanWindow(consummateDeals(next), 'offseason'); // [fase 3] vendas/acordos + empréstimos da janela
                 persist(fin);
                 setSave(fin);
                 setMajorResult(null);
@@ -5490,19 +6588,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // bônus de mata-mata: campeão +60%, vice +25% (no prêmio e no VRS)
     const poMult = isChampion ? 1.6 : poRank === 2 ? 1.25 : 1;
     const prize = Math.round((PRIZE_BY_POS[pos - 1] ?? 4_000) * (save.circuit?.prizeMult ?? 1) * poMult);
-    // ganho de VRS ponderado pelo Opponent Network do evento: ir longe num campo
-    // forte vale muito; ganhar um campeonato fraco rende quase nada no mundial.
-    const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsWeight ?? 0.4) * poMult);
-    // CLASSIFICAÇÃO AO MAJOR = TOP 16 DO RANKING VRS MUNDIAL (como na vida real).
-    // Some VRS vencendo partidas e indo longe; sua posição é base do elenco + ganhos.
-    // Projeta o VRS já com o ganho DESTE split pra decidir a vaga no fim da temporada.
-    const projectedEventVrs = applyCareerVrsDecay(save.vrs, vrsGain);
-    const projOrg = save.takeoverId ? currentEra.find((t) => t.id === save.takeoverId) : undefined;
-    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? projOrg?.teamwork ?? 78, projOrg) + projectedEventVrs + userLegacyVrs(save);
-    const worldRank = oppEra.filter((t) => aiTeamVrs(t, save.split) > userProjVrs).length + 1; // posição mundial projetada
-    const rankQualified = worldRank <= MAJOR_VRS_CUT;
-    const majorNow = isMajorSplit(save.split) && lastEvent; // Major só na última etapa do split de Major
-    const qualified = rankQualified && majorNow;
+    // [fase 4 · circuito] VRS UNIFICADO: o seu resultado e os outros eventos da
+    // etapa (segundo plano) entram no mundo e o ranking é republicado (etapaClose).
+    // O ganho exibido é a parte deste evento nos seus pontos.
+    const vrsGain = etapaClose?.contribution ?? 0;
+    const worldRank = etapaClose?.rank ?? 999; // posição mundial com esta etapa
+    const majorNow = isMajorSplit(save.split) && lastEvent; // Major só depois da última etapa do split de Major
+    const route = etapaClose?.route ?? null;
+    // CLASSIFICAÇÃO AO MAJOR (ciclo real): VRS 1–24 direto (Stage 3/2/1), os
+    // próximos de cada região disputam o RMR; o resto fica de fora.
+    const rankQualified = worldRank <= MAJOR_S1;
+    const qualified = majorNow && !!route && route.kind !== 'out';
     const nextMajorSplit = save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
 
     // promoção/rebaixamento: só conta se você jogou no SEU tier (não farmando abaixo).
@@ -5590,7 +6686,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     : `${save.org?.name} terminou em ${pos}º na fase de pontos`}
             </h2>
             <div className="prize-banner">
-              {ct('Premiação:')} <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> · {ct('Folha:')}{' '}
+              {ct('Premiação:')} <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> (#{worldRank}) · {ct('Folha:')}{' '}
               <b className="neg">-{formatMoney(payroll)}</b>
             </div>
             {/* #39: SPLIT REVIEW — o arco do split em números que importam */}
@@ -5651,20 +6747,25 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             {lastEvent && tierResult.tierChange === 'down' && (
               <div className="tier-banner down">⬇ {ct('Rebaixado ao')} {ct(TIER_NAMES[tierResult.tier])}. {ct('Terminou no fundo da tabela; recupere o nível no próximo split.')}</div>
             )}
-            {qualified ? (
+            {qualified && route?.kind === 'stage' ? (
               <div className="qualify-banner">
                 <b>{ct('CLASSIFICADO PRO MAJOR MUNDIAL!')}</b> {ct('Você está em')} <b>#{worldRank}</b> {ct('no ranking VRS mundial')}
-                {' '}({ct('top')} {MAJOR_VRS_CUT} {ct('garantem vaga). Hora de enfrentar os melhores do mundo.')}
+                {' '}— {ct('convite direto pro')} <b>Stage {route.stage}</b>. {ct('Hora de enfrentar os melhores do mundo.')}
+              </div>
+            ) : qualified && route?.kind === 'rmr' ? (
+              <div className="qualify-banner">
+                <b>{ct('RMR')} {ct(RMR_LABEL[route.region])}</b> · {ct('Você está em')} <b>#{worldRank}</b> {ct('no ranking VRS mundial')}
+                {' '}— {ct('fora do top')} {MAJOR_S1}{ct(', mas dentro do seu regional:')} {ct('os')} <b>{RMR_SLOTS[route.region]}</b> {ct('melhores dos 16 do RMR vão ao Stage 1 do Major.')}
               </div>
             ) : rankQualified && !majorNow ? (
               <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
-                {ct('Você está')} <b>{ct('dentro do top')} {MAJOR_VRS_CUT} {ct('do VRS mundial')}</b> (#{worldRank}) — {ct('vaga no Major encaminhada!')}
-                {ct('O Major acontece a cada')} <b>{MAJOR_EVERY} splits</b>{ct('; o próximo é no fim do')} <b>Split {nextMajorSplit}</b>. {ct('Mantenha o nível.')}
+                {ct('Você está')} <b>{ct('dentro do top')} {MAJOR_S1} {ct('do VRS mundial')}</b> (#{worldRank}) — {ct('convite direto pro Major encaminhado!')}
+                {' '}{ct('O Major acontece a cada')} <b>{MAJOR_EVERY} splits</b>{ct('; o próximo é no fim do')} <b>Split {nextMajorSplit}</b>. {ct('Mantenha o nível.')}
               </p>
             ) : (
               <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
-                {ct('A vaga no Major é dos')} <b>{ct('top')} {MAJOR_VRS_CUT} {ct('do ranking VRS mundial')}</b> {ct('(você está em')} <b>#{worldRank}</b>).
-                {ct('Ganhe VRS')} <b>{ct('vencendo partidas, indo longe e levando campeonatos')}</b> {ct('pra subir no ranking.')} {ct('Major a cada')} {MAJOR_EVERY} {ct('splits (próximo: Split')} {majorNow ? save.split : nextMajorSplit}).
+                {ct('Major: os')} <b>{ct('top')} {MAJOR_S1} {ct('do ranking VRS mundial')}</b> {ct('entram direto; os próximos de cada região disputam o RMR')} {ct('(você está em')} <b>#{worldRank}</b>).
+                {' '}{ct('Ganhe VRS')} <b>{ct('indo longe em eventos fortes, de preferência em LAN')}</b> {ct('pra subir no ranking.')} {ct('Major a cada')} {MAJOR_EVERY} {ct('splits (próximo: Split')} {majorNow ? save.split : nextMajorSplit}).
               </p>
             )}
             {save.playoff && <PlayoffBracket p={save.playoff} teamOf={(id) => leagueTeam(league, id)} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />}
@@ -5732,22 +6833,24 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     // aplica prêmio+VRS do split antes de ir pro Major;
                     // o registro do split é finalizado após o resultado do Major
                     const circuitRecord = baseRecord();
-                    const next = {
+                    const next: CareerSave = {
                       ...save,
                       budget: save.budget + prize,
-                      vrs: applyCareerVrsDecay(save.vrs, vrsGain),
+                      // [fase 4 · circuito] etapa fechada no mundo: VRS republicado com os outros eventos
+                      ...(etapaClose ? { mundo: etapaClose.mundo, vrs: etapaClose.points } : {}),
                       titles: save.titles + (isChampion ? 1 : 0),
                       pendingSplit: circuitRecord,
                       // acumula as stats da liga já aqui (o split do Major fecha
                       // depois, mas a liga regular terminou); evita perder o split
                       ...bankStats(save, { placement: finalPos, champion: isChampion }),
+                      ...pushNews(save, headlineNews(etapaClose?.headlines ?? [], save.split)),
                     };
                     persist(next);
                     setSave(next);
-                    playMajor(next);
+                    playMajor(next, etapaClose?.plan ?? null);
                   }}
                 >
-                  {ct('Disputar o Major Mundial')}
+                  {route?.kind === 'rmr' ? `${ct('Disputar o RMR')} ${ct(RMR_LABEL[route.region])}` : ct('Disputar o Major Mundial')}
                 </button>
               )}
               <button
@@ -5760,9 +6863,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     const nextEv = {
                       ...save,
                       budget: save.budget + prize,
-                      // VRS é POR JOGO: decai e soma o ganho a cada campeonato
-                      // (independente do envelhecimento, que é por split).
-                      vrs: applyCareerVrsDecay(save.vrs, vrsGain),
+                      // [fase 4 · circuito] a etapa fecha no MUNDO: os outros eventos
+                      // (segundo plano) entram e o VRS é republicado a cada campeonato
+                      ...(etapaClose ? { mundo: etapaClose.mundo, vrs: etapaClose.points } : {}),
+                      ...pushNews(save, headlineNews(etapaClose?.headlines ?? [], save.split)),
                       titles: save.titles + (isChampion ? 1 : 0),
                       eventInSplit: ev + 1,
                       league: null,
@@ -5776,15 +6880,36 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                         qualified: false,
                         endTier: save.tier,
                         wonMajor: false,
+                        ...cenCtx('e'),
                       }),
                       ...bankStats(save, { placement: finalPos, champion: isChampion }),
                       // folga curta entre etapas: compensa ~um campeonato jogado
-                      fatigue: recoverFatigue(save.fatigue, 16, normalizeFacilities(save.facilities).psychologist * 2),
+                      fatigue: {},
+                      gestao: (() => { const g = gestaoOf(save); return { ...g, condition: recoverCondition(g.condition, 16, normalizeFacilities(save.facilities).psychologist * 2) }; })(),
                       restingPlayers: [],
                     };
-                    persist(nextEv);
-                    setSave(nextEv);
-                    setStage('circuit'); // escolhe o próximo campeonato da etapa
+                    // [fase 3 · MERCADO] depois da etapa 1: JANELA CURTA — a IA se
+                    // mexe (poucos negócios, stand-ins), chegam propostas e os seus
+                    // acordos/vendas/empréstimos fechados até aqui entram em vigor.
+                    // No split de Major, depois da etapa 2 começa o roster lock.
+                    let fin: CareerSave = nextEv;
+                    if (ev === 1) {
+                      const w = runMarketWindow(save, 'mid');
+                      const withWindow: CareerSave = { ...nextEv, ...w.patch };
+                      fin = applyLoanWindow(consummateDeals({ ...withWindow, ...pushNews(withWindow, w.news) }), 'mid');
+                    } else if (ev === 2 && isMajorSplit(save.split)) {
+                      fin = { ...nextEv, ...pushNews(nextEv, [{
+                        id: `${save.split}:rosterlock`, split: save.split, icon: '🔒', tone: 'info', cat: 'transfer',
+                        title: `${ct('Roster lock do')} ${MAJOR_NAME(save.split)}`,
+                        body: ct('Elencos travados até o fim do Major: ninguém entra nem sai, a IA para de negociar e não chegam propostas. Acordos fechados agora valem na janela de pré-temporada.'),
+                      }]) };
+                    }
+                    // status da janela na nova etapa (roster lock no split de Major a partir da etapa 3)
+                    fin = { ...fin, ...withMarket(fin, withWindowStatus(marketOf(fin), { split: fin.split, eventInSplit: fin.eventInSplit ?? 1, inMajor: false, majorSplit: isMajorSplit(fin.split) })) };
+                    persist(fin);
+                    setSave(fin);
+                    // vendeu/emprestou e ficou com menos de 5: completa o elenco antes da etapa
+                    setStage(fin.squad.length < 5 ? 'market' : 'circuit');
                     return;
                   }
                   const renewals = dueRenewals(save, save.split + 1);
@@ -5797,10 +6922,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   for (const p of me.players) nickByOid[p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id] = p.nick;
                   const squadInfo = save.squad.map((sg) => {
                     const rp = me.players.find((p) => p.id === `user__${sg.playerId}`);
-                    const until = save.contracts?.[sg.playerId];
+                    const until = contractUntilOf(save, sg.playerId);
                     return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                   });
-                  const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }), normalizeFacilities(save.facilities).psychologist);
+                  const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }, staffEffects(save.gestao?.staff).moraleRecovery), normalizeFacilities(save.facilities).psychologist);
                   // #16: campanha do split como fator de resultados (winrate da liga)
                   const splitResults01 = me.wins + me.losses > 0 ? me.wins / (me.wins + me.losses) : 0.5;
                   const hap = tickHappiness(save, splitResults01, morale0);
@@ -5814,7 +6939,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     split: save.split, org: save.org?.name ?? 'Sua org', champion: isChampion,
                     circuit: save.circuit?.name ?? ct('circuito'), objMet, objText: obj?.text,
                     tierChange: tierResult.tierChange, tierName: TIER_NAMES[tierResult.tier],
-                    releases: [], offer,
+                    releases: [], offer: offer ? { orgName: offer.fromName ?? '', nick: offer.nick ?? '', ovr: offer.ovr ?? 0, fee: offer.fee } : null,
                     risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                     sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
                     breakthroughs: (evo.lastEvo ?? []).filter((e) => e.breakthrough).map((e) => ({ nick: e.nick, ...e.breakthrough! })),
@@ -5852,7 +6977,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const sponsorTick = applySponsorSplitTick(save, save.split + 1, rngRef.current);
                   const teamEventTick = applyTeamEventSplitTick(save, save.split + 1, rngRef.current);
                   // T3.4: decay leve de química no fim do split
-                  const decayedPairChem = decayPairChemOnSplitChange({ pairChem: save.pairChem });
+                  const decayedPairChem = applyPairChemFx(decayPairChemOnSplitChange({ pairChem: save.pairChem }), hap.pairChemFx);
                   // T3.11: registra troféu de circuito no stint do coach se foi campeão
                   const coachStintsAfterCircuit = isChampion
                     ? appendCoachTrophy(save.coachStints ?? [], `${save.circuit?.name ?? 'Circuito'} S${save.split}`)
@@ -5862,8 +6987,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   // T3.12: scouting tick — salário + relatórios
                   const scoutingPatch = applyScoutingSplitTick(save, oppEra, rngRef.current);
                   const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
+                  // [fase 2 · STAFF] folha da comissão + contratos que vencem
+                  const staffTick = staffSplitTick(save.gestao?.staff, save.split);
                   // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
                   const { marketNews, ...windowPatch } = applyTransferWindow(save);
+                  const juv = juventudeClose({ ...save, ...windowPatch }); // [fase 4] juventude do fechamento
                   // #15: jogadores LISTADOS à venda — a IA dá o lance no fechamento.
                   // Venda fechada entra no trilho existente (pendingSales → janela).
                   const alreadySelling = new Set((save.pendingSales ?? []).map((x) => x.playerId));
@@ -5881,7 +7009,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const listedSales = listedHits.map((h) => {
                     const sig = save.squad.find((x) => x.playerId === h.playerId);
                     const f = sig ? findSigning(sig) : null;
-                    return { playerId: h.playerId, nick: f?.player.nick ?? h.playerId, fee: h.fee, toTag: h.buyer.tag, toId: h.buyer.id };
+                    // [saídas] quem perde a vaga no comprador (titular mais fraco da função)
+                    const buyerTeam = oppEra.find((t) => t.id === h.buyer.id);
+                    const outPlayerId = buyerTeam && f ? displacedBy(buyerTeam, { ...f.player, id: h.playerId }) : undefined;
+                    return { playerId: h.playerId, nick: f?.player.nick ?? h.playerId, fee: h.fee, toTag: h.buyer.tag, toId: h.buyer.id, outPlayerId };
                   });
                   const listedPricesLeft = { ...(save.listedPrices ?? {}) };
                   for (const h of listedHits) delete listedPricesLeft[h.playerId];
@@ -5892,16 +7023,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   }));
                   // #8: fechar o split no vermelho (receitas não cobriram a folha)
                   // também corrói a confiança — a diretoria vê o caixa, não só a tabela.
-                  const rawBudget = save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
+                  const rawBudget = save.budget + prize - payroll - loyaltyDue(save) - facilityUpkeep(save.facilities) - scoutSalary - staffTick.payroll + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
                   const boardCash = rawBudget < 0
                     ? applyBoardDelta(boardPatch.board, boardPatch.boardLog, save.split, APPROVAL_DELTAS.splitCashCrunch, ct('Caixa zerado: receitas do split não cobriram a folha'))
                     : null;
+                  // [fase 4 · circuito] a etapa fecha no mundo; no split de Major sem vaga,
+                  // o Major (RMRs + stages + playoffs) roda em segundo plano
+                  const bgMajor = etapaClose && majorNow && etapaClose.plan ? backgroundMajor(etapaClose.mundo, etapaClose.plan, save.split) : null;
+                  const mundoAfter = bgMajor?.mundo ?? etapaClose?.mundo ?? null;
                   const next = {
                     ...save,
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
                     // a carreira com saldo negativo (impossível montar 5)
                     budget: Math.max(0, rawBudget),
-                    vrs: applyCareerVrsDecay(save.vrs, vrsGain), // VRS rolante (decai e soma o ganho do evento)
+                    ...(save.gestao ? { gestao: { ...save.gestao, staff: staffTick.staff } } : {}),
+                    ...(mundoAfter ? { mundo: withFreshCalendar(mundoAfter, save.split + 1), vrs: mundoAfter.vrs[USER_ID]?.points ?? 0 } : {}),
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
                     eventInSplit: 1, // fecha o split: volta pra etapa 1 do próximo
@@ -5922,33 +7058,40 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     ...evolveAcademy(save),
                     scenario: applyScenarioProgress(save.scenario, {
                       isChampion, circuitTier, finalPos, qualified, endTier: tierResult.tier, wonMajor: false,
+                      ...cenCtx('s'),
                     }),
                     ...bankStats(save, { placement: finalPos, champion: isChampion }),
                     ...evo,
                     ...windowPatch,
+                    // [fase 4] jovens + aposentadorias do mundo (K) com o circuito/VRS fechado (J)
+                    mundo: mundoAfter ? withCircuit(juv.mundo, withFreshCalendar(mundoAfter, save.split + 1)) : juv.mundo, moves: juv.moves, extraOnTeam: juv.extraOnTeam,
                     ...boardPatch,
                     ...(boardCash ? { board: boardCash.board, boardLog: boardCash.boardLog } : {}),
                     tier: tierResult.tier,
                     tierChange: tierResult.tierChange,
-                    pendingOffer: offer,
                     renewals,
                     morale,
                     satisfaction: hap.satisfaction,
+                    // [integração] mercado da janela (I) + vestiário do fechamento (G) — os dois saem do mesmo clube
+                    clube: { ...hap.clube, market: (windowPatch.clube ?? hap.clube).market },
                     coachBond: pj.coachBond,
                     playerPromises: pj.playerPromises,
                     splitStart: snapshotSplitStart(save, save.split + 1, Math.max(0, rawBudget)),
                     // offseason de split (não-Major): descanso de verdade entre splits
-                    fatigue: recoverFatigue(save.fatigue, 40, normalizeFacilities(save.facilities).psychologist * 3),
+                    fatigue: {},
+                    gestao: (() => { const g = gestaoOf(save); return { ...g, training: closeTrainingSplit(g.training), condition: recoverCondition(g.condition, 40, normalizeFacilities(save.facilities).psychologist * 3) }; })(),
                     restingPlayers: [],
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                    ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...listedNews, ...pj.news, ...sc.news, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...listedNews, ...pj.news, ...hap.news, ...sc.news, ...staffTickNews(staffTick, save.split), ...marketNews, ...juv.news, ...headlineNews(etapaClose?.headlines ?? [], save.split), ...(bgMajor?.news ?? []), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
                     // #15: vendas de jogadores LISTADOS entram no trilho da janela
-                    pendingSales: [...(save.pendingSales ?? []), ...listedSales],
+                    pendingSales: [...(windowPatch.pendingSales ?? save.pendingSales ?? []), ...listedSales], // + cláusulas pagas na janela
                     listedPrices: listedPricesLeft,
                   };
-                  const fin = consummateDeals(next);
+                  // [integração] proposta de elite entra no fluxo único de propostas
+                  const withElite: CareerSave = offer ? { ...next, ...withMarket(next, withOffers(marketOf(next), [offer])) } : next;
+                  const fin = applyLoanWindow(consummateDeals(withElite), 'offseason'); // [fase 3] vendas/acordos + empréstimos da janela
                   persist(fin);
                   setSave(fin);
                   // FRENTE 1 — recap cinematográfico só no FIM do split (não em etapas
@@ -6042,7 +7185,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const m = poFindMatch(clone, matchCtx.playoffIds);
         if (!m) return;
         m.result = series;
-        poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
+        poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current, save.league?.pressure ?? 0);
         const next = { ...save, playoff: clone };
         persist(next); setSave(next);
         committed = true;
@@ -6074,6 +7217,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             userStarters,
             won,
             personalityChemBonus,
+            socialPairBonus(vPlayersOf(s), dressingOf(s).conflicts), // [fase 3] grupo coeso entrosa mais rápido
           );
           const next = { ...s, pairChem };
           persist(next);
@@ -6102,6 +7246,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       );
     }
     return (
+      <CareerDashFrame title={`${matchCtx.teams[0].tag} × ${matchCtx.teams[1].tag} · ${matchCtx.phaseLabel}`} onExit={onExit} immersive>
       <MatchScreen
         teams={matchCtx.teams}
         maps={matchCtx.maps!}
@@ -6112,10 +7257,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         onFinish={finish}
         onDecided={commitDecided}
         identity={save.identity}
+        pressure={(matchCtx.mode === 'major' ? majorT?.pressure : save.league?.pressure) ?? 0}
         // [W5] fecha a partida na identidade: decai o passado, grava as chamadas de hoje.
         // Update funcional (roda DEPOIS do commitDecided no mesmo lote) — não perde o resultado travado.
         onCalls={(calls) => setSave((s) => { const next = { ...s, identity: closeMatchIdentity(s.identity, calls) }; persist(next); return next; })}
       />
+      </CareerDashFrame>
     );
   }
 
@@ -6139,6 +7286,24 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             ) : null}
           </span>
         }>
+          {/* [Major espetáculo · lite] final de evento T1: contagem, troféu e confete */}
+          {(save.circuit?.tier ?? save.tier) === 1 && p.final && (
+            <EventFinaleLite eventName={p.circuit} seenKey={`t1:${save.org?.name ?? ''}:${save.split}:${p.circuit}`} final={{
+              a: teamOf(p.final.a), b: teamOf(p.final.b),
+              score: p.final.result?.mapScore, winnerId: p.champion ?? undefined,
+            }} />
+          )}
+          {(() => {
+            // [mídia viva] coletiva antes do mata-mata (ou a pendente)
+            const om = userMatch ? (userMatch.a === 'user' ? userMatch.b : userMatch.a) : null;
+            const ot = om ? teamOf(om) : null;
+            const stageLbl = !userMatch ? '' : p.final === userMatch ? 'Final' : p.qf?.includes(userMatch) ? 'Quartas' : 'Semifinal';
+            const conf = midiaOf(save).pend ?? (ot ? preMatchConference(midiaOf(save), {
+              split: save.split, matchKey: `po:${p.circuit}:${stageLbl}:${ot.id}`, oid: ot.id, o: ot.tag, label: `${p.circuit.split('·')[0].trim()} · ${ct(stageLbl)}`, k: koStageOf(stageLbl),
+              rivalScore: rivalryScore(save.rivalries, ot.id), squad: midiaSquad(save), board: save.board, rumor: openRumorOnSquad(midiaOf(save), save.squad.map((sg) => sg.playerId)),
+            }) : null);
+            return <PressSlot scope={`po:${p.circuit}:${stageLbl}:${ot?.id ?? ''}`} lang={lang} conf={conf} onAnswer={answerMidiaPress} nickOf={(id) => midiaSquad(save).find((x) => x.id === id)?.nick ?? id} />;
+          })()}
           <PlayoffBracket p={p} teamOf={teamOf} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />
         </DashCard>
         {selSeries && (
@@ -6161,7 +7326,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const myMatch = userLeagueMatch(league);
   const playMine = () => {
     if (!myMatch) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `lg:${league.name}:${league.current}:${myMatch.a}:${myMatch.b}`));
     const pair = prepareTeams(leagueTeam(league, myMatch.a), leagueTeam(league, myMatch.b));
     if (!pair) {
       // save com referência morta a um team que não está em league.teams.
@@ -6180,9 +7345,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setStage('veto');
   };
 
-  const myPos = userPosition(league);
   const spots = save.circuit?.spots ?? MAJOR_SPOTS;
   const opp = myMatch ? leagueTeam(league, myMatch.a === 'user' ? myMatch.b : myMatch.a) : null;
+  // [mídia viva] coletiva: a pendente (pós-jogo/crise/glória) ou a pré-jogo de jogo grande
+  const midiaPre = opp && myMatch ? preMatchConference(midiaOf(save), {
+    split: save.split, matchKey: `${league.name}:${league.current}:${opp.id}`, oid: opp.id, o: opp.tag, label: league.name.split('·')[0].trim(),
+    rivalScore: rivalryScore(save.rivalries, opp.id), squad: midiaSquad(save), board: save.board, rumor: openRumorOnSquad(midiaOf(save), save.squad.map((sg) => sg.playerId)),
+  }) : null;
+  const midiaPress = midiaOf(save).pend ?? midiaPre;
+  const midiaOrg = { name: save.org?.name ?? '', tag: save.org?.tag ?? 'ORG' };
   const seasonStats = seasonStatsMemo;
   const mySquadIds = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
   const mySquadOids = new Set(save.squad.map((s) => s.playerId)); // ids ORIGINAIS (relabel HLTV pra sua org)
@@ -6197,35 +7368,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     .filter((x) => x.f)
     .map((x) => ({
       nick: (x.f as { player: Player }).player.nick,
-      left: save.contracts?.[x.sig.playerId] != null ? save.contracts![x.sig.playerId] - save.split + 1 : 0,
+      left: contractUntilOf(save, x.sig.playerId) != null ? contractUntilOf(save, x.sig.playerId)! - save.split + 1 : 0,
     }))
     .filter((w) => w.left <= 1);
   const expiringCount = expiringContracts.length;
 
   const unread = save.unread ?? 0;
-  // navegação em 2 níveis: grupos no topo + sub-abas do grupo ativo. Reduz a
-  // confusão de 15 abas planas pra ~5 grupos com 1-5 itens cada.
-  const TAB_LABEL: Record<HubTab, string> = {
-    overview: ct('Visão geral'), major: 'Major', calendar: ct('Calendário'), results: ct('Resultados'),
-    standings: ct('Classificação'), bracket: ct('Chave'), squad: ct('Elenco'), academy: ct('Academia'),
-    market: ct('Negociações'), finance: ct('Finanças'), vrs: ct('Ranking VRS'), top20: 'Top 20 HLTV',
-    world: ct('Cena mundial'), inbox: ct('Notícias DRAFT5'), history: ct('História da org'),
-    stats: ct('Geral'),
-  };
-  const HUB_GROUPS: { id: string; label: string; tabs: HubTab[] }[] = [
-    { id: 'dashboard', label: 'Dashboard', tabs: ['overview', 'inbox'] },
-    { id: 'team', label: ct('Meu time'), tabs: ['squad', 'academy'] },
-    { id: 'ingame', label: ct('Em jogo'), tabs: [...(majorActive ? ['major' as HubTab] : []), 'bracket', 'results', 'standings'] },
-    { id: 'transfers', label: ct('Transferências'), tabs: ['market', 'finance'] },
-    { id: 'news', label: 'DRAFT5', tabs: ['inbox'] },
-    { id: 'stats', label: ct('Estatísticas'), tabs: ['stats', 'vrs', 'top20', 'world', 'history'] },
-  ];
-  const tabAlert = (id: HubTab) => (id === 'finance' && expiringCount > 0) || (id === 'inbox' && unread > 0);
-  const tabLabelFull = (id: HubTab) =>
-    id === 'inbox' && unread > 0 ? `${ct('Notícias DRAFT5')} (${unread})`
-    : id === 'finance' && expiringCount > 0 ? `${ct('Finanças')} (${expiringCount})`
-    : TAB_LABEL[id];
-  const activeGroup = HUB_GROUPS.find((g) => g.tabs.includes(hubTab)) ?? HUB_GROUPS[0];
 
   const vrsByRegion = vrsByRegionMemo;
   const vrsAll = vrsAllMemo;
@@ -6253,7 +7401,50 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   };
 
   const userVrs = vrsAll.find((t) => t.isUser)?.vrs ?? save.vrs ?? 0;
-  const dateLabel = `Split ${save.split} · ${save.circuit?.name?.split(' ').slice(0, 2).join(' ') ?? '2026'}`;
+
+  // ───────── [fase 4 · circuito] dados das telas Calendário / Circuito / VRS ─────────
+  const mundoNow = mundoOf(save);
+  const seasonNow = seasonOfSplit(save.split);
+  const seasonCal = buildSeasonCalendar(seasonNow);
+  const myEventId = save.circuit?.eventId ?? circuits.find((c) => c.id === save.circuit?.id)?.eventId ?? null;
+  const myLive = !save.playoff?.champion;
+  const weekNow = (Math.max(1, save.eventInSplit ?? 1) - 1) * WEEKS_PER_ETAPA + 1 + (save.playoff ? WEEKS_PER_ETAPA - 1 : 1 + Math.min(2, league.current));
+  const teamLite = (id: string): TeamLite => {
+    if (id === USER_ID) return { id, name: save.org?.name ?? ct('Você'), tag: save.org?.tag ?? 'VOCÊ', colors: save.org?.colors ?? ['#e8b64a', '#1a1205'], logoUrl: save.org?.logo };
+    const t = currentEra.find((x) => x.id === id) ?? worldBase.find((x) => x.id === id) ?? CS2_REAL_2026.find((x) => x.id === id);
+    const tag = storedTag(id);
+    return t ? { id, name: t.team, tag: t.tag, colors: t.colors, logoUrl: t.logoUrl ?? logoForTeam(t), country: t.country } : { id, name: tag ?? id, tag: tag ?? id.slice(0, 5).toUpperCase(), colors: ['#1c2c47', '#8fa2bf'] };
+  };
+  const circuitFields: Record<string, { teams: string[]; invited: string[] }> = {};
+  for (const c of circuits) if (c.eventId) circuitFields[c.eventId] = { teams: c.teams.map((t) => t.id), invited: c.invited ?? [] };
+  if (myEventId) circuitFields[myEventId] = { teams: league.teams.map((t) => t.id), invited: circuitFields[myEventId]?.invited ?? [] };
+  // Major em curso: o field sai do plano (VRS 1–24 convidados + RMRs)
+  if (save.majorPlan && majorT) {
+    const pl = save.majorPlan;
+    const inv = [...pl.s3, ...pl.s2, ...pl.s1Invites];
+    const rmrQ = rmrQualifiedIds(pl);
+    circuitFields[majorIdOf(save.split)] = { teams: [...inv, ...rmrQ], invited: inv };
+    for (const reg of ['europe', 'americas', 'asia'] as const) {
+      const f = pl.rmr[reg];
+      if (f) circuitFields[`rmr:${save.split}:${reg}`] = { teams: f.field, invited: [] };
+    }
+  }
+  const vrsTableNow = hubTab === 'vrs' || hubTab === 'circuito' ? computeVrs(mundoNow.results, mundoNow.vrsAt ?? etapaTime(save.split, save.eventInSplit ?? 1)) : null;
+  const majorRouteInfo: MajorRouteInfo | null = hubTab !== 'calendar' ? null : (() => {
+    const pool = oppEra.filter((x) => x.id !== USER_ID && x.players.length >= 5);
+    const plan = majorFieldFromVrs(mundoNow.vrs, pool, { region: save.region });
+    const route = majorRouteOf(plan);
+    const majorSplit = isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
+    const cut = plan.ranked[MAJOR_S1 - 1];
+    const reg = route.kind === 'rmr' ? route.region : undefined;
+    return {
+      majorName: MAJOR_NAME(majorSplit), majorSplit, splitsLeft: majorSplit - save.split, route,
+      rank: mundoNow.vrs[USER_ID]?.rank ?? 999, points: mundoNow.vrs[USER_ID]?.points ?? 0,
+      cutPoints: cut ? (mundoNow.vrs[cut]?.points ?? 0) : 0,
+      region: reg, regionRank: reg ? (plan.rmr[reg]?.field.indexOf(USER_ID) ?? -1) + 1 : undefined,
+    };
+  })();
+  const openEvent = (id: string) => { setCircuitoSel(id); setSelSeries(null); setHubTab('circuito'); };
 
   const resolvePlayerById = (id: string): Player | null => {
     const baseId = playerOrgId(id);
@@ -6284,6 +7475,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               consistency: p.consistency,
               awp: p.awp,
               igl: p.igl,
+              attrs: p.attrs, // [realismo FM] mantém os atributos (evolução do elenco)
             };
           }
         }
@@ -6293,7 +7485,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const p = t.players.find((pl) => pl.id === baseId);
       if (p) return p;
     }
-    return null;
+    // [fase 4] jovem gerado sem clube (mercado livre / tela Juventude)
+    return newgenPlayer(mundoOf(save), baseId);
   };
 
   const resolveTeamById = (id: string): TTeam | null => {
@@ -6323,43 +7516,36 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     hothead: { label: ct('Cabeça-quente'), desc: ct('Oscila mais com resultados e acumula carga com maior facilidade.') },
     resilient: { label: ct('Resiliente'), desc: ct('Recupera-se melhor da pressão e acumula menos fadiga.') },
   };
+  // [fase 3 · vestiário] personalidade DERIVADA DOS OCULTOS: a Carreira registra a
+  // fonte dos jogadores (elenco, base, liga) para quem só tem o id (moral,
+  // fadiga, conversas, propostas). Sem fonte (testes/Road to Pro), vale o hash.
+  setPersonalitySource((id) => {
+    const sg = save.squad.find((x) => x.playerId === id);
+    const f = sg ? findSigning(sg) : null;
+    const p = f?.player ?? resolvePlayerById(id);
+    return p ? { ...p, id, age: effectiveAge(p, save.split, save.youthAge, save.youthDebut) } : null;
+  });
 
-  return (
-    <>
-    <CareerShell
-      groups={HUB_GROUPS}
-      activeGroupId={activeGroup.id}
-      activeTab={hubTab}
-      tabLabel={(id) => tabLabelFull(id as HubTab)}
-      tabAlert={(id) => tabAlert(id as HubTab)}
-      onGroupChange={(_gid, tab) => { setHubTab(tab as HubTab); setSelSeries(null); }}
-      onTabChange={(id) => {
-        setHubTab(id as HubTab);
-        setSelSeries(null);
-        if (id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 });
-      }}
-      orgTag={save.org?.tag ?? ''}
-      orgColors={save.org?.colors ?? ['#101820', '#3a3a3a']}
-      orgLogo={save.org?.logo}
-      onExit={onExit}
-      onReset={resetCareer}
-      onContinue={myMatch ? playMine : undefined}
-      dateLabel={dateLabel}
-      showOnboarding={() => setShowOnb(true)}
-      onSearch={() => setHubTab('squad')}
-      onBeforeNav={closeCareerOverlays}
-      onHistoryBack={careerHistoryBack}
-      onHistoryForward={careerHistoryForward}
-      canGoBack={canNavBack}
-      budgetLabel={formatMoney(save.budget)}
-      unreadCount={save.unread ?? 0}
-      onOpenInbox={() => {
-        setHubTab('inbox');
-        setSelSeries(null);
-        if ((save.unread ?? 0) > 0) update({ unread: 0 });
-      }}
-      onHowToPlay={openHowToPlay}
-      onOpenLogoBuilder={save.org ? () => {
+  peekFnRef.current = (id: string) => {
+    const p = resolvePlayerById(id);
+    if (!p) return null;
+    const oid = playerOrgId(p.id);
+    const mine = save.squad.some((sg) => sg.playerId === oid);
+    const recent = save.recentRatings?.[oid] ?? [];
+    const lt = save.league?.teams.find((t) => t.players.some((pl) => (pl.sourcePlayerId ?? pl.id) === oid || pl.id === oid));
+    return peekFromPlayer({ ...p, role: (save.roles?.[oid] ?? p.role) as Role }, {
+      ovr: playerOvr(p),
+      age: mine ? effectiveAge(p, save.split, save.youthAge, save.youthDebut) : p.age,
+      team: mine ? save.org?.tag : lt?.tag,
+      rating: recent.length ? (recent.reduce((a, b) => a + b, 0) / recent.length).toFixed(2) : undefined,
+      extra: mine ? [{ label: ct('Moral'), value: String(save.morale?.[oid] ?? MORALE_DEFAULT) }] : undefined,
+      onOpen: () => openPlayerProfile(p),
+      openLabel: ct('Abrir perfil'),
+    });
+  };
+
+  // ── ferramentas da topbar (⋯) e lançadores da sidebar ──
+  const openLogoBuilderTool = (save.org ? () => {
         // T7.2: abre o LogoBuilder pré-povoado com cores e tag da org atual.
         // Ao salvar, persiste no save.org.logo (data URL SVG).
         const orgNow = save.org!;
@@ -6373,8 +7559,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             update({ org: { ...orgNow, logo: dataUrl } });
           },
         });
-      } : undefined}
-      onOpenLockerRoom={(() => {
+      } : undefined);
+  const openLockerRoomTool = ((() => {
         // T10.2: só plugamos o handler se de fato existe próxima partida não-jogada
         // do user no split atual. Sem ela, o botão nem aparece (CareerShell omite
         // o ícone quando o prop é undefined).
@@ -6414,8 +7600,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             mapName: mapPickFav,
           });
         };
-      })()}
-      onOpenInfrastructure={() => {
+      })());
+  const openInfrastructureTool = (() => {
         // T10.1: abre modal de infraestrutura. Handler `onUpgrade` debita custo
         // e aplica o nível. Reusa engine `facilityUpgradeCost` + `normalizeFacilities`.
         const openWithCurrent = () => {
@@ -6443,11 +7629,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           });
         };
         openWithCurrent();
-      }}
-      onOpenMeta={() => {
+      });
+  const openMetaTool = (() => {
         // T9.2: monta agregados on-demand. top20 já é memo do CareerScreen;
         // worldScene roda em cima de oppEra; mapPicks deriva do league.rounds.
-        const scene = worldScene(oppEra, save.split);
+        const scene = worldScene(oppEra, save.split, save.mundo);
         const orgAg = aggregateHistory(save.history);
         const mapCounts = new Map<MapId, number>();
         for (const round of league?.rounds ?? []) {
@@ -6470,16 +7656,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           userTrophies: { circuits: orgAg.circuitTitles, majors: orgAg.majorTitles },
           currentSplit: save.split,
         });
-      }}
-      onOpenTrophies={() => {
+      });
+  const openTrophiesTool = (() => {
         // Brasval gap: Sala de Troféus — lê save.history (pure-read, sem migração).
         openTrophyRoom({
           history: save.history as unknown as Parameters<typeof openTrophyRoom>[0]['history'],
           orgName: save.org?.name ?? 'Sua org',
           currentSplit: save.split,
         });
-      }}
-      onOpenCoach={() => {
+      });
+  const openCoachTool = (() => {
         // Brasval gap: Perfil de carreira do treinador — lê save.coachStints.
         const active = activeCoachStint(save.coachStints ?? []);
         openCoachProfile({
@@ -6487,8 +7673,283 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           activeCoachNick: active?.coachNick,
           scars: save.scars, split: save.split, // [W4]
         });
+      });
+
+  // ── [fase 3 · vestiário] Escalação e banco (Elenco) + Dinâmica ──
+  // campanha do split AO VIVO (vitórias/derrotas da etapa atual); sem série jogada, o split passado
+  const liveResults01 = (s: CareerSave): number => {
+    const u = s.league?.teams.find((t) => t.id === 'user');
+    if (u && u.wins + u.losses > 0) return u.wins / (u.wins + u.losses);
+    const last = s.history[s.history.length - 1];
+    return last && last.wins + last.losses > 0 ? last.wins / (last.wins + last.losses) : 0.5;
+  };
+  const headCoachOf = (s: CareerSave) => s.gestao?.staff.members.find((m) => m.role === 'headCoach');
+  const buildVestModel = (s: CareerSave): VestModel => {
+    const vc = vestiarioCtx(s);
+    const ids = s.squad.map((x) => x.playerId);
+    const lu = resolveLineup(ids, vc.dr.lineup);
+    const hier = hierarchy(vc.vps, vc.statuses);
+    const r01 = liveResults01(s);
+    const cond = gestaoOf(s).condition;
+    const hc = headCoachOf(s);
+    const rows: VestRow[] = [];
+    for (const vp of vc.vps) {
+      const sg = s.squad.find((x) => x.playerId === vp.id);
+      const f = sg ? findSigning(sg) : null;
+      if (!f) continue;
+      const c = cond[vp.id] ?? defaultCondition(); // [integração] sem condição gravada: o padrão
+      rows.push({
+        id: vp.id, player: f.player, nick: vp.nick, role: (s.roles?.[vp.id] ?? f.player.role) as Role, country: vp.country, ovr: vp.ovr, age: vp.age,
+        status: vc.statuses[vp.id] ?? 'starter', starter: lu.starters.includes(vp.id), injured: isInjured(c),
+        fitness: c ? c.fitness : undefined, morale: s.morale?.[vp.id] ?? MORALE_DEFAULT,
+        happiness: computeHappiness(happinessInputsFor(s, vp.id, r01, s.coachBond?.[vp.id] ?? BOND_DEFAULT, vc)),
+        unrest: (vc.dr.unrest?.[vp.id]?.level ?? 0) as UnrestLevel,
+        share: effectivePlayShare(vc.dr, vp.id), expected: expectedPlayTime(vc.statuses[vp.id] ?? 'starter'),
+        fm: vp.fm, influence: hier.find((h) => h.id === vp.id)!, lang: LANGUAGE_LABEL[languageOf(vp.country)] ?? vp.country.toUpperCase(),
+      });
+    }
+    const byId = new Map(vc.vps.map((p) => [p.id, p]));
+    const meetIn = (kind: MeetingKind) => resolveTeamMeeting({ kind, results01: r01, players: vc.vps, morale: s.morale ?? {}, hierarchy: hier, conflicts: vc.dr.conflicts.length, motivating: hc?.attrs.motivating });
+    return {
+      split: s.split, rows, starters: lu.starters, bench: lu.bench, locked: rosterLocked(s),
+      groups: vc.groups, isolated: isolatedIds(vc.vps, vc.groups),
+      conflicts: vc.dr.conflicts.map((c) => {
+        const A = byId.get(c.a), B = byId.get(c.b);
+        const chance = A && B ? mediationChance(A, B, { manManagement: hc?.attrs.manManagement ?? 10, bondA: s.coachBond?.[c.a] ?? BOND_DEFAULT, bondB: s.coachBond?.[c.b] ?? BOND_DEFAULT }) : 0;
+        return { ...c, chance };
+      }),
+      meetingAvailable: canHoldMeeting(vc.dr, s.split),
+      lastMeeting: vc.dr.meetings[vc.dr.meetings.length - 1] ?? null,
+      meetingPreview: { praise: meetIn('praise'), demand: meetIn('demand'), calm: meetIn('calm') },
+      results01: r01,
+    };
+  };
+  const vestActions: VestActions = {
+    setStatus: (id, st) => setSquadStatus(id, st),
+    swap: (a, b) => {
+      if (rosterLocked(save)) { toast.error(ct('Roster lock: a escalação está travada.')); return; }
+      updateDressing((d, s) => ({ dressing: { ...d, lineup: swapLineup(s.squad.map((x) => x.playerId), d.lineup, a, b) } }));
+    },
+    holdMeeting: (kind) => {
+      const m = buildVestModel(save);
+      if (!m.meetingAvailable) return;
+      const r = m.meetingPreview[kind];
+      updateDressing((d, s) => {
+        if (!canHoldMeeting(d, s.split)) return { dressing: d };
+        const morale = { ...(s.morale ?? {}) };
+        for (const [id, dm] of Object.entries(r.deltas)) morale[id] = Math.max(0, Math.min(100, (morale[id] ?? MORALE_DEFAULT) + dm));
+        return { dressing: recordMeeting(d, r, s.split), patch: { morale } };
+      });
+      const msg = `${ct(MEETING_LABEL[kind])}: ${ct('moral média')} ${r.mean >= 0 ? '+' : ''}${r.mean}`;
+      if (r.mean > 0) toast.success(msg); else if (r.mean < 0) toast.error(msg); else toast.info(msg);
+    },
+    mediate: (a, b) => {
+      const vc = vestiarioCtx(save);
+      const A = vc.vps.find((p) => p.id === a), B = vc.vps.find((p) => p.id === b);
+      if (!A || !B) return;
+      const ctx = { split: save.split, manManagement: headCoachOf(save)?.attrs.manManagement ?? 10, bondA: save.coachBond?.[a] ?? BOND_DEFAULT, bondB: save.coachBond?.[b] ?? BOND_DEFAULT };
+      const r = mediateConflict(vc.dr, A, B, ctx);
+      if (r.dressing === vc.dr) return;
+      updateDressing((d, s) => {
+        const rr = mediateConflict(d, A, B, ctx);
+        const morale = { ...(s.morale ?? {}) };
+        morale[a] = Math.max(0, Math.min(100, (morale[a] ?? MORALE_DEFAULT) + rr.moraleA));
+        morale[b] = Math.max(0, Math.min(100, (morale[b] ?? MORALE_DEFAULT) + rr.moraleB));
+        return { dressing: rr.dressing, patch: { morale } };
+      });
+      if (r.resolved) toast.success(`${A.nick} × ${B.nick}: ${ct('conflito resolvido na conversa')}`);
+      else toast.error(`${A.nick} × ${B.nick}: ${ct('a mediação não funcionou; os dois saíram mais irritados')}`);
+    },
+    talk: (id) => {
+      const vp = vPlayersOf(save).find((p) => p.id === id);
+      if (vp) setTalkPlayer({ oid: id, nick: vp.nick, age: vp.age });
+    },
+    open: (p) => openPlayerProfile(p),
+  };
+  const vestModel = hubTab === 'squad' && (squadSec === 'sq' || squadSec === 'dy') ? buildVestModel(save) : null;
+  // pedidos do vestiário (conversa/saída) aparecem nas pendências do shell
+  const vestRequests = (() => {
+    const dr = dressingOf(save);
+    return save.squad
+      .map((sg) => ({ id: sg.playerId, level: dr.unrest?.[sg.playerId]?.level ?? 0 }))
+      .filter((x) => x.level >= 2);
+  })();
+
+  // ── navegação estilo FM: seção da sidebar ↔ aba interna (hubTab + subseção) ──
+  const SQUAD_SECS = ['sq', 'dy', 'pl', 'tr', 'st', 'an', 'sc'];
+  const activeSection: string =
+    hubTab === 'squad' ? squadSec
+      : hubTab === 'finance' ? finSec
+        : ({ overview: 'ov', inbox: 'in', calendar: 'ag', stats: 'dh', market: 'tf', academy: 'ac', youth: 'jv', history: 'hi', legado: 'lg', major: 'mj', standings: 'cl', bracket: 'cl', results: 'cl', vrs: 'vr', top20: 'vr', world: 'vr', circuito: 'ci', midia: 'md' } as Record<HubTab, string>)[hubTab] ?? 'ov';
+  const goSection = (id: string) => {
+    closeCareerOverlays();
+    setSelSeries(null);
+    if (id === 'x-inf') { openInfrastructureTool(); return; }
+    if (id === 'x-lr') { openLockerRoomTool?.(); return; }
+    if (id === 'x-tr') { openTrophiesTool(); return; }
+    if (SQUAD_SECS.includes(id)) { setSquadSec(id); setHubTab('squad'); return; }
+    if (id === 'fi' || id === 'ct') { setFinSec(id); setHubTab('finance'); return; }
+    const map: Record<string, HubTab> = { ov: 'overview', in: 'inbox', ag: 'calendar', dh: 'stats', tf: 'market', ac: 'academy', jv: 'youth', hi: 'history', lg: 'legado', mj: 'major', cl: 'standings', vr: 'vrs', ci: 'circuito', md: 'midia' };
+    const tab = map[id];
+    if (!tab) return;
+    setHubTab(tab);
+    if (tab === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 });
+  };
+  const NAV: ShellNavGroup[] = [
+    { id: 'principal', label: ct('Principal'), items: [
+      { id: 'ov', label: ct('Início'), icon: House },
+      { id: 'in', label: ct('Caixa de entrada'), short: ct('Caixa'), icon: Inbox, badge: unread || undefined },
+      { id: 'ag', label: ct('Calendário'), icon: CalendarDays },
+      { id: 'md', label: ct('Mídia'), icon: Megaphone, badge: midiaPress ? 1 : undefined, badgeTone: 'warn' },
+    ] },
+    { id: 'time', label: ct('Time'), items: [
+      { id: 'sq', label: ct('Elenco'), icon: Users },
+      { id: 'dy', label: ct('Dinâmica'), icon: Sparkles },
+      { id: 'pl', label: ct('Plano de jogo'), icon: Target },
+      { id: 'tr', label: ct('Treinos e scrims'), icon: Crosshair },
+      { id: 'st', label: ct('Comissão técnica'), icon: ShieldHalf },
+    ] },
+    { id: 'dados', label: ct('Dados'), items: [
+      { id: 'dh', label: ct('Central de dados'), icon: ChartNoAxesColumn },
+      { id: 'an', label: ct('Relatório do analista'), icon: Binoculars, disabled: !opp },
+      { id: 'sc', label: ct('Olheiros'), icon: Search },
+    ] },
+    { id: 'mercado', label: ct('Mercado'), items: [
+      { id: 'tf', label: ct('Transferências'), icon: ArrowLeftRight },
+      { id: 'ct', label: ct('Contratos'), icon: FileSignature, badge: expiringCount || undefined, badgeTone: 'warn' },
+      { id: 'ac', label: ct('Academia'), icon: GraduationCap },
+      { id: 'jv', label: ct('Juventude'), icon: Sprout },
+    ] },
+    { id: 'clube', label: ct('Clube'), items: [
+      { id: 'fi', label: ct('Finanças'), icon: Wallet },
+      { id: 'x-inf', label: ct('Instalações'), icon: Building2 },
+      ...(openLockerRoomTool ? [{ id: 'x-lr', label: ct('Vestiário'), icon: DoorOpen }] : []),
+      { id: 'x-tr', label: ct('Sala de troféus'), icon: Trophy },
+      { id: 'hi', label: ct('História da org'), icon: ScrollText },
+      { id: 'lg', label: ct('Legado'), icon: Crown },
+    ] },
+    { id: 'comp', label: ct('Competições'), items: [
+      { id: 'mj', label: 'Major', icon: Trophy, disabled: !majorT, alert: majorActive },
+      { id: 'ci', label: ct('Circuito'), icon: Award },
+      { id: 'cl', label: ct('Classificação e chave'), short: ct('Tabela'), icon: Layers },
+      { id: 'vr', label: ct('Ranking VRS'), icon: ChartNoAxesColumn },
+    ] },
+  ];
+  const activeGroupNav = NAV.find((g) => g.items.some((it) => it.id === activeSection));
+  const shellTabs: ShellTab[] = activeSection === 'cl'
+    ? [{ id: 't:standings', label: ct('Classificação'), icon: ListOrdered }, { id: 't:bracket', label: ct('Chave'), icon: Network }, { id: 't:results', label: ct('Resultados'), icon: CalendarCheck }]
+    : activeSection === 'vr'
+      ? [{ id: 't:vrs', label: 'VRS', icon: ChartNoAxesColumn }, { id: 't:top20', label: 'Top 20 HLTV', icon: Star }, { id: 't:world', label: ct('Cena mundial'), icon: Globe }]
+      : (activeGroupNav?.items ?? []).filter((it) => !it.id.startsWith('x-') && !it.disabled).map((it) => ({ id: it.id, label: it.label, icon: it.icon, badge: it.badge }));
+  const shellActiveTab = activeSection === 'cl' || activeSection === 'vr' ? `t:${hubTab}` : activeSection;
+  const onShellTab = (id: string) => {
+    if (id.startsWith('t:')) { setSelSeries(null); setHubTab(id.slice(2) as HubTab); }
+    else goSection(id);
+  };
+  const ceremonyNew = save.org ? unseenCeremony(legadoOf(save.legado)) : null;
+  const shellPending: ShellPending[] = [
+    ...(midiaPress ? [{ id: 'midia', label: ct('Coletiva de imprensa aguardando você'), icon: Megaphone, tone: 'warn' as const, onGo: () => goSection('md') }] : []),
+    ...(ceremonyNew ? [{ id: 'cerimonia', label: `${ct('Cerimônia da cena')}: ${ct('Temporada')} ${ceremonyNew.year}`, icon: Crown, tone: 'info' as const, onGo: () => setCeremonyYear(ceremonyNew.year) }] : []),
+    ...(unread > 0 ? [{ id: 'inbox', label: `${unread} ${ct('mensagem(ns) nova(s) na caixa')}`, icon: Inbox, tone: 'info' as const, onGo: () => goSection('in') }] : []),
+    ...(expiringCount > 0 ? [{ id: 'contracts', label: `${expiringCount} ${ct('contrato(s) vencendo')}`, icon: FileSignature, tone: 'warn' as const, onGo: () => goSection('ct') }] : []),
+    // [fase 3 · vestiário] pedidos de conversa e de saída
+    ...(vestRequests.length > 0 ? [{
+      id: 'vestiario',
+      label: vestRequests.some((x) => x.level >= 3)
+        ? `${vestRequests.filter((x) => x.level >= 3).length} ${ct('jogador(es) pedindo para sair')}`
+        : `${vestRequests.length} ${ct('pedido(s) de conversa no vestiário')}`,
+      icon: MessageCircle, tone: 'warn' as const, onGo: () => goSection('dy'),
+    }] : []),
+  ];
+  const shellNext: ShellNext = myMatch && opp
+    ? { label: ct('Continuar'), detail: `${ct('Partida vs')} ${opp.tag || opp.name} · MD${myMatch.bo ?? LEAGUE_BO}`, onGo: playMine, pending: shellPending }
+    : majorActive
+      ? { label: ct('Continuar'), detail: ct('Major em andamento'), onGo: () => goSection('mj'), pending: shellPending }
+      : { label: ct('Continuar'), detail: ct('Sem partida agendada'), disabled: true, pending: shellPending };
+  const careerSearch = (q: string): PaletteItem[] => {
+    const out: PaletteItem[] = [];
+    const seen = new Set<string>();
+    const pushP = (p: Player, team: string) => {
+      if (seen.has(p.id) || out.length > 10) return;
+      if (!scoreMatch(q, p.nick) && !scoreMatch(q, p.name ?? '')) return;
+      seen.add(p.id);
+      out.push({ id: `p-${p.id}`, label: p.nick, sub: `${p.role} · ${team} · OVR ${playerOvr(p)}`, group: ct('Jogadores'), icon: UserRound, peek: `career:${p.id}`, run: () => openPlayerProfile(p) });
+    };
+    for (const sig of save.squad) { const f = findSigning(sig); if (f) pushP(f.player, save.org?.tag ?? ct('Seu time')); }
+    for (const t of league.teams) {
+      if (scoreMatch(q, t.name) || scoreMatch(q, t.tag)) out.push({ id: `t-${t.id}`, label: t.name, sub: `${t.tag} · ${ct('Time')}`, group: ct('Times'), icon: Shield, run: () => openTeamProfile(t.id) });
+      for (const pl of t.players) pushP({ id: pl.sourcePlayerId ?? pl.id, nick: pl.nick, name: pl.name, country: pl.country, role: pl.role, role2: pl.role2, aim: pl.aim, clutch: pl.clutch, consistency: pl.consistency, awp: pl.awp, igl: pl.igl }, t.tag);
+    }
+    return out.slice(0, 12);
+  };
+  // Perfil de jogador/time aberto: a sidebar, o breadcrumb e a subnav refletem
+  // o perfil, não a seção de onde se veio. Jogador do elenco → Time › Elenco;
+  // da academia → Mercado › Academia; de outro time → Mercado › Transferências.
+  // Time → Competições › Classificação e chave.
+  const routePlayer = playerRouteId ? resolvePlayerById(playerRouteId) : null;
+  const routeTeam = !playerRouteId && teamRouteId ? resolveTeamById(teamRouteId) : null;
+  const routeSection: string | null = (() => {
+    if (routePlayer) {
+      const oid = playerOrgId(routePlayer.id);
+      if (save.academy?.some((a) => a.id === oid) || save.academyTeam?.some((a) => a.id === oid)) return 'ac';
+      const own = save.squad.some((sig) => { const f = findSigning(sig); return !!f && (f.player.id === oid || sig.playerId === oid); }) || !!save.youth?.[oid];
+      return own ? 'sq' : 'tf';
+    }
+    return routeTeam ? 'cl' : null;
+  })();
+  const routeNav = routeSection ? NAV.flatMap((g) => g.items.map((it) => ({ it, g }))).find((x) => x.it.id === routeSection) : undefined;
+  const routeCrumbs = routeNav ? [{ label: routeNav.g.label }, { label: routeNav.it.label, onGo: () => goSection(routeNav.it.id) }] : undefined;
+  const careerTools: ShellTool[] = [
+    { id: 'howto', label: ct('Como jogar'), icon: BookOpen, onClick: openHowToPlay },
+    { id: 'tour', label: ct('Tutorial'), icon: CircleHelp, onClick: () => setShowOnb(true) },
+    { id: 'meta', label: ct('Meta da temporada'), icon: ChartColumn, onClick: openMetaTool },
+    { id: 'coach', label: ct('Perfil do treinador'), icon: Medal, onClick: openCoachTool },
+    ...(openLogoBuilderTool ? [{ id: 'logo', label: ct('Editar logo'), icon: PenLine, onClick: openLogoBuilderTool }] : []),
+    { id: 'reset', label: ct('Recomeçar carreira'), icon: RotateCcw, onClick: resetCareer },
+    { id: 'exit', label: ct('Sair da carreira'), icon: LogOut, onClick: onExit },
+  ];
+
+  return (
+    <>
+    <CareerShell
+      identity={{
+        title: save.org?.name ?? ct('Carreira'),
+        subtitle: `${save.org?.tag ?? ''} · Split ${save.split}`,
+        badge: save.org ? <TeamBadge tag={save.org.tag} colors={save.org.colors} size={40} logoUrl={save.org.logo} /> : undefined,
+        colors: save.org?.colors,
       }}
-      formStreak={formStreak}
+      nav={NAV}
+      active={routeSection ?? activeSection}
+      crumbs={routeCrumbs}
+      title={routePlayer?.nick ?? routeTeam?.name}
+      onNav={goSection}
+      tabs={routePlayer ? PLAYER_TABS.map((t) => ({ id: t.id, label: ct(t.label), icon: t.icon })) : routeTeam ? undefined : shellTabs}
+      activeTab={routePlayer ? ppTab : shellActiveTab}
+      onTab={routePlayer ? (id) => setPpTabFor({ id: playerRouteId, tab: id as PlayerTab }) : onShellTab}
+      mobileNav={['ov', 'in', 'sq', 'cl']}
+      next={shellNext}
+      search={careerSearch}
+      searchPlaceholder={ct('Buscar jogador, time…')}
+      tools={careerTools}
+      bell={{ label: ct('Caixa de entrada'), count: unread, onClick: () => goSection('in') }}
+      meta={(
+        <>
+          {formStreak.length > 0 && (
+            <span className="gs-form" aria-label={`${ct('Forma')}: ${formStreak.slice(-5).join(' ')}`}>
+              {formStreak.slice(-5).map((r, i) => <i key={i} data-r={r}>{r === 'W' ? 'V' : 'D'}</i>)}
+            </span>
+          )}
+          <span className="gs-chip"><Wallet size={15} aria-hidden /> {formatMoney(save.budget)}</span>
+          <span className="gs-when"><b>Split {save.split}</b><small>{save.circuit?.name?.split(' ').slice(0, 2).join(' ') ?? '2026'}</small></span>
+        </>
+      )}
+      sideWidget={myMatch && opp ? (
+        <button type="button" className="gs-widget" onClick={playMine}>
+          <span className="gs-widget__kicker"><Swords size={13} aria-hidden /> {ct('Próximo jogo')}</span>
+          <span className="gs-widget__main">{save.org?.tag ?? ct('Você')} <span className="gs-widget__vs">vs</span> {opp.tag || opp.name}</span>
+          <span className="gs-widget__sub">{league.name.split(' · ')[0]} · MD{myMatch.bo ?? LEAGUE_BO}</span>
+        </button>
+      ) : undefined}
     >
       {playerRouteId && (() => {
         const p = resolvePlayerById(playerRouteId);
@@ -6503,7 +7964,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const rid = playerRuntimeId(p.id);
         const oid = playerOrgId(p.id);
         // Prospecto da academia (não promovido): o .age do entry JÁ é a idade
-        // corrente (mantida por evolveAcademyEntries a cada 3 splits). Passá-lo
+        // corrente (mantida por evolveAcademyEntries a cada temporada). Passá-lo
         // por effectiveAge somaria careerYears(split) por cima → idade inflada
         // no perfil (bug: 17 no AcademyTab, 21 no perfil). Usa a idade crua.
         const isAcademyEntry = (save.academy?.some((a) => a.id === oid) ?? false)
@@ -6511,15 +7972,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const age = isAcademyEntry
           ? Math.max(15, Math.round(p.age ?? 18))
           : effectiveAge(p, save.split, save.youthAge, save.youthDebut);
-        // #17: potencial EFETIVO = scouted + teto furado por performance
-        const potBoost = save.dynamicPotBonus?.[oid] ?? 0;
-        const pot = Math.min(99, playerPotentialOvr(p, age) + potBoost);
+        // #17: potencial EFETIVO = scouted + teto furado por performance (helper único)
+        const pot = careerPotentialOvr(save, p);
         const tier = potentialTier(pot);
         const phase = playerPhase(oid, age);
         const ovr = playerOvr(p);
         const personality = playerPersonality(oid);
         const mi = moraleInfo(save.morale?.[oid] ?? MORALE_DEFAULT);
-        const contractUntil = save.contracts?.[oid];
+        const contractUntil = contractUntilOf(save, oid);
         const left = contractUntil != null ? contractUntil - save.split + 1 : null;
         const contractLeft = left == null ? '—' : left <= 0 ? ct('vencido') : `${left} split${left > 1 ? 's' : ''}`;
         const developmentProgress = Math.max(0, Math.min(100, Math.round((ovr - 40) / Math.max(1, pot - 40) * 100)));
@@ -6548,14 +8008,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             phaseLabel={ct(PHASE_LABEL[phase])}
             ovr={ovr}
             peakOvr={Math.max(save.peakOvr?.[oid] ?? 0, ovr)}
-            personalityLabel={personalityUi[personality].label}
-            personalityDesc={personalityUi[personality].desc}
+            personalityLabel={(() => { const pr = personalityProfileOf(oid); return pr ? ct(FM_PERSONALITY_LABEL[pr.fm]) : personalityUi[personality].label; })()}
+            personalityDesc={(() => { const pr = personalityProfileOf(oid); return pr ? ct(FM_PERSONALITY_DESC[pr.fm]) : personalityUi[personality].desc; })()}
             morale={save.morale?.[oid] ?? MORALE_DEFAULT}
             moraleLabel={mi.label}
             moraleIcon={mi.icon}
-            fatigue={save.fatigue?.[oid] ?? 0}
+            fatigue={fatigueView(save, [oid])[oid] ?? 0}
+            {...(() => {
+              // [fase 2 · treino] ritmo de jogo e lesão (condição do save)
+              const c = gestaoOf(save).condition[oid];
+              return c ? { sharpness: Math.round(c.sharpness), injuryNote: isInjured(c) ? `${ct(INJURY_LABEL[c.injury!.kind])} · ${Math.ceil(c.injury!.weeksLeft)} ${ct('sem.')}` : null } : {};
+            })()}
             valueLabel={formatMoney(playerValue({ ...p, ovr }))}
-            wageLabel={formatMoney(playerWage(p))}
+            wageLabel={formatMoney(contractWageOf(save, oid, () => playerWage(p)))}
             contractLeft={contractLeft}
             evoTotal={save.evo?.[oid] ?? 0}
             developmentProgress={developmentProgress}
@@ -6570,19 +8035,26 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               const last = save.history[save.history.length - 1];
               const results01 = last && last.wins + last.losses > 0 ? last.wins / (last.wins + last.losses) : 0.5;
               const bondNow = save.coachBond?.[oid] ?? BOND_DEFAULT;
-              const ids = save.squad.map((x) => x.playerId);
-              const chemPair = ids.length >= 2 ? averageStarterChemistry({ pairChem: save.pairChem }, ids) : 50;
-              const until = save.contracts?.[oid];
+              // [fase 3 · vestiário] felicidade unificada + status no elenco
+              const vc = vestiarioCtx(save);
+              const lu = resolveLineup(save.squad.map((x) => x.playerId), vc.dr.lineup);
+              const statusNow = vc.statuses[oid] ?? 'starter';
+              const unrestLv = (vc.dr.unrest?.[oid]?.level ?? 0) as UnrestLevel;
+              const infl = hierarchy(vc.vps, vc.statuses).find((h) => h.id === oid);
               return {
                 stints: stintsOf(save.stints, oid),
-                happiness: computeHappiness({
-                  ratings: save.recentRatings?.[oid],
-                  results01,
-                  contractSplitsLeft: until != null ? until - save.split : null,
-                  bond: bondNow,
-                  chemistry: Math.round(((save.playbookXp ?? 50) + chemPair) / 2),
-                }),
+                happiness: computeHappiness(happinessInputsFor(save, oid, results01, bondNow, vc)),
                 bond: bondNow,
+                squadStatus: {
+                  value: statusNow,
+                  options: SQUAD_STATUS_OPTS.map((v) => ({ value: v, label: ct(STATUS_LABEL[v]), desc: ct(STATUS_DESC[v]) })),
+                  onChange: (v: string) => setSquadStatus(oid, v as SquadStatus),
+                  expected: expectedPlayTime(statusNow),
+                  share: effectivePlayShare(vc.dr, oid),
+                  slot: lu.starters.includes(oid) ? ct('Titular') : ct('Banco'),
+                  unrest: unrestLv > 0 ? ct(UNREST_LABEL[unrestLv]) : null,
+                  influence: infl && infl.tier !== 'none' ? ct(INFLUENCE_LABEL[infl.tier]) : undefined,
+                },
                 // #15: listagem de venda — só pro seu elenco
                 listedPrice: save.listedPrices?.[oid] ?? null,
                 marketValue: playerValue(p),
@@ -6596,20 +8068,38 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     return next;
                   });
                 },
-                // #22: foco de treino por atributo (com sugestão do staff)
-                focusAttr: save.trainingFocusAttr?.[oid] ?? null,
-                focusSuggested: suggestFocus(p, save.evoAttrBias?.[oid]),
-                focusOptions: CORE_STATS.map((k) => ({ id: k, label: TRAINING_FOCUS_LABEL[k], biased: save.evoAttrBias?.[oid]?.[k] ?? 0 })),
-                onFocusAttr: (attr: string | null) => {
-                  setSave((s) => {
-                    const trainingFocusAttr = { ...(s.trainingFocusAttr ?? {}) };
-                    if (attr == null) delete trainingFocusAttr[oid];
-                    else trainingFocusAttr[oid] = attr as CoreStat;
-                    const next = { ...s, trainingFocusAttr };
-                    persist(next);
-                    return next;
-                  });
-                },
+                // [fase 2 · treino] FOCO INDIVIDUAL (atributo ou função) — o mesmo
+                // da tela Treinos e scrims; substitui o foco antigo de 5 atributos
+                ...(() => {
+                  const cur = gestaoOf(save).training.focus[oid];
+                  const roleAttrs = ROLE_FOCUS_ATTRS[p.role] ?? [];
+                  const suggested = LEGACY_FOCUS_ATTR[suggestFocus(p)];
+                  const attrs: AttrKey[] = [...roleAttrs];
+                  if (suggested && !attrs.includes(suggested)) attrs.push(suggested);
+                  if (cur?.kind === 'attr' && !attrs.includes(cur.attr)) attrs.push(cur.attr);
+                  return {
+                    focusAttr: cur ? (cur.kind === 'attr' ? `attr:${cur.attr}` : `role:${cur.role}`) : null,
+                    focusSuggested: suggested ? `attr:${suggested}` : undefined,
+                    focusOptions: [
+                      { id: `role:${p.role}`, label: `${ct('Função')}: ${p.role}`, biased: 0 },
+                      ...attrs.map((k) => ({ id: `attr:${k}`, label: ATTR_LABEL[k], biased: 0 })),
+                    ],
+                    onFocusAttr: (id: string | null) => {
+                      setSave((s) => {
+                        const g = gestaoOf(s);
+                        const focus = { ...g.training.focus };
+                        if (id == null) delete focus[oid];
+                        else {
+                          const [kind, v] = id.split(':');
+                          focus[oid] = kind === 'role' ? { kind: 'role', role: v as Role } : { kind: 'attr', attr: v as AttrKey };
+                        }
+                        const next = { ...s, gestao: { ...g, training: { ...g.training, focus } } };
+                        persist(next);
+                        return next;
+                      });
+                    },
+                  };
+                })(),
               };
             })() : (() => {
               // #41: OBSERVATÓRIO — scouting progressivo pra jogador de FORA do elenco
@@ -6662,7 +8152,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               // youthDebut {idade, split atual} = FONTE ÚNICA da idade (tem
               // prioridade sobre customPlayers.age em effectiveAge). O jogador
               // passa a ter EXATAMENTE essa idade agora e envelhece normal dali
-              // (+1 ano a cada 3 splits). NÃO reescrevemos customPlayers.age
+              // (+1 ano a cada temporada). NÃO reescrevemos customPlayers.age
               // (baseAge o leria como idade-base do split 1 e somaria os anos de
               // novo — era o vetor do "+15 anos"). Sem clamp de 30 (aquele é pra
               // prospecto de academia): edição livre 16..40.
@@ -6676,15 +8166,20 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 : undefined
             }
             retired={(save.retired ?? []).includes(oid)}
-            attributes={playerAttributes({
-              id: oid,
-              aim: p.aim,
-              clutch: p.clutch,
-              consistency: p.consistency,
-              awp: p.awp,
-              igl: p.igl,
-              role: (save.roles?.[oid] ?? p.role) as Role,
-            })}
+            // [realismo FM] os atributos são a fonte da verdade (base + evolução)
+            attributes={attrsOf({ ...p, id: oid, role: (save.roles?.[oid] ?? p.role) as Role }).a}
+            ca={caFromOvr(ovr)}
+            paRange={paRange(
+              Math.max(caFromOvr(ovr), caFromOvr(pot)),
+              caFromOvr(ovr),
+              isAcademyEntry || save.squad.some((sg) => sg.playerId === oid) || (watchOf(save.watchlist, oid)?.revealLevel ?? 0) >= 4
+                ? 'full'
+                : (watchOf(save.watchlist, oid)?.revealLevel ?? 0) >= 2 ? 'scouted' : 'rumor',
+              oid,
+              staffEffects(save.gestao?.staff).scoutAccuracy, // [fase 2 · STAFF] olheiros estreitam a faixa
+            )}
+            tab={ppTab}
+            onTab={(t) => setPpTabFor({ id: playerRouteId, tab: t })}
           />
         );
       })()}
@@ -6711,7 +8206,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           };
           const age = effectiveAge(pl, save.split, save.youthAge, save.youthDebut);
           teamAges[pid] = age;
-          teamPotentialMap[pid] = Math.min(99, playerPotentialOvr(pl, age) + (save.dynamicPotBonus?.[pid] ?? 0));
+          teamPotentialMap[pid] = careerPotentialOvr(save, pl);
         }
         return (
           <CareerTeamPage
@@ -6724,7 +8219,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             wageLabel={isUserTeam ? formatMoney(payroll) : undefined}
             titles={isUserTeam ? (save.titles ?? 0) : 0}
             split={save.split}
-            contracts={save.contracts ?? {}}
+            contracts={contractUntilMap(save)}
             potentialMap={teamPotentialMap}
             ages={teamAges}
             identity={isUserTeam ? save.identity : undefined}
@@ -6745,14 +8240,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           unread={save.unread ?? 0}
           onMarkAllRead={() => update({ unread: 0 })}
           orgName={save.org?.name}
+          onAction={(sec) => goSection(sec)}
         />
       )}
 
       {/* ===== VISÃO GERAL (dashboard estilo análise pós-partida) ===== */}
       {/* T1.4: aba Overview extraída em src/pages/career/OverviewTab.tsx */}
+      {hubTab === 'overview' && save.scenario?.run && (
+        <CenarioPanel run={save.scenario.run} split={save.split} onSubmitted={(score) => { const sc = save.scenario; if (sc?.run) update({ scenario: { ...sc, run: { ...sc.run, submitted: Math.max(score, sc.run.submitted ?? 0) } } }); }} />
+      )}
       {hubTab === 'overview' && (
         <OverviewTab
-          save={save as unknown as Parameters<typeof OverviewTab>[0]['save']}
+          save={{ ...save, fatigue: fatigueView(save, save.squad.map((sg) => sg.playerId)) } as unknown as Parameters<typeof OverviewTab>[0]['save']}
           league={league}
           opp={opp}
           myMatch={myMatch}
@@ -6775,6 +8274,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
       {/* ===== MAJOR AO VIVO (dentro do hub) ===== */}
       {/* T1.4: aba Major extraída em src/pages/career/MajorTab.tsx */}
+      {/* [mídia viva] coletiva antes do jogo do Major (ou a pendente) */}
+      {hubTab === 'major' && majorT && majorActive && (() => {
+        const up = tournamentUserPairing(majorT);
+        const oid = up ? (up.a === 'user' ? up.b : up.a) : null;
+        const ot = oid ? getTeam(majorT, oid) : null;
+        const lbl = `${majorT.name} · ${up?.label ?? ''}`;
+        const conf = midiaOf(save).pend ?? (ot ? preMatchConference(midiaOf(save), {
+          split: save.split, matchKey: `mj:${save.majorStage ?? 1}:${up?.label ?? ''}:${ot.id}`, oid: ot.id, o: ot.tag, label: lbl, k: koStageOf(up?.label ?? ''),
+          rivalScore: rivalryScore(save.rivalries, ot.id), squad: midiaSquad(save), board: save.board, rumor: openRumorOnSquad(midiaOf(save), save.squad.map((sg) => sg.playerId)),
+        }) : null);
+        return <PressSlot scope={`mj:${save.majorStage ?? 1}:${up?.label ?? ''}:${ot?.id ?? ''}`} lang={lang} conf={conf} onAnswer={answerMidiaPress} nickOf={(id) => midiaSquad(save).find((x) => x.id === id)?.nick ?? id} />;
+      })()}
       {hubTab === 'major' && majorT && (
         <MajorTab
           majorT={majorT}
@@ -6785,25 +8296,140 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         />
       )}
 
-      {/* ===== MERCADO: janela FECHADA durante a temporada ===== */}
-      {hubTab === 'market' && (
-        <SeasonNegotiations
-          market={market}
-          squadPlayers={save.squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[]}
-          budget={save.budget}
-          clubFormOf={(id) => formOf(save, id)}
-          split={save.split}
-          pendingDeals={save.pendingDeals ?? []}
-          pendingSales={save.pendingSales ?? []}
-          offers={incomingOffers}
-          feed={feedMemo}
-          onAddDeal={(d) => update({ pendingDeals: [...(save.pendingDeals ?? []), d] })}
-          onCancelDeal={(id) => update({ pendingDeals: (save.pendingDeals ?? []).filter((x) => x.id !== id) })}
-          onAcceptOffer={(o) => update({ pendingSales: [...(save.pendingSales ?? []), o] })}
-          onRejectOffer={(pid) => update({ rejectedOffers: [...(save.rejectedOffers ?? []), pid] })}
-          onCancelSale={(pid) => update({ pendingSales: (save.pendingSales ?? []).filter((x) => x.playerId !== pid) })}
-        />
-      )}
+      {/* ===== MERCADO › TRANSFERÊNCIAS [fase 3]: janela, propostas, rivais, alvos, empréstimos e negociação ===== */}
+      {hubTab === 'market' && marketClubsMemo && (() => {
+        const m = marketOf(save);
+        const clubs = marketClubsMemo;
+        const win = transferWindowOf({ split: save.split, eventInSplit: save.eventInSplit ?? 1, inMajor: majorActive, majorSplit: isMajorSplit(save.split) });
+        const entries = squadEntries(save);
+        const entryOf = new Map(entries.map((e) => [e.player.id, e]));
+        const offers: OfferRow[] = m.incoming.map((o) => {
+          const e = entryOf.get(o.playerId);
+          const buyerTier = clubs.byId.get(o.fromTeamId)?.tier ?? 3;
+          const wage = e?.wage ?? Math.round((o.wageOffered ?? 0) / 1.2);
+          return {
+            offer: o, country: e?.player.country ?? '', age: e ? aiAgeOf(e.player, save.split, save.youthDebut) : 0, wage, value: e ? playerValue(e.player) : o.fee,
+            willingness: playerWillingness({ wage, wageOffered: o.wageOffered, buyerTier, userTier: save.tier ?? 3, wantsLeave: !!e?.wantsLeave }), buyerTier,
+          };
+        });
+        const loansMine = m.loans.filter((l) => l.kind === 'out' || l.kind === 'in');
+        const loanIds = new Set(loansMine.map((l) => l.playerId));
+        const teamName = (id?: string) => (id === FREE_TEAM_ID ? ct('mercado livre') : clubs.byId.get(id ?? '')?.team ?? id ?? '');
+        const squadIds = new Set(save.squad.map((sg) => sg.playerId));
+        const targets: TargetRow[] = market
+          .filter((x) => !squadIds.has(x.player.id) && x.from.id !== ACADEMY_FROM.id)
+          .map((x) => {
+            const free = x.from.id === FREE_AGENTS_FROM.id || x.from.id === FREE_TEAM_ID;
+            const strategy = free ? null : clubs.strategies[x.from.id] ?? null;
+            const left = aiContractSplitsLeft(x.player.id, save.split);
+            const owner = free ? null : clubs.byId.get(x.from.id);
+            const bestId = free ? null : [...x.from.players].sort((a, b) => playerOvr(b) - playerOvr(a))[0]?.id;
+            const sells: TargetRow['sells'] = free || strategy === 'survival' || left === 0 ? 'easy'
+              : (bestId === x.player.id && (owner?.form ?? 50) >= 55) || strategy === 'starBuyer' || left >= 2 ? 'hard' : 'normal';
+            return {
+              player: x.player, ovr: playerOvr(x.player), age: aiAgeOf(x.player, save.split, save.youthDebut), teamId: x.from.id,
+              teamName: free ? ct('Mercado livre') : x.from.team, teamTag: free ? 'FA' : x.from.tag, strategy,
+              asking: free ? 0 : askingPrice(x.player, x.from.teamwork), sells,
+            };
+          });
+        const exclude = new Set([...squadIds, ...loanIds]);
+        const standIns: StandInRow[] = standInCandidates({
+          teams: oppEra.filter((t) => t.id !== save.takeoverId), freeAgents: agedFreeAgents(worldBase, save.moves, save.split, squadIds, save.worldEvo),
+          strategies: clubs.strategies, exclude, movable: (pl) => movableIds.has(pl.id),
+        }).slice(0, 60).map((c) => ({
+          player: c.player, ovr: playerOvr(c.player), age: aiAgeOf(c.player, save.split, save.youthDebut), teamId: c.team?.id ?? FREE_TEAM_ID,
+          teamName: c.team?.team ?? ct('Mercado livre'), teamTag: c.team?.tag ?? 'FA', fee: loanFee(c.player, 'in'), bench: !!c.team && c.team.players.indexOf(c.player) >= 5,
+        }));
+        const setMarket = (next: MarketState, extra?: Partial<CareerSave>) => update({ ...withMarket(save, next), ...extra });
+        return (
+          <TransfersTab
+            split={save.split}
+            budget={save.budget}
+            window={win}
+            market={m}
+            offers={offers}
+            pendingSales={save.pendingSales ?? []}
+            rivals={clubs.rows}
+            targets={targets}
+            squad={entries.filter((e) => !e.committed).map((e) => ({ id: e.player.id, nick: e.player.nick, role: e.player.role, ovr: playerOvr(e.player), country: e.player.country }))}
+            squadSize={save.squad.length}
+            standIns={standIns}
+            loans={loansMine.map((l) => ({ loan: l, partner: teamName(l.kind === 'out' ? l.toTeamId : l.fromTeamId) }))}
+            loanClubsFor={(role) => [...clubs.rows]
+              .sort((a, b) => Number(b.needs.some((n) => n.role === role)) - Number(a.needs.some((n) => n.role === role)) || b.budget - a.budget)
+              .slice(0, 20)}
+            loanFeeFor={(pid) => { const e = entryOf.get(pid); return e ? loanFee(e.player, 'out') : 0; }}
+            standInOpen={(save.eventInSplit ?? 1) === 1 && !win.rosterLocked}
+            squadMax={SQUAD_MAX}
+            onAccept={(id) => {
+              const r = acceptOffer(m, id);
+              if (r.sale) setMarket(r.market, { pendingSales: [...(save.pendingSales ?? []).filter((x) => x.playerId !== r.sale!.playerId), r.sale] });
+            }}
+            onReject={(id) => {
+              const o = offers.find((x) => x.offer.id === id);
+              if (!o) return;
+              const r = rejectOffer(m, id, { wantsLeave: !!entryOf.get(o.offer.playerId)?.wantsLeave, willingness: o.willingness });
+              if (!r.ok) return;
+              if (r.moraleDelta < 0) {
+                const morale = { ...(save.morale ?? {}) };
+                morale[o.offer.playerId] = Math.max(0, (morale[o.offer.playerId] ?? MORALE_DEFAULT) + r.moraleDelta);
+                const item: NewsItem = { id: `${save.split}:rej:${o.offer.playerId}`, split: save.split, icon: '😠', tone: 'bad', cat: 'transfer', title: `${o.offer.nick} ${ct('não gostou da recusa')}`, body: `${ct('Ele queria ouvir a')} ${o.offer.fromName}. ${ct('A moral caiu')} ${-r.moraleDelta} ${ct('pontos.')}` };
+                const withMorale: CareerSave = { ...save, morale };
+                update({ ...withMarket(save, r.market), morale, ...pushNews(withMorale, [item]) });
+              } else setMarket(r.market);
+            }}
+            onCounter={(id, ask) => {
+              const o = offers.find((x) => x.offer.id === id);
+              if (!o) return 'rejected';
+              const r = counterOffer(m, id, ask, { value: o.value, budget: clubs.budgets[o.offer.fromTeamId] ?? o.offer.fee });
+              setMarket(r.market, r.sale ? { pendingSales: [...(save.pendingSales ?? []).filter((x) => x.playerId !== r.sale!.playerId), r.sale] } : undefined);
+              return r.outcome;
+            }}
+            onCancelSale={(pid) => {
+              const incoming = m.incoming.map((o) => (o.playerId === pid && o.status === 'accepted' && !o.viaReleaseClause ? { ...o, status: 'open' as const } : o));
+              setMarket({ ...m, incoming }, { pendingSales: (save.pendingSales ?? []).filter((x) => x.playerId !== pid) });
+            }}
+            onLoanOut={(pid, toTeamId, splits) => {
+              const e = entryOf.get(pid);
+              if (!e) return;
+              setMarket(agreeLoan(m, { playerId: pid, nick: e.player.nick, kind: 'out', fromTeamId: 'user', toTeamId, splits, fee: loanFee(e.player, 'out'), split: save.split }));
+            }}
+            onStandIn={(row) => setMarket(agreeLoan(m, { playerId: row.player.id, nick: row.player.nick, kind: 'in', fromTeamId: row.teamId, toTeamId: 'user', splits: 1, fee: row.fee, split: save.split }))}
+            onCancelLoan={(pid) => setMarket(cancelLoan(m, pid))}
+            onNegotiate={(nick) => { setNegoFocus((f) => ({ q: nick, n: (f?.n ?? 0) + 1 })); setTfView('negociar'); }}
+            view={tfView}
+            onView={setTfView}
+            negotiate={(
+              <SeasonNegotiations
+                market={market}
+                squadPlayers={save.squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[]}
+                budget={save.budget}
+                clubFormOf={(id) => formOf(save, id)}
+                split={save.split}
+                contract={signingCtx(save.split + 1)}
+                pendingDeals={save.pendingDeals ?? []}
+                pendingSales={save.pendingSales ?? []}
+                offers={[]}
+                feed={feedMemo}
+                focusQuery={negoFocus}
+                ownerStrategyOf={(id) => clubs.strategies[id]}
+                onAddDeal={(d) => {
+                  // [integração] elenco de no máximo 7: o acordo que passaria do limite
+                  // na janela nem entra (a janela também recusa, sem cobrar nada)
+                  const leaving = new Set([...(save.pendingSales ?? []).map((x) => x.playerId), ...(save.pendingDeals ?? []).flatMap((x) => x.outPlayerIds), ...d.outPlayerIds]);
+                  const after = save.squad.filter((x) => !leaving.has(x.playerId)).length + (save.pendingDeals ?? []).length + 1;
+                  if (after > SQUAD_MAX) { toast.error(ct('Elenco cheio (7): venda, empreste ou inclua alguém na troca antes de fechar.')); return; }
+                  update({ pendingDeals: [...(save.pendingDeals ?? []), d] });
+                }}
+                onCancelDeal={(id) => update({ pendingDeals: (save.pendingDeals ?? []).filter((x) => x.id !== id) })}
+                onAcceptOffer={(o) => update({ pendingSales: [...(save.pendingSales ?? []), o] })}
+                onRejectOffer={(pid) => update({ rejectedOffers: [...(save.rejectedOffers ?? []), pid] })}
+                onCancelSale={(pid) => update({ pendingSales: (save.pendingSales ?? []).filter((x) => x.playerId !== pid) })}
+              />
+            )}
+          />
+        );
+      })()}
 
       {/* ===== RESULTADOS (todas as rodadas) ===== */}
       {/* T1.4: abas Results e Standings extraídas em src/pages/career/ */}
@@ -6850,41 +8476,147 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         />
       )}
 
+      {/* ===== [fase 4] JUVENTUDE: a geração do ano, promessas, aposentadorias ===== */}
+      {hubTab === 'youth' && (
+        <JuventudeTab
+          split={save.split}
+          mundo={mundoOf(save)}
+          moves={save.moves}
+          clubOf={(id) => { const t = oppEra.find((x) => x.id === id); return t ? { id: t.id, tag: t.tag, name: t.team } : null; }}
+          scoutAccuracy={staffEffects(save.gestao?.staff).scoutAccuracy}
+          orgName={save.org?.name ?? ct('Seu clube')}
+          academy={save.academy ?? []}
+          academyMax={ACADEMY_MAX}
+          onTakeToAcademy={takeNewgenToAcademy}
+          onOpenPlayer={openPlayerProfile}
+          onGoAcademy={() => goSection('ac')}
+        />
+      )}
+
+      {/* ===== [mídia viva] MÍDIA: sala de imprensa, feed da cena, narrativas ===== */}
+      {hubTab === 'midia' && (
+        <MidiaTab
+          lang={lang}
+          seed={midiaSeed(save)}
+          split={save.split}
+          org={midiaOrg}
+          midia={midiaOf(save)}
+          pre={midiaPre}
+          rivalries={save.rivalries}
+          results={save.mundo?.results ?? EMPTY_RESULTS}
+          lastMoves={save.lastMoves ?? EMPTY_MOVES}
+          tagOf={tagOfTeam}
+          playerOf={(teamId, salt) => { const t = oppEra.find((x) => x.id === teamId); return t?.players.length ? t.players[hashStr(salt) % t.players.length].nick : undefined; }}
+          nickOf={(id) => midiaSquad(save).find((x) => x.id === id)?.nick ?? id}
+          onAnswer={answerMidiaPress}
+        />
+      )}
+
       {/* ===== ELENCO + RANKING DE JOGADORES ===== */}
       {/* T1.4: aba Finance extraída em src/pages/career/FinanceTab.tsx */}
-      {hubTab === 'finance' && (
+      {hubTab === 'finance' && finSec !== 'ct' && (
         // CareerSave é interface fechada (sem index signature); FinanceTab usa
         // shape broad — cast via unknown pra reconciliar.
         <FinanceTab
+          section="money"
           save={save as unknown as Parameters<typeof FinanceTab>[0]['save']}
           findSigning={findSigning}
           update={update as unknown as Parameters<typeof FinanceTab>[0]['update']}
         />
       )}
+      {/* [fase 3 · CONTRATOS] Mercado › Contratos: folha real, termos e renovação negociada */}
+      {hubTab === 'finance' && finSec === 'ct' && (
+        <ContractsTab
+          save={save as unknown as Parameters<typeof ContractsTab>[0]['save']}
+          findSigning={findSigning}
+          ageOf={(p) => effectiveAge(p, save.split, save.youthAge, save.youthDebut)}
+          sponsorIncome={effSponsorIncome(save)}
+          renewalProfileFor={(pid) => {
+            const sig = save.squad.find((x) => x.playerId === pid);
+            const f = sig ? findSigning(sig) : null;
+            return f ? contractProfile(save, { ...f.player, id: pid }, 'renewal') : null;
+          }}
+          blockedFor={renewalBlockedFor}
+          onRecord={(n) => updateClube((s) => recordNegotiation(s, n))}
+          onRenew={(pid, terms) => updateClube(
+            (s) => signContract(s, pid, terms),
+            (s) => ({ budget: Math.max(0, s.budget - (terms.signingBonus ?? 0)) }),
+          )}
+          onOpenPlayer={openPlayerProfile}
+        />
+      )}
 
       {/* T1.4: aba Squad extraída em src/pages/career/SquadTab.tsx */}
-      {hubTab === 'squad' && (
+      {hubTab === 'squad' && squadSec === 'an' && opp && (() => {
+        const me = resolveTeamById('user');
+        return me ? <AnalystReportCard report={generateAnalystReport(opp, me)} oppName={opp.name} oppTag={opp.tag} /> : null;
+      })()}
+      {/* [fase 2 · STAFF] Time › Comissão técnica */}
+      {hubTab === 'squad' && squadSec === 'st' && (
+        <StaffTab
+          save={save as unknown as Parameters<typeof StaffTab>[0]['save']}
+          sponsorIncome={effSponsorIncome(save)}
+          update={update as unknown as Parameters<typeof StaffTab>[0]['update']}
+        />
+      )}
+      {/* [fase 2 · treino] Treinos e scrims: agenda, intensidade, foco individual, condição, scrim */}
+      {hubTab === 'squad' && squadSec === 'tr' && (
+        <TrainingTab
+          budget={save.budget}
+          players={save.squad.map((sg) => findSigning(sg)?.player).filter((p): p is Player => !!p).map((p) => ({ ...p, id: playerOrgId(p.id) }))}
+          gestao={gestaoOf(save)}
+          updateGestao={updateGestao}
+          openPlayerProfile={openPlayerProfile}
+          nextOpp={opp ? { id: opp.id, tag: opp.tag } : null}
+          teamTag={(id) => league?.teams.find((t) => t.id === id)?.tag ?? oppEra.find((t) => t.id === id)?.tag}
+          scrimsThisSplit={save.scrimsThisSplit ?? 0}
+          scrimOpponents={scrimOpponents}
+          scrimReport={scrimReport}
+          doScrimVs={doScrimVs}
+          onBootcamp={doBootcamp}
+          bootcampUsed={bootcampNow.used}
+          bootcamp={{
+            event: bootcampNow.ev?.name ?? null, lan: !!bootcampNow.ev?.lan, travel: bootcampNow.plan.travel, cost: bootcampNow.plan.cost,
+            chem: bootcampNow.plan.chem, familiarity: bootcampNow.plan.familiarity, played: bootcampNow.played, ok: bootcampNow.ok,
+          }}
+        />
+      )}
+      {hubTab === 'squad' && squadSec !== 'an' && squadSec !== 'tr' && squadSec !== 'st' && (
         <SquadTab
-          save={save as unknown as Parameters<typeof SquadTab>[0]['save']}
+          section={squadSec as SquadSection}
+          save={{ ...save, fatigue: fatigueView(save, save.squad.map((sg) => sg.playerId)) } as unknown as Parameters<typeof SquadTab>[0]['save']}
           findSigning={findSigning}
           update={update as unknown as Parameters<typeof SquadTab>[0]['update']}
           openPlayerProfile={openPlayerProfile}
-          doScrimVs={doScrimVs}
-          onBootcamp={doBootcamp}
-          bootcampUsed={save.bootcampSplit === save.split}
-          scrimOpponents={scrimOpponents}
-          scrimReport={scrimReport}
+          condition={gestaoOf(save).condition}
           hireScout={hireScout}
           fireScout={fireScout}
           seasonStats={seasonStats}
           mySquadIds={mySquadIds}
+          lineup={vestModel && squadSec === 'sq' ? <LineupPanel model={vestModel} actions={vestActions} /> : undefined}
+          dinamica={vestModel && squadSec === 'dy' ? <DinamicaView model={vestModel} actions={vestActions} /> : undefined}
+          squadInfo={vestModel ? Object.fromEntries(vestModel.rows.map((r) => [r.id, {
+            status: ct(STATUS_LABEL[r.status]), slot: r.starter ? 'starter' as const : 'bench' as const, valueMul: benchValueFactor(dressingOf(save), r.id),
+          }])) : undefined}
+          gamePlan={squadSec === 'pl' ? (
+            <GamePlanScreen
+              tactics={gestaoOf(save).tactics}
+              onChange={(tactics) => updateGestao((g) => ({ ...g, tactics }))}
+              players={resolveLineup(save.squad.map((sg) => sg.playerId), dressingOf(save).lineup).starters.map((id) => save.squad.find((sg) => sg.playerId === id)).map((sig) => (sig ? findSigning(sig)?.player : undefined)).filter((p): p is Player => !!p)}
+              opp={opp}
+              reveal={antiStratReveal(staffEffects(save.gestao?.staff).antiStratRead, normalizeFacilities(save.facilities).analyst)}
+              gamePlan={save.gamePlan}
+              onOpenPlayer={openPlayerProfile}
+              vodPoints={vodPrepPoints(gestaoOf(save).training)}
+            />
+          ) : undefined}
         />
       )}
 
       {/* ===== CENA MUNDIAL: o que rola nas outras regiões ===== */}
       {/* T1.4: aba World extraída em src/pages/career/WorldTab.tsx */}
       {hubTab === 'world' && (
-        <WorldTab oppEra={oppEra} save={save} openTeamProfile={openTeamProfile} />
+        <WorldTab oppEra={oppEra} save={save} openTeamProfile={openTeamProfile} team={teamLite} onOpenEvent={openEvent} />
       )}
 
       {/* ===== ESTATÍSTICAS DA TEMPORADA (página dedicada) ===== */}
@@ -6908,8 +8640,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           vrsAll={vrsAll}
           vrsByRegion={vrsByRegion}
           openTeamProfile={openTeamProfile}
-          majorCut={MAJOR_VRS_CUT}
+          majorCut={MAJOR_S1}
           splitsToMajor={isMajorSplit(save.split) ? 0 : MAJOR_EVERY - (save.split % MAJOR_EVERY)}
+          published={mundoNow.vrs}
+          table={vrsTableNow}
+          onOpenEvent={openEvent}
         />
       )}
 
@@ -6930,14 +8665,43 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
       {/* ===== HISTÓRIA DA ORGANIZAÇÃO ===== */}
       {/* T1.4: aba Calendar extraída em src/pages/career/CalendarTab.tsx */}
-      {hubTab === 'calendar' && (
+      {hubTab === 'calendar' && majorRouteInfo && (
         <CalendarTab
-          save={save}
-          league={league}
-          table={table}
-          myPos={myPos}
-          myVrsRank={myVrsRank}
-          setSelTeam={setSelTeam}
+          season={seasonNow}
+          split={save.split}
+          etapa={save.eventInSplit ?? 1}
+          week={weekNow}
+          calendar={seasonCal}
+          results={mundoNow.results}
+          myEventId={myEventId}
+          myLive={myLive}
+          activeIds={Object.keys(circuitFields)}
+          qualifiers={mundoNow.qualifiers ?? {}}
+          route={majorRouteInfo}
+          userRank={majorRouteInfo.rank}
+          userPoints={majorRouteInfo.points}
+          team={teamLite}
+          onOpenEvent={openEvent}
+        />
+      )}
+
+      {/* [fase 4 · circuito] página do evento: formato, participantes, chave/resultado, premiação, VRS */}
+      {hubTab === 'circuito' && (
+        <CircuitoTab
+          season={seasonNow}
+          calendar={seasonCal}
+          results={mundoNow.results}
+          vrs={mundoNow.vrs}
+          table={vrsTableNow}
+          fields={circuitFields}
+          myEventId={myEventId}
+          myLive={myLive}
+          selected={circuitoSel ?? (majorT && majorT.phase !== 'done' ? (save.majorStage === 0 && save.majorRegion ? `rmr:${save.split}:${save.majorRegion}` : majorIdOf(save.split)) : null)}
+          onSelect={setCircuitoSel}
+          team={teamLite}
+          onOpenTeam={openTeamProfile}
+          onOpenBracket={() => setHubTab('bracket')}
+          onOpenCalendar={() => setHubTab('calendar')}
         />
       )}
 
@@ -6958,9 +8722,65 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           })}
         />
       )}
+      {/* [SA2 · legado] Clube › Legado */}
+      {hubTab === 'legado' && save.org && (() => {
+        const lg = legadoOf(save.legado);
+        const infoOf = (id: string) => {
+          const pl = resolvePlayerById(id) ?? currentEra.flatMap((t) => t.players).find((x) => x.id === id) ?? rawBase.flatMap((t) => t.players).find((x) => x.id === id);
+          if (pl) return { nick: pl.nick, country: pl.country, role: save.roles?.[id] ?? pl.role };
+          const e = lg.years.flatMap((y) => y.top20).find((x) => x.id === id);
+          return e ? { nick: e.nick, country: e.country, role: e.role } : null;
+        };
+        const view = buildLegado({
+          split: save.split, orgName: save.org.name, tier: save.tier, history: save.history, careerStats: save.careerStats,
+          seasonStats: save.seasonStats, stints: save.stints, peakOvr: save.peakOvr, squadIds: save.squad.map((sg) => sg.playerId),
+          retired: save.retired, coachStints: save.coachStints, legado: lg, academyTrophies: save.academyTrophies, infoOf,
+        });
+        return (
+          <LegadoTab
+            key={legadoCards} initialSection={legadoCards ? 'cards' : undefined}
+            view={view} legado={lg} split={save.split}
+            orgName={save.org.name} tag={save.org.tag} colors={save.org.colors} logo={save.org.logo}
+            roster={(userTeamSeason?.players ?? []).slice(0, 5).map((pl) => ({ nick: pl.nick, role: save.roles?.[pl.id] ?? pl.role, value: String(playerOvr(pl)) }))}
+            coachNick={userCoachNick}
+            onOpenCeremony={setCeremonyYear}
+            onOpenPlayer={(id) => { const pl = resolvePlayerById(id) ?? currentEra.flatMap((t) => t.players).find((x) => x.id === id); if (pl) openPlayerProfile(pl); }}
+            onRetireShirt={(l) => askConfirm({
+              title: `${ct('Aposentar a camisa de')} ${l.nick}?`,
+              message: ct('A camisa sobe para o teto do clube e entra na história da org para sempre. Não dá para desfazer.'),
+              confirmLabel: ct('Aposentar a camisa'),
+              onConfirm: () => {
+                update({ legado: withShirt(legadoOf(save.legado), { playerId: l.id, nick: l.nick, split: save.split, maps: l.maps, titles: l.titles }) });
+                toast.success(`${ct('Camisa de')} ${l.nick} ${ct('aposentada')}`);
+              },
+            })}
+          />
+        );
+      })()}
       </>
       )}
     </CareerShell>
+      {/* [integração] na virada do ano a cerimônia da cena substitui o modal antigo de prêmios (abre uma vez) */}
+      {(ceremonyYear ?? (save.pendingYearAwards && ceremonyNew ? ceremonyNew.year : null)) != null && (() => {
+        const cy = ceremonyYear ?? ceremonyNew!.year;
+        const y = legadoOf(save.legado).years.find((x) => x.year === cy);
+        if (!y) return null;
+        const close = () => {
+          setCeremonyYear(null);
+          setSave((s) => {
+            const lg = legadoOf(s.legado);
+            const pend = s.pendingYearAwards;
+            const next: CareerSave = {
+              ...s,
+              ...((lg.seenYear ?? 0) < y.year ? { legado: { ...lg, seenYear: y.year } } : {}),
+              ...(pend ? { pendingYearAwards: null, yearAwardsHistory: [...(s.yearAwardsHistory ?? []), pend] } : {}),
+            };
+            persist(next);
+            return next;
+          });
+        };
+        return <LegadoCeremony year={y} onClose={close} onShare={() => { close(); setLegadoCards((n) => n + 1); setHubTab('legado'); }} />;
+      })()}
 
       {selSeries && (
         <div className="modal-backdrop" onClick={() => setSelSeries(null)}>
@@ -6984,9 +8804,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           }}
           // #10: tópicos que destravam promessa FORMAL (com prazo e cobrança)
           promiseOfferFor={(topic) => {
+            // [fase 3 · vestiário] quem está jogando menos do que o status promete
+            // (ou já reclamou) recebe a promessa de TEMPO DE JOGO; os demais, reforço
+            const dr = dressingOf(save);
+            const vc = vestiarioCtx(save);
+            const share = effectivePlayShare(dr, talkPlayer.oid);
+            const wantsMinutes = (dr.unrest?.[talkPlayer.oid]?.level ?? 0) > 0
+              || (share != null && share < expectedPlayTime(vc.statuses[talkPlayer.oid] ?? 'starter') - 0.05);
             const kind: PlayerPromiseKind | null =
               topic === 'extension' ? 'extension'
-              : topic === 'playtime' ? 'signing'
+              : topic === 'playtime' ? (wantsMinutes ? 'playtime' : 'signing')
               : topic === 'effort' || topic === 'behavior' ? 'workload'
               : null;
             if (!kind || hasOpenPromise(save.playerPromises, talkPlayer.oid, kind)) return null;
@@ -7000,7 +8827,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 kind,
                 madeAtSplit: s.split,
                 deadlineSplit: s.split + PROMISE_DEADLINE_SPLITS,
-                contractUntilAt: kind === 'extension' ? (s.contracts?.[oid] ?? null) : undefined,
+                contractUntilAt: kind === 'extension' ? (contractUntilOf(s, oid) ?? null) : undefined,
                 squadIdsAt: kind === 'signing' ? s.squad.map((x) => x.playerId) : undefined,
                 status: 'open',
               };
@@ -7035,6 +8862,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 },
                 lastTalkAt: { ...(s.lastTalkAt ?? {}), [oid]: s.split },
               };
+              // [fase 3 · vestiário] a conversa mexe no incômodo de quem cobra tempo de jogo
+              const dr = dressingOf(s);
+              const du = talkUnrestDelta(result.topic, result.outcome.tone, dr.unrest?.[oid]?.level ?? 0);
+              if (du) next.clube = { ...clubeOfSave(s), dressing: applyUnrestDelta(dr, oid, du, s.split) };
               persist(next);
               return next;
             });
@@ -7042,7 +8873,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           onClose={() => setTalkPlayer(null)}
         />
       )}
-      {save.pendingYearAwards && (
+      {save.pendingYearAwards && !ceremonyNew && (
         <YearAwardsModal
           awards={save.pendingYearAwards}
           onClose={() => {
@@ -7128,7 +8959,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       )}
 
       {/* T8.2: Tour interativo de boas-vindas — substitui o slideshow estático. */}
-      {showOnb && (
+      {showOnb && !overlayHeldNow && (
         <InteractiveTour
           steps={[
             {
@@ -7474,7 +9305,7 @@ function TeamDetail({ team, league, form, onClose }: { team: TTeam; league?: Lea
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* hero do time */}
           <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-border)', boxShadow: 'var(--rtm-shadow-banner)' }}>
-            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${team.colors[0]}33, rgba(13,17,22,.92))` }} />
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, color-mix(in srgb, ${team.colors[0]} 20%, transparent), rgba(13,17,22,.92))` }} />
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '20px 22px', flexWrap: 'wrap' }}>
               <TeamBadge tag={team.tag} colors={team.colors} logoUrl={team.logoUrl} size={64} />
               <div style={{ flex: 1, minWidth: 180 }}>
@@ -7531,15 +9362,16 @@ export interface SeasonStat { id: string; nick: string; teamTag: string; country
 function seasonPlayerStats(l: League): SeasonStat[] {
   const meta = new Map<string, { nick: string; teamTag: string; country: string; role: string }>();
   for (const t of l.teams) for (const p of t.players) meta.set(p.id, { nick: p.nick, teamTag: t.tag, country: p.country, role: p.role });
-  const agg = new Map<string, { k: number; d: number; a: number; dmg: number; kast: number; r: number }>();
+  const agg = new Map<string, { k: number; d: number; a: number; dmg: number; kast: number; r: number; maps: number }>();
   for (const round of l.rounds) {
     for (const m of round) {
       if (!m.result) continue;
       for (const map of m.result.maps) {
         for (const [id, st] of Object.entries(map.stats)) {
-          const cur = agg.get(id) ?? { k: 0, d: 0, a: 0, dmg: 0, kast: 0, r: 0 };
+          const cur = agg.get(id) ?? { k: 0, d: 0, a: 0, dmg: 0, kast: 0, r: 0, maps: 0 };
           cur.k += st.both.kills; cur.d += st.both.deaths; cur.a += st.both.assists;
           cur.dmg += st.both.dmg; cur.kast += st.both.kastRounds; cur.r += st.both.rounds;
+          cur.maps += 1; // mesmo critério do accumulateCareerStats: 1 por mapa jogado
           agg.set(id, cur);
         }
       }
@@ -7554,7 +9386,7 @@ function seasonPlayerStats(l: League): SeasonStat[] {
     const rating = Math.max(0, 0.0073 * kast * 100 + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.0032 * adr + 0.1587);
     const md = meta.get(id);
     if (!md) continue;
-    out.push({ id, nick: md.nick, teamTag: md.teamTag, country: md.country, role: md.role, rating, kd: s.d ? s.k / s.d : s.k, adr, maps: 0 });
+    out.push({ id, nick: md.nick, teamTag: md.teamTag, country: md.country, role: md.role, rating, kd: s.d ? s.k / s.d : s.k, adr, maps: s.maps });
   }
   return out.sort((a, b) => b.rating - a.rating);
 }
@@ -7865,121 +9697,15 @@ interface CircuitOption {
   /** FRENTE 3: 'global' = aberto a todos; 'sa'/'eu'/'asia' = só user da macro-região
    *  ou que tenha core lá. Default = global. */
   region?: 'global' | 'sa' | 'eu' | 'asia';
+  // [fase 4 · circuito] evento do calendário real
+  eventId?: string;
+  lan?: boolean;
+  venue?: string;
+  host?: string | null;
+  prize?: number;          // prize pool real (USD)
+  invited?: string[];      // convites diretos pelo VRS
+  etapa?: EtapaEvent;
 }
-function CircuitPicker({ circuits, split, playerTier, inviteTier, userRegion, relocate, onRelocate, onPick, onBack }: {
-  circuits: CircuitOption[];
-  split: number;
-  playerTier: number;
-  inviteTier: number | null;
-  userRegion: MacroRegion | null;
-  relocate: { from: MacroRegion; to: MacroRegion } | null;
-  onRelocate: () => void;
-  onPick: (c: CircuitOption) => void;
-  onBack: () => void;
-}) {
-  // FRENTE 3 — REGION ROUTING:
-  // - circuitos 'global' são abertos a todos
-  // - circuitos regionais ('sa'/'eu'/'asia') só pra user cuja MacroRegion bate
-  // - mapeia macroRegion → conjunto de region tags aceitas
-  const userRegionTags: Set<'global' | 'sa' | 'eu' | 'asia'> = (() => {
-    const set = new Set<'global' | 'sa' | 'eu' | 'asia'>(['global']);
-    if (userRegion === 'americas') set.add('sa');
-    if (userRegion === 'europe' || userRegion === 'cis') set.add('eu');
-    if (userRegion === 'asia' || userRegion === 'oceania') set.add('asia');
-    return set;
-  })();
-  const regionOk = (opt: CircuitOption) => userRegionTags.has(opt.region ?? 'global');
-  // você disputa: o circuito do SEU tier; o tier de CIMA se recebeu CONVITE; e UM
-  // tier ABAIXO por opção. Acrescido do filtro de região pra regionais.
-  const tierOk = (opt: CircuitOption) => opt.tier === playerTier || opt.tier === inviteTier || opt.tier === playerTier + 1;
-  const canEnter = (opt: CircuitOption) => tierOk(opt) && regionOk(opt);
-  const isInvite = (opt: CircuitOption) => opt.tier === inviteTier && opt.tier !== playerTier;
-  const isBelow = (opt: CircuitOption) => opt.tier === playerTier + 1;
-  const isRegional = (opt: CircuitOption) => opt.region && opt.region !== 'global';
-  const REGION_LABEL: Record<string, string> = { sa: '🌎 SA', eu: '🇪🇺 EU', asia: '🌏 Ásia' };
-  const firstAvailable = circuits.find(canEnter) ?? circuits[0];
-  const [selectedId, setSelectedId] = useState(firstAvailable?.id ?? '');
-  const selected = circuits.find((option) => option.id === selectedId);
-  const c = selected ?? firstAvailable;
-  const cOk = c && canEnter(c);
-  return (
-    <div className="fade-in">
-      <div className="panel" style={{ maxWidth: 900, margin: '24px auto' }}>
-        <div className="panel-head">
-          Divisões · Split {split} · você está no {ct(TIER_NAMES[playerTier])}
-          <span className="spacer" />
-          <button className="btn" onClick={onBack}>{ct('← Mercado')}</button>
-        </div>
-        <div className="panel-body">
-          {relocate && (
-            <div className="relocate-banner">
-              🌍 Seu <b>core</b> {ct('mudou: agora é da')} <b>{ct(MACRO_REGION_LABELS[relocate.to])}</b>{ct(', mas você compete na')} <b>{ct(MACRO_REGION_LABELS[relocate.from])}</b>.
-              {' '}Quer <b>realocar a org para a {ct(MACRO_REGION_LABELS[relocate.to])}</b>? A bandeira do time passa a ser a dessa região.
-              <button className="btn small" onClick={onRelocate}>Mudar para {ct(MACRO_REGION_LABELS[relocate.to])}</button>
-            </div>
-          )}
-          <p className="muted small">{ct('Cada circuito é um')} <b>tier</b>{ct('. Você joga no seu tier ou abaixo; vencer o seu circuito te')} <b>promove</b>{ct(', terminar no fundo te')} <b>rebaixa</b>{ct('. Só o')} <b>Tier 1</b> {ct('dá vaga no Major.')}</p>
-          <div className="circuit-cards">
-            {circuits.map((opt) => {
-              const locked = !canEnter(opt);
-              return (
-                <button key={opt.id} className={`circuit-card${c?.id === opt.id ? ' on' : ''}${locked ? ' locked' : ''}`} onClick={() => setSelectedId(opt.id)}>
-                  <div className="cc-name">
-                    <span className={`tier-badge t${opt.tier}`}>TIER {opt.tier}</span> {opt.name}
-                    {isInvite(opt) && <span className="tier-badge" style={{ background: 'var(--rtm-gold)', color: '#06121d', marginLeft: 6 }}>✉ {ct('CONVITE')}</span>}
-                    {isRegional(opt) && (
-                      <span className="tier-badge" style={{ background: 'rgba(95,164,232,0.18)', color: '#5fa4e8', border: '1px solid rgba(95,164,232,0.45)', marginLeft: 6 }}>
-                        {REGION_LABEL[opt.region ?? '']}
-                      </span>
-                    )}
-                  </div>
-                  <div className="cc-desc muted small">{opt.desc}</div>
-                  <div className="cc-meta">
-                    <span>💰 {fmtPool(eventMeta(opt.name, opt.tier).prize)}</span>
-                    <span>📍 {eventMeta(opt.name, opt.tier).venue}</span>
-                    <span>{opt.spots} {opt.spots === 1 ? 'vaga' : 'vagas'} ao Major</span>
-                    <span>prêmio ×{opt.prizeMult}</span>
-                    <span>VRS ×{opt.vrsWeight.toFixed(2)}</span>
-                  </div>
-                  {isInvite(opt) && <div className="cc-lock small" style={{ color: 'var(--rtm-gold)' }}>✉ {ct('Convite: jogar aqui acelera a evolução dos seus jogadores mais jovens.')}</div>}
-                  {isBelow(opt) && <div className="cc-lock muted small">↓ {ct('Opcional: um tier abaixo (menos VRS e prêmio).')}</div>}
-                  {locked && !regionOk(opt) && (
-                    <div className="cc-lock muted small">🔒 {ct('Circuito regional —')} {REGION_LABEL[opt.region ?? '']} {ct('exclusivo (sua org não compete nessa região)')}</div>
-                  )}
-                  {locked && regionOk(opt) && (opt.tier < playerTier
-                    ? <div className="cc-lock muted small">🔒 {ct('Acima da sua divisão — suba pelo ranking VRS')}</div>
-                    : <div className="cc-lock muted small">🔒 {ct('Fora da sua divisão (você joga o seu tier)')}</div>)}
-                </button>
-              );
-            })}
-          </div>
-          {c && (
-            <>
-              <div className="muted small section-label">{ct('Times confirmados no')} {c.name}</div>
-              <div className="circuit-teams">
-                {c.teams.map((t) => (
-                  <div key={t.id} className="cteam">
-                    <TeamBadge tag={t.tag} colors={t.colors} size={28} logoUrl={t.logoUrl ?? logoForTeam(t)} />
-                    <span className="ct-tname"><Flag cc={t.country} /> {t.team}</span>
-                    <span className={`tier-badge t${teamTier(t)}`}>T{teamTier(t)}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="center" style={{ marginTop: 16 }}>
-                {cOk ? (
-                  <button className="btn gold big" onClick={() => onPick(c)}>Disputar o {c.name}</button>
-                ) : (
-                  <div className="muted">🔒 Você precisa estar no {ct(TIER_NAMES[c.tier])} para disputar este circuito. Suba vencendo o seu tier atual.</div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // emblemas do construtor de logo (SVG inline gerado a partir das cores + tag)
 type EmblemId = 'shield' | 'circle' | 'hexagon' | 'bolt' | 'star' | 'diamond';
 const EMBLEMS: { id: EmblemId; label: string }[] = [
@@ -8020,87 +9746,67 @@ function buildLogoDataUrl(emblem: EmblemId, c1: string, c2: string, text: string
 // substituídos pelo InteractiveTour (tour com spotlight nos elementos reais).
 
 // tela OBRIGATÓRIA de renovação: aparece na janela quando há contratos vencendo.
-// O usuário decide quem fica (paga 1 salário) e quem sai. Sem perder jogador "do nada".
-function RenewalScreen({ renewals, budget, onConfirm }: {
+// [fase 3] Cada renovação é NEGOCIADA com o jogador (salário, duração, luvas,
+// cláusula, status, lealdade): "Negociar" abre a mesa; "Aceitar exigência"
+// fecha nos termos que ele pede; quem se recusa (rebaixado, insatisfeito,
+// negociação rompida) só pode ser liberado. Sem perder jogador "do nada".
+type RenewalDecision = { kind: 'keep'; terms: ContractTerms } | { kind: 'drop' };
+function RenewalScreen({ renewals, budget, payrollBase, profileFor, blockedFor, onRecord, onConfirm }: {
   renewals: Renewal[];
   budget: number;
-  onConfirm: (renewIds: string[]) => void;
+  /** folha base atual (sem encargos) — mostra a folha depois de cada renovação */
+  payrollBase: number;
+  profileFor: (r: Renewal) => NegoProfile | null;
+  blockedFor: (playerId: string) => Negotiation | null;
+  onRecord: (nego: Negotiation) => void;
+  onConfirm: (decisions: Record<string, RenewalDecision>) => void;
 }) {
-  // Redesenhada no padrão em-*: header banner + DashCard com rows limpas
-  // + sticky bottom com hud de cost/budget e CTA. API preservada.
-  const [decided, setDecided] = useState<Record<string, 'keep' | 'drop'>>({});
-  const set = (id: string, v: 'keep' | 'drop') => setDecided((d) => ({ ...d, [id]: v }));
-  const setAll = (v: 'keep' | 'drop') => setDecided(Object.fromEntries(renewals.map((r) => [r.playerId, v])));
-  const kept = renewals.filter((r) => decided[r.playerId] === 'keep');
-  const dropped = renewals.filter((r) => decided[r.playerId] === 'drop');
-  const cost = kept.reduce((a, r) => a + r.wage, 0);
+  const [decided, setDecided] = useState<Record<string, RenewalDecision>>({});
+  const [talking, setTalking] = useState<Renewal | null>(null);
+  const [blockedNow, setBlockedNow] = useState<Record<string, true>>({});
+  const set = (id: string, v: RenewalDecision) => setDecided((d) => ({ ...d, [id]: v }));
+  // quem aceita sequer conversar (e a exigência de abertura de quem aceita)
+  const info = useMemo(() => Object.fromEntries(renewals.map((r) => {
+    const p = profileFor(r);
+    const opened = p ? openPlayerNegotiation(p) : null;
+    const refused = !p ? ct('Jogador não encontrado.') : blockedFor(r.playerId) ? ct('Rompeu a negociação neste split.') : opened?.refused ?? null;
+    return [r.playerId, { p, demand: opened?.demand ?? null, refused }];
+  })), [renewals, profileFor, blockedFor]);
+  const refusedOf = (id: string) => (blockedNow[id] ? ct('Rompeu a negociação neste split.') : info[id]?.refused ?? null);
+  const acceptAll = () => setDecided((d) => {
+    const out = { ...d };
+    for (const r of renewals) {
+      if (out[r.playerId]) continue;
+      const it = info[r.playerId];
+      if (!refusedOf(r.playerId) && it?.demand && it.p) out[r.playerId] = { kind: 'keep', terms: termsFromOffer(offerFromDemand(it.demand, it.p.split), it.p.split) };
+    }
+    return out;
+  });
+  const dropAll = () => setDecided(Object.fromEntries(renewals.map((r) => [r.playerId, { kind: 'drop' } as RenewalDecision])));
+  const kept = renewals.filter((r) => decided[r.playerId]?.kind === 'keep');
+  const dropped = renewals.filter((r) => decided[r.playerId]?.kind === 'drop');
+  const cost = kept.reduce((a, r) => a + ((decided[r.playerId] as { terms: ContractTerms }).terms.signingBonus ?? 0), 0);
+  const wagesAfter = kept.reduce((a, r) => a + (decided[r.playerId] as { terms: ContractTerms }).terms.wage - r.wage, 0);
   const overBudget = cost > budget;
   const allDecided = renewals.every((r) => decided[r.playerId]);
+  const talkProfile = talking ? info[talking.playerId]?.p : null;
 
   return (
     <div className="em-renewals fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 20px 24px', maxWidth: 880, margin: '0 auto' }}>
-      {/* Header banner */}
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '14px 18px',
-          background: 'linear-gradient(135deg, rgba(232,193,112,0.12) 0%, transparent 60%)',
-          border: '1px solid var(--em-border)',
-          borderRadius: 6,
-        }}
-      >
+      <header className="ren-head">
         <div>
-          <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 800 }}>
-            📝 {ct('Janela de renovação')}
-          </div>
-          <h2 style={{ margin: '2px 0 0', fontSize: '1.4rem', fontWeight: 900, color: 'var(--em-text)', letterSpacing: '-0.3px' }}>
-            {renewals.length} {ct('contratos venceram')}
-          </h2>
-          <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'var(--em-muted)', maxWidth: 580, lineHeight: 1.45 }}>
-            {ct('Decida cada um:')} <b style={{ color: 'var(--em-text)' }}>{ct('Renovar')}</b> {ct('mantém no elenco e custa 1 salário · ')}<b style={{ color: 'var(--em-text)' }}>{ct('Liberar')}</b> {ct('libera o jogador agora (de graça).')}
+          <div className="ren-eyebrow">📝 {ct('Janela de renovação')}</div>
+          <h2 className="ren-title">{renewals.length} {ct('contratos venceram')}</h2>
+          <p className="ren-sub">
+            {ct('Negocie cada renovação com o jogador (salário, duração, luvas, cláusula e status) ou libere de graça. Quem foi rebaixado ou está insatisfeito pode se recusar a renovar.')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => setAll('keep')}
-            style={{
-              padding: '6px 12px',
-              background: 'rgba(94,216,138,0.12)',
-              color: '#5ed88a',
-              border: '1px solid rgba(94,216,138,0.45)',
-              borderRadius: 4,
-              fontFamily: 'inherit',
-              fontSize: '0.74rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            ✓ {ct('Renovar todos')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setAll('drop')}
-            style={{
-              padding: '6px 12px',
-              background: 'rgba(229,138,138,0.10)',
-              color: '#e58a8a',
-              border: '1px solid rgba(229,138,138,0.45)',
-              borderRadius: 4,
-              fontFamily: 'inherit',
-              fontSize: '0.74rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            ✕ {ct('Liberar todos')}
-          </button>
+        <div className="ren-bulk">
+          <Button size="sm" onClick={acceptAll}>✓ {ct('Aceitar exigências')}</Button>
+          <Button size="sm" variant="ghost" onClick={dropAll}>✕ {ct('Liberar todos')}</Button>
         </div>
       </header>
 
-      {/* Lista de renovações */}
       <DashCard
         title={ct('Decisões')}
         info={`${kept.length} ${ct('renovar')} · ${dropped.length} ${ct('liberar')} · ${renewals.length - kept.length - dropped.length} ${ct('pendente')}`}
@@ -8108,73 +9814,33 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {renewals.map((r) => {
             const v = decided[r.playerId];
-            const isKeep = v === 'keep';
-            const isDrop = v === 'drop';
-            const accent = isKeep ? '#5ed88a' : isDrop ? '#e58a8a' : 'var(--em-border)';
+            const refused = refusedOf(r.playerId);
+            const dem = info[r.playerId]?.demand;
+            const tone = v?.kind === 'keep' ? 'keep' : v?.kind === 'drop' ? 'drop' : refused ? 'refused' : 'open';
             return (
-              <div
-                key={r.playerId}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '10px 12px',
-                  background: 'var(--em-panel-2)',
-                  border: `1px solid ${accent}`,
-                  borderLeft: `3px solid ${accent}`,
-                  borderRadius: 4,
-                  opacity: isDrop ? 0.7 : 1,
-                  transition: 'border-color .15s, opacity .15s',
-                }}
-              >
+              <div key={r.playerId} className={`ren-row ren-row--${tone}`}>
                 <PlayerAvatar nick={r.nick} size={40} />
-                <div style={{ flex: 1, minWidth: 0, lineHeight: 1.25 }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.92rem', fontWeight: 800, color: 'var(--em-text)' }}>
-                    <Flag cc={r.country} /> {r.nick}
-                    <span className={`role-pill ${r.role}`}>{r.role}</span>
-                  </div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 3, fontSize: '0.74rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
-                    <span>OVR <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{r.ovr}</b></span>
-                    <span>{ct('salário')} <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{formatMoney(r.wage)}</b></span>
+                <div className="ren-row__who">
+                  <div className="ren-row__name"><Flag cc={r.country} /> {r.nick} <span className={`role-pill ${r.role}`}>{r.role}</span></div>
+                  <div className="ren-row__meta">
+                    <span>OVR <b>{r.ovr}</b></span>
+                    <span>{ct('ganha')} <b>{formatMoney(r.wage)}</b></span>
+                    {v?.kind === 'keep' ? (
+                      <span className="ren-ok">{ct('novo')} <b>{formatMoney(v.terms.wage)}</b> · {v.terms.until - (info[r.playerId]?.p?.split ?? v.terms.until) + 1} {ct('splits')}{(v.terms.signingBonus ?? 0) > 0 ? ` · ${ct('luvas')} ${formatMoney(v.terms.signingBonus!)}` : ''}</span>
+                    ) : refused ? (
+                      <span className="ren-bad">{refused}</span>
+                    ) : dem ? (
+                      <span>{ct('pede')} <b>{formatMoney(dem.terms.wage)}</b> · {dem.term} {ct('splits')}</span>
+                    ) : null}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => set(r.playerId, 'keep')}
-                    style={{
-                      padding: '7px 14px',
-                      background: isKeep ? '#5ed88a' : 'transparent',
-                      color: isKeep ? '#0a1a0c' : '#5ed88a',
-                      border: `1px solid ${isKeep ? '#5ed88a' : 'rgba(94,216,138,0.45)'}`,
-                      borderRadius: 4,
-                      fontFamily: 'inherit',
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      minWidth: 90,
-                    }}
-                  >
-                    {isKeep ? `✓ ${ct('Renovar')}` : ct('Renovar')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => set(r.playerId, 'drop')}
-                    style={{
-                      padding: '7px 14px',
-                      background: isDrop ? '#c0392b' : 'transparent',
-                      color: isDrop ? '#fff' : '#e58a8a',
-                      border: `1px solid ${isDrop ? '#c0392b' : 'rgba(229,138,138,0.45)'}`,
-                      borderRadius: 4,
-                      fontFamily: 'inherit',
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      minWidth: 90,
-                    }}
-                  >
-                    {isDrop ? `✕ ${ct('Liberar')}` : ct('Liberar')}
-                  </button>
+                <div className="ren-row__act">
+                  <Button size="sm" variant={v?.kind === 'keep' ? 'primary' : 'secondary'} disabled={!!refused} onClick={() => setTalking(r)}>
+                    {v?.kind === 'keep' ? `✓ ${ct('Renovado')}` : ct('Negociar')}
+                  </Button>
+                  <Button size="sm" variant={v?.kind === 'drop' ? 'danger' : 'ghost'} onClick={() => set(r.playerId, { kind: 'drop' })}>
+                    {v?.kind === 'drop' ? `✕ ${ct('Liberar')}` : ct('Liberar')}
+                  </Button>
                 </div>
               </div>
             );
@@ -8182,80 +9848,37 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
         </div>
       </DashCard>
 
-      {/* Sticky bottom hud + CTA — `em-market-sticky-bottom` reaproveitada da
-         MarketScreen: respeita o banner G4 (sobe 126/92px quando has-ad-footer)
-         e ganha flex-wrap no mobile. */}
-      <div
-        className="em-market-sticky-bottom"
-        style={{
-          position: 'sticky',
-          padding: '12px 18px',
-          background: 'var(--em-panel)',
-          border: '1px solid var(--em-border)',
-          borderRadius: 6,
-          boxShadow: '0 -4px 16px rgba(0,0,0,0.25)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          zIndex: 20,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.84rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              {ct('Custo renovações')}
-            </span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? '#e58a8a' : 'var(--em-text)', fontSize: '1.05rem', fontWeight: 900 }}>
-              {formatMoney(cost)}
-            </b>
-          </div>
-          <span style={{ color: 'var(--em-muted)' }}>·</span>
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              {ct('Caixa')}
-            </span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '1.05rem', fontWeight: 900 }}>
-              {formatMoney(budget)}
-            </b>
-          </div>
-          {!allDecided && (
-            <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem', marginLeft: 8 }}>
-              ⚠ {ct('Faltam')} <b style={{ color: 'var(--em-text)' }}>{renewals.length - kept.length - dropped.length}</b> {ct('decisões')}
-            </span>
-          )}
-          {overBudget && (
-            <span style={{ color: '#e58a8a', fontSize: '0.78rem', marginLeft: 8 }}>
-              ⚠ {ct('Estourou')} {formatMoney(cost - budget)}
-            </span>
-          )}
+      <div className="em-market-sticky-bottom ren-foot">
+        <div className="ren-foot__hud">
+          <div><span>{ct('Luvas das renovações')}</span><b className={overBudget ? 'ren-bad' : undefined}>{formatMoney(cost)}</b></div>
+          <div><span>{ct('Folha depois')}</span><b>{formatMoney(payrollBase + wagesAfter - dropped.reduce((a, r) => a + r.wage, 0))}</b></div>
+          <div><span>{ct('Caixa')}</span><b className="ren-ok">{formatMoney(budget)}</b></div>
+          {!allDecided && <span className="ren-dim">⚠ {ct('Faltam')} <b>{renewals.length - kept.length - dropped.length}</b> {ct('decisões')}</span>}
+          {overBudget && <span className="ren-bad">⚠ {ct('Estourou')} {formatMoney(cost - budget)}</span>}
         </div>
-        <button
-          type="button"
-          disabled={overBudget || !allDecided}
-          onClick={() => onConfirm(kept.map((r) => r.playerId))}
-          style={{
-            padding: '10px 22px',
-            background: (overBudget || !allDecided) ? 'var(--em-panel-2)' : 'var(--em-gold)',
-            color: (overBudget || !allDecided) ? 'var(--em-muted)' : '#1a1205',
-            border: (overBudget || !allDecided) ? '1px solid var(--em-border)' : 'none',
-            borderRadius: 4,
-            fontFamily: 'inherit',
-            fontWeight: 900,
-            fontSize: '0.9rem',
-            cursor: (overBudget || !allDecided) ? 'not-allowed' : 'pointer',
-            letterSpacing: '0.3px',
-          }}
-        >
+        <Button variant="primary" disabled={overBudget || !allDecided} onClick={() => onConfirm(decided)}>
           ✔ {ct('Confirmar e abrir o mercado')}
-        </button>
+        </Button>
       </div>
+
+      {talking && talkProfile && (
+        <ContractNegotiationModal
+          subject={{ id: talking.playerId, nick: talking.nick, country: talking.country, role: talking.role, ovr: talking.ovr, age: talkProfile.age, fromLabel: ct('Seu elenco') }}
+          profile={talkProfile}
+          budget={budget - cost + (decided[talking.playerId]?.kind === 'keep' ? ((decided[talking.playerId] as { terms: ContractTerms }).terms.signingBonus ?? 0) : 0)}
+          payrollNow={payrollBase - talking.wage}
+          blocked={blockedFor(talking.playerId)}
+          onClose={() => setTalking(null)}
+          onRecord={(n) => { onRecord(n); setBlockedNow((b) => ({ ...b, [talking.playerId]: true })); }}
+          onSigned={(terms) => { set(talking.playerId, { kind: 'keep', terms }); setTalking(null); }}
+        />
+      )}
     </div>
   );
 }
 
 function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
-  offer: PoachOffer;
+  offer: EliteOfferView;
   orgName: string;
   onAccept: () => void;
   onRefuse: () => void;
@@ -8320,7 +9943,7 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
             <div style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--em-text)' }}>
               {offer.nick}
             </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+            <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
               OVR <b style={{ color: 'var(--em-gold)', fontWeight: 900 }}>{offer.ovr}</b>
             </div>
           </div>
@@ -8331,15 +9954,15 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
             flexDirection: 'column',
             justifyContent: 'center',
             padding: '14px 16px',
-            background: 'rgba(94,216,138,0.10)',
-            border: '1px solid rgba(94,216,138,0.45)',
+            background: 'color-mix(in srgb, var(--c-win) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--c-win) 45%, transparent)',
             borderRadius: 6,
           }}
         >
           <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
             {ct('Valor da proposta')}
           </div>
-          <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '1.5rem', fontWeight: 900, marginTop: 2 }}>
+          <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)', fontSize: '1.5rem', fontWeight: 900, marginTop: 2 }}>
             {formatMoney(offer.fee)}
           </b>
         </div>
@@ -8358,7 +9981,7 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
           lineHeight: 1.55,
         }}
       >
-        <b>{offer.orgName}</b> {ct('(org de elite) ofereceu')} <b style={{ color: '#5ed88a' }}>{formatMoney(offer.fee)}</b> {ct('pelo seu')} <b>{offer.nick}</b>.
+        <b>{offer.orgName}</b> {ct('(org de elite) ofereceu')} <b style={{ color: 'var(--c-win)' }}>{formatMoney(offer.fee)}</b> {ct('pelo seu')} <b>{offer.nick}</b>.
         {' '}
         {ct('Vender enche o caixa, mas você fica com 4 e precisa repor no mercado. Segurar mantém a')} <b>{orgName}</b> {ct('forte.')}
       </div>
@@ -8408,7 +10031,8 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
 // escolha da org: assumir QUALQUER time real do dataset (com elenco e contexto)
 // ou uma org sem line pra montar do zero. Substitui o "inventar do nada".
 // Tela redesenhada no padrão em-* (DashCard, filtros, grid 3-col).
-function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid, onExit, difficulty, onDifficulty }: {
+function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid, onExit, difficulty, onDifficulty, dbSlot }: {
+  dbSlot?: React.ReactNode;
   teams: TeamSeason[];
   onStart: (s: OrgStart) => void;
   onFictional: () => void;
@@ -8524,6 +10148,7 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid,
         </button>
       </header>
 
+      {dbSlot}
       <DifficultyPicker value={difficulty} onChange={onDifficulty} />
 
       {/* CTAs secundários: Desafios + Fundar */}
@@ -8763,7 +10388,7 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid,
                 {ct(e.blurb)}
               </div>
               <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8 }}>
-                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: '#5ed88a', fontWeight: 800 }}>
+                <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
                   💰 {formatMoney(e.budget)}
                 </span>
                 <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>{ct('Assumir')} →</span>
@@ -8871,7 +10496,7 @@ function TeamPickCard({
         </div>
         <div style={{ textAlign: 'right', lineHeight: 1.1 }}>
           <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>OVR</div>
-          <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.1rem', color: 'var(--em-gold)', fontWeight: 900 }}>
+          <div style={{ fontFamily: 'var(--font-num)', fontSize: '1.1rem', color: 'var(--em-gold)', fontWeight: 900 }}>
             {ovr}
           </div>
         </div>
@@ -8891,7 +10516,7 @@ function TeamPickCard({
                 color: 'var(--em-text)',
                 border: '1px solid var(--em-border)',
                 borderRadius: 8,
-                fontFamily: '"JetBrains Mono", monospace',
+                fontFamily: 'var(--font-num)',
                 fontSize: '0.62rem',
                 fontWeight: 800,
                 padding: '0 4px',
@@ -8906,7 +10531,7 @@ function TeamPickCard({
 
       {/* Footer: budget + CTA */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 2 }}>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.88rem', color: '#5ed88a', fontWeight: 800 }}>
+        <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.88rem', color: 'var(--c-win)', fontWeight: 800 }}>
           💰 {formatMoney(budget)}
         </span>
         <span style={{ fontSize: '0.72rem', color: 'var(--em-gold)', fontWeight: 700 }}>
@@ -8918,7 +10543,9 @@ function TeamPickCard({
 }
 
 // ----- DESAFIOS: assumir uma org real com contexto + metas (estilo Draft) -----
-function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: {
+function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty, dbSlot, onCenarios }: {
+  dbSlot?: React.ReactNode;
+  onCenarios?: () => void;
   current: TeamSeason[];
   onBack: () => void;
   onStart: (s: OrgStart) => void;
@@ -8986,6 +10613,8 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: 
         </button>
       </header>
 
+      {onCenarios && <CenariosEntry onOpen={onCenarios} />}
+      {dbSlot}
       <DifficultyPicker value={difficulty} onChange={onDifficulty} />
 
       {SCENARIO_CAT_ORDER.map((cat) => {
@@ -9046,7 +10675,7 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: 
                           <span style={{ ...tierBadgeStyle(tier), padding: '1px 6px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.5px' }}>
                             TIER {tier}
                           </span>
-                          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.74rem', color: 'var(--em-muted)' }}>
+                          <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.74rem', color: 'var(--em-muted)' }}>
                             OVR {ovr}
                           </span>
                         </div>
@@ -9088,7 +10717,7 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: 
 
                     {/* Footer: budget + CTA */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 'auto' }}>
-                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: '#5ed88a', fontWeight: 800 }}>
+                      <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
                         💰 {formatMoney(budget)}
                       </span>
                       <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>
@@ -9298,7 +10927,7 @@ function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNull
                     </button>
                   )}
                 </div>
-                {logoErr && <div style={{ marginTop: 4, fontSize: '0.74rem', color: '#e58a8a' }}>{logoErr}</div>}
+                {logoErr && <div style={{ marginTop: 4, fontSize: '0.74rem', color: 'var(--c-loss)' }}>{logoErr}</div>}
                 {customLogo && <div style={{ marginTop: 4, fontSize: '0.72rem', color: 'var(--em-muted)' }}>{ct('Logo enviada — redimensionada pra 128px.')}</div>}
               </FoundField>
             ) : (
@@ -9336,7 +10965,7 @@ function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNull
             <div style={{ fontSize: '1rem', fontWeight: 900, color: '#fff', textAlign: 'center' }}>
               {name || ct('Sua Organização')}
             </div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '1px', color: c2, fontFamily: '"JetBrains Mono", monospace' }}>
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '1px', color: c2, fontFamily: 'var(--font-num)' }}>
               {(tag || 'ORG').toUpperCase()}
             </div>
           </div>
@@ -9434,8 +11063,12 @@ function ColorSwatch({ value, onChange, label }: { value: string; onChange: (v: 
 }
 
 // ---------- negociação de transferência (modal) ----------
-function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, onClose, onAgree }: {
+function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, split = 0, blocked, difficulty, onRecord, onClose, onAgree }: {
   player: Player; from: TeamSeason; budget: number;
+  difficulty?: Difficulty;  // [equilíbrio] mercado por modo (estrelas mais protegidas, ágio maior)
+  split?: number;           // [fase 3] split da conversa (rodadas e bloqueio)
+  blocked?: Negotiation | null; // [fase 3] o clube encerrou a conversa neste split
+  onRecord?: (nego: Negotiation) => void; // [fase 3] grava conversa encerrada (bloqueia até o próximo split)
   swapPool?: Player[]; // seus jogadores disponíveis pra incluir na troca (habilita swap)
   // contexto do decideOffer (gap #14) — todos opcionais/degradáveis
   sellerForm?: number;      // formOf(save, from.id)
@@ -9448,12 +11081,15 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
   const ask = askingPrice(player, from.teamwork);
   // contexto multifatorial do clube vendedor — from.players já é o elenco
   // ATUAL (currentEra vem pós-applyMoves)
-  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount, buyoutFloor };
+  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount, buyoutFloor, difficulty: careerDiff(difficulty) };
   const mkt = playerValue(player);
   const wage = playerWage(player);
   const [offer, setOffer] = useState(Math.round(ask * 0.85));
-  const [round, setRound] = useState(0);
+  // [fase 3] negociação com o clube dono em RODADAS: o decideOffer continua
+  // sendo a IA do vendedor; a rodada/paciência vivem em Negotiation{party:'club'}
+  const [nego, setNego] = useState<Negotiation>(() => openClubNegotiation({ playerId: player.id, split, asking: ask }));
   const [reply, setReply] = useState<NegoReply | null>(null);
+  const clubClosed = nego.status === 'rejected' || nego.status === 'expired';
   const [swapOut, setSwapOut] = useState<string[]>([]);
   const swapValue = swapOut.reduce((a, id) => {
     const p = swapPool?.find((x) => x.id === id);
@@ -9463,9 +11099,16 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
   const overBudget = offer > budget;
   const reset = () => setReply(null);
   const submit = () => {
-    if (overBudget) return;
-    setReply(clubReply(effectiveOffer, ask, player, from.teamwork, round, negoCtx));
-    setRound((r) => r + 1);
+    if (overBudget || nego.status !== 'open') return;
+    const r = clubReply(effectiveOffer, ask, player, from.teamwork, decideRound(nego), negoCtx);
+    const n = clubNegotiationStep(nego, effectiveOffer, r);
+    setReply(r.kind === 'counter' && n.status === 'expired'
+      ? { kind: 'reject', firm: true, msg: ct('Acabaram as rodadas: o clube encerrou a conversa neste split.') }
+      : r.kind === 'counter' && n.status === 'rejected'
+        ? { kind: 'reject', firm: true, msg: ct('O clube perdeu a paciência e encerrou a conversa neste split.') }
+        : r);
+    setNego(n);
+    if (n.status === 'rejected' || n.status === 'expired') onRecord?.(n);
   };
   const toggleSwap = (id: string) => {
     setSwapOut((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -9498,16 +11141,27 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
               <span className={`role-pill ${player.role}`}>{player.role}</span>
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', marginTop: 2 }}>
-              {ct('Negociando com')} <b style={{ color: 'var(--em-text)' }}>{from.team}</b> · OVR <b style={{ color: 'var(--em-gold)', fontFamily: '"JetBrains Mono", monospace' }}>{playerOvr(player)}</b>
+              {ct('Negociando com')} <b style={{ color: 'var(--em-text)' }}>{from.team}</b> · OVR <b style={{ color: 'var(--em-gold)', fontFamily: 'var(--font-num)' }}>{playerOvr(player)}</b>
             </div>
           </div>
         </header>
 
+        {/* [fase 3] etapa, rodada e paciência do clube */}
+        <div className="cn-step">{ct('Etapa 1 de 2 · acordo com o clube')}</div>
+        {blocked ? (
+          <div className="cn-reply cn-reply--walkout" role="status"><b>{ct('Conversa encerrada')}</b><span>{ct('O clube encerrou a conversa neste split. Tente de novo no próximo.')}</span></div>
+        ) : (
+          <div className="cn-clubbar">
+            <span className="cn-clubbar__round">{ct('Rodada')} <b>{Math.min(nego.round, nego.maxRounds)}/{nego.maxRounds}</b></span>
+            <ProgressBar value={nego.patience} tone={nego.patience > 55 ? 'win' : nego.patience > 25 ? 'warn' : 'loss'} label={ct('Paciência do clube')} valueText={`${nego.patience}/100`} />
+          </div>
+        )}
+
         {/* Figures: 3 cards inline */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           <NegoFigure label={ct('Valor mercado')} value={formatMoney(mkt)} />
-          <NegoFigure label={ct('Pedida do clube')} value={formatMoney(ask)} accent="#e8c170" />
-          <NegoFigure label={ct('Salário / split')} value={formatMoney(wage)} accent="#e58a8a" />
+          <NegoFigure label={ct('Pedida do clube')} value={formatMoney(nego.demand.fee ?? ask)} accent="#e8c170" />
+          <NegoFigure label={ct('Salário de mercado')} value={formatMoney(wage)} accent="var(--c-loss)" />
         </div>
 
         {/* #37/#38: avisos de contexto — cláusula segura o preço, infeliz derruba */}
@@ -9552,7 +11206,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
                     }}
                   >
                     <Flag cc={p.country} /> {p.nick}
-                    <span style={{ color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace', fontSize: '0.7rem' }}>
+                    <span style={{ color: 'var(--em-muted)', fontFamily: 'var(--font-num)', fontSize: '0.7rem' }}>
                       {formatMoney(playerValue(p))}
                     </span>
                   </button>
@@ -9561,7 +11215,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
             </div>
             {swapValue > 0 && (
               <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--em-muted)' }}>
-                {ct('Valor da troca:')} <b style={{ color: '#5ed88a', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b>
+                {ct('Valor da troca:')} <b style={{ color: 'var(--c-win)', fontFamily: 'var(--font-num)' }}>{formatMoney(swapValue)}</b>
               </div>
             )}
           </div>
@@ -9595,16 +11249,16 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
           />
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, fontSize: '0.86rem', flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--em-muted)' }}>{ct('Dinheiro:')}</span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? '#e58a8a' : 'var(--em-text)', fontSize: '1.1rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: 'var(--font-num)', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.1rem', fontWeight: 900 }}>
               {formatMoney(offer)}
             </b>
             {swapValue > 0 && (
               <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem' }}>
-                + troca <b style={{ color: '#5ed88a', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b> = oferta total <b style={{ color: 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(effectiveOffer)}</b>
+                + troca <b style={{ color: 'var(--c-win)', fontFamily: 'var(--font-num)' }}>{formatMoney(swapValue)}</b> = oferta total <b style={{ color: 'var(--em-text)', fontFamily: 'var(--font-num)' }}>{formatMoney(effectiveOffer)}</b>
               </span>
             )}
             {overBudget && (
-              <span style={{ color: '#e58a8a', fontSize: '0.76rem', fontWeight: 700 }}>· {ct('sem caixa')}</span>
+              <span style={{ color: 'var(--c-loss)', fontSize: '0.76rem', fontWeight: 700 }}>· {ct('sem caixa')}</span>
             )}
           </div>
         </div>
@@ -9615,18 +11269,18 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
             style={{
               padding: '10px 14px',
               background:
-                reply.kind === 'accept' ? 'rgba(94,216,138,0.12)' :
+                reply.kind === 'accept' ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' :
                 reply.kind === 'counter' ? 'rgba(232,193,112,0.12)' :
-                'rgba(229,138,138,0.12)',
+                'color-mix(in srgb, var(--c-loss) 12%, transparent)',
               border: `1px solid ${
-                reply.kind === 'accept' ? 'rgba(94,216,138,0.45)' :
+                reply.kind === 'accept' ? 'color-mix(in srgb, var(--c-win) 45%, transparent)' :
                 reply.kind === 'counter' ? 'rgba(232,193,112,0.45)' :
-                'rgba(229,138,138,0.45)'
+                'color-mix(in srgb, var(--c-loss) 45%, transparent)'
               }`,
               borderLeft: `3px solid ${
-                reply.kind === 'accept' ? '#5ed88a' :
+                reply.kind === 'accept' ? 'var(--c-win)' :
                 reply.kind === 'counter' ? '#e8c170' :
-                '#e58a8a'
+                'var(--c-loss)'
               }`,
               borderRadius: 4,
               fontSize: '0.84rem',
@@ -9665,8 +11319,10 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
           >
             {ct('Desistir')}
           </button>
-          {reply?.kind === 'accept' ? (
-            <ActionGold label={ct('Fechar acordo')} onClick={() => onAgree(offer, swapOut)} />
+          {blocked || clubClosed ? (
+            <ActionGold label={ct('Sair')} onClick={onClose} />
+          ) : reply?.kind === 'accept' ? (
+            <ActionGold label={ct('Fechar com o clube e negociar o contrato')} onClick={() => onAgree(offer, swapOut)} />
           ) : reply?.kind === 'counter' ? (
             <>
               <button
@@ -9704,13 +11360,70 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
   );
 }
 
+// [fase 3] transferência em duas etapas: primeiro o clube dono (rodadas sobre
+// o decideOffer), depois o contrato com o jogador/agente. Sem acordo com o
+// jogador, o acordo com o clube cai (FM: "recusou os termos pessoais").
+interface ContractCtx {
+  /** perfil do jogador na mesa (contratação); squadOvrs = OVR do elenco sem ele (padrão: o elenco do save) */
+  profileFor: (player: Player, squadOvrs?: number[]) => NegoProfile;
+  /** folha base atual (sem encargos) */
+  payrollNow: number;
+  /** conversa rompida neste split (clube ou jogador) */
+  blockedFor: (playerId: string, party: Negotiation['party']) => Negotiation | null;
+  onRecord: (nego: Negotiation) => void;
+  /** split da conversa (bloqueio): o atual, mesmo quando o contrato começa no próximo */
+  split: number;
+  /** [equilíbrio] modo da Carreira (mercado mais duro no Difícil/Lendário) */
+  difficulty?: Difficulty;
+}
+function subjectOf(player: Player, age: number, fromLabel: string): ContractNegoSubject {
+  return { id: player.id, nick: player.nick, name: player.name, country: player.country, role: player.role, ovr: playerOvr(player), age, fromLabel };
+}
+function TransferNegotiation({ player, from, budget, contract, clubProps, onClose, onDone }: {
+  player: Player; from: TeamSeason; budget: number;
+  contract: ContractCtx;
+  clubProps: Omit<Parameters<typeof NegotiationModal>[0], 'player' | 'from' | 'budget' | 'onClose' | 'onAgree' | 'split' | 'blocked' | 'onRecord'>;
+  onClose: () => void;
+  onDone: (fee: number, outIds: string[], terms: ContractTerms) => void;
+}) {
+  const [club, setClub] = useState<{ fee: number; outIds: string[] } | null>(null);
+  // [equilíbrio] free agent sem taxa de transferência pede luvas pelo calibre
+  const profile = useMemo(() => ({ ...contract.profileFor(player), freeAgent: from.id === FREE_TEAM_ID }), [contract, player, from.id]);
+  if (!club) {
+    return (
+      <NegotiationModal
+        {...clubProps}
+        difficulty={contract.difficulty}
+        player={player} from={from} budget={budget} split={contract.split}
+        blocked={contract.blockedFor(player.id, 'club')}
+        onRecord={contract.onRecord}
+        onClose={onClose}
+        onAgree={(fee, outIds) => setClub({ fee, outIds })}
+      />
+    );
+  }
+  return (
+    <ContractNegotiationModal
+      subject={subjectOf(player, profile.age, from.team)}
+      profile={profile}
+      budget={budget - club.fee}
+      payrollNow={contract.payrollNow}
+      blocked={contract.blockedFor(player.id, 'player')}
+      stepLabel={`${ct('Etapa 2 de 2 · contrato com o jogador')} · ${ct('taxa acertada')} ${formatMoney(club.fee)}`}
+      onRecord={(n) => contract.onRecord({ ...n, split: contract.split })}
+      onClose={onClose}
+      onSigned={(terms) => onDone(club.fee, club.outIds, terms)}
+    />
+  );
+}
+
 function NegoFigure({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div style={{ padding: '8px 10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', borderRadius: 4, lineHeight: 1.2 }}>
       <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
         {label}
       </div>
-      <b style={{ fontFamily: '"JetBrains Mono", monospace', color: accent ?? 'var(--em-text)', fontSize: '0.96rem', fontWeight: 800 }}>
+      <b style={{ fontFamily: 'var(--font-num)', color: accent ?? 'var(--em-text)', fontSize: '0.96rem', fontWeight: 800 }}>
         {value}
       </b>
     </div>
@@ -9765,8 +11478,11 @@ function ActionGold({ label, onClick, disabled }: { label: string; onClick: () =
 }
 
 // ---------- negociações durante a temporada (acordos pendentes p/ a janela) ----------
-function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf, split = 0 }: {
+function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf, split = 0, contract, focusQuery, ownerStrategyOf }: {
+  focusQuery?: { q: string; n: number } | null; // [fase 3] 'Negociar' a partir da lista de alvos
+  ownerStrategyOf?: (teamId: string) => ClubStrategy | undefined; // [fase 3] estratégia do clube dono no card
   market: { player: Player; from: TeamSeason; price: number }[];
+  contract: ContractCtx; // [fase 3] mesa de contrato com o jogador (o contrato começa na janela)
   squadPlayers: Player[];
   budget: number;
   clubFormOf?: (teamId: string) => number; // forma REAL do clube (teamForm) pro decideOffer
@@ -9782,6 +11498,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   feed: TransferItem[];
 }) {
   const [target, setTarget] = useState<{ player: Player; from: TeamSeason } | null>(null);
+  const [faTarget, setFaTarget] = useState<{ player: Player; from: TeamSeason } | null>(null); // [fase 3] free agent: só o contrato
   const [q, setQ] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>('');
   const [countryFilter, setCountryFilter] = useState('');
@@ -9791,10 +11508,12 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   // não mostrava tudo.
   const [negoLimit, setNegoLimit] = useState(60);
   useEffect(() => { setNegoLimit(60); }, [q, roleFilter, countryFilter, marketSort]);
+  // [fase 3] veio da lista de alvos: filtra pelo jogador escolhido
+  useEffect(() => { if (focusQuery) setQ(focusQuery.q); }, [focusQuery]);
   const marketRoles = ROLE_OPTS.filter((role) => market.some((item) => item.player.role === role));
   const marketCountries = [...new Set(market.map((m) => m.player.country).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
-  const committedCash = pendingDeals.reduce((a, d) => a + d.fee, 0);
+  const committedCash = pendingDeals.reduce((a, d) => a + d.fee + (d.contract?.signingBonus ?? 0), 0);
   const dealBudget = budget - committedCash;
   const targeted = new Set(pendingDeals.map((d) => d.inPlayerId));
   const squadIds = new Set(squadPlayers.map((p) => p.id));
@@ -9880,7 +11599,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
             {pendingDeals.map((d) => (
               <div key={d.id} className="nego-deal-row">
                 <span className="nego-deal-in">🤝 <b>{d.inNick}</b></span>
-                <span className="muted small">{formatMoney(d.fee)}{d.outNicks.length > 0 ? ` ${ct('+ troca:')} ${d.outNicks.join(', ')}` : ''}</span>
+                <span className="muted small">{formatMoney(d.fee)}{d.outNicks.length > 0 ? ` ${ct('+ troca:')} ${d.outNicks.join(', ')}` : ''}{d.contract ? ` · ${ct('contrato')} ${formatMoney(d.contract.wage)}/split ${ct('até o split')} ${d.contract.until}${(d.contract.signingBonus ?? 0) > 0 ? ` · ${ct('luvas')} ${formatMoney(d.contract.signingBonus!)}` : ''}` : ''}</span>
                 <button className="btn ghost small" onClick={() => onCancelDeal(d.id)}>{ct('Cancelar')}</button>
               </div>
             ))}
@@ -9933,7 +11652,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               // (só salário), igual à fundação. Antes abria o modal de negociação e
               // cobrava `askingPrice`, divergindo do mercado da fundação onde FA = fee 0.
               m.from.id === '__free__'
-                ? onAddDeal({ id: m.player.id, inPlayerId: m.player.id, inFromId: m.from.id, inNick: m.player.nick, fee: 0, outPlayerIds: [], outNicks: [] })
+                ? setFaTarget({ player: m.player, from: m.from })
                 : setTarget({ player: m.player, from: m.from })
             }>
               <PlayerAvatar nick={m.player.nick} size={48} />
@@ -9949,6 +11668,9 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               )}
               {buyoutOf(m.player) > 0 && (
                 <div className="meta small" style={{ color: 'var(--em-muted)', fontWeight: 700 }}>🔒 {ct('cláusula')} {formatMoney(buyoutOf(m.player))}</div>
+              )}
+              {ownerStrategyOf && m.from.id !== FREE_TEAM_ID && ownerStrategyOf(m.from.id) && (
+                <div className="meta small muted" title={ct(STRATEGY_HINT[ownerStrategyOf(m.from.id)!])}>{ct('Dono')}: {ct(STRATEGY_LABEL[ownerStrategyOf(m.from.id)!])}</div>
               )}
             </button>
           ))}
@@ -9968,18 +11690,21 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
         <div className="muted small section-label">{ct('Rumores da janela')}</div>
         <TransferFeed items={feed} compact />
       {target && (
-        <NegotiationModal
+        <TransferNegotiation
           player={target.player}
           from={target.from}
           budget={dealBudget}
-          swapPool={swapPool}
-          sellerForm={clubFormOf?.(target.from.id)}
-          unhappyDiscount={discountOf(target.player)}
-          buyoutFloor={buyoutOf(target.player)}
-          buyerStrength={squadPlayers.length > 0 ? squadStrength(squadPlayers) : undefined}
-          freeAgents={market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player)}
+          contract={contract}
+          clubProps={{
+            swapPool,
+            sellerForm: clubFormOf?.(target.from.id),
+            unhappyDiscount: discountOf(target.player),
+            buyoutFloor: buyoutOf(target.player),
+            buyerStrength: squadPlayers.length > 0 ? squadStrength(squadPlayers) : undefined,
+            freeAgents: market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player),
+          }}
           onClose={() => setTarget(null)}
-          onAgree={(fee, outIds) => {
+          onDone={(fee, outIds, terms) => {
             onAddDeal({
               id: target.player.id,
               inPlayerId: target.player.id,
@@ -9988,11 +11713,30 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               fee,
               outPlayerIds: outIds,
               outNicks: outIds.map((id) => squadPlayers.find((p) => p.id === id)?.nick ?? id),
+              contract: terms,
             });
             setTarget(null);
           }}
         />
       )}
+      {faTarget && (() => {
+        const prof = contract.profileFor(faTarget.player);
+        return (
+          <ContractNegotiationModal
+            subject={subjectOf(faTarget.player, prof.age, ct('Free agent'))}
+            profile={prof}
+            budget={dealBudget}
+            payrollNow={contract.payrollNow}
+            blocked={contract.blockedFor(faTarget.player.id, 'player')}
+            onRecord={(n) => contract.onRecord({ ...n, split: contract.split })}
+            onClose={() => setFaTarget(null)}
+            onSigned={(terms) => {
+              onAddDeal({ id: faTarget.player.id, inPlayerId: faTarget.player.id, inFromId: faTarget.from.id, inNick: faTarget.player.nick, fee: 0, outPlayerIds: [], outNicks: [], contract: terms });
+              setFaTarget(null);
+            }}
+          />
+        );
+      })()}
     </DashCard>
   );
 }
@@ -10003,6 +11747,7 @@ function MarketScreen({
   market,
   coaches,
   findSigning,
+  contract,
   onConfirm,
   onExit,
   embedded,
@@ -10011,6 +11756,7 @@ function MarketScreen({
   market: { player: Player; from: TeamSeason; price: number }[];
   coaches: TeamSeason[];
   findSigning: (s: Signing) => ResolvedSigning | null;
+  contract: ContractCtx; // [fase 3] mesa de contrato com o jogador
   onConfirm: (squad: Signing[], coachFromId: string, budget: number, sponsors: string[], sponsorUntil: Record<string, number>) => void;
   onExit: () => void;
   embedded?: boolean;
@@ -10019,6 +11765,7 @@ function MarketScreen({
   const [squad, setSquad] = useState<Signing[]>(initialSquad.resolved);
   const recoveredSlots = initialSquad.unresolved.length;
   const [nego, setNego] = useState<{ player: Player; from: TeamSeason } | null>(null);
+  const [faNego, setFaNego] = useState<{ player: Player; from: TeamSeason; price: number } | null>(null); // [fase 3] free agent: só o contrato
   // Limite de jogadores visíveis (paginação 'load more'). Antes era 60 fixo
   // com mensagem 'Refine filtros'. User reportou (Fundador #103) que o resto
   // ficava inalcançável mesmo filtrando. Agora botão carrega +60 por clique.
@@ -10032,17 +11779,10 @@ function MarketScreen({
   const [marketSort, setMarketSort] = useState<MarketSort>('ovr-desc');
   const [sponsors, setSponsors] = useState<string[]>(save.sponsors);
   const [sponsorUntil, setSponsorUntil] = useState<Record<string, number>>(save.sponsorUntil ?? {});
-  // feed do mercado da IA (#23): mesma projeção do tick real de tickAIMarketActivity
+  // [fase 3 · mercado] o que a janela que acabou de fechar movimentou
   const marketFeed = useMemo<TransferItem[]>(
-    () => tickAIMarketActivity({
-      save,
-      split: save.split,
-      teams: coaches.filter((t) => t.id !== save.takeoverId),
-      freeAgents: currentFreeAgents(CS2_REAL_2026, save.moves),
-      protectedIds: new Set(save.squad.map((x) => x.playerId)),
-      movableIds: BASE_PLAYER_IDS,
-    }).log.map((m) => ({ nick: m.nick, cc: m.country, from: m.fromTag, to: m.toTag, fee: m.fee, reason: m.reason })),
-    [save, coaches],
+    () => (marketOf(save).windows?.[0]?.items ?? []).map((m) => ({ nick: m.nick, cc: m.cc, from: m.from, to: m.to, fee: m.fee, reason: m.reason })),
+    [save],
   );
 
   // contrato ativo = ainda dentro do prazo (não pode rescindir antes do fim)
@@ -10067,20 +11807,38 @@ function MarketScreen({
     squad.map((s) => findSigning(s)?.player.nick.toLowerCase()).filter(Boolean) as string[],
   );
   // jogadores que JÁ eram seus (pagos no split anterior) não custam de novo;
-  // dispensar um deles é venda a 85% do valor de mercado
+  // tirar um deles é VENDA a um clube interessado por 85% do valor de mercado
+  // (ou pelo valor da venda já acertada, se houver uma esperando a janela)
   const owned = new Set(save.squad.map((s) => s.playerId));
   const spentPlayers = squad.reduce((acc, s) => {
     if (owned.has(s.playerId)) return acc;
     const f = findSigning(s);
     // usa o fee NEGOCIADO; se não houver (free agent / save antigo), o de tabela
-    return acc + (f ? (s.fee ?? playerValue(f.player)) : 0);
+    // [fase 3] + as luvas acertadas com o jogador
+    return acc + (f ? (s.fee ?? playerValue(f.player)) + (s.contract?.signingBonus ?? 0) : 0);
   }, 0);
+  // [fase 3] stand-in emprestado não é seu: dispensar não rende venda
+  const loanedIn = new Set(marketOf(save).loans.filter((l) => l.kind === 'in').map((l) => l.playerId));
   const soldPlayers = save.squad
-    .filter((s) => !squad.some((x) => x.playerId === s.playerId))
+    .filter((s) => !squad.some((x) => x.playerId === s.playerId) && !loanedIn.has(s.playerId))
     .reduce((acc, s) => {
       const f = findSigning(s);
-      return acc + (f ? Math.round(playerValue(f.player) * 0.85) : 0);
+      return acc + (f ? quickSaleFee(s.playerId, f.player, save.pendingSales) : 0);
     }, 0);
+  // [fase 3] a mesa de contrato olha o elenco DA TELA (com quem você já escolheu)
+  // e a folha dele (contrato de quem já era seu, termos negociados de quem chega)
+  const localOvrs = squad.map((s) => { const f = findSigning(s); return f ? { id: s.playerId, ovr: playerOvr(f.player) } : null; })
+    .filter(Boolean) as { id: string; ovr: number }[];
+  const localPayroll = squad.reduce((acc, s) => {
+    const f = findSigning(s);
+    if (!f) return acc;
+    return acc + (s.contract?.wage ?? contractWageOf(save, s.playerId, () => playerWage(f.player)));
+  }, 0);
+  const mctx: ContractCtx = {
+    ...contract,
+    payrollNow: localPayroll,
+    profileFor: (pl) => contract.profileFor(pl, localOvrs.filter((x) => x.id !== pl.id).map((x) => x.ovr)),
+  };
   const coachTeam = coachId && coachId !== ROOKIE_ID ? coaches.find((t) => t.id === coachId) : null;
   const coachChanged = coachId !== save.coachFromId;
   const spentCoach = !coachChanged ? 0 : coachId === ROOKIE_ID ? coachFee(ROOKIE_COACH) : coachTeam ? coachFee(coachTeam.coach) : 0;
@@ -10098,7 +11856,8 @@ function MarketScreen({
   // todos os signings precisam RESOLVER (findSigning != null) — senão o slot fica
   // vazio na hora de buildTeam e a carreira não avança apesar do contador mostrar 5/5.
   const unresolvedCount = squad.filter((s) => !findSigning(s)).length;
-  const ready = squad.length === 5 && unresolvedCount === 0 && !!coachId && budgetLeft >= 0;
+  // [fase 3 · vestiário] elenco de 5 a 7: os 5 titulares + até 2 no banco
+  const ready = squad.length >= 5 && squad.length <= SQUAD_MAX && unresolvedCount === 0 && !!coachId && budgetLeft >= 0;
 
   // países presentes no mercado (com contagem) pro filtro de nacionalidade
   const countryCounts = market.reduce<Record<string, number>>((acc, m) => {
@@ -10125,7 +11884,7 @@ function MarketScreen({
 
   // ── derivações pro redesign ────────────────────────────────────────────────
   const academyAvail = (save.academy ?? []).filter((a) => !squad.some((s) => s.playerId === a.id));
-  const sponsorVrs = userVrsTotal(save, findSigning, coaches);
+  const sponsorVrs = userVrsTotal(save);
   const filtersActive = !!(filter || roleFilter || ccFilter || marketSort !== 'ovr-desc');
   // reset do paginador quando filtros mudam (cada novo filtro = começar do zero)
   useEffect(() => { setMarketLimit(60); }, [filter, roleFilter, ccFilter, marketSort]);
@@ -10156,7 +11915,7 @@ function MarketScreen({
         </div>
         <div className="em-market-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <HudPill label="Orçamento" value={formatMoney(budgetLeft)} tone={budgetLeft >= 0 ? 'green' : 'red'} mono />
-          <HudPill label="Elenco" value={`${squad.length}/5`} tone={squad.length === 5 ? 'green' : 'neutral'} mono />
+          <HudPill label="Elenco" value={`${squad.length}/${SQUAD_MAX}`} tone={squad.length >= 5 ? 'green' : 'neutral'} mono />
           <HudPill label="Coach" value={coachId ? '✓' : '—'} tone={coachId ? 'green' : 'red'} />
           <button
             type="button"
@@ -10183,8 +11942,8 @@ function MarketScreen({
         <div
           style={{
             padding: '10px 14px',
-            background: 'rgba(229,138,138,0.10)',
-            border: '1px solid rgba(229,138,138,0.35)',
+            background: 'color-mix(in srgb, var(--c-loss) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--c-loss) 35%, transparent)',
             borderRadius: 4,
             color: 'var(--em-text)',
             fontSize: '0.86rem',
@@ -10227,14 +11986,14 @@ function MarketScreen({
                     alignItems: 'center',
                     gap: 6,
                     padding: '4px 10px',
-                    background: isUp ? 'rgba(94,216,138,0.12)' : isDown ? 'rgba(229,138,138,0.12)' : 'var(--em-panel-2)',
-                    border: `1px solid ${isUp ? 'rgba(94,216,138,0.4)' : isDown ? 'rgba(229,138,138,0.4)' : 'var(--em-border)'}`,
+                    background: isUp ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : isDown ? 'color-mix(in srgb, var(--c-loss) 12%, transparent)' : 'var(--em-panel-2)',
+                    border: `1px solid ${isUp ? 'color-mix(in srgb, var(--c-win) 40%, transparent)' : isDown ? 'color-mix(in srgb, var(--c-loss) 40%, transparent)' : 'var(--em-border)'}`,
                     borderRadius: 4,
                     fontSize: '0.78rem',
                     color: 'var(--em-text)',
                   }}
                 >
-                  <b style={{ color: isUp ? '#5ed88a' : isDown ? '#e58a8a' : 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+                  <b style={{ color: isUp ? 'var(--c-win)' : isDown ? 'var(--c-loss)' : 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
                     {isUp ? '▲' : isDown ? '▼' : '▬'} {e.nick}
                   </b>
                   <i style={{ color: 'var(--em-muted)', fontSize: '0.72rem', fontStyle: 'normal' }}>
@@ -10262,11 +12021,12 @@ function MarketScreen({
         {/* ─── ESQUERDA: Seu time + Academia ───────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <DashCard
-            title={`${ct('Seu elenco')} (${squad.length}/5)`}
-            info={ct('Clique pra dispensar (vende a 85% se for jogador atual).')}
+            title={`${ct('Seu elenco')} (${squad.length}/${SQUAD_MAX})`}
+            info={ct('5 titulares + até 2 reservas no banco. Clique num jogador do elenco pra vendê-lo a um clube interessado (85% do valor); contratação desta janela sai com reembolso integral.')}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[0, 1, 2, 3, 4].map((i) => {
+              {/* [fase 3 · vestiário] 5 vagas de titular + as vagas do banco (6º/7º) */}
+              {Array.from({ length: Math.min(SQUAD_MAX, Math.max(5, squad.length + (squad.length >= 5 ? 1 : 0))) }, (_, i) => i).map((i) => {
                 const s = squad[i];
                 const f = s ? findSigning(s) : null;
                 if (!f) {
@@ -10286,7 +12046,7 @@ function MarketScreen({
                         fontStyle: 'italic',
                       }}
                     >
-                      Vaga {i + 1}
+                      {i < 5 ? `${ct('Vaga')} ${i + 1}` : `${ct('Banco')} · ${ct('vaga')} ${i + 1} (${ct('opcional')})`}
                     </div>
                   );
                 }
@@ -10295,7 +12055,7 @@ function MarketScreen({
                     key={i}
                     player={f.player}
                     rightLabel={`${formatMoney(playerValue(f.player))}`}
-                    rightHint={ct('dispensar')}
+                    rightHint={owned.has(s.playerId) && !loanedIn.has(s.playerId) ? ct('vender (85%)') : ct('remover')}
                     tone="release"
                     onClick={() => setSquad(squad.filter((x) => x.playerId !== s!.playerId))}
                   />
@@ -10311,7 +12071,7 @@ function MarketScreen({
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {academyAvail.map((a) => {
-                  const full = squad.length >= 5;
+                  const full = squad.length >= SQUAD_MAX;
                   return (
                     <SquadRow
                       key={a.id}
@@ -10441,7 +12201,7 @@ function MarketScreen({
               {visible.slice(0, marketLimit).map((m) => {
                 const dup = signedNicks.has(m.player.nick.toLowerCase());
                 const isFA = m.from.id === '__free__';
-                const canPick = squad.length < 5 && !dup && (isFA ? m.price <= budgetLeft : true);
+                const canPick = squad.length < SQUAD_MAX && !dup && (isFA ? m.price <= budgetLeft : true);
                 return (
                   <button
                     key={m.player.id}
@@ -10449,7 +12209,7 @@ function MarketScreen({
                     disabled={!canPick}
                     onClick={() =>
                       isFA
-                        ? setSquad([...squad, signingWithSnapshot({ playerId: m.player.id, fromId: m.from.id, fee: m.price }, { player: m.player, from: m.from, basePlayer: m.player })])
+                        ? setFaNego({ player: m.player, from: m.from, price: m.price })
                         : setNego({ player: m.player, from: m.from })
                     }
                   >
@@ -10466,7 +12226,7 @@ function MarketScreen({
                     {(() => {
                       const age = effectiveAge(m.player, save.split, save.youthAge, save.youthDebut);
                       const ph = playerPhase(m.player.id, age);
-                      const pot = potentialTier(playerPotentialOvr(m.player, age));
+                      const pot = potentialTier(careerPotentialOvr(save, m.player));
                       return (
                         <>
                           <div className="meta small player-bio">
@@ -10523,6 +12283,7 @@ function MarketScreen({
                 name={ROOKIE_COACH.name}
                 country={ROOKIE_COACH.country ?? '??'}
                 rating={ROOKIE_COACH.rating}
+                style={ROOKIE_COACH.style}
                 fee={coachFee(ROOKIE_COACH)}
                 selected={coachId === ROOKIE_ID}
                 tag={ct('Estreante')}
@@ -10535,6 +12296,7 @@ function MarketScreen({
                   name={t.coach.name}
                   country={t.coach.country ?? '??'}
                   rating={t.coach.rating}
+                  style={t.coach.style}
                   fee={coachFee(t.coach)}
                   selected={coachId === t.id}
                   tag={t.tag}
@@ -10607,7 +12369,7 @@ function MarketScreen({
             </DashCard>
           )}
 
-          <DashCard title={ct('Rumores da próxima janela')}>
+          <DashCard title={ct('Movimentos da última janela')}>
             <TransferFeed items={marketFeed} />
           </DashCard>
         </div>
@@ -10635,10 +12397,10 @@ function MarketScreen({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.82rem', color: 'var(--em-muted)' }}>
           {squad.length < 5 && <span>⚠ {ct('Faltam')} <b style={{ color: 'var(--em-text)' }}>{5 - squad.length}</b> {ct('jogador(es)')}</span>}
-          {squad.length === 5 && unresolvedCount > 0 && <span style={{ color: '#e58a8a' }}>⚠ {unresolvedCount} {ct('jogador(es) com vaga vazia — remova e escolha outro')}</span>}
-          {squad.length === 5 && !coachId && <span>⚠ {ct('Escolha um coach')}</span>}
-          {budgetLeft < 0 && <span style={{ color: '#e58a8a' }}>⚠ {ct('Orçamento estourado')}</span>}
-          {ready && <span style={{ color: '#5ed88a', fontWeight: 700 }}>✓ {ct('Pronto pra fechar')}</span>}
+          {squad.length >= 5 && unresolvedCount > 0 && <span style={{ color: 'var(--c-loss)' }}>⚠ {unresolvedCount} {ct('jogador(es) com vaga vazia — remova e escolha outro')}</span>}
+          {squad.length >= 5 && !coachId && <span>⚠ {ct('Escolha um coach')}</span>}
+          {budgetLeft < 0 && <span style={{ color: 'var(--c-loss)' }}>⚠ {ct('Orçamento estourado')}</span>}
+          {ready && <span style={{ color: 'var(--c-win)', fontWeight: 700 }}>✓ {ct('Pronto pra fechar')}</span>}
         </div>
         <button
           type="button"
@@ -10662,23 +12424,44 @@ function MarketScreen({
       </div>
 
       {nego && (
-        <NegotiationModal
+        <TransferNegotiation
           player={nego.player}
           from={nego.from}
           budget={budgetLeft}
-          sellerForm={formOf(save, nego.from.id)}
-          buyerStrength={(() => {
-            const mine = squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[];
-            return mine.length > 0 ? squadStrength(mine) : undefined;
-          })()}
-          freeAgents={market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player)}
+          contract={mctx}
+          clubProps={{
+            sellerForm: formOf(save, nego.from.id),
+            buyerStrength: (() => {
+              const mine = squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[];
+              return mine.length > 0 ? squadStrength(mine) : undefined;
+            })(),
+            freeAgents: market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player),
+          }}
           onClose={() => setNego(null)}
-          onAgree={(fee) => {
-            setSquad([...squad, signingWithSnapshot({ playerId: nego.player.id, fromId: nego.from.id, fee }, { player: nego.player, from: nego.from, basePlayer: nego.player })]);
+          onDone={(fee, _outIds, terms) => {
+            setSquad([...squad, signingWithSnapshot({ playerId: nego.player.id, fromId: nego.from.id, fee, contract: terms }, { player: nego.player, from: nego.from, basePlayer: nego.player })]);
             setNego(null);
           }}
         />
       )}
+      {faNego && (() => {
+        const prof = mctx.profileFor(faNego.player);
+        return (
+          <ContractNegotiationModal
+            subject={subjectOf(faNego.player, prof.age, ct('Free agent'))}
+            profile={prof}
+            budget={budgetLeft - faNego.price}
+            payrollNow={mctx.payrollNow}
+            blocked={mctx.blockedFor(faNego.player.id, 'player')}
+            onRecord={mctx.onRecord}
+            onClose={() => setFaNego(null)}
+            onSigned={(terms) => {
+              setSquad([...squad, signingWithSnapshot({ playerId: faNego.player.id, fromId: faNego.from.id, fee: faNego.price, contract: terms }, { player: faNego.player, from: faNego.from, basePlayer: faNego.player })]);
+              setFaNego(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -10687,8 +12470,8 @@ function MarketScreen({
 
 function HudPill({ label, value, tone, mono }: { label: string; value: string; tone: 'green' | 'red' | 'neutral'; mono?: boolean }) {
   const colors: Record<string, { fg: string; bg: string; border: string }> = {
-    green:   { fg: '#5ed88a', bg: 'rgba(94,216,138,0.12)',  border: 'rgba(94,216,138,0.4)' },
-    red:     { fg: '#e58a8a', bg: 'rgba(229,138,138,0.12)', border: 'rgba(229,138,138,0.4)' },
+    green:   { fg: 'var(--c-win)', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
+    red:     { fg: 'var(--c-loss)', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];
@@ -10708,7 +12491,7 @@ function HudPill({ label, value, tone, mono }: { label: string; value: string; t
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: mono ? '"JetBrains Mono", monospace' : 'inherit' }}>
+      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: mono ? 'var(--font-num)' : 'inherit' }}>
         {value}
       </b>
     </div>
@@ -10732,7 +12515,7 @@ function SquadRow({
   disabledHint?: string;
   onClick: () => void;
 }) {
-  const accent = tone === 'promote' ? '#5ed88a' : '#e8a93b';
+  const accent = tone === 'promote' ? 'var(--c-win)' : '#e8a93b';
   return (
     <button
       type="button"
@@ -10761,7 +12544,7 @@ function SquadRow({
       <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.86rem', fontWeight: 700 }}>
           <Flag cc={player.country} /> {player.nick}
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem', color: accent, fontWeight: 800 }}>
+          <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.78rem', color: accent, fontWeight: 800 }}>
             {playerOvr(player)}
           </span>
         </div>
@@ -10770,7 +12553,7 @@ function SquadRow({
         </div>
       </div>
       <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem', color: 'var(--em-text)', fontWeight: 700 }}>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.78rem', color: 'var(--em-text)', fontWeight: 700 }}>
           {rightLabel}
         </div>
         {rightHint && (
@@ -10788,6 +12571,7 @@ function CoachRow({
   name,
   country,
   rating,
+  style,
   fee,
   selected,
   tag,
@@ -10797,11 +12581,13 @@ function CoachRow({
   name: string;
   country: string;
   rating: number;
+  style?: CoachStyle;
   fee: number;
   selected: boolean;
   tag?: string;
   onClick: () => void;
 }) {
+  const impact = coachMatchImpact({ rating });
   return (
     <button
       type="button"
@@ -10828,14 +12614,17 @@ function CoachRow({
           <Flag cc={country} /> {nick}
         </div>
         <div style={{ fontSize: '0.68rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {tag ? tag : name}
+          {tag ? tag : name}{style ? ` · ${ct(COACH_STYLE_LABELS[style])}` : ''}
+        </div>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.7rem', fontWeight: 700, color: impact.points > 0 ? 'var(--c-win)' : impact.points < 0 ? 'var(--c-loss)' : 'var(--em-muted)', marginTop: 2 }}>
+          {ct('Na partida:')} {impact.points > 0 ? '+' : impact.points < 0 ? '−' : '±'}{decPt(Math.abs(impact.points), 1)} (≈ {impact.pp > 0 ? '+' : impact.pp < 0 ? '−' : '±'}{Math.abs(impact.pp)} {ct('pp por série')})
         </div>
       </div>
       <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.92rem', color: selected ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.92rem', color: selected ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>
           {rating}
         </div>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.7rem', color: 'var(--em-muted)' }}>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.7rem', color: 'var(--em-muted)' }}>
           {formatMoney(fee)}
         </div>
       </div>

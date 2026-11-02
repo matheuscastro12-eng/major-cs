@@ -2,6 +2,7 @@
 // Sem DOM/localStorage aqui (a persistência mora em src/state/ultimate.ts) →
 // 100% testável. Ver docs-but-map.md §4/§6.
 
+import { frameById, mergeFrames, normalizeClub } from './cosmetics';
 import { quickSellValue } from './quicksell';
 import { DRAFT_DEFAULT, DRAFT_ENTRY, DRAFT_REWARDS, DRAFT_ROLES, DRAFT_TARGET, type DraftRunState } from './draft';
 import { computeNextDaily, dailyCredits } from './daily';
@@ -9,6 +10,7 @@ import { divisionFor, DIV_TIER_MULT } from './divisions';
 import { defaultPassState, ensurePass, passAddXp, PASS_MAX_LEVEL, type PassState, type PassXpSource } from './seasonPass';
 import type { UltCard } from './cards';
 import { isStyleId, STYLE_COST, type StyleId } from './traits';
+import { countEditionCards, normalizeEdition } from './seasonEdition';
 import type { Role } from '../../types';
 
 // registro de partida (histórico das últimas HISTORY_MAX, todos os modos).
@@ -49,6 +51,8 @@ export interface OwnedCard {
   locked: 'squad' | null;  // travada num squad → não pode vender
   boost?: number;          // nível de evolução (+OVR/atributos por nível), 0..EVO_MAX
   style?: StyleId;         // estilo de química aplicado (iter33) — aditivo, migration-safe
+  ev?: string;             // [URG-2] id do evento que concedeu a carta exclusiva (selo "EVENTO wknd-…"); aditivo
+  ed?: number;             // [URG-1] edição da temporada N: +OVR enquanto season.n === ed, depois "Legado S{ed}"
 }
 
 export interface UltimateSquad {
@@ -86,6 +90,17 @@ export interface UltimateProfile {
   missions: MissionsState | null; // missões diárias rotativas
   weekly: WeeklyState | null;     // missões semanais renováveis
   pass: PassState | null;         // Passe de Temporada (reset no rollover; premium NÃO carrega)
+  target?: { cardKey: string; setAt: number } | null; // [U07] jogador dos sonhos (carta-alvo); opcional — save antigo abre sem
+  // [U10] identidade do clube (nome + escudo) e molduras equipáveis — cosmético, nunca altera força
+  club?: { name: string; logo: import('../../lib/logoBuilder').LogoConfig | null } | null;
+  frames?: string[];
+  equippedFrame?: string | null;
+  // [O0-46/O0-37] créditos do SERVIDOR já absorvidos neste save (sincroniza
+  // com a nuvem junto do resto): vouchers pagos ('coins:<corr>', 'pass:<n>')
+  // e listagens do mercado já processadas ('sold:<id>', 'back:<id>'). É o que
+  // impede o mesmo crédito de entrar 2x em outro aparelho ou depois de limpar
+  // o storage. Opcional — save antigo abre sem.
+  srvSeen?: string[];
 }
 
 export const ULTIMATE_VERSION = 1;
@@ -359,6 +374,7 @@ function uid(): string {
     if (c?.randomUUID) return c.randomUUID();
   } catch { /* sem crypto */ }
   _uidCounter += 1;
+  // eslint-disable-next-line no-restricted-properties -- fallback de id sem crypto; o id não entra em nenhuma simulação
   return `u_${_uidCounter.toString(36)}_${Math.floor(Math.random() * 1e9).toString(36)}`;
 }
 
@@ -382,16 +398,20 @@ export function grantCard(
   state: UltimateState,
   cardKey: string,
   via: AcquiredVia,
-  opts?: { id?: string; at?: number },
+  opts?: { id?: string; at?: number; ev?: string; ed?: number },
 ): UltimateState {
   const serial = maxSerialOf(state, cardKey) + 1;
+  const ed = normalizeEdition(opts?.ed);
   const owned: OwnedCard = {
     id: opts?.id ?? uid(),
     cardKey,
     serial,
     acquiredVia: via,
+    // eslint-disable-next-line no-restricted-properties -- carimbo de aquisição (metadado de exibição); tests e servidor passam `at`
     acquiredAt: opts?.at ?? Date.now(),
     locked: null,
+    ...(opts?.ev ? { ev: opts.ev } : {}),
+    ...(ed != null ? { ed } : {}),
   };
   return { ...state, inventory: [...state.inventory, owned] };
 }
@@ -419,6 +439,32 @@ export function sellCard(
   const inventory = state.inventory.filter((o) => o.id !== ownedId);
   const profile = { ...state.profile, credits: state.profile.credits + credited };
   return { state: { ...state, inventory, profile }, ok: true, credited };
+}
+
+// ── [O0-46/O0-37] créditos do servidor já absorvidos (srvSeen) ─────────────
+// Tags de mercado ('sold:'/'back:') são muitas e só as ~30 listagens mais
+// recentes voltam no mktMine → cap nelas. Vouchers pagos ('coins:'/'pass:')
+// são poucos e NUNCA saem da lista (sair = o próximo claim creditaria de novo).
+export const SRV_SEEN_MARKET_CAP = 200;
+const isMarketTag = (t: string) => t.startsWith('sold:') || t.startsWith('back:');
+
+export function capSrvSeen(tags: string[]): string[] {
+  const uniq = [...new Set(tags)];
+  const market = uniq.filter(isMarketTag);
+  if (market.length <= SRV_SEEN_MARKET_CAP) return uniq;
+  const drop = new Set(market.slice(0, market.length - SRV_SEEN_MARKET_CAP));
+  return uniq.filter((t) => !drop.has(t));
+}
+
+export function hasSrvSeen(state: UltimateState, tag: string): boolean {
+  return (state.profile.srvSeen ?? []).includes(tag);
+}
+
+export function markSrvSeen(state: UltimateState, tags: string[]): UltimateState {
+  const cur = state.profile.srvSeen ?? [];
+  const add = tags.filter((t) => !cur.includes(t));
+  if (!add.length) return state;
+  return { ...state, profile: { ...state.profile, srvSeen: capSrvSeen([...cur, ...add]) } };
 }
 
 export function addCredits(state: UltimateState, n: number): UltimateState {
@@ -459,6 +505,11 @@ export function migrateUltimate(raw: unknown): UltimateState {
     packSeedCounter: num(p.packSeedCounter, 0),
     titles: Array.isArray(p.titles) ? p.titles.filter((x): x is string => typeof x === 'string') : [],
     equippedTitle: typeof p.equippedTitle === 'string' ? p.equippedTitle : null,
+    target: p.target && typeof p.target === 'object' && typeof (p.target as { cardKey?: unknown }).cardKey === 'string' ? { cardKey: String((p.target as { cardKey: string }).cardKey), setAt: Number((p.target as { setAt?: unknown }).setAt) || 0 } : null, // [U07]
+    club: normalizeClub(p.club), // [U10]
+    frames: mergeFrames([], Array.isArray(p.frames) ? p.frames.filter((f): f is string => typeof f === 'string') : []), // [U10]
+    equippedFrame: typeof p.equippedFrame === 'string' && frameById(p.equippedFrame) ? p.equippedFrame : null, // [U10]
+    srvSeen: capSrvSeen(Array.isArray(p.srvSeen) ? p.srvSeen.filter((x): x is string => typeof x === 'string') : []), // [O0-46/O0-37]
     season: p.season && typeof p.season === 'object' && typeof p.season.startedAt === 'number'
       ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0), peak: num(p.season.peak, STARTING_ELO), claimed: Array.isArray(p.season.claimed) ? p.season.claimed.filter((x): x is string => typeof x === 'string') : [], n: Math.max(1, num(p.season.n, 1)), w: Math.max(0, num(p.season.w, 0)) }
       : null,
@@ -529,7 +580,11 @@ export function migrateUltimate(raw: unknown): UltimateState {
           const boost = (typeof b !== 'number' || !Number.isFinite(b) || b <= 0) ? undefined : Math.min(EVO_MAX, Math.floor(b));
           // estilo (iter33): campo aditivo — só sobrevive se for um StyleId conhecido
           const style = isStyleId(o.style) ? o.style : undefined;
-          return { ...o, boost, style };
+          // [URG-2] selo de evento: string curta ou nada (save antigo não tem o campo)
+          const ev = typeof o.ev === 'string' && o.ev.length > 0 && o.ev.length <= 64 ? o.ev : undefined;
+          // [URG-1] edição da temporada: só sobrevive se for inteiro ≥ 1 (save antigo não tem)
+          const ed = normalizeEdition(o.ed);
+          return { ...o, boost, style, ev, ed };
         })
     : [];
   // sanitiza squads: recomputeLocks itera sq.slots — um save corrompido com
@@ -717,7 +772,9 @@ export function startSeason(nowMs: number, wl0 = 0, peak = STARTING_ELO, n = 1):
   return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000, wl0, peak, claimed: [], n, w: 0 };
 }
 
-export interface SeasonRollover { rolled: boolean; credits: number; newElo: number }
+// [URG-1] legacyCount = cópias em forma da temporada que ACABOU (perderam o +OVR
+// e viraram "Legado S{prevN}"); newN = temporada que abriu (edição nova na Loja).
+export interface SeasonRollover { rolled: boolean; credits: number; newElo: number; legacyCount: number; prevN: number; newN: number }
 
 export function applySeasonRollover(state: UltimateState, nowMs: number): { state: UltimateState; result: SeasonRollover } {
   const p = state.profile;
@@ -726,9 +783,10 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
   if (!s) {
     // 1ª vez: abre a season marcando o baseline de jogos (não paga nada).
     // O passe abre junto (temporada 1), preservando XP já ganho antes do tick.
-    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow), pass: ensurePass(p.pass, 1) } }, result: { rolled: false, credits: 0, newElo: p.elo } };
+    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow), pass: ensurePass(p.pass, 1) } }, result: { rolled: false, credits: 0, newElo: p.elo, legacyCount: 0, prevN: 1, newN: 1 } };
   }
-  if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: p.elo } };
+  const prevN = s.n ?? 1;
+  if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: p.elo, legacyCount: 0, prevN, newN: prevN } };
   // só paga bônus se JOGOU nesta season (conta dormente não vira fonte de credits).
   // recompensa proporcional ao RP CONQUISTADO na season (elo atual, não pico eterno).
   const playedThisSeason = wlNow - (s.wl0 ?? 0) > 0;
@@ -747,5 +805,8 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
     // carrega pra temporada nova (compra vale UMA season, como no BUT/FUT).
     pass: defaultPassState((s.n ?? 1) + 1),
   };
-  return { state: { ...state, profile }, result: { rolled: true, credits, newElo } };
+  // [URG-1] as cópias com `ed === prevN` perdem o +OVR só por `season.n` ter
+  // mudado — nada é reescrito no inventário (o selo "Legado" é derivado).
+  const legacyCount = countEditionCards(state.inventory, prevN);
+  return { state: { ...state, profile }, result: { rolled: true, credits, newElo, legacyCount, prevN, newN: prevN + 1 } };
 }

@@ -322,14 +322,13 @@ export async function mktRecentSales(): Promise<{ ok: true; recent: MktRecentSal
 
 // --------------------------------------------------- ledger local "já vi"
 
-// Marca listagens já PROCESSADAS no cliente ('sold:<id>' = proceeds creditados;
-// 'back:<id>' = carta devolvida à coleção local). Sem isso, cada poll do
-// mktMine re-creditaria a venda / re-devolveria a carta. Best-effort: se o
-// storage falhar, o pior caso é crédito duplicado LOCAL — a reconciliação do
-// boot (servidor→local nunca; local vence, mas o ledger fica como auditoria)
-// e o cap de 300 tags mantêm o dano limitado.
+// [O0-37] LEGADO, só leitura. Marcava listagens já PROCESSADAS ('sold:<id>' =
+// proceeds creditados; 'back:<id>' = carta devolvida) por APARELHO — outro
+// aparelho ou storage limpo re-creditava as últimas 30 vendas (ECON-04). A
+// marca agora vive no save do Ultimate (profile.srvSeen, sincronizado com a
+// nuvem — ver marketCardSold/marketCardReturned). Este conjunto só é lido pra
+// semear o save e pra não re-creditar o que ESTE aparelho já processou.
 const SEEN_KEY = 'rtm-ult-mkt-seen-v1';
-const SEEN_CAP = 300;
 
 function loadSeen(): string[] {
   try {
@@ -343,11 +342,6 @@ export function mktSeenHas(tag: string): boolean {
   return loadSeen().includes(tag);
 }
 
-export function mktMarkSeen(tag: string): void {
-  try {
-    const arr = loadSeen();
-    if (arr.includes(tag)) return;
-    arr.push(tag);
-    localStorage.setItem(SEEN_KEY, JSON.stringify(arr.slice(-SEEN_CAP)));
-  } catch { /* storage indisponível — best-effort */ }
+export function mktLegacySeenTags(): string[] {
+  return loadSeen().filter((t) => t.startsWith('sold:') || t.startsWith('back:'));
 }

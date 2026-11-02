@@ -29,6 +29,11 @@ export function refreshInfrastructure(input: State): void {
   if (current) setAll(input);
 }
 
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+export function closeInfrastructure(): void {
+  setAll(null);
+}
+
 export function InfrastructurePageHost() {
   const [state, setState] = useState<State | null>(current);
 

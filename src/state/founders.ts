@@ -3,6 +3,7 @@
 // que NUNCA bloqueia nem quebra a UI — se falhar, os componentes rendem nada
 // (número falso jamais aparece na tela).
 import { useEffect, useState } from 'react';
+import { setPriceCents } from './price';
 
 export interface FounderStats { founders: number; limit: number }
 
@@ -35,7 +36,8 @@ async function fetchFounders(): Promise<FounderStats | null> {
     try {
       const r = await fetch('/api/account', { method: 'GET' });
       if (!r.ok) return null;
-      const d = (await r.json()) as { founders?: unknown; limit?: unknown };
+      const d = (await r.json()) as { founders?: unknown; limit?: unknown; priceCents?: unknown };
+      setPriceCents(d.priceCents); // mesmo GET expõe o preço da vitalícia
       const founders = Number(d.founders);
       const limit = Number(d.limit);
       if (!Number.isFinite(founders) || !Number.isFinite(limit) || founders < 0 || limit <= 0) return null;

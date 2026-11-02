@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { ct } from '../../state/career-i18n';
 import { Flag } from '../ui';
 import { RtpIcon } from './RtpIcon';
@@ -85,7 +85,9 @@ export function RtpPrematch({ save, prep, major, onReady, onExit }: {
         <span className="rtp-daybrief-txt">{desk.headline}</span>
       </div>
       <div className="rtp-vs">
-        <span className="rtp-vs-tag" style={{ color: save.team.colors[0] }}>{save.team.tag}</span>
+        {/* a cor do time vira o sublinhado; o texto fica na cor de tinta do tema
+            (a cor crua do time podia ser preta sobre o marinho, 1:1 de contraste) */}
+        <span className="rtp-vs-tag" style={{ '--team': save.team.colors[0] } as CSSProperties}>{save.team.tag}</span>
         <span className="rtp-vs-x">VS</span>
         <span className="rtp-vs-name">{prep.opp.name}</span>
       </div>

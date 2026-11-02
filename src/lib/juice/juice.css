@@ -1,0 +1,43 @@
+/* Juice kit — estilos do SoundToggle. Só tokens (docs/design-system.md);
+   os fallbacks cobrem o período antes da camada semântica --c-* existir. */
+
+.juice-sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;              /* alvo mínimo de toque (UX-11) */
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--c-line, var(--border));
+  border-radius: var(--r-sm, 8px);
+  background: var(--c-surface-1, var(--panel));
+  color: var(--c-ink-dim, var(--dim));
+  font: inherit;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+.juice-sound-toggle:hover {
+  color: var(--c-ink, var(--text-strong));
+  border-color: var(--c-accent, var(--blue-bright));
+}
+.juice-sound-toggle:focus-visible {
+  outline: 2px solid var(--c-accent, var(--blue-bright));
+  outline-offset: 2px;
+}
+.juice-sound-toggle[aria-pressed='true'] {
+  color: var(--c-ink, var(--text-strong));
+}
+.juice-sound-toggle--compact {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+.juice-sound-toggle__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .juice-sound-toggle { transition: none; }
+}
