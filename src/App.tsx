@@ -942,6 +942,13 @@ export default function App() {
     const nextSeason = career.season + 1;
     void loadSwiss().then(({ createTournament }) => {
       track('season_start', { season: nextSeason, pool: draft.pool });
+      // funil: o gancho 'market' já existia em HOOKS (UpsellCard.tsx) — texto
+      // pronto pra "montando seu elenco" — mas nenhuma tela chamava. O card de
+      // upsell é a superfície que mais converte paywall_view em checkout_open
+      // (~2%); a janela de transferências é o único momento do Draft grátis sem
+      // gancho. O UpsellCard decide se mostra (#159: só depois do 1º valor, 1
+      // oferta automática por sessão, mesmo cooldown dos outros ganchos).
+      if (!account?.paid) window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'market' } }));
       setCareer((c) => ({ ...c, season: nextSeason, budget: c.budget - cost, lastPrize: undefined }));
       rngRef.current = makeRng(randomSeed());
       const t = createTournament(
