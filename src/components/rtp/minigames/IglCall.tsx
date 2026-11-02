@@ -106,7 +106,7 @@ export function IglCall({ seed, durationMs, difficulty, reducedMotion, onFinish 
     // reduced motion: pontos já nas posições finais (setState só no callback do rAF)
     const start = performance.now();
     const loop = (now: number) => {
-      const k = reducedMotion ? 1 : Math.min(1, (now - start) / readMs);
+      const k = reducedMotion ? 1 : Math.max(0, Math.min(1, (now - start) / readMs)); // [RTP-RAF]
       setT(k);
       if (k < 1) raf.current = requestAnimationFrame(loop);
     };

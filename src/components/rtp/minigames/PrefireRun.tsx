@@ -48,7 +48,7 @@ export function PrefireRun({ seed, durationMs, difficulty, onFinish }: MiniGameP
   useEffect(() => {
     const start = performance.now();
     const loop = (now: number) => {
-      const t = (now - start) / passMs;
+      const t = Math.max(0, (now - start) / passMs); // [RTP-RAF] rAF pode vir antes do start
       if (t >= PASSES) { finish(); return; }
       // ida e volta: passada par vai L→R, ímpar volta R→L
       const p = t % 1;
