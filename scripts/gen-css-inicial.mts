@@ -17,11 +17,12 @@
 //
 // Rode com: npm run gen:css-inicial   (o teste scripts/test-css-inicial.mts falha se
 // um dos dois arquivos divergir do que este script gera)
+import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, normalize, relative } from 'node:path';
 import ts from 'typescript';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // pasta com espaço (test-paths-with-spaces)
 
 /** CSS que saem da carga inicial (ordem do main.tsx) */
 export const MOVIDOS = [

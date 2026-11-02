@@ -6,6 +6,7 @@
 //  - o filtro de seletor não descarta regra que a carga inicial pode usar;
 //  - o carregador (state/lazyCss.ts) põe a folha logo depois do CSS global, mesmo
 //    com CSS lazy que já chegou, e tenta de novo depois de uma falha.
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -13,7 +14,7 @@ import { join } from 'node:path';
 import { CARGA_INICIAL, MOVIDOS, TELAS, classesExigidas, generate, globalCssOrder, parseCss, seletores } from './gen-css-inicial.mts';
 import { createSheetLoader, type DocLike, type ElLike, type LinkLike } from '../src/state/lazyCss.ts';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // pasta com espaço (test-paths-with-spaces)
 const read = (f: string) => readFileSync(join(ROOT, f), 'utf8');
 
 test('carga-inicial.css e telas.css estão em dia com o gerador', () => {
