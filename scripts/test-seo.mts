@@ -16,9 +16,10 @@ import { MAJOR_SG_TITLE_ODDS_RUNS } from '../src/data/majorSgOdds.ts';
 import { buildSeoPages } from '../src/seo/pages.ts';
 import { absUrl, esc, renderPage, sitemapXml, templateImage } from '../src/seo/render.ts';
 import { APP_SHELL, prerender, rewriteFiles } from './prerender.mts';
+import { fileURLToPath } from 'node:url';
 
 const D = data as unknown as MajorData;
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 const TPL = read('index.html');
 const DURING = Date.UTC(2026, 9, 30, 15);   // 30/10/2026: vitrine do Major no ar
