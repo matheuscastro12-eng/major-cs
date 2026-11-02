@@ -22,7 +22,9 @@ import { ct } from '../../state/career-i18n';
 import type { LegadoView, ClubPlayerLine, ClubLegend, TimelineEntry, ManagerBadge, RecordRow } from '../../engine/legado/historia';
 import { entryOf, userHonorsOfYear } from '../../engine/legado/premios';
 import type { LegadoState, SceneYearAwards } from '../../engine/legado/model';
-import { type LegadoCardData, type CardRosterRow, legadoCardDataUrl, legadoCardFileName, shareLegadoCard, downloadLegadoCard } from '../../state/legadoShareCard';
+import { type LegadoCardData, type CardRosterRow, legadoCardDataUrl, legadoCardFileName, shareLegadoCard, downloadLegadoCard, legadoXText, LEGADO_URL } from '../../state/legadoShareCard';
+import { postOnX } from '../../state/shareX';
+import { trackShare } from '../../state/track';
 import { reputationLabel } from '../../engine/coachCareer';
 import '../../styles/legado.css';
 
@@ -526,8 +528,21 @@ function CardsSection(p: LegadoTabProps) {
     setBusy(true);
     try {
       const r = await shareLegadoCard(card.data);
+      trackShare(`legado-${card.data.kind}`, r === 'shared' ? 'native' : 'copy');
       setMsg(r === 'shared' ? ct('Card compartilhado.') : ct('Card baixado e texto copiado.'));
     } finally { setBusy(false); }
+  };
+  // X: abre o compositor ANTES de qualquer await (senão o popup é bloqueado) e
+  // baixa o PNG em seguida — o intent não aceita arquivo, o jogador anexa.
+  const shareX = async () => {
+    if (!card.data) return;
+    const data = card.data;
+    postOnX(`legado-${data.kind}`, legadoXText(data), LEGADO_URL);
+    setMsg(ct('Abriu o X: anexa a imagem que baixou 😉'));
+    try {
+      const url = preview ?? await legadoCardDataUrl(data);
+      downloadLegadoCard(url, legadoCardFileName(data));
+    } catch { /* canvas indisponível: o post sai só com texto */ }
   };
   const download = async () => {
     if (!card.data) return;
@@ -560,6 +575,7 @@ function CardsSection(p: LegadoTabProps) {
             <div className="lg-cards__actions">
               <Button variant="achievement" onClick={share} disabled={busy}><Share2 size={16} aria-hidden /> {ct('Compartilhar')}</Button>
               <Button variant="secondary" onClick={download} disabled={busy}><Download size={16} aria-hidden /> {ct('Baixar PNG')}</Button>
+              <Button variant="secondary" onClick={() => { void shareX(); }} disabled={busy}>{ct('Postar no X')}</Button>
             </div>
             {msg && <p className="lg-note" role="status">{msg}</p>}
             <p className="lg-note">{ct('O card é gerado no seu aparelho (PNG 1080×1350). No celular, abre o compartilhamento do sistema; no computador, baixa a imagem e copia o texto.')}</p>

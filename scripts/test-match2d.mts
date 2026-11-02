@@ -138,6 +138,61 @@ test('todos os mapas do pool têm minimapa próprio, conexo', () => {
   }
 });
 
+// ponto dentro da planta (even-odd sobre todos os anéis)
+function inPlan(rings: number[][], x: number, y: number): boolean {
+  let c = false;
+  for (const r of rings) {
+    for (let i = 0, n = r.length / 2; i < n; i++) {
+      const x1 = r[2 * i], y1 = r[2 * i + 1], x2 = r[(2 * i + 2) % r.length], y2 = r[(2 * i + 3) % r.length];
+      if ((y1 > y) !== (y2 > y) && x < ((x2 - x1) * (y - y1)) / (y2 - y1) + x1) c = !c;
+    }
+  }
+  return c;
+}
+
+test('planta real: nós e arestas da Mirage ficam dentro do piso', () => {
+  for (const id of MAP_POOL) {
+    const m = map2dOf(id);
+    if (!m.plan) continue;
+    for (const [n, p] of Object.entries(m.nodes)) assert.ok(inPlan(m.plan.rings, p.x, p.y), `${id}: nó ${n} fora do piso`);
+    for (const [u, v] of m.edges) {
+      const a = m.nodes[u], b = m.nodes[v];
+      const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.4);
+      for (let i = 0; i <= steps; i++) {
+        const x = a.x + ((b.x - a.x) * i) / steps, y = a.y + ((b.y - a.y) * i) / steps;
+        assert.ok(inPlan(m.plan.rings, x, y), `${id}: aresta ${u}-${v} atravessa parede em (${x.toFixed(1)}, ${y.toFixed(1)})`);
+      }
+    }
+    for (const s of ['A', 'B'] as const) assert.ok(inPlan(m.plan.rings, m.sites[s].x, m.sites[s].y), `${id}: site ${s}`);
+  }
+  assert.ok(map2dOf('mirage').plan, 'a Mirage tem a planta real');
+});
+
+test('planta real: nomes das calls ficam dentro do piso e longe de onde os jogadores param', () => {
+  // tamanho do texto no celular (match2d.css, max-width 560px): 2.6 unidades;
+  // bolinha r=1.9 + espalhamento => 2.8 de folga até a borda do texto
+  const FS = 2.6, CLEAR = 2.8;
+  for (const id of MAP_POOL) {
+    const m = map2dOf(id);
+    if (!m.plan) continue;
+    const spots = [...new Set([...m.holds.A, ...m.holds.B, ...m.holds.mid, ...m.stage])].map((n) => ({ n, ...m.nodes[n] }));
+    for (const [t, x, y, a] of m.plan.calls) {
+      assert.ok(inPlan(m.plan.rings, x, y), `${id}: call ${t} fora do piso`);
+      const w = t.length * FS * 0.62;
+      const [hw, hh] = a ? [FS / 2, w / 2] : [w / 2, FS / 2];
+      // desktop: texto 2.1 e o nick do jogador embaixo da bolinha (até ~12 de largura)
+      const dw = t.length * 2.1 * 0.62;
+      const [dhw, dhh] = a ? [1.05, dw / 2] : [dw / 2, 1.05];
+      for (const s of spots) {
+        const d = Math.hypot(Math.max(0, Math.abs(s.x - x) - hw), Math.max(0, Math.abs(s.y - y) - hh));
+        assert.ok(d >= CLEAR, `${id}: call ${t} embaixo de quem para em ${s.n} (folga ${d.toFixed(1)})`);
+        const nx = Math.max(0, Math.abs(s.x - x) - dhw - 6), ny = Math.max(0, Math.abs(s.y + 3.6 - y) - dhh - 1.4);
+        assert.ok(Math.hypot(nx, ny) >= 0.4, `${id}: call ${t} embaixo do nome de quem para em ${s.n}`);
+      }
+    }
+  }
+});
+
 const K = (killer: string, kt: 0 | 1, victim: string): KillEvent => ({ round: 1, killerId: killer, victimId: victim, killerTeam: kt, victimTeam: kt === 0 ? 1 : 0, weapon: 'AK-47', headshot: false, opening: false, trade: false });
 
 test('momentos: ace, clutch 1v3, eco vencido, virada', () => {

@@ -72,7 +72,8 @@ test('validateUltTx limita cartas e exige cardKey no add', () => {
 test('schema cria wallet, cards e ledger com UNIQUE(email, op_id)', () => {
   const db = new FakeDb();
   const queries = ultEconomySchemaQueries(db.sql);
-  assert.equal(queries.length, 5);
+  assert.equal(queries.length, 7); // [CSM-4] + credits_after
+  assert.ok((queries[5] as unknown as { text: string }).text.includes('ADD COLUMN IF NOT EXISTS imported_at'));
   const texts = queries.map((q) => (q as unknown as { text: string }).text);
   // [O0-02] congelamento como coluna aditiva e idempotente
   assert.ok(texts[4].includes('ADD COLUMN IF NOT EXISTS frozen_at'));
@@ -86,7 +87,7 @@ test('schema cria wallet, cards e ledger com UNIQUE(email, op_id)', () => {
 test('grant credita e registra no ledger', async () => {
   const db = new FakeDb();
   const r = await applyUltTransaction(db.sql, 'a@x.com', tx({ opId: 'g1', kind: 'grant', creditsDelta: 1000 }));
-  assert.deepEqual(r, { ok: true, replayed: false, credits: 1000 });
+  assert.deepEqual(r, { ok: true, replayed: false, credits: 1000, creditsAfter: 1000 });
   assert.equal(db.ledger.length, 1);
   assert.equal(db.wallets.get('a@x.com'), 1000);
 });
@@ -95,7 +96,7 @@ test('replay do mesmo op_id NÃO re-aplica (idempotente)', async () => {
   const db = new FakeDb();
   await applyUltTransaction(db.sql, 'a@x.com', tx({ opId: 'g1', kind: 'grant', creditsDelta: 1000 }));
   const r2 = await applyUltTransaction(db.sql, 'a@x.com', tx({ opId: 'g1', kind: 'grant', creditsDelta: 1000 }));
-  assert.deepEqual(r2, { ok: true, replayed: true, credits: 1000 });
+  assert.deepEqual(r2, { ok: true, replayed: true, credits: 1000, creditsAfter: 1000 });
   assert.equal(db.ledger.length, 1);
   assert.equal(db.wallets.get('a@x.com'), 1000);
 });
@@ -130,7 +131,7 @@ test('pack: debita credits e adiciona cartas na coleção', async () => {
       { op: 'add', cardId: 'own-2', cardKey: 'fallen:gold', meta: { boost: 0 } }, // duplicata = outra cópia, uuid próprio
     ],
   }));
-  assert.deepEqual(r, { ok: true, replayed: false, credits: 1500 });
+  assert.deepEqual(r, { ok: true, replayed: false, credits: 1500, creditsAfter: 1500 });
   const cards = db.cardsOf('a@x.com');
   assert.equal(cards.length, 2);
   assert.deepEqual(cards.map((c) => c.cardKey), ['fallen:gold', 'fallen:gold']);
@@ -145,8 +146,8 @@ test('quicksell: remove a cópia e credita; replay não duplica o crédito', asy
   const sell = tx({ opId: 'q1', kind: 'quicksell', creditsDelta: 750, cards: [{ op: 'remove', cardId: 'own-1' }] });
   const r1 = await applyUltTransaction(db.sql, 'a@x.com', sell);
   const r2 = await applyUltTransaction(db.sql, 'a@x.com', sell);
-  assert.deepEqual(r1, { ok: true, replayed: false, credits: 750 });
-  assert.deepEqual(r2, { ok: true, replayed: true, credits: 750 });
+  assert.deepEqual(r1, { ok: true, replayed: false, credits: 750, creditsAfter: 750 });
+  assert.deepEqual(r2, { ok: true, replayed: true, credits: 750, creditsAfter: 750 });
   assert.equal(db.cardsOf('a@x.com').length, 0);
   assert.equal(db.wallets.get('a@x.com'), 750);
 });
@@ -263,10 +264,19 @@ test('handler tx: quicksell ignora o valor do cliente e credita pelo card_key do
   const row = db.ledger.find((l) => l.opId === 'qs1');
   assert.equal(row?.delta, 2400);
   assert.equal(row?.meta.clientDelta, 9_999_999);
-  // replay do mesmo op_id: nada re-aplica
-  const again = await applyClientUltTx(db.sql, 'a@x', { opId: 'qs1', kind: 'quicksell', creditsDelta: 1, cards: [{ op: 'remove', cardId: 'c1' }] }, loadValuer);
+  // replay do mesmo op_id com o MESMO pedido: nada re-aplica e devolve o resultado gravado
+  const again = await applyClientUltTx(db.sql, 'a@x', {
+    opId: 'qs1', kind: 'quicksell', creditsDelta: 9_999_999,
+    cards: [{ op: 'remove', cardId: 'c1' }, { op: 'remove', cardId: 'c2' }, { op: 'remove', cardId: 'c3' }, { op: 'remove', cardId: 'local1' }],
+  }, loadValuer);
   assert.equal(again.status, 200);
   assert.equal(again.body.replayed, true);
+  assert.deepEqual(again.body.recorded, { creditsAfter: 2400 });
+  assert.equal(db.wallets.get('a@x'), 2400);
+  // [CSM-4] mesmo op_id com OUTRO pedido: 409 op_conflict, nada aplicado
+  const forged = await applyClientUltTx(db.sql, 'a@x', { opId: 'qs1', kind: 'quicksell', creditsDelta: 1, cards: [{ op: 'remove', cardId: 'c1' }] }, loadValuer);
+  assert.equal(forged.status, 409);
+  assert.equal(forged.body.error, 'op_conflict');
   assert.equal(db.wallets.get('a@x'), 2400);
   // vender de novo a carta que já saiu (outro op_id): vale 0
   const ghost = await applyClientUltTx(db.sql, 'a@x', { opId: 'qs2', kind: 'quicksell', creditsDelta: 1000, cards: [{ op: 'remove', cardId: 'c1' }] }, loadValuer);

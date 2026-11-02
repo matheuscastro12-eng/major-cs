@@ -171,3 +171,36 @@ test('webhook rejects altered payloads and accepts a valid Stripe signature', as
     else process.env.STRIPE_WEBHOOK_SECRET = previous.webhookSecret;
   }
 });
+
+test('account price comes from PIX_PRICE_CENTS (default 2000)', async () => {
+  const { accountPriceCents } = await import('./payments.js');
+  const prev = process.env.PIX_PRICE_CENTS;
+  try {
+    delete process.env.PIX_PRICE_CENTS;
+    assert.equal(accountPriceCents(), 2000);
+    process.env.PIX_PRICE_CENTS = '3500';
+    assert.equal(accountPriceCents(), 3500);
+    process.env.PIX_PRICE_CENTS = 'lixo';
+    assert.equal(accountPriceCents(), 2000);
+    // sessão dinâmica (metadata.kind=account) vale se pagou >= preço atual
+    process.env.PIX_PRICE_CENTS = '3500';
+    const dyn = (amount: number) => session({ line_items: undefined, metadata: { kind: 'account' }, currency: 'brl', amount_total: amount });
+    assert.equal(checkoutHasExpectedPrice(dyn(3500)), true);
+    assert.equal(checkoutHasExpectedPrice(dyn(2000)), false);
+    assert.equal(checkoutHasExpectedPrice(session({ line_items: undefined, amount_total: 3500, currency: 'brl' })), false);
+  } finally {
+    if (prev === undefined) delete process.env.PIX_PRICE_CENTS; else process.env.PIX_PRICE_CENTS = prev;
+  }
+});
+
+test('account checkout falls back to the legacy Payment Link without Stripe key', async () => {
+  const { accountCheckoutUrl } = await import('./payments.js');
+  const prev = [process.env.STRIPE_SECRET_KEY, process.env.STRIPE];
+  delete process.env.STRIPE_SECRET_KEY; delete process.env.STRIPE;
+  try {
+    assert.equal(await accountCheckoutUrl('player@example.com'), checkoutUrl('player@example.com'));
+  } finally {
+    if (prev[0] !== undefined) process.env.STRIPE_SECRET_KEY = prev[0];
+    if (prev[1] !== undefined) process.env.STRIPE = prev[1];
+  }
+});

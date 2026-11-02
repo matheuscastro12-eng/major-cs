@@ -70,7 +70,7 @@ function eventMessage(ev: EventEnd): string {
 // `demo`: modo DEGUSTAÇÃO (conta grátis/deslogado) — peneira + DEMO_WEEKS
 // semanas jogáveis; depois a RtpDemoGate trava com o CTA da vitalícia. O save
 // é o mesmo formato do completo: comprou → continua daqui (e sobe pra nuvem).
-export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => void; demo?: boolean; onUpgrade?: () => void }) {
+export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => void; demo?: boolean; onUpgrade?: (nick?: string) => void }) {
   // [W1] save da demo carregado já na última semana grátis (ou além) sem o
   // cliffhanger — chegou lá antes desta versão ou recarregou a página:
   // materializa (e entrega, se a semana já virou) na hora de carregar.
@@ -207,7 +207,7 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   // DEMO: a trava fecha quando a degustação acaba (ou quando o convidado
   // tenta abrir a Série do Dia — exclusiva da vitalícia).
   if (demo && (save.world.week > DEMO_WEEKS || dailyOpen)) {
-    return <RtpDemoGate save={save} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(); }} onExit={() => { setDailyOpen(false); onExit(); }} onBack={save.world.week > DEMO_WEEKS ? undefined : () => setDailyOpen(false)} />;
+    return <RtpDemoGate save={save} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(save.player.nick); }} onExit={() => { setDailyOpen(false); onExit(); }} onBack={save.world.week > DEMO_WEEKS ? undefined : () => setDailyOpen(false)} />;
   }
   // SÉRIE DO DIA: desafio global diário — fixture próprio, não toca no seu save.
   if (dailyOpen) {
@@ -325,7 +325,7 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
         <RtpSimResult result={simResult.result} consequence={simResult.consequence} onClose={() => setSimResult(null)} />
       )}
       {/* [W1] última semana grátis: a proposta do clube maior, com resposta trancada */}
-      {demo && save.demoCliff?.status === 'teaser' && <RtpDemoCliffBanner save={save} onUpgrade={() => onUpgrade?.()} />}
+      {demo && save.demoCliff?.status === 'teaser' && <RtpDemoCliffBanner save={save} onUpgrade={() => onUpgrade?.(save.player.nick)} />}
     </>
   );
 }

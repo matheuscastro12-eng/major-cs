@@ -22,14 +22,18 @@ import { makeRng } from '../src/engine/rng.js';
 import type { UltCard } from '../src/engine/ultimate/cards.js';
 import { packById, rollPack, type PackDef } from '../src/engine/ultimate/packs.js';
 import { monthIndex } from '../src/engine/ultimate/promos.js';
-import { weeklyPackPool } from '../src/engine/ultimate/packPool.js';
+import { openingPool } from '../src/engine/ultimate/packPool.js';
+import { activeEventVersionDecl, applyEventVersions, parseEventVersionKey } from '../src/engine/ultimate/eventVersions.js';
+import { dropPool } from '../src/engine/ultimate/drops.js';
+import type { DropCatalog } from './ultimate-drops.js';
 import { CardIndex } from '../src/engine/ultimate/cardIndex.js';
 import { ULT_CATALOG_MONTHS, ULT_SNAPSHOT_FIRST_MONTH, ULT_SNAPSHOT_LAST_MONTH, type SnapCard } from './ultimate-catalog.snapshot.js';
-import { applyUltTransaction, type SqlTag, type UltCardOp, type UltTx } from './ultimate-economy.js';
+import { applyUltTransaction, ultPayloadHash, type SqlTag, type UltCardOp, type UltTx } from './ultimate-economy.js';
 
 // versão do motor de roll gravada no ledger — se as odds/engine mudarem um dia,
 // dá pra saber COM QUAL versão cada pack foi rolado.
-export const ULT_PACK_ENGINE_VERSION = 'ult-pack-v2-weekly';
+// v3: versões de evento [CSM-2] substituem a base no pool durante o evento.
+export const ULT_PACK_ENGINE_VERSION = 'ult-pack-v3-evento';
 
 // ------------------------------------------------------------------ catálogo
 
@@ -68,6 +72,26 @@ export function serverCatalogIndex(now: Date = new Date()): Map<string, SnapCard
   return _index!;
 }
 
+// [F1] carta por key em QUALQUER mês do snapshot (o mais recente vence). Cópias
+// antigas (promo/totw de meses passados) seguem válidas no squad e no import.
+let _anyMonth: Map<string, SnapCard> | null = null;
+export function serverCardByKeyAnyMonth(key: string): SnapCard | undefined {
+  if (!_anyMonth) {
+    const m = new Map<string, SnapCard>();
+    const months = Object.keys(ULT_CATALOG_MONTHS).map(Number).sort((a, b) => a - b);
+    for (const mi of months) for (const c of ULT_CATALOG_MONTHS[mi] ?? []) m.set(c.key, c);
+    _anyMonth = m;
+  }
+  // [CSM-2] versão de evento não está no snapshot: deriva da base do mês corrente
+  return _anyMonth.get(key) ?? (parseEventVersionKey(key) ? serverCatalogIndex().get(key) : undefined);
+}
+
+// lookup pro squad autoritativo: mês corrente primeiro, depois qualquer mês.
+export function serverSquadLookup(now: Date = new Date()): (key: string) => SnapCard | undefined {
+  const idx = serverCatalogIndex(now);
+  return (key: string) => idx.get(key) ?? serverCardByKeyAnyMonth(key);
+}
+
 // ---------------------------------------------------------------------- roll
 
 // PackDef validada pelo ENGINE (id/custo/odds nunca vêm do request do cliente).
@@ -85,7 +109,8 @@ export function randomSeed32(): number {
 export function rollPackServer(args: { packId: string; seed: number; catalog: UltCard[]; now?: Date }): UltCard[] | null {
   const pack = serverPackDef(args.packId);
   if (!pack) return null;
-  const pool = pack.id === 'totw' ? (args.now ? weeklyPackPool(args.catalog, args.now) : null) : args.catalog;
+  // sem `now` não há como saber o evento/semana: só packs fixos, sem evento.
+  const pool = args.now ? openingPool(args.catalog, pack.id, args.now) : pack.id === 'totw' ? null : args.catalog;
   return pool ? rollPack(pool, pack, makeRng(args.seed >>> 0)) : null;
 }
 
@@ -151,10 +176,11 @@ export async function openPack(
     kind: 'pack',
     creditsDelta: -pack.cost,
     cards: cardOps,
-    meta: { packId: pack.id, seed, engineVersion: ULT_PACK_ENGINE_VERSION },
+    meta: { packId: pack.id, seed, engineVersion: ULT_PACK_ENGINE_VERSION, eventId: activeEventVersionDecl(now.getTime(), catalog)?.eventId ?? null },
   };
-  const r = await applyUltTransaction(sql, email, tx);
-  if (!r.ok) return { ok: false, error: 'insufficient_credits', credits: r.credits };
+  // [CSM-4] hash do pedido (packId): mesmo op_id com outro pack = op_conflict
+  const r = await applyUltTransaction(sql, email, tx, { reqHash: ultPayloadHash({ a: 'packOpen', packId: pack.id }) });
+  if (!r.ok) return r.error === 'op_conflict' ? { ok: false, error: 'op_conflict' } : { ok: false, error: 'insufficient_credits', credits: r.credits };
 
   if (!r.replayed) {
     return {
@@ -168,6 +194,8 @@ export async function openPack(
   const rows = await sql`SELECT kind, cards, meta FROM rtm_ult_ledger WHERE email=${email} AND op_id=${req.opId}`;
   const row = rows[0];
   if (!row || String(row.kind) !== 'pack') return { ok: false, error: 'op_conflict' };
+  // linha antiga (sem reqHash): o pack gravado tem de ser o mesmo pedido
+  if (row.meta && typeof row.meta === 'object' && (row.meta as Record<string, unknown>).packId !== pack.id) return { ok: false, error: 'op_conflict' };
   const priorOps = (Array.isArray(row.cards) ? row.cards : []) as { cardId?: string; cardKey?: string }[];
   const priorMeta = (row.meta && typeof row.meta === 'object' ? row.meta : {}) as Record<string, unknown>;
   return {
@@ -177,5 +205,25 @@ export async function openPack(
       const key = String(op.cardKey ?? '');
       return { cardId: String(op.cardId ?? ''), cardKey: key, card: index.get(key) ?? null };
     }),
+  };
+}
+
+// ------------------------------------------------------------------- drops
+
+// [CSM-1] catálogo do drop de escolha: pool elegível do mês (tiers base com
+// peso) com as versões de evento aplicadas [CSM-2] — a MESMA função que o
+// cliente usaria (teste de drift em ultimate-event-versions.test.ts).
+export function serverDropCatalog(): DropCatalog {
+  return {
+    pool(now) {
+      const cat = buildServerCatalog(now);
+      return dropPool(applyEventVersions(cat, activeEventVersionDecl(now.getTime(), cat)));
+    },
+    lookup(key) {
+      return serverSquadLookup()(key);
+    },
+    eventId(now) {
+      return activeEventVersionDecl(now.getTime(), buildServerCatalog(now))?.eventId ?? null;
+    },
   };
 }

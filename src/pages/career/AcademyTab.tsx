@@ -314,6 +314,9 @@ export function AcademyTab({
   // ─── FULL MATCH: veto + MatchScreen real ───────────────────────────────────
   // stage 'veto' → 'match' → null. Quando termina, persiste override do match.
   const [fullStage, setFullStage] = useState<null | 'veto' | 'match'>(null);
+  // a série já foi decidida (o MatchScreen mostra o resultado e espera o Continuar):
+  // o cabeçalho deixa de dizer "Partida ao vivo"
+  const [fullDecided, setFullDecided] = useState(false);
   const [fullCtx, setFullCtx] = useState<null | {
     oppId: string;
     teams: [TTeam, TTeam];
@@ -351,6 +354,7 @@ export function AcademyTab({
   const onVetoDone = (maps: { map: MapId; pickedBy: 0 | 1 | -1 }[]) => {
     if (!fullCtx) return;
     setFullCtx({ ...fullCtx, maps });
+    setFullDecided(false);
     setFullStage('match');
   };
 
@@ -1368,7 +1372,7 @@ export function AcademyTab({
           >
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
               <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
-                {fullStage === 'veto' ? ct('Veto de mapas') : ct('Partida ao vivo')}
+                {fullStage === 'veto' ? ct('Veto de mapas') : fullDecided ? ct('Série encerrada') : ct('Partida ao vivo')}
               </span>
               <b style={{ fontSize: '0.92rem', color: 'var(--em-text)' }}>{fullCtx.phaseLabel}</b>
             </div>
@@ -1411,6 +1415,7 @@ export function AcademyTab({
                 phaseLabel={fullCtx.phaseLabel}
                 bestOf={3}
                 onFinish={onFullMatchFinish}
+                onDecided={() => setFullDecided(true)}
               />
             )}
           </div>

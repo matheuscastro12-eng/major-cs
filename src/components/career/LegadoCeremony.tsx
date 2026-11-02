@@ -9,6 +9,8 @@ import { Flag } from '../ui';
 import { ct } from '../../state/career-i18n';
 import { entryOf } from '../../engine/legado/premios';
 import type { SceneYearAwards } from '../../engine/legado/model';
+import { postOnX } from '../../state/shareX';
+import { LEGADO_URL } from '../../state/legadoShareCard';
 import '../../styles/legado.css';
 
 type Step = 'intro' | 'count' | 'awards';
@@ -47,6 +49,9 @@ export function LegadoCeremony({ year, onClose, onShare }: { year: SceneYearAwar
         <div className="lgc-foot">
           {step === 'count' && <Button variant="ghost" onClick={() => { setShown(total); setStep('awards'); }}>{ct('Pular')}</Button>}
           {step === 'awards' && mineTop1 && onShare && <Button variant="achievement" onClick={onShare}>{ct('Compartilhar o card')}</Button>}
+          {step === 'awards' && mineTop1 && top && (
+            <Button variant="secondary" onClick={() => postOnX('legado-ceremony', `${top.nick} da ${top.team} é o melhor jogador de ${year.year} no road to major 🏆${top.rating > 0 ? `\nrating ${top.rating.toFixed(2)}` : ''}`, LEGADO_URL)}>{ct('Postar no X')}</Button>
+          )}
           <Button variant={step === 'awards' ? 'primary' : 'secondary'} onClick={onClose}>{step === 'awards' ? ct('Fechar') : ct('Depois')}</Button>
         </div>
       )}

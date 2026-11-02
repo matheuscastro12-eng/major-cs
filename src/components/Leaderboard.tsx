@@ -7,6 +7,7 @@ import { getLadder, getChampions, fetchMyRank, type RankRow, type MyRank, type C
 import { ct } from '../state/career-i18n';
 import { trackPaywallView } from '../state/track';
 import { FounderCounter } from './FounderCounter';
+import { usePrice, withPrice } from '../state/price';
 
 const DIV_COLOR: Record<string, string> = {
   Calibrando: 'var(--em-muted)',
@@ -33,6 +34,7 @@ const th: CSSProperties = { background: 'var(--rtm-header)', color: 'var(--em-mu
 const cond: CSSProperties = { fontFamily: 'inherit', fontWeight: 800 };
 
 export function Leaderboard({ account, onBack, onUpgrade }: { account: Account | null; onBack: () => void; onUpgrade: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const paid = !!account?.paid;
   const [data, setData] = useState<{ total: number; ladder: RankRow[]; season: number; endsAt: string } | null>(null);
   const [mine, setMine] = useState<MyRank | null>(null);
@@ -133,9 +135,9 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
 
           {!paid && (
             <Panel title={ct('Entre no ranking')} accent="gold">
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{ct('Você joga ranqueada de graça. A conta de R$20 cobre a infraestrutura que mantém MMR e histórico entre sessões.')}</p>
+              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{withPrice(ct('Você joga ranqueada de graça. A conta de {preço} cobre a infraestrutura que mantém MMR e histórico entre sessões.'))}</p>
               <FounderCounter style={{ marginBottom: '10px', display: 'block' }} />
-              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{ct('Ativar ranking persistente (R$20)')}</Button>
+              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{withPrice(ct('Ativar ranking persistente ({preço})'))}</Button>
             </Panel>
           )}
 

@@ -8,6 +8,7 @@
 // copia o texto pro clipboard.
 
 import { ct } from './career-i18n';
+import { shareUrl } from './shareLink';
 
 const W = 1080;
 const H = 1350;
@@ -345,10 +346,20 @@ export function legadoCardFileName(d: LegadoCardData): string {
   return `road-to-major-${base.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.png`;
 }
 
+/** link dos cards do Legado com atribuição (?ref=legado). O PNG leva só o domínio. */
+export const LEGADO_URL = shareUrl('/carreira', 'legado');
+
 export function legadoShareText(d: LegadoCardData): string {
-  if (d.kind === 'poty') return `${d.nick}: ${ct('jogador do ano')} (${ct('Temporada')} ${d.year}) ${ct('no Road to Major')}. Rating ${d.rating}.\nhttps://roadtomajor.com.br`;
-  if (d.kind === 'major') return `${d.orgName} ${ct('é campeã do Major no Road to Major')} 🏆\nhttps://roadtomajor.com.br`;
-  return `${ct('Minha dinastia no Road to Major')}: ${d.orgName}, ${d.titles} ${ct('títulos')}, ${d.majors} Major${d.majors === 1 ? '' : 's'}.\nhttps://roadtomajor.com.br`;
+  if (d.kind === 'poty') return `${d.nick}: ${ct('jogador do ano')} (${ct('Temporada')} ${d.year}) ${ct('no Road to Major')}. Rating ${d.rating}.\n${LEGADO_URL}`;
+  if (d.kind === 'major') return `${d.orgName} ${ct('é campeã do Major no Road to Major')} 🏆\n${LEGADO_URL}`;
+  return `${ct('Minha dinastia no Road to Major')}: ${d.orgName}, ${d.titles} ${ct('títulos')}, ${d.majors} Major${d.majors === 1 ? '' : 's'}.\n${LEGADO_URL}`;
+}
+
+/** texto do post no X: minúsculo, tom de post (o link vai via &url=). */
+export function legadoXText(d: LegadoCardData): string {
+  if (d.kind === 'poty') return `${d.nick} foi o jogador do ano de ${d.year} no road to major, com a ${d.orgName} 🏆\nrating ${d.rating}`;
+  if (d.kind === 'major') return `fechei ${d.title.toLowerCase()} como campeão com a ${d.orgName} no road to major 🏆`;
+  return `minha dinastia no road to major: ${d.orgName}, ${d.titles} títulos e ${d.majors} major${d.majors === 1 ? '' : 's'} em ${d.seasons} temporada${d.seasons === 1 ? '' : 's'}`;
 }
 
 /** Compartilha (Web Share com arquivo) ou baixa o PNG + copia o texto. */

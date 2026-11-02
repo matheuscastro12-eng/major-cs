@@ -17,7 +17,8 @@ export type UltRarity =
   | 'major'  // Campeão de Major (special)
   | 'promo'  // Promo do Mês (special rotativa — ver promos.ts)
   | 'totw'   // Time da Semana / in-form (special rotativa — ver totw.ts)
-  | 'histIcon'; // Ícone Histórico (lendas aposentadas curadas — ver icons.ts)
+  | 'histIcon' // Ícone Histórico (lendas aposentadas curadas — ver icons.ts)
+  | 'evento'; // [CSM-2] versão de evento de um jogador (ver eventVersions.ts)
 
 export type RarityBucket = 'bronze' | 'silver' | 'gold' | 'special';
 
@@ -48,6 +49,10 @@ export const RARITIES: Record<UltRarity, RarityInfo> = {
   promo:     { id: 'promo',     label: 'Promo do Mês',      tier: 8,  ovrMin: 78, ovrMax: 96, bucket: 'special', color: '#f472b6', valueMult: 13, quickSellBase: 6000,  special: true },
   totw:      { id: 'totw',      label: 'Time da Semana',    tier: 8,  ovrMin: 78, ovrMax: 97, bucket: 'special', color: '#38bdf8', valueMult: 14, quickSellBase: 6500,  special: true },
   histIcon:  { id: 'histIcon',  label: 'Ícone Histórico',   tier: 10, ovrMin: 88, ovrMax: 97, bucket: 'special', color: '#ffd700', valueMult: 40, quickSellBase: 30000, special: true },
+  // [CSM-2] versão de evento: base Ouro Raro/Elite +3 OVR. Quick-sell entre o
+  // Ouro Raro e a Elite de propósito — a carta vale pelo uso no evento, não
+  // pela venda (não vira torneira de coins).
+  evento:    { id: 'evento',    label: 'Evento',            tier: 8,  ovrMin: 83, ovrMax: 92, bucket: 'special', color: '#f97316', valueMult: 8,  quickSellBase: 1500,  special: true },
 };
 
 // tiers base (derivados por OVR), do mais fraco pro mais forte

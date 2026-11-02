@@ -4,6 +4,9 @@ import { parseJsonBody } from '../server/http.js';
 import { clientIp, memoryRateHit, respondLimited } from '../server/rate-limit.js';
 
 const ALLOWED_TYPES = new Set([
+  // {ref?, utm_source?, utm_medium?, utm_campaign?, path?, referrer, mobile} — ref/utm
+  // vêm do ?ref= dos links de share (src/state/shareLink.ts). ATENÇÃO: antes de
+  // out/2026 `ref` guardava o document.referrer; hoje o referrer vai em `referrer`.
   'visit',
   'game_start',
   'game_end',
@@ -13,6 +16,10 @@ const ALLOWED_TYPES = new Set([
   'online_done',
   'donate_click',
   'ad_click',
+  // {kind, channel: 'x'|'native'|'copy'} — 1 por clique em compartilhar/postar
+  // no X (src/state/shareX.ts). kind = ref do link ('daily', 'ult-card', 'legado-major'…).
+  // Os eventos de venda (paywall_view, checkout_*, signup_*) passam a levar
+  // `ref` = primeiro ?ref= da sessão (first-touch, sessionStorage 'rtm-ref').
   'share_card',
   'presence',
   // funil de conversão da vitalícia (iter39): visão de paywall → checkout → abandono
@@ -32,6 +39,14 @@ const ALLOWED_TYPES = new Set([
   'rtp_demo',
   // [U02] funil do Ultimate: {step, mode?, won?, product_kind?, src?, method?, orderId?} — marcos por sessão, sem evento por round
   'ult_funnel',
+  // Medição do Modo Major e da ativação (out/2026). Sem dado pessoal: só sid,
+  // ref e modo/superfície. Dedupe no cliente (src/state/track.ts): 1x por
+  // sessão por superfície; first_match_done 1x por navegador.
+  'major_sg_view',          // {shared} — abriu /major-singapore
+  'major_vitrine_click',    // {surface: 'landing'|'home'|'sidebar'|'palette'|'onboarding', via?: 'rail'|'menu'|'tabbar'} — entrou no Modo Major por um atalho
+  'major_pickem_submit',    // {} — completou o pick'em (campeão escolhido)
+  'major_sg_campaign_done', // {champion: 0|1} — terminou um Major jogado com um time
+  'first_match_done',       // {mode, secs} — 1ª partida concluída e segundos desde a 1ª visita
   // conv/loop-20261007: o botão de pagar ficava simplesmente desabilitado quando
   // faltava algo no cadastro (e-mail, senha, confirmação ou termos), sem dizer o
   // quê — quem travava aqui desistia em silêncio, fora do funil (paywall_view

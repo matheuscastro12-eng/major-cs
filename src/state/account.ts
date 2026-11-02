@@ -1,4 +1,4 @@
-// Conta do jogador (e-mail + senha) + entitlement da conta vitalícia R$20.
+// Conta do jogador (e-mail + senha) + entitlement da conta vitalícia (preço: state/price.ts).
 // Token fica no localStorage; o backend (api/account.ts) valida e diz se é paga.
 //
 // [O0-10/O1-33] Estado da conta é UM só (store Zustand `useAccountStore`): um
@@ -159,7 +159,7 @@ export async function fetchAdminKey(): Promise<string | null> {
 }
 
 export async function signup(email: string, password: string, nick: string): Promise<Account> {
-  const d = await post({ action: 'signup', email, password, nick });
+  const d = await post({ action: 'signup', email, password, nick, origin: window.location.origin });
   setToken(String(d.token));
   const a = toAcct(d); setAccount(a); return a;
 }
@@ -173,7 +173,7 @@ export async function confirmPasswordReset(email: string, code: string, password
 }
 
 export async function login(email: string, password: string): Promise<Account> {
-  const d = await post({ action: 'login', email, password });
+  const d = await post({ action: 'login', email, password, origin: window.location.origin });
   setToken(String(d.token));
   const a = toAcct(d); setAccount(a); return a;
 }
@@ -183,7 +183,7 @@ export async function claim(cs: string): Promise<boolean> {
 }
 export async function beginCheckout(): Promise<string | null> {
   const token = getToken(); if (!token) throw new Error(ct('Faça login antes de pagar.'));
-  const d = await post({ action: 'checkout', token });
+  const d = await post({ action: 'checkout', token, origin: window.location.origin });
   if (d.paid) return null;
   if (typeof d.url !== 'string' || !d.url) throw new Error(ct('Checkout indisponível. Tente de novo.'));
   return d.url;
