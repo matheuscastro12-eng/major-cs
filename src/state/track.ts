@@ -173,7 +173,7 @@ export function trackPaywallView(src: string): void {
 //   checkout → já está no pagamento (avisos dentro do QR Pix / nudge do checkout)
 //   surface  → viu uma vitrine de venda navegando (landing, Início, perfil, ranking…)
 const PAYWALL_GATES = new Set(['rtp-demo-gate', 'mkt-lock', 'home-ultimate', 'wl-guest', 'wl-free']);
-const PAYWALL_IN_CHECKOUT = new Set(['pix-wait-longo', 'pix-cartao-cedo', 'upsell-pix-cartao-cedo', 'checkout-nudge']);
+const PAYWALL_IN_CHECKOUT = new Set(['pix-wait-longo', 'pix-cartao-cedo', 'upsell-pix-cartao-cedo', 'checkout-nudge', 'upsell-nudge']);
 export type PaywallTrigger = 'gate' | 'checkout' | 'surface';
 export function paywallTrigger(src: string): PaywallTrigger {
   if (PAYWALL_GATES.has(src)) return 'gate';
