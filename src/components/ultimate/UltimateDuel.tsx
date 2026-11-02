@@ -7,6 +7,7 @@
 import { duelInviteText } from '../../engine/ultimate/duelInvite';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchLobby, lobbyApi, listOpenLobbies, type LobbyState, type OpenRoom, type UltimatePvpSquad } from '../../state/online';
+import { startResultError, staleRoomError } from '../../state/duelStart';
 import { ct } from '../../state/career-i18n';
 import { Copy, Globe, LogOut, Plus, RefreshCw, Swords, Users, Zap } from 'lucide-react';
 import { UltimatePvpLive } from './UltimatePvpLive';
@@ -169,6 +170,14 @@ export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, varia
     return () => { alive = false; window.clearInterval(t); };
   }, [view, code, state?.lobby.status, state?.lobby.code, variant]);
 
+  // [FIX29] a sala avançou (draft/partida): "o draft já começou" ficou obsoleto
+  const lastStatus = useRef<LobbyState['lobby']['status'] | undefined>(undefined);
+  useEffect(() => {
+    const next = state?.lobby.status;
+    if (staleRoomError(error, lastStatus.current, next)) setError('');
+    lastStatus.current = next;
+  }, [state?.lobby.status, error]);
+
   // ── heartbeat (presença) ──
   useEffect(() => {
     if (view !== 'room' || !code) return;
@@ -273,7 +282,11 @@ export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, varia
   const startDuel = async () => {
     setBusy(true); setError('');
     const r = await lobbyApi({ action: 'start', nick, code }).catch(() => ({ ok: false, error: ct('Sem conexão.') } as { ok: boolean; error?: string }));
-    if (!r.ok) setError(r.error ?? ct('Não foi possível iniciar.'));
+    const err = startResultError(r, ct('Não foi possível iniciar.'));
+    if (err) setError(err);
+    // [FIX29] o servidor já está em 'drafting': reflete na hora (o botão some) em
+    // vez de esperar o próximo poll — era a janela do 2º toque → 409.
+    else setState((s) => (s && s.lobby.status === 'waiting' ? { ...s, lobby: { ...s.lobby, status: 'drafting' } } : s));
     setBusy(false);
   };
 

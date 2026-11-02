@@ -1,8 +1,10 @@
 // Card do Pick'em do Modo Major (canvas puro → PNG, mesmo padrão de
 // state/careerShareCard.ts): campeão em destaque, a chave dos playoffs e os
 // classificados de cada stage. O PNG leva só o domínio; o link vai no texto.
+// Também o card da campanha jogada e o do PLACAR (recap do pick'em por Stage).
 import type { MajorData, MajorPicks, MajorResult, MajorTeam } from '../../engine/majorSingapore';
 import type { CampaignSummary, MajorCampaign } from '../../engine/majorCampaign';
+import type { PlacarRecap } from '../../engine/pickemScore';
 import { bracketSides } from '../../engine/majorSingapore';
 
 const NAVY = '#070d19';
@@ -198,6 +200,112 @@ export function drawCampaignCard(d: MajorData, c: MajorCampaign, r: MajorResult,
   ctx.fillStyle = GOLD;
   ctx.font = `600 17px ${UI}`;
   ctx.fillText(L.foot, 48, H - 44);
+  return cv.toDataURL('image/png');
+}
+
+export interface PlacarCardLabels {
+  /** "Meu pick'em" */
+  kicker: string;
+  event: string;
+  /** "acertei 6 de 8 classificados" (já preenchido) */
+  hits: string;
+  /** "Total até agora" / "Total no Major" */
+  total: string;
+  waiting: string;
+  foot: string;
+}
+
+const PART_NAMES = ['Stage 1', 'Stage 2', 'Stage 3', 'Playoffs'];
+
+/** card do placar: a parte que acabou de sair em destaque, o total e cada parte (pontos ou aguardando) */
+export function drawPlacarCard(r: PlacarRecap, L: PlacarCardLabels): string {
+  const W = 1200;
+  const H = 675;
+  const cv = document.createElement('canvas');
+  cv.width = W;
+  cv.height = H;
+  const ctx = cv.getContext('2d')!;
+
+  ctx.fillStyle = NAVY;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = LINE;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(12, 12, W - 24, H - 24);
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(12, 12, W - 24, 4);
+  ctx.textBaseline = 'alphabetic';
+
+  // cabeçalho
+  ctx.fillStyle = DIM;
+  ctx.font = `600 18px ${TITLE}`;
+  ctx.fillText(L.kicker.toUpperCase(), 48, 64);
+  ctx.fillStyle = INK;
+  ctx.font = `600 40px ${DISPLAY}`;
+  fitText(ctx, L.event.toUpperCase(), 48, 108, 620);
+
+  // a parte que acabou de sair: nome, pontos grandes e os acertos
+  const focus = r.part === 'playoffs' ? 3 : r.part - 1;
+  ctx.fillStyle = GOLD;
+  ctx.font = `600 30px ${TITLE}`;
+  ctx.fillText(PART_NAMES[focus].toUpperCase(), 48, 190);
+  ctx.fillStyle = INK;
+  ctx.font = `700 168px ${DISPLAY}`;
+  const big = String(r.points);
+  ctx.fillText(big, 40, 360);
+  const bigW = ctx.measureText(big).width;
+  ctx.fillStyle = DIM;
+  ctx.font = `600 52px ${DISPLAY}`;
+  ctx.fillText(`/${r.max} PTS`, 40 + bigW + 14, 360);
+  ctx.fillStyle = INK;
+  ctx.font = `600 32px ${UI}`;
+  fitText(ctx, L.hits.charAt(0).toUpperCase() + L.hits.slice(1), 48, 424, 600);
+  if (r.x30 && r.x03) {
+    const ext = (label: string, [hit, of]: [number, number]) => `${label} ${of ? `${hit}/${of}` : '—'}`;
+    ctx.fillStyle = DIM;
+    ctx.font = `500 24px ${UI}`;
+    ctx.fillText(`${ext('3-0', r.x30)}  ·  ${ext('0-3', r.x03)}`, 48, 468);
+  }
+
+  // total e cada parte, num painel à direita
+  const px = 712;
+  const pw = W - 48 - px;
+  ctx.fillStyle = NAVY_2;
+  ctx.fillRect(px, 136, pw, 392);
+  ctx.fillStyle = DIM;
+  ctx.font = `600 18px ${TITLE}`;
+  ctx.fillText(L.total.toUpperCase(), px + 28, 180);
+  ctx.fillStyle = INK;
+  ctx.font = `700 72px ${DISPLAY}`;
+  ctx.fillText(String(r.total), px + 28, 256);
+  const totW = ctx.measureText(String(r.total)).width;
+  ctx.fillStyle = DIM;
+  ctx.font = `600 32px ${DISPLAY}`;
+  ctx.fillText(`/${r.totalMax}`, px + 28 + totW + 8, 256);
+  r.parts.forEach((p, i) => {
+    const y = 300 + i * 54;
+    const on = i === focus;
+    ctx.fillStyle = on ? '#1c2c47' : NAVY;
+    ctx.fillRect(px + 28, y, pw - 56, 44);
+    ctx.fillStyle = on ? GOLD : LINE;
+    ctx.fillRect(px + 28, y, 4, 44);
+    ctx.fillStyle = p ? INK : DIM;
+    ctx.font = `600 20px ${TITLE}`;
+    ctx.fillText(PART_NAMES[i].toUpperCase(), px + 46, y + 29);
+    ctx.textAlign = 'right';
+    ctx.font = p ? `600 22px ${DISPLAY}` : `500 18px ${UI}`;
+    ctx.fillText(p ? `${p.points}/${p.max}` : L.waiting, px + pw - 44, y + 30);
+    ctx.textAlign = 'left';
+  });
+
+  // pé: domínio e a marca
+  ctx.fillStyle = GOLD;
+  ctx.font = `600 17px ${UI}`;
+  ctx.fillText(L.foot, 48, H - 44);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = INK;
+  ctx.font = `700 26px ${DISPLAY}`;
+  ctx.fillText('ROAD TO MAJOR', W - 48, H - 42);
+  ctx.textAlign = 'left';
   return cv.toDataURL('image/png');
 }
 

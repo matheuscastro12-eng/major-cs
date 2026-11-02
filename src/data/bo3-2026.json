@@ -609,19 +609,6 @@
     "age": 25
    },
    {
-    "id": "bo3_30074",
-    "nick": "bobz",
-    "name": "Pedro Rocha",
-    "country": "br",
-    "role": "Rifler",
-    "aim": 77,
-    "clutch": 76,
-    "consistency": 76,
-    "awp": 53,
-    "igl": 47,
-    "age": 24
-   },
-   {
     "id": "bo3_19665",
     "nick": "arT",
     "name": "Andrei Piovezan",
@@ -9102,6 +9089,19 @@
     "awp": 37,
     "igl": 39,
     "age": 26
+   },
+   {
+    "id": "bo3_30074",
+    "nick": "bobz",
+    "name": "Pedro Rocha",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 77,
+    "clutch": 76,
+    "consistency": 76,
+    "awp": 53,
+    "igl": 47,
+    "age": 24
    }
   ]
  },

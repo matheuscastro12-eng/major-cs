@@ -208,7 +208,10 @@ export function MatchBanner({
 }) {
   const showScore = scoreA !== undefined && scoreB !== undefined;
   return (
-    <div className="match-banner">
+    // data-theme: o banner tem fundo escuro fixo; com o atributo, as camadas
+    // legadas (--text, --dim…) são recalculadas aqui e o texto não some no tema
+    // claro (index.css: [data-theme='light'] .match-banner)
+    <div className="match-banner" data-theme="dark">
       <div className="mb-side left">
         <div className="mb-flag">
           <CoreFlag players={teamA.players} />

@@ -6,8 +6,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// fileURLToPath (não .pathname): .pathname deixa espaço como %20 e quebra em pastas com espaço
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 

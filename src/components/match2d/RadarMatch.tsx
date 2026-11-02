@@ -465,6 +465,12 @@ function momentText(m: Moment, nickOf: Map<string, string>, teams: [TTeam, TTeam
 // ── desenho do mapa (estático por mapa) ──
 function MapArt({ map }: { map: MapId }) {
   const m = useMemo(() => map2dOf(map), [map]);
+  // planta real (Mirage): um path só, com os vãos internos em even-odd
+  const planD = useMemo(() => m.plan?.rings.map((r) => {
+    const pts: string[] = [];
+    for (let i = 0; i < r.length; i += 2) pts.push(`${r[i]},${r[i + 1]}`);
+    return `M${pts.join('L')}Z`;
+  }).join(''), [m]);
   return (
     <g className="r2d-map" aria-hidden="true">
       <rect x={0} y={0} width={100} height={100} className="r2d-bg" />
@@ -472,7 +478,17 @@ function MapArt({ map }: { map: MapId }) {
         {Array.from({ length: 9 }, (_, i) => <line key={`v${i}`} x1={(i + 1) * 10} y1={0} x2={(i + 1) * 10} y2={100} />)}
         {Array.from({ length: 9 }, (_, i) => <line key={`h${i}`} x1={0} y1={(i + 1) * 10} x2={100} y2={(i + 1) * 10} />)}
       </g>
-      {m.floor ? (
+      {m.plan && planD ? (
+        <>
+          <path className="r2d-plan-walls" d={planD} />
+          <path className="r2d-plan-floor" d={planD} />
+          <g className="r2d-calls">
+            {m.plan.calls.map(([t, x, y, a]) => (
+              <text key={t} x={x} y={y} transform={a ? `rotate(${a} ${x} ${y})` : undefined}>{t}</text>
+            ))}
+          </g>
+        </>
+      ) : m.floor ? (
         <>
           <g className="r2d-walls">
             {m.floor.map(([x, y, w, h], i) => <rect key={i} x={x - 0.8} y={y - 0.8} width={w + 1.6} height={h + 1.6} rx={1} />)}

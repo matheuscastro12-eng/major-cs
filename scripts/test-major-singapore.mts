@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import data from '../src/data/major-singapore-2026.json' with { type: 'json' };
 import {
   validateMajorData, simulateMajor, stageEntrants, swissBestOf, seriesWinP, mapWinP,
-  emptyPicks, pickPool, normalizePicks, bracketSides, picksComplete, scorePicks,
+  emptyPicks, pickPool, normalizePicks, bracketSides, picksComplete, scorePicks, phaseOdds,
   encodePicks, decodePicks, listVersion, type MajorData, type MajorPicks,
 } from '../src/engine/majorSingapore.ts';
 
@@ -103,4 +103,39 @@ test('pontuação: palpite igual ao resultado faz o máximo', () => {
   assert.equal(sc.points, sc.max);
   assert.ok(sc.champion);
   assert.equal(scorePicks(emptyPicks(), r).points, 0);
+});
+
+test('suíço Valve: Buchholz, sem revanche e classificados em ordem W-L/Buchholz', () => {
+  for (const seed of [1, 2, 3, 42, 99]) {
+    const r = simulateMajor(D, seed);
+    for (const st of r.stages) {
+      const seen = new Set<string>();
+      for (const round of st.rounds) for (const m of round) {
+        const k = [m.a, m.b].sort().join('|');
+        assert.ok(!seen.has(k), `revanche no stage ${st.stage}`);
+        seen.add(k);
+      }
+      const rec = new Map(st.records.map((x) => [x.id, x]));
+      for (let i = 1; i < st.advanced.length; i++) {
+        const a = rec.get(st.advanced[i - 1])!, b = rec.get(st.advanced[i])!;
+        assert.ok(a.l < b.l || (a.l === b.l && (a.buchholz ?? 0) >= (b.buchholz ?? 0)), 'ordem dos classificados');
+      }
+    }
+  }
+});
+
+test('previsões: probabilidades somam o esperado', () => {
+  const o = phaseOdds(D, 300);
+  const sum = (f: (x: (typeof o)[number]) => number) => o.reduce((s, x) => s + f(x), 0);
+  assert.ok(Math.abs(sum((x) => x.title) - 1) < 1e-9);
+  assert.ok(Math.abs(sum((x) => x.playoffs) - 8) < 1e-9);
+  assert.ok(Math.abs(sum((x) => x.s1 ?? 0) - 8) < 1e-9);
+});
+
+test('Legacy: dumau, latto, try, n1ssim, arT + coach RiVAS', async () => {
+  const bo3 = (await import('../src/data/bo3-2026.json', { with: { type: 'json' } })).default as { id: string; players: { nick: string }[]; coach?: { nick: string } }[];
+  const lg = D.teams.find((t) => t.name === 'Legacy')!;
+  const team = bo3.find((t) => t.id === lg.bo3Id)!;
+  assert.deepEqual(team.players.map((p) => p.nick), ['dumau', 'latto', 'try', 'n1ssim', 'arT']);
+  assert.equal(team.coach?.nick, 'RiVAS');
 });

@@ -3,6 +3,7 @@ import { MAP_IMAGES, isLiquipediaLogo, photoForNick } from '../data/media';
 import { loadMapImages } from '../state/crm';
 import { hashStr } from '../state/hash';
 import { MAP_LABELS, type MapId, type TTeam } from '../types';
+import { readableInk } from '../state/contrast';
 
 // ─── T7.1: paleta procedural pro fallback de avatar ────────────────────────
 // Players têm 8 paletas dark/saturated rotacionadas por hash(nick); coaches
@@ -183,8 +184,13 @@ export function TeamBadge({
   // logo vinda da Liquipedia (save antigo) é ignorada → sigla do time
   const logoUrl = isLiquipediaLogo(logoUrlProp) ? undefined : logoUrlProp;
   const [err, setErr] = useState(false);
+  // logo de outro domínio vai com crossOrigin (pra ler o tom no canvas); se o
+  // CDN não mandar o cabeçalho de CORS, tenta de novo sem ele em vez de sumir
+  // com a logo (o tom fica 'mid': a cor do time)
+  const [noCors, setNoCors] = useState(false);
   const [tone, setTone] = useState<LogoTone | undefined>(logoUrl ? toneCache.get(logoUrl) : undefined);
   if (logoUrl && !err) {
+    const cors = logoUrl.startsWith('http') && !noCors;
     return (
       <span
         className="tbadge logo"
@@ -200,9 +206,10 @@ export function TeamBadge({
           title={tag}
           loading="lazy"
           decoding="async"
-          crossOrigin={logoUrl.startsWith('http') ? 'anonymous' : undefined}
-          onLoad={(e) => setTone(detectTone(e.currentTarget, logoUrl))}
-          onError={() => setErr(true)}
+          key={cors ? 'cors' : 'plain'}
+          crossOrigin={cors ? 'anonymous' : undefined}
+          onLoad={(e) => setTone(cors ? detectTone(e.currentTarget, logoUrl) : 'mid')}
+          onError={() => (cors ? setNoCors(true) : setErr(true))}
         />
       </span>
     );
@@ -212,7 +219,7 @@ export function TeamBadge({
       className="tbadge"
       style={{
         background: colors[0],
-        color: colors[1],
+        color: readableInk(colors[0], colors[1]),
         width: size,
         height: size,
         fontSize: size * 0.38,

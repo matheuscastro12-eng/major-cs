@@ -3,10 +3,11 @@
 // Um shell só pro jogo inteiro (Início, Carreira, Road to Pro, Ultimate,
 // Draft, Diário, Online, perfil e ranking), com o Football Manager como
 // referência de UX e a identidade marinho + dourado do Road to Major:
-//   - sidebar marinha com o escudo "ROAD TO MAJOR", o seletor de MODO logo
-//     abaixo, as seções do modo em grupos recolhíveis (estilo FM: título em
-//     caixa-alta, ícone por item, badge de pendência, item ativo em pílula
-//     dourada) e o widget "próximo jogo / próxima ação" no pé;
+//   - trilho de MODOS (o escudo é o "Início"; o ativo leva a barra dourada)
+//     com Avisos e Conta no pé: o único lugar de perfil, conta e preferências;
+//   - sidebar marinha só com o contexto do modo ativo: o cabeçalho do modo,
+//     as seções em grupos recolhíveis (estilo FM: título em caixa-alta, ícone
+//     por item, badge de pendência) e o widget "próximo jogo" no pé;
 //   - topbar grafite com o escudo do clube, breadcrumbs, busca ⌘K, sino,
 //     informações do modo e o CONTINUAR dourado (o que vem a seguir e o que
 //     bloqueia o avanço), com a faixa dourada embaixo;
@@ -23,6 +24,7 @@ import {
 import { BrandMark } from '../../brand';
 import { registerShortcut } from '../../../hooks/useKeyboardShortcuts';
 import { useAppHistory } from '../../../state/app-history';
+import { ct } from '../../../state/career-i18n';
 import { useAppTheme } from '../../../state/career-theme';
 import { LangSwitcher } from '../../social';
 import { cx } from '../cx';
@@ -31,7 +33,7 @@ import { CommandPalette } from './CommandPalette';
 import { useDensity, useShellGlobal, openPalette, usePaletteOpen } from './ShellContext';
 import {
   MODE_DATA, type ModeId, type PaletteItem, type ShellCommand, type ShellCrumb, type ShellIdentity,
-  type ShellNavGroup, type ShellNext, type ShellTab, type ShellTool,
+  type ShellMode, type ShellNavGroup, type ShellNavItem, type ShellNext, type ShellTab, type ShellTool,
 } from './types';
 
 export interface GameShellProps {
@@ -44,7 +46,8 @@ export interface GameShellProps {
   tabs?: ShellTab[];
   activeTab?: string;
   onTab?: (id: string) => void;
-  /** ids da tab bar do celular (até 4); padrão: 1º item de cada grupo */
+  /** ids da tab bar do celular (até 4); padrão: 1º item de cada grupo.
+   *  'mode:<id>' fixa um modo do trilho na tab bar (ex.: 'mode:majorsg') */
   mobileNav?: string[];
   crumbs?: ShellCrumb[];
   /** nome da tela (último item do breadcrumb; padrão: rótulo do item ativo) */
@@ -139,8 +142,8 @@ export function GameShell(props: GameShellProps) {
       out.push({ id: `tab-${t.id}`, label: t.label, sub: screenTitle, group: 'Ir para', icon: t.icon, run: () => onTab(t.id) });
     }
     for (const m of global.modes) {
-      if (m.id === mode) continue;
-      out.push({ id: `mode-${m.id}`, label: m.label, sub: m.hint ?? 'Modo de jogo', group: 'Modos', icon: m.icon, run: m.onSelect });
+      if (m.id === mode || m.inPalette === false) continue;
+      out.push({ id: `mode-${m.id}`, label: m.label, sub: m.hint ?? 'Modo de jogo', group: 'Modos', icon: m.icon, run: () => m.onSelect('palette') });
     }
     for (const c of [...commands, ...global.commands]) {
       out.push({ id: `cmd-${c.id}`, label: c.label, sub: c.hint, group: c.group ?? 'Ações', icon: c.icon, run: c.run });
@@ -154,11 +157,18 @@ export function GameShell(props: GameShellProps) {
     ? ({ '--club-1': identity.colors[0], '--club-2': identity.colors[1] } as CSSProperties)
     : undefined;
 
-  // tab bar do celular: ids pedidos, senão o 1º item de cada grupo
+  // tab bar do celular: ids pedidos, senão o 1º item de cada grupo;
+  // 'mode:<id>' vira um atalho pro modo (some se o modo não está no trilho)
   const mobileItems = useMemo(() => {
     const ids = mobileNav ?? nav.map((g) => g.items[0]?.id).filter(Boolean);
-    return ids.map((id) => items.find((it) => it.id === id)).filter(Boolean).slice(0, 4) as typeof items;
-  }, [mobileNav, nav, items]);
+    return ids.map((id): TabbarItem | undefined => {
+      if (id.startsWith('mode:')) {
+        const m = global.modes.find((x) => x.id === id.slice(5));
+        return m && { id, label: m.label, short: m.short, icon: m.icon, badge: m.badge, mode: m };
+      }
+      return items.find((it) => it.id === id);
+    }).filter((x): x is TabbarItem => !!x).slice(0, 4);
+  }, [mobileNav, nav, items, global.modes]);
 
   const go = (id: string) => { setMoreOpen(false); onNav?.(id); };
 
@@ -188,7 +198,6 @@ export function GameShell(props: GameShellProps) {
       )}
       {variant === 'full' && (
         <aside className="gs-side" aria-label={modeDef?.label ?? 'Seções'}>
-          <Brand />
           {modeDef && (
             <div className="gs-modehead">
               <span className="gs-modehead__ic"><modeDef.icon size={18} aria-hidden /></span>
@@ -311,9 +320,17 @@ export function GameShell(props: GameShellProps) {
         <nav className="gs-tabbar" aria-label="Seções">
           {mobileItems.map((it) => {
             const Icon = it.icon ?? LayoutGrid;
+            const m = it.mode;
+            const current = m ? m.id === mode : it.id === active;
+            const label = m?.hint ? `${m.label} · ${m.hint}` : it.short && it.short !== it.label ? it.label : undefined;
             return (
-              <button key={it.id} type="button" className="gs-tabbar__item" aria-current={it.id === active ? 'page' : undefined} aria-label={it.short && it.short !== it.label ? it.label : undefined} onClick={() => onNav?.(it.id)}>
-                <span className="gs-tabbar__icon"><Icon size={20} aria-hidden />{(it.badge || it.alert) ? <span className="gs-dot" aria-hidden /> : null}</span>
+              <button key={it.id} type="button" className="gs-tabbar__item" aria-current={current ? (m ? 'true' : 'page') : undefined} aria-label={label} onClick={() => (m ? m.onSelect('tabbar') : onNav?.(it.id))}>
+                <span className="gs-tabbar__icon">
+                  <Icon size={20} aria-hidden />
+                  {m && m.badge != null && m.badge !== 0
+                    ? <span className={cx('gs-tabbar__badge', m.badgeTone === 'live' && 'is-live')} aria-hidden>{m.badge}</span>
+                    : (it.badge || it.alert) ? <span className="gs-dot" aria-hidden /> : null}
+                </span>
                 <span className="gs-tabbar__label">{it.short ?? it.label}</span>
               </button>
             );
@@ -361,38 +378,37 @@ function initials(name: string): string {
 function Brand({ mark = false }: { mark?: boolean }) {
   const home = useShellGlobal().modes.find((m) => m.id === 'inicio');
   return (
-    <button type="button" className="gs-brand" onClick={home?.onSelect} aria-label="Road to Major · Início">
+    <button type="button" className="gs-brand" onClick={() => home?.onSelect()} aria-label="Road to Major · Início">
       {mark && <BrandMark size={32} />}
       <b>ROAD TO <span>MAJOR</span></b>
     </button>
   );
 }
 
-// ── trilho de modos (74px): escudo, modos, avisos e ajustes ─────────────────
+// ── trilho de modos (74px): Início (escudo), modos, avisos e conta ──────────
 function ModeRail({ mode, density, theme, onDensity, onTheme }: { mode: ModeId; density: string; theme: string; onDensity: () => void; onTheme: () => void }) {
   const g = useShellGlobal();
-  const home = g.modes.find((m) => m.id === 'inicio');
   const [prefsOpen, setPrefsOpen] = useState(false);
   return (
     <nav className="gs-rail" aria-label="Modos de jogo">
-      <button type="button" className="gs-rail__logo" onClick={home?.onSelect} aria-label="Road to Major · Início" aria-current={mode === 'inicio' ? 'true' : undefined}>
-        <BrandMark size={38} />
-      </button>
-      {g.modes.filter((m) => m.id !== 'inicio').map((m) => (
+      {g.modes.map((m) => (
         <button
           key={m.id}
           type="button"
-          className="gs-mode"
+          className={cx('gs-mode', m.id === 'inicio' && 'gs-mode--home')}
           data-mode={MODE_DATA[m.id]}
           aria-current={m.id === mode ? 'true' : undefined}
-          aria-label={m.hint ? `${m.label} · ${m.hint}` : m.label}
-          onClick={m.onSelect}
+          aria-label={m.id === 'inicio' ? `Road to Major · ${m.label}` : m.hint ? `${m.label} · ${m.hint}` : m.label}
+          onClick={() => m.onSelect('rail')}
         >
           <span className="gs-mode__ic">
-            <m.icon size={20} aria-hidden />
-            {m.badge != null && m.badge !== 0 && <span className="gs-mode__badge" aria-hidden>{m.badge}</span>}
+            {m.id === 'inicio' ? <BrandMark size={30} /> : <m.icon size={20} aria-hidden />}
+            <ModeBadge m={m} />
           </span>
-          <span className="gs-mode__label">{m.short ?? m.label}</span>
+          {/* AO VIVO toma o lugar do rótulo, como o selo de uma transmissão */}
+          {m.badgeTone === 'live' && m.badge
+            ? <span className="gs-mode__label gs-mode__label--live">{m.badge}</span>
+            : <span className="gs-mode__label">{m.short ?? m.label}</span>}
           {m.hint && <span className="gs-tip gs-tip--side" role="presentation">{m.label}<small>{m.hint}</small></span>}
         </button>
       ))}
@@ -400,13 +416,13 @@ function ModeRail({ mode, density, theme, onDensity, onTheme }: { mode: ModeId; 
       {g.alerts && (
         <button type="button" className="gs-mode" onClick={g.alerts.onClick} aria-label={g.alerts.count ? `Avisos · ${g.alerts.count} novo(s)` : 'Avisos'}>
           <span className="gs-mode__ic"><Bell size={19} aria-hidden />{!!g.alerts.count && <span className="gs-mode__dot" aria-hidden />}</span>
-          <span className="gs-mode__label">Avisos</span>
+          <span className="gs-mode__label">{ct('Avisos')}</span>
         </button>
       )}
       <div className="gs-rail__prefs">
         <button type="button" className="gs-mode" aria-label="Conta, preferências e atalhos" aria-haspopup="menu" aria-expanded={prefsOpen} onClick={() => setPrefsOpen((v) => !v)}>
           <span className="gs-mode__ic gs-mode__avatar" aria-hidden>{(g.user?.nick ?? 'R').slice(0, 1).toUpperCase()}</span>
-          <span className="gs-mode__label">Você</span>
+          <span className="gs-mode__label">{ct('Conta')}</span>
         </button>
         {prefsOpen && (
           <Popover onClose={() => setPrefsOpen(false)} className="gs-menu gs-menu--rail" placement="right-end" label="Conta, preferências e atalhos">
@@ -442,6 +458,15 @@ function ModeRail({ mode, density, theme, onDensity, onTheme }: { mode: ModeId; 
       </div>
     </nav>
   );
+}
+
+type TabbarItem = ShellNavItem & { mode?: ShellMode };
+
+/** selo do modo no trilho: contagem dourada (ex.: 24d, 4) ou o ponto de AO VIVO */
+function ModeBadge({ m }: { m: ShellMode }) {
+  if (m.badge == null || m.badge === 0) return null;
+  if (m.badgeTone === 'live') return <span className="gs-mode__dot gs-mode__dot--live" aria-hidden />;
+  return <span className="gs-mode__badge" aria-hidden>{m.badge}</span>;
 }
 
 // ── grupo da sidebar (recolhível, lembra o estado por modo) ─────────────────
@@ -695,6 +720,8 @@ function MoreSheet({ onClose, mode, nav, active, onGo, tools, sideWidget, onDens
   tools: ShellTool[]; sideWidget?: ReactNode; onDensity: () => void; onTheme: () => void; density: string; theme: string;
 }) {
   const g = useShellGlobal();
+  // atalhos da Conta que o menu do modo já mostra (ranking, hall…) não repetem no rodapé
+  const navLabels = new Set(nav.flatMap((grp) => grp.items.map((it) => it.label)));
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; });
   useEffect(() => {
@@ -713,10 +740,10 @@ function MoreSheet({ onClose, mode, nav, active, onGo, tools, sideWidget, onDens
         </header>
         <div className="gs-more__modes" role="group" aria-label="Modos de jogo">
           {g.modes.map((m) => (
-            <button key={m.id} type="button" className="gs-more__mode" data-mode={MODE_DATA[m.id]} aria-current={m.id === mode ? 'true' : undefined} onClick={() => { onClose(); m.onSelect(); }}>
+            <button key={m.id} type="button" className="gs-more__mode" data-mode={MODE_DATA[m.id]} aria-current={m.id === mode ? 'true' : undefined} aria-label={m.hint ? `${m.label} · ${m.hint}` : undefined} onClick={() => { onClose(); m.onSelect('menu'); }}>
               <m.icon size={20} aria-hidden />
               <span>{m.short ?? m.label}</span>
-              {m.badge != null && m.badge !== 0 && <span className="gs-modes__badge">{m.badge}</span>}
+              {m.badge != null && m.badge !== 0 && <span className={cx('gs-modes__badge', m.badgeTone === 'live' && 'is-live')} aria-hidden>{m.badge}</span>}
             </button>
           ))}
         </div>
@@ -738,7 +765,7 @@ function MoreSheet({ onClose, mode, nav, active, onGo, tools, sideWidget, onDens
         </nav>
         {sideWidget && <div className="gs-side__widget">{sideWidget}</div>}
         <footer className="gs-more__foot">
-          {(g.railFoot ?? []).map((c) => (
+          {(g.railFoot ?? []).filter((c) => !navLabels.has(c.label)).map((c) => (
             <button key={c.id} type="button" className="gs-chipbtn" onClick={() => { onClose(); c.run(); }}>
               {c.icon && <c.icon size={16} aria-hidden />} {c.label}
             </button>

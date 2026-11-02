@@ -1,3 +1,4 @@
+import { logoForName } from '../data/media';
 // MODO MAJOR JOGADO — o usuário escolhe um time do PGL Major Singapore 2026 e
 // joga as séries DELE na Sala (a mesma máquina de estados do Road to Pro,
 // engine/rtp/room.ts); as outras séries seguem simuladas pelo rating.
@@ -129,14 +130,14 @@ export function majorSeriesSetup(d: MajorData, c: MajorCampaign, m: PendingSerie
     seed: (c.seed ^ 0x51ac) >>> 0, startTier: 'challenger',
   });
   // o scorebug da Sala mostra save.team: é o time do Major, não o do fixture
-  save.team = { ...save.team, tag: mine.tag };
+  save.team = { ...save.team, tag: mine.tag, logo: logoForName(mine.name, mine.id) ?? save.team.logo };
   const base = prepareCircuitMatch(save);
   if (!base) throw new Error('fixture do Major sem partida');
   const prep: MatchPrep = {
     ...base,
     matchSeed: seed,
     opp: {
-      name: opp.name, tag: opp.tag, colors: opp.colors ?? ['#1b2433', '#c9a227'],
+      name: opp.name, tag: opp.tag, colors: opp.colors ?? ['#1b2433', '#c9a227'], logoUrl: logoForName(opp.name, opp.id),
       strength: save.player.ovr - edgeOf(mine, opp), players: [],
     },
     maps: pickMaps(makeRng(seed), m.bestOf),

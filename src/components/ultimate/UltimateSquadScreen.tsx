@@ -83,7 +83,9 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
+import { UltimateStarterOffer } from './UltimateStarterOffer';
 import { setCheckoutSrc, trackPaywallView, trackShare, trackUltFunnel } from '../../state/track';
+import { markFirstValue } from '../../state/paywallPolicy';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, beginPassPix, beginPassCheckout, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { collectPaidCoins, collectPaidPass } from '../../state/paidClaim'; // [O0-25] coleta única, crédito fora do ciclo de vida da tela
 import { ultFrozenNotice } from '../../state/ultimateShadow'; // [O0-02]
@@ -118,6 +120,8 @@ import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQ
 import { useSectionHistory } from '../../state/app-history';
 import '../../styles/ultimate.css';
 import { priceLabel, usePrice, withPrice } from '../../state/price';
+import { dismissGuestBanner, guestBannerVisible, readGuestBannerDismissed } from '../../state/guestBanner';
+import { planRadarUrl } from '../../data/planRadar';
 
 // [URG-3] deep link do e-mail "rival te passou": /ultimate?tab=ranqueada abre a
 // aba Ranqueada. Lido UMA vez no carregamento do módulo (mesmo motivo do
@@ -492,6 +496,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; draft?: { wins: number; completed: boolean; over: boolean; credits: number; card?: UltCard; daily?: boolean }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean; star?: MatchStar; casterFinal?: string | null; evidence?: MatchEvidence };
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1; pvpCode?: string } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
+  const [guestBannerDismissed, setGuestBannerDismissed] = useState(readGuestBannerDismissed);
   const [shareState, setShareState] = useState<'busy' | 'shared' | 'saved' | null>(null);
   const [liveRound, setLiveRound] = useState(0); // rounds já exibidos no replay (barra de momentum)
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
@@ -1993,6 +1998,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         setPackFromCloud(res.source === 'server');
         if (pack.id === SEASON_PACK.id) trackUltFunnel('season_pack_open', { season: seasonN ?? 0 }); // [URG-1]
         setReveal([...res.cards].sort((a, b) => b.ovr - a.ovr));
+        markFirstValue('pack'); // 1º pacote = 1º valor (a oferta passiva só aparece depois: state/paywallPolicy.ts)
       } finally { setPackBusy(null); }
     })();
   };
@@ -2273,6 +2279,35 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     })(),
   };
 
+  const guestWarn = (compact: boolean) => (
+        <div className={`ut-guest-warn${compact ? ' is-compact' : ''}`} style={{ position: 'relative', borderRadius: compact ? 10 : 0, paddingRight: 44, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 16px', background: 'rgba(232,193,112,0.10)', borderBottom: '1px solid rgba(232,193,112,0.35)', color: 'var(--em-text, #eadfce)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', lineHeight: 1.4, flex: '1 1 320px' }}>
+            <Lock size={16} style={{ color: '#e8c170', flexShrink: 0 }} />
+            <span>
+              <b>{ct('Você está jogando sem conta.')}</b>{' '}
+              {ct('Seu progresso do Ultimate fica salvo só neste navegador — se limpar o cache ou trocar de aparelho, você perde tudo.')}
+            </span>
+          </span>
+          {onCreateAccount && (
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={onCreateAccount}
+                style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
+              >
+                {withPrice(ct('Criar conta vitalícia · {preço} · salva na nuvem e joga no PC e no celular'))}
+              </button>
+              {/* prova social real na única superfície de venda do modo convidado (iter42) */}
+              <FounderCounter style={{ fontSize: '10px' }} />
+            </span>
+          )}
+          <button type="button" className="ut-guest-warn__close" aria-label={ct('Fechar aviso')} title={ct('Fechar (volta em 7 dias)')}
+            onClick={() => setGuestBannerDismissed(dismissGuestBanner())}
+            style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid rgba(232,193,112,0.35)', background: 'transparent', color: 'inherit', cursor: 'pointer' }}>
+            <X size={14} />
+          </button>
+        </div>
+  );
   return (
     <GameShell {...shellProps}>
     <div className="ut-root ut-in-shell">
@@ -2296,30 +2331,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           real (acct-chip-guest, upsell-card) já mostrou que repetir o preço no
           próprio texto do botão, e não só num parágrafo ao lado, melhora clique
           em telas pequenas. Aplica o mesmo padrão aqui. */}
-      {guest && (
-        <div className="ut-guest-warn" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 16px', background: 'rgba(232,193,112,0.10)', borderBottom: '1px solid rgba(232,193,112,0.35)', color: 'var(--em-text, #eadfce)' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', lineHeight: 1.4, flex: '1 1 320px' }}>
-            <Lock size={16} style={{ color: '#e8c170', flexShrink: 0 }} />
-            <span>
-              <b>{ct('Você está jogando sem conta.')}</b>{' '}
-              {ct('Seu progresso do Ultimate fica salvo só neste navegador — se limpar o cache ou trocar de aparelho, você perde tudo.')}
-            </span>
-          </span>
-          {onCreateAccount && (
-            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-              <button
-                type="button"
-                onClick={onCreateAccount}
-                style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
-              >
-                {withPrice(ct('Criar conta vitalícia · {preço} · salva na nuvem e joga no PC e no celular'))}
-              </button>
-              {/* prova social real na única superfície de venda do modo convidado (iter42) */}
-              <FounderCounter style={{ fontSize: '10px' }} />
-            </span>
-          )}
-        </div>
-      )}
+      {/* [FIX29] só no Hub (home do Ultimate), com ✕ — ver src/state/guestBanner.ts */}
+      {guestBannerVisible({ guest, tab, dismissedAt: guestBannerDismissed }) && guestWarn(false)}
 
 
       {/* ===== PAGE ===== */}
@@ -2551,7 +2564,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             const tone = wknd.open ? '#f472b6' : '#8a93a2';
             return (
               <section style={{ borderRadius: '14px', overflow: 'hidden', border: `1px solid ${tone}`, marginBottom: '16px', background: '#0e141b', position: 'relative' }}>
-                <span style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/de_inferno.png)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.14 }} />
+                <span style={{ position: 'absolute', inset: 0, backgroundImage: `url("${planRadarUrl('inferno')}")`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.14 }} />
                 <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(244,114,182,.18), rgba(13,17,22,.94) 62%)' }} />
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 22px', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '30px' }}>🎁</span>
@@ -3148,6 +3161,14 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             {/* fase 3b: selinho discreto quando o último pack foi rolado no servidor */}
             {packFromCloud && <span style={{ marginLeft: 8, whiteSpace: 'nowrap', opacity: 0.85 }}>☁️ {ct('economia sincronizada')}</span>}
           </p>
+          {/* [U08] oferta inicial: atrás da flag VITE_FF_ULTIMATE_STARTER (OFF),
+              enabled=false e sem preço → não renderiza. Pedidos reais (orders) e
+              checkout entram junto com o tier no servidor. */}
+          <UltimateStarterOffer
+            orders={[]}
+            matchesPlayed={state.profile.w + state.profile.l}
+            onBuy={() => { /* checkout do tier 'starter-v1': pendente (servidor + preço) */ }}
+          />
           {/* coins com dinheiro real (Pix) — acelera, não substitui: os mesmos
               packs continuam compráveis só jogando */}
           <div className="ut-coinshop">
@@ -3971,6 +3992,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 {result.divChange === 'promoted' ? <><TrendingUp size={15} strokeWidth={2.5} /> {ct('PROMOVIDO')} · {result.divName}</> : <><TrendingUp size={15} strokeWidth={2.5} style={{ transform: 'scaleY(-1)' }} /> {ct('rebaixado')} · {result.divName}</>}
               </div>
             )}
+            {/* [FIX29] fim de run (Gauntlet/Draft encerrados) */}
+            {guestBannerVisible({ guest, tab: 'run-end', runOver: !!(result.gaunt?.over || result.draft?.over), dismissedAt: guestBannerDismissed }) && <div style={{ margin: '0 0 12px' }}>{guestWarn(true)}</div>}
             {result.gaunt?.completed && (
               <div className="ut-divchange promoted"><Flame size={15} strokeWidth={2.5} /> {ct('GAUNTLET COMPLETO')} · 5/5</div>
             )}

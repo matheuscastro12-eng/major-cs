@@ -90,18 +90,66 @@ export function logoForTeam(team: Pick<TeamSeason, 'id' | 'team'>): string | und
   return local ? `/logos/${local}` : undefined;
 }
 
+// Logo local pelo NOME/sigla do time (times fora do banco de temporadas, ex.: os
+// convidados do Modo Major e os seeds do Major da carreira). Só arquivos de
+// public/logos — nunca Liquipedia. Sem arquivo → undefined (TeamBadge usa a sigla).
+const LOGO_BY_NAME: Record<string, string> = {
+  vitality: 'vitality.png',
+  spirit: 'spirit.png',
+  falcons: 'falcons.png',
+  natusvincere: 'navi.png', navi: 'navi.png',
+  mouz: 'mouz.png', mousesports: 'mouz.png',
+  legacy: 'legacy.png',
+  mongolz: 'mongolz.png',
+  astralis: 'astralis.png',
+  furia: 'furia.png',
+  g2: 'g2.png',
+  '9z': '9z.png',
+  pain: 'pain.png',
+  mibr: 'mibr.png',
+  faze: 'faze.png',
+  ninjasinpyjamas: 'nip.jpg', nip: 'nip.jpg',
+  heroic: 'heroic.png',
+  big: 'big.jpg',
+  tyloo: 'tyloo.png',
+  liquid: 'liquid.png',
+  fnatic: 'fnatic.png', cloud9: 'cloud9.png', ence: 'ence.png',
+  complexity: 'complexity.png', imperial: 'imperial.png',
+  apeks: 'apeks.png', sharks: 'sharks.png', redcanids: 'redcanids.png', oddik: 'oddik.png',
+  w7m: 'w7m.png', virtuspro: 'virtuspro.png',
+};
+const normTeam = (s: string) => s.toLowerCase()
+  .replace(/\b(team|esports|e-sports|gaming|clan|club)\b/g, '')
+  .replace(/^the\s+/, '')
+  .replace(/[^a-z0-9]/g, '');
+
+/** logo local para um time pelo nome, sigla ou id (o primeiro que bater) */
+export function logoForName(...keys: (string | undefined)[]): string | undefined {
+  for (const k of keys) {
+    if (!k) continue;
+    const f = LOGO_BY_NAME[normTeam(k)];
+    if (f) return `/logos/${f}`;
+  }
+  return undefined;
+}
+
 export function liquipediaTeamUrl(team: Pick<TeamSeason, 'team'>): string {
   return `https://liquipedia.net/counterstrike/${team.team.replace(/ /g, '_')}`;
 }
 
 // ---- fotos de jogadores ----
-// Só bo3.gg (URLs diretas em bo3-photos.json). NÃO usamos fotos da Liquipedia:
-// os arquivos têm licença "permission" (uso restrito à Liquipedia), não livre.
-// Sem foto → PlayerAvatar mostra as iniciais.
+// Só bo3.gg, servidas do NOSSO domínio (public/players/bo3/<slug>.webp, commitadas;
+// sem hotlink pro CDN). bo3-photos.json lista só as que existem em disco; as
+// quebradas ficam em bo3-photos-missing.json. Atualizar: tsx scripts/fetch-bo3-photos.mts.
+// NÃO usamos fotos da Liquipedia (licença "permission", uso restrito à Liquipedia).
+// Sem foto → PlayerAvatar mostra as iniciais. Crédito "Fotos: bo3.gg" é global (GameShell).
 import bo3Photos from './bo3-photos.json';
 
-const BO3_PHOTOS = bo3Photos as Record<string, string>;
+export const photoSlug = (nick: string) => nick.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+const BO3_LOCAL = new Set(Object.keys(bo3Photos as Record<string, string>).map(photoSlug));
 
 export function photoForNick(nick: string): string | undefined {
-  return BO3_PHOTOS[nick.toLowerCase()];
+  const k = photoSlug(nick);
+  return k && BO3_LOCAL.has(k) ? `/players/bo3/${k}.webp` : undefined;
 }
+

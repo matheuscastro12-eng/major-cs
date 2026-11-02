@@ -421,7 +421,7 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 }
 .ut-pack > :not(.ut-packart) { grid-column: 2; }
 .ut-pack__name { font-size: 1.1rem; font-weight: 900; color: var(--c-ink, #fff); letter-spacing: 0.2px; }
-.ut-pack__desc { font-size: 0.76rem; line-height: 1.4; color: var(--c-ink-2, rgba(255,255,255,.78)); }
+.ut-pack__desc { font-size: 0.76rem; line-height: 1.4; color: var(--c-ink-dim); }
 .ut-pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .ut-pack-grid .ut-pack { grid-template-columns: 1fr; text-align: center; justify-items: center; padding: 18px 14px 14px; }
 .ut-pack-grid .ut-pack > :not(.ut-packart) { grid-column: 1; }
@@ -448,14 +448,14 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
   transform: rotateY(-10deg) rotateX(3deg); transition: transform .25s ease;
 }
 .ut-pack:hover .ut-packart__foil { transform: rotateY(0) rotateX(0) translateY(-3px); }
-.ut-packart__brand { font-family: var(--ut-font-display, inherit); font-size: .5rem; font-weight: 900; letter-spacing: 1.6px; opacity: .9; }
+.ut-packart__brand { font-family: var(--ut-font-cond); font-size: .5rem; font-weight: 900; letter-spacing: 1.6px; opacity: .9; }
 .ut-packart__tear { width: 100%; border-top: 1px dashed rgba(255,255,255,.45); margin: 2px 0 auto; }
 .ut-packart__emblem {
   display: grid; place-items: center; width: 62px; height: 62px; border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.35), rgba(0,0,0,.25));
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.55), 0 4px 10px rgba(0,0,0,.3);
 }
-.ut-packart__label { margin-top: auto; font-family: var(--ut-font-display, inherit); font-weight: 900; font-size: .78rem; text-transform: uppercase; letter-spacing: .6px; text-align: center; line-height: 1.1; text-shadow: 0 1px 3px rgba(0,0,0,.5); max-width: 100%; overflow-wrap: anywhere; }
+.ut-packart__label { margin-top: auto; font-family: var(--ut-font-cond); font-weight: 900; font-size: .78rem; text-transform: uppercase; letter-spacing: .6px; text-align: center; line-height: 1.1; text-shadow: 0 1px 3px rgba(0,0,0,.5); max-width: 100%; overflow-wrap: anywhere; }
 .ut-packart__count { font-size: .58rem; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,.35); }
 .ut-packart__sheen { position: absolute; inset: -40% -60%; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.38) 50%, transparent 60%); transform: translateX(-60%); transition: transform .7s ease; pointer-events: none; }
 .ut-pack:hover .ut-packart__sheen { transform: translateX(60%); }
