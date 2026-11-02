@@ -15,6 +15,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, Crosshair, Gift, Globe, Play, Star, Swords, Target, Trophy } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutBlocked, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
+import { offerVariant } from '../state/offerAb';
+import { OfferPixCta } from './OfferPixCta';
 import {
   MAJOR_FAVORITES, MAJOR_SG_MILESTONES, landingDoors, landingHero, landingMajorCta, landingModes, majorPhase, milestonesReached,
   type LandingDoor, type LandingDoorId, type LandingHero, type LandingMajorCta, type LandingModeId, type MajorPhase,
@@ -398,7 +400,7 @@ function Modes({ hero, onPlay }: { hero: LandingHero; onPlay: () => void }) {
   );
 }
 
-function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+function Pricing({ onAccount, onPix, onPlay }: { onAccount: () => void; onPix: () => void; onPlay: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
   const FREE = ['Carreira, Ultimate, Draft, Diário e Online completos', 'Ranqueada online do Ultimate', 'Road to Pro: demo com a peneira e 3 semanas', 'Save neste navegador'];
   const PAID = ['Road to Pro completo, com a Série do Dia', 'Save na nuvem: joga no PC e no celular', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil'];
@@ -425,7 +427,9 @@ function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => v
             <ul className="lp-checks">
               {PAID.map((f) => <li key={f}><Check size={16} aria-hidden /><b>{ct(f)}</b></li>)}
             </ul>
-            <Button variant="gold" block onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>
+            {offerVariant() === 'B'
+              ? <OfferPixCta showFounders={false} benefit={ct('Tudo acima liberado na hora em que o Pix cai. Sem assinatura.')} onPix={onPix} />
+              : <Button variant="gold" block onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>}
           </article>
         </div>
         <p className="lp-plans__foot lp-reveal">
@@ -971,6 +975,7 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
   usePrice(); // re-renderiza quando o preço do servidor chega
   const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar OU clique numa trava dentro do app: pula a landing e abre direto o cadastro
   const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
+  const [acctPix, setAcctPix] = useState(false); // [A/B oferta · B] modal abre no modo Pix direto
   const ref = useReveal();
   // hero do Major enquanto a vitrine estiver no ar (data/majorWindow.ts) e o App
   // souber abrir o modo; o instante é lido 1x por visita (régua e contagem)
@@ -1073,11 +1078,11 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
           : <HeroGeneral onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />}
         <QuickStart hero={hero} cta={live.cta} onMajor={openMajor} onDoor={openDoor} />
         <Modes hero={hero} onPlay={onPlay} />
-        <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPlay={onPlay} />
+        <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPix={() => { setAcctPix(true); openAcct('signup', 'landing-pricing'); }} onPlay={onPlay} />
         <Faq hero={hero} />
         <FinalCta hero={hero} cta={live.cta} onMajor={openMajor} onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
       </main>
-      {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} payingAccount={payingAccount} />}
+      {acct && <AccountModal onClose={() => { setAcct(false); setAcctPix(false); }} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} payingAccount={payingAccount} pixFirst={acctPix} />}
     </div>
   );
 }

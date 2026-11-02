@@ -1479,6 +1479,7 @@ export default function App() {
              pedindo pra pagar). onUpgrade reusa startCheckout (mesmo caminho do
              onUpgrade do Ultimate) — sem repetir e-mail/senha. */
           onUpgrade={startCheckout}
+          onPixCheckout={(src) => openInlineCheckout(src)}
           onLogout={() => { logout(); setCloudEnabled(false); }}
           onAdmin={account?.admin ? () => setScreen('admin') : undefined}
           onAchievements={() => setAchOpen(true)}

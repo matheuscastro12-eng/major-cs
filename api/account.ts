@@ -158,6 +158,18 @@ const RATE = {
 // 2 min por e-mail: o 'me' de um cadastro pendente não vira flood na API do Stripe.
 const STRIPE_RECON_WINDOW_SEC = 120;
 
+
+// [A/B oferta] atribuição best-effort em rtm_pending_signups / rtm_coin_orders.
+// Colunas vêm de scripts/migrations/2026-11-02-attr-ref-utm.sql (rodado à mão,
+// com ok do Matheus). Sem as colunas o UPDATE falha e é ignorado: nunca quebra
+// cadastro nem pedido. Só [a-z0-9_-], até 40 chars.
+function cleanAttr(raw: unknown): { ref: string | null; utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; offer_variant: string | null } {
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const c = (v: unknown) => { const s = String(v ?? '').toLowerCase().slice(0, 40); return s && /^[a-z0-9_-]+$/.test(s) ? s : null; };
+  const v = String(o.offerVariant ?? '').toUpperCase();
+  return { ref: c(o.ref), utm_source: c(o.utm_source), utm_medium: c(o.utm_medium), utm_campaign: c(o.utm_campaign), offer_variant: v === 'A' || v === 'B' ? v : null };
+}
+
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
@@ -334,6 +346,12 @@ export default async function handler(
     }
     await sql`INSERT INTO rtm_pending_signups (email, nick, pass_hash) VALUES (${email}, ${nick}, ${passHash})
               ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, created_at=now()`;
+    try {
+      const a = cleanAttr(body.attr);
+      if (a.ref || a.utm_source || a.utm_medium || a.utm_campaign || a.offer_variant) {
+        await sql`UPDATE rtm_pending_signups SET ref=${a.ref}, utm_source=${a.utm_source}, utm_medium=${a.utm_medium}, utm_campaign=${a.utm_campaign}, offer_variant=${a.offer_variant} WHERE email=${email}`;
+      }
+    } catch { /* colunas ainda não migradas: segue sem atribuição */ }
     res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, url: await safeCheckoutUrl(email, body.origin) });
     return;
   }
@@ -576,6 +594,12 @@ export default async function handler(
     // o inverso — cobrança paga sem pedido — perderia os coins do jogador.
     await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents) VALUES (${corr}, ${em}, ${tier}, ${pack.coins}, ${pack.cents}) ON CONFLICT (correlation_id) DO NOTHING`;
     try {
+      const a = cleanAttr(body.attr);
+      if (a.ref || a.utm_source || a.utm_medium || a.utm_campaign || a.offer_variant) {
+        await sql`UPDATE rtm_coin_orders SET ref=${a.ref}, utm_source=${a.utm_source}, utm_medium=${a.utm_medium}, utm_campaign=${a.utm_campaign}, offer_variant=${a.offer_variant} WHERE correlation_id=${corr}`;
+      }
+    } catch { /* colunas ainda não migradas: segue sem atribuição */ }
+    try {
       const r = await fetch('https://api.openpix.com.br/api/v1/charge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: appId },
@@ -622,6 +646,12 @@ export default async function handler(
     // pedido ANTES da sessão (mesma razão do Pix): pending órfão é inofensivo; o
     // inverso — cartão aprovado sem pedido — perderia os coins do jogador.
     await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, method) VALUES (${corr}, ${em}, ${tier}, ${pack.coins}, ${pack.cents}, 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
+    try {
+      const a = cleanAttr(body.attr);
+      if (a.ref || a.utm_source || a.utm_medium || a.utm_campaign || a.offer_variant) {
+        await sql`UPDATE rtm_coin_orders SET ref=${a.ref}, utm_source=${a.utm_source}, utm_medium=${a.utm_medium}, utm_campaign=${a.utm_campaign}, offer_variant=${a.offer_variant} WHERE correlation_id=${corr}`;
+      }
+    } catch { /* colunas ainda não migradas: segue sem atribuição */ }
     try {
       const session = await stripeClient().checkout.sessions.create({
         mode: 'payment',
