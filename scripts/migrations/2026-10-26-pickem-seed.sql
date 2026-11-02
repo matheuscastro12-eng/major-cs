@@ -1,14 +1,11 @@
 -- SEED do Pick'em: abre o Stage 1. Gerado por scripts/pickem-seed.mts — não editar à mão.
 -- Rodar DEPOIS de 2026-10-26-pickem.sql, no Neon SQL Editor. Idempotente (upsert por stage).
--- ATENÇÃO: times ainda são PROJEÇÃO (lista oficial sai em 2026-11-02). Atualize o JSON
--- (status='oficial'), rode `npx tsx scripts/pickem-seed.mts` e só então execute este arquivo.
 --
--- locks_at PROPOSTO: 2026-11-24T02:00:00Z = 24/11/2026 10:00 em Singapura (23/11 23:00 em Brasília).
--- O horário da 1ª partida do Stage 1 ainda não foi publicado pela PGL: confirme e ajuste se preciso.
--- A trava vale pelo relógio do servidor (now() < locks_at).
+-- locks_at: 2026-11-23T16:00:00Z = 24/11/2026 00:00 em Singapura = 23/11 13:00 em Brasília,
+-- a mesma trava do placar no navegador. A trava vale pelo relógio do servidor (now() < locks_at).
 
 INSERT INTO rtm_pickem_stages (stage, teams, locks_at)
-VALUES ('s1', '["betboom","magic","pain-gaming","mibr","faze-clan","ninjas-in-pyjamas","lynn-vision","wildcard","envy","heroic","big","tyloo","m80","jijiehao","team-liquid","thunder-downunder"]'::jsonb, '2026-11-24T02:00:00Z')
+VALUES ('s1', '["heroic","9z","ninjas-in-pyjamas","team-liquid","m80","faze-clan","100-thieves","eternal-fire","parivision","dendele","bc-game","imperial","wildcard","lynn-vision","flyquest","chinggis-warriors"]'::jsonb, '2026-11-23T16:00:00Z')
 ON CONFLICT (stage) DO UPDATE SET teams = EXCLUDED.teams, locks_at = EXCLUDED.locks_at, updated_at = now();
 
 -- s2, s3 e playoffs: os times dependem dos resultados (Stage 2 = seeds 9-16 + 8 classificados do

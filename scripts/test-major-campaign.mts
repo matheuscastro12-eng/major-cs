@@ -28,10 +28,12 @@ function runAll(c: MajorCampaign, viaRoom: boolean): MajorCampaign {
 }
 
 test('a primeira série pendente é do time escolhido, no stage de entrada', () => {
-  const c = newCampaign(42, 'mibr', 'Rifler');
+  // um time do Stage 1 (seeds 17-32) da lista do JSON, sem depender de qual é
+  const s1 = [...D.teams].sort((a, b) => a.seed - b.seed)[20].id;
+  const c = newCampaign(42, s1, 'Rifler');
   const v = campaignView(D, c);
   assert.ok(v.next);
-  assert.ok([v.next!.a, v.next!.b].includes('mibr'));
+  assert.ok([v.next!.a, v.next!.b].includes(s1));
   assert.equal(v.next!.phase, 1);
   assert.equal(v.result, null);
 });
