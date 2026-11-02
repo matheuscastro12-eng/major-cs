@@ -7,6 +7,7 @@ import { useFounders } from '../state/founders';
 import { priceLabel, usePrice } from '../state/price';
 import { pixErrorKind, type PixErrorKind } from '../state/pixView';
 import { PixPanel } from './PixPanel';
+import { Button } from './ds';
 import { PAYWALL_VARIANTS, autoOfferAllowed, autoOffersShown, hasFirstValue, markAutoOfferShown, variantOf } from '../state/paywallPolicy';
 
 // variante do teste do teto por sessão (state/paywallPolicy.ts); ?pw=a|b força
@@ -47,6 +48,10 @@ const HOOKS: Record<string, string> = {
   default: 'Leve sua carreira pro próximo nível.',
 };
 
+// nudge anti-abandono do QR Pix deste card: no máximo 1x por sessão de navegação
+// (guard de módulo), igual ao do modal de conta da Landing (checkout-nudge).
+const upsellNudgeShown = new Set<string>();
+
 export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade: () => void; onGuestUpgrade?: () => void; onPixPaid: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
   const { account } = useAccount();
@@ -69,6 +74,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
   const [pix, setPix] = useState<PixCharge | null>(null);
   const [pixAt, setPixAt] = useState(0); // quando a cobrança chegou (base do prazo do Woovi)
   const [pixBusy, setPixBusy] = useState(false);
+  const [nudge, setNudge] = useState(false); // nudge anti-abandono na tela do QR (requestClose)
   const [pixErr, setPixErr] = useState<PixErrorKind | null>(null);
   // o polling automático bateu no teto de 15 min: a tela pede o "verificar agora"
   const [pollPaused, setPollPaused] = useState(false);
@@ -127,7 +133,9 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
       setHook(HOOKS[trigger ?? 'default'] ?? HOOKS.default);
       setCardSwitching(false); // botão de cartão destravado a cada abertura (só UI)
       setOpen(true);
-      trackPaywallView('upsell-card', { moment, cap: PW.cap, variant: PW_VARIANT }); // funil: 1 por momento, com a variante do teto
+      // 'market' segue com src próprio (efeito isolado do gancho); os demais
+      // dividem 'upsell-card' e se separam pelo moment
+      trackPaywallView(trigger === 'market' ? 'upsell-card-market' : 'upsell-card', { moment, cap: PW.cap, variant: PW_VARIANT });
       localStorage.setItem(LAST_KEY, String(Date.now()));
     };
     window.addEventListener('rtm:upsell', onEvt);
@@ -182,9 +190,20 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     );
   }
 
+  // fechar com o QR Pix aberto e sem pagamento: UM nudge leve inline (1x por
+  // sessão), honesto e descartável — o mesmo da Landing. Depois, fechar fecha.
+  const requestClose = () => {
+    if (pix && !pixConfirmed.current && !pixSwitchedMethod.current && !upsellNudgeShown.has('pix')) {
+      upsellNudgeShown.add('pix');
+      setNudge(true);
+      trackPaywallView('upsell-nudge'); // funil: src próprio, mede separado do checkout-nudge da Landing
+      return;
+    }
+    close();
+  };
   const close = () => {
     if (pix && !pixConfirmed.current && !pixSwitchedMethod.current) trackCheckoutAbandon('pix', (Date.now() - pixOpenedAt.current) / 1000);
-    setPix(null); setPixErr(null); setPixBusy(false);
+    setPix(null); setPixErr(null); setPixBusy(false); setNudge(false);
     pixOpenedAt.current = 0; // a próxima abertura do card é outro checkout (conta outro checkout_open)
     setOpen(false);
   };
@@ -215,9 +234,9 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
   const pixMode = !!pix || pixBusy || !!pixErr;
 
   return (
-    <div className={`upsell-overlay${pixMode ? ' upsell-overlay--pix' : ''}`} role="dialog" aria-modal="true" onClick={close}>
+    <div className={`upsell-overlay${pixMode ? ' upsell-overlay--pix' : ''}`} role="dialog" aria-modal="true" onClick={requestClose}>
       <div className="upsell-card" onClick={(e) => e.stopPropagation()}>
-        <button className="upsell-x" onClick={close} aria-label={ct('fechar')}>✕</button>
+        <button className="upsell-x" onClick={requestClose} aria-label={ct('fechar')}>✕</button>
         <div className="upsell-kicker">{ct('Conta vitalícia')}</div>
         {pixMode ? (
           <PixPanel
@@ -237,6 +256,15 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
             onCheckNow={() => void checkPixNow()}
             checkingNow={checkingNow}
             pollPaused={pollPaused}
+            interrupt={nudge ? (
+              <div className="pix-panel__nudge" role="group" aria-label={ct('Continuar pagamento')}>
+                <p>{ct('Ficou alguma dúvida? O acesso é vitalício e o Pix confirma na hora.')}</p>
+                <div className="pix-panel__nudge-actions">
+                  <Button variant="secondary" autoFocus onClick={() => setNudge(false)}>{ct('Continuar pagamento')}</Button>
+                  <Button variant="ghost" onClick={close}>{ct('Fechar')}</Button>
+                </div>
+              </div>
+            ) : undefined}
           />
         ) : (
           <>
@@ -276,7 +304,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
                   {ct('Criar conta e ativar')} · {priceLabel()}
                 </button>
               )}
-              <button className="upsell-later" onClick={close}>{ct('Agora não')}</button>
+              <button className="upsell-later" onClick={requestClose}>{ct('Agora não')}</button>
             </div>
           </>
         )}
