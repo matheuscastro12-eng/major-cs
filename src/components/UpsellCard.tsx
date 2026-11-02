@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AccountError, useAccount, beginPix, fetchMe, type PixCharge } from '../state/account';
 import { sessionId, setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView } from '../state/track';
 import { track } from '../state/track'; // pix_confirmed
+import { offerVariant } from '../state/offerAb';
+import { OfferPixCta } from './OfferPixCta';
 import { ct } from '../state/career-i18n';
 import { FounderCounter } from './FounderCounter';
 import { useFounders } from '../state/founders';
@@ -304,9 +306,13 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
                    "primário" nunca decolou — sinal de que boa parte desse tráfego
                    nem tinha conta). Manda pro fluxo de cadastro+pagamento da landing,
                    que já lida com convidado do início ao fim. */
+                offerVariant() === 'B' ? (
+                  <OfferPixCta showFounders={false} onPix={() => { setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }} />
+                ) : (
                 <button className="btn gold big" onClick={() => { setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }}>
                   {ct('Criar conta e ativar')} · {priceLabel()}
                 </button>
+                )
               )}
               <button className="upsell-later" onClick={requestClose}>{ct('Agora não')}</button>
             </div>

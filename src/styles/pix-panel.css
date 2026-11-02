@@ -196,3 +196,9 @@
 @media (pointer: coarse) {
   .upsell-overlay--pix .upsell-x { width: var(--tap); height: var(--tap); top: var(--sp-2); right: var(--sp-2); }
 }
+
+/* [A/B oferta · B] CTA Pix direto no card */
+.offer-pix { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.offer-pix__benefit { margin: 0; font-size: 0.86rem; line-height: 1.35; }
+.offer-pix__btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.offer-pix__meta { opacity: 0.8; font-size: 0.75rem; }

@@ -226,6 +226,39 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
 };
 const funnelSrcLabel = (s: string) => ct(FUNNEL_SRC_LABEL[s] ?? s);
 
+// [A/B oferta] A = card atual · B = "Pagar com Pix" direto no card (state/offerAb.ts)
+const AB_SRCS = ['landing-pricing', 'home-rtp', 'acct-chip-guest', 'upsell-card'];
+function AbBlock({ rows }: { rows: { type: string; src: string; variant: string; n: number }[] }) {
+  if (!rows.length) return null;
+  const get = (type: string, src: string | null, v: string) => rows.filter((r) => r.type === type && r.variant === v && (src === null || r.src === src)).reduce((a, r) => a + r.n, 0);
+  const lines = [...AB_SRCS.map((s) => ({ key: s, label: funnelSrcLabel(s), src: s as string | null })), { key: 'all', label: ct('Todas as origens'), src: null }];
+  return (
+    <>
+      <h4 className="crm-fin-sub s2">{ct('A/B dos cards de oferta — A atual × B Pix direto')}</h4>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="acc-table">
+          <thead><tr><th>{ct('Origem')}</th><th>A {ct('viram')}</th><th>A checkout</th><th>A %</th><th>B {ct('viram')}</th><th>B checkout</th><th>B %</th></tr></thead>
+          <tbody>
+            {lines.map((l) => {
+              const cells = (['A', 'B'] as const).map((v) => { const vw = get('paywall_view', l.src, v); const ck = get('checkout_open', l.src, v); return { vw, ck }; });
+              return (
+                <tr key={l.key}>
+                  <td>{l.label}</td>
+                  {cells.map((c, i) => [
+                    <td key={`v${i}`}>{num(c.vw)}</td>, <td key={`c${i}`}>{num(c.ck)}</td>,
+                    <td key={`p${i}`} style={{ textAlign: 'center' }}>{c.vw > 0 ? pct(c.ck / c.vw, 2) : <span className="muted">—</span>}</td>,
+                  ])}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="muted small" style={{ marginTop: 6 }}>{ct('sids distintos em 28 dias; só eventos com offerVariant (a partir do deploy do teste). Signups por variante: ')}A {num(get('signup_done', null, 'A'))} · B {num(get('signup_done', null, 'B'))}</div>
+    </>
+  );
+}
+
 function FunnelBlock({ data, days }: { data: RevenueData; days: DayRow[] }) {
   const visits28 = sum(days.slice(-28).map((d) => d.visitors));
   const sold28 = sum(days.slice(-28).map((d) => d.sold));
@@ -294,6 +327,7 @@ function FunnelBlock({ data, days }: { data: RevenueData; days: DayRow[] }) {
               </tbody>
             </table>
           </div>
+          <AbBlock rows={data.funnel?.ab ?? []} />
           <div className="muted small" style={{ marginTop: 6 }}>
             {ct('Checkout sem view na mesma origem é normal: a origem do checkout é o PRIMEIRO CTA clicado na sessão (first-touch), e a view deduplica 1x por sessão.')}
           </div>

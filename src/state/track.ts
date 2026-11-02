@@ -87,6 +87,31 @@ function getShareRef(): string {
   try { return sessionStorage.getItem(REF_KEY) || memoryRef; } catch { return memoryRef; }
 }
 
+// utm first-touch da sessão (vai junto do cadastro/pedido de coins → colunas ref/utm)
+const UTM_KEY = 'rtm-utm';
+let memoryUtm: Record<string, string> = {};
+function rememberUtm(u: Record<string, string>): void {
+  if (!Object.keys(u).length) return;
+  try { if (sessionStorage.getItem(UTM_KEY)) return; sessionStorage.setItem(UTM_KEY, JSON.stringify(u)); } catch { if (Object.keys(memoryUtm).length) return; }
+  memoryUtm = u;
+}
+/** ref/utm first-touch da sessão (só [a-z0-9-_]); vazio quando não houver. */
+export function sessionAttribution(): Record<string, string> {
+  let utm: Record<string, string> = memoryUtm;
+  try { const raw = sessionStorage.getItem(UTM_KEY); if (raw) utm = JSON.parse(raw) as Record<string, string>; } catch { /* memória */ }
+  const ref = getShareRef();
+  return { ...(ref ? { ref } : {}), ...utm };
+}
+
+// variante do A/B dos cards de oferta (state/offerAb.ts registra o getter — evita import circular)
+const OFFER_AB_TYPES = new Set(['paywall_view', 'checkout_open', 'signup_done']);
+let offerVariantGetter: (() => string) | null = null;
+export function registerOfferVariant(get: () => string): void { offerVariantGetter = get; }
+function withOfferVariant(type: string, data: Record<string, unknown>): Record<string, unknown> {
+  if (!OFFER_AB_TYPES.has(type) || !offerVariantGetter || data.offerVariant !== undefined) return data;
+  try { return { ...data, offerVariant: offerVariantGetter() }; } catch { return data; }
+}
+
 function rememberShareRef(ref: string): void {
   if (!ref || getShareRef()) return; // first-touch
   memoryRef = ref;
@@ -104,7 +129,7 @@ export function track(type: string, data: Record<string, unknown> = {}): void {
     fetch('/api/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, sid: sessionId(), data: withShareRef(type, data) }),
+      body: JSON.stringify({ type, sid: sessionId(), data: withOfferVariant(type, withShareRef(type, data)) }),
       keepalive: true,
     }).catch(() => {});
   } catch {
@@ -412,6 +437,9 @@ export function trackVisit(): void {
       path: window.location.pathname.slice(0, 80),
     };
     for (const k of Object.keys(attr)) if (!attr[k]) delete attr[k];
+    const utm: Record<string, string> = {};
+    for (const k of ['utm_source', 'utm_medium', 'utm_campaign']) if (attr[k]) utm[k] = attr[k];
+    rememberUtm(utm);
   } catch { /* URL inacessível: segue sem atribuição */ }
   try {
     const key = 'rtm-visit-at';

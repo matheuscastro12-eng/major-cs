@@ -1,3 +1,5 @@
+import { sessionAttribution } from './track';
+import { offerVariant } from './offerAb';
 // Conta do jogador (e-mail + senha) + entitlement da conta vitalícia (preço: state/price.ts).
 // Token fica no localStorage; o backend (api/account.ts) valida e diz se é paga.
 //
@@ -162,7 +164,7 @@ export async function fetchAdminKey(): Promise<string | null> {
 }
 
 export async function signup(email: string, password: string, nick: string): Promise<Account> {
-  const d = await post({ action: 'signup', email, password, nick, origin: window.location.origin });
+  const d = await post({ action: 'signup', email, password, nick, origin: window.location.origin, attr: { ...sessionAttribution(), offerVariant: offerVariant() } });
   setToken(String(d.token));
   const a = toAcct(d); setAccount(a); return a;
 }
@@ -213,7 +215,7 @@ export type CoinTierId = 'p10' | 'p15' | 'p30';
 export interface CoinCharge extends PixCharge { coins: number; correlationID: string }
 export async function beginCoinsPix(tier: CoinTierId): Promise<CoinCharge> {
   const token = getToken(); if (!token) throw new Error(ct('Faça login antes de comprar coins.'));
-  const d = await post({ action: 'coinsPix', token, tier });
+  const d = await post({ action: 'coinsPix', token, tier, attr: { ...sessionAttribution(), offerVariant: offerVariant() } });
   return {
     coins: Number(d.coins) || 0,
     correlationID: String(d.correlationID ?? ''),
@@ -229,7 +231,7 @@ export async function beginCoinsPix(tier: CoinTierId): Promise<CoinCharge> {
 export async function beginCoinsCheckout(tier: CoinTierId): Promise<string> {
   const token = getToken(); if (!token) throw new Error(ct('Faça login antes de comprar coins.'));
   let origin = ''; try { origin = window.location.origin; } catch { /* sem window */ }
-  const d = await post({ action: 'coinsCheckout', token, tier, origin });
+  const d = await post({ action: 'coinsCheckout', token, tier, origin, attr: { ...sessionAttribution(), offerVariant: offerVariant() } });
   if (typeof d.url !== 'string' || !d.url) throw new Error(ct('Checkout indisponível. Tente de novo.'));
   return d.url;
 }
