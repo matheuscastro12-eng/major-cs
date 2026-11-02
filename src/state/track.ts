@@ -162,11 +162,12 @@ const SRC_KEY = 'rtm-funnel-src';
 let memorySrc = '';
 
 /** Registra que uma superfície de venda da vitalícia foi VISTA (1x/sessão/src). */
-export function trackPaywallView(src: string): void {
-  if (seenOnce(`paywall_view:${src}`)) return;
+export function trackPaywallView(src: string, extra: Record<string, string | number> = {}): void {
+  // 1x por sessão por superfície (e por momento, quando a superfície tem vários)
+  if (seenOnce(`paywall_view:${src}${extra.moment ? `:${extra.moment}` : ''}`)) return;
   // src segue igual (as consultas antigas dependem dele); surface/trigger são o
   // recorte que o Growth pediu: onde apareceu e o que fez aparecer.
-  track('paywall_view', { src, surface: src, trigger: paywallTrigger(src) });
+  track('paywall_view', { src, surface: src, trigger: paywallTrigger(src), ...extra });
 }
 
 // O que fez a oferta aparecer:
