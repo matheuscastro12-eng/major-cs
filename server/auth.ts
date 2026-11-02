@@ -58,8 +58,33 @@ export function respondMissingSecret(res: { status: (code: number) => { json: (b
   return true;
 }
 
+// ── Dupla chave (etapa 1 do #107) ────────────────────────────────────────────
+// Com APP_SECRET configurada, tudo que é NOVO é assinado com ela, mas tokens
+// assinados com o reserva legado continuam aceitos (ninguém é deslogado) e o
+// `me` devolve um token novo para trocar o antigo no navegador. Sem APP_SECRET,
+// o comportamento é idêntico ao de antes (só o reserva). A etapa 2 (outro PR,
+// com data de corte) deixa de aceitar o reserva.
+function acceptedSecrets(): string[] {
+  const out = [cleanEnv(process.env.APP_SECRET), legacyFallbackSecret()].filter(Boolean);
+  return [...new Set(out)];
+}
+
+/** Segredo das REFERÊNCIAS de pagamento (accountReference): estável de propósito.
+ *  stripe_ref fica gravado em rtm_accounts e vai ao Stripe como
+ *  client_reference_id; trocar a chave mudaria a referência e o webhook deixaria
+ *  de achar a conta. Fica no reserva enquanto ele existir. Não é token de login. */
+export function referenceSecret(): string {
+  return legacyFallbackSecret() || appSecret();
+}
+
 const nowSec = (): number => Math.floor(Date.now() / 1000);
-const hmac = (body: string): string => createHmac('sha256', appSecret()).update(body).digest('base64url');
+const hmacWith = (secret: string, body: string): string => createHmac('sha256', secret).update(body).digest('base64url');
+const hmac = (body: string): string => hmacWith(appSecret(), body);
+/** a assinatura bate com alguma chave aceita? devolve a chave usada (ou null) */
+function matchSecret(sig: string, body: string): string | null {
+  for (const k of acceptedSecrets()) if (safeEqualStr(sig, hmacWith(k, body))) return k;
+  return null;
+}
 
 function safeEqualStr(a: string, b: string): boolean {
   const ab = Buffer.from(a); const bb = Buffer.from(b);
@@ -77,10 +102,19 @@ export function verifyAccountToken(token: string): string | null {
   const [b64, sig] = String(token ?? '').split('.');
   if (!b64 || !sig) return null;
   const body = Buffer.from(b64, 'base64url').toString();
-  if (!safeEqualStr(sig, hmac(body))) return null;
+  if (!matchSecret(sig, body)) return null;
   const [email, exp] = body.split('|');
   if (!email || !(Number(exp) >= nowSec())) return null;
   return email;
+}
+
+/** token de conta válido mas assinado com uma chave que não é a de assinatura
+ *  atual (o reserva, depois de configurar APP_SECRET): o `me` troca por um novo */
+export function accountTokenNeedsRefresh(token: string): boolean {
+  if (!verifyAccountToken(token)) return false;
+  const [b64, sig] = String(token).split('.');
+  const body = Buffer.from(b64, 'base64url').toString();
+  return matchSecret(sig, body) !== appSecret();
 }
 
 // ── Sessão de admin (O0-16) ──────────────────────────────────────────────────
@@ -100,7 +134,7 @@ export function verifyAdminSession(token: string): string | null {
   const [b64, sig] = raw.slice(ADMIN_PREFIX.length).split('.');
   if (!b64 || !sig) return null;
   const body = Buffer.from(b64, 'base64url').toString();
-  if (!safeEqualStr(sig, hmac(body))) return null;
+  if (!matchSecret(sig, body)) return null;
   const [claim, email, exp] = body.split('|');
   if (claim !== 'admin' || !email || !(Number(exp) >= nowSec())) return null;
   return email;

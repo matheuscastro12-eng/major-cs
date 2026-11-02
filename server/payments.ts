@@ -1,7 +1,7 @@
 import type { NeonQueryFunction } from '@neondatabase/serverless';
 import { createHmac } from 'node:crypto';
 import Stripe from 'stripe';
-import { appSecret } from './auth.js';
+import { referenceSecret } from './auth.js';
 
 const DEFAULT_PAYMENT_LINK = 'https://buy.stripe.com/4gM3cv4zGa2Vfcx5jQ1RC01';
 export const DEFAULT_PRICE_ID = 'price_1Tkp7NEHvCNyCbcUcYzHFZvK';
@@ -49,9 +49,10 @@ export function normalizeEmail(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().slice(0, 200);
 }
 
-// assinado com o segredo de server/auth.ts (falha fechada: sem APP_SECRET, lança).
+// assinado com o segredo estável das referências (server/auth.ts referenceSecret):
+// a referência já gravada não muda quando a APP_SECRET entrar (falha fechada: sem segredo, lança).
 export function accountReference(email: string): string {
-  const digest = createHmac('sha256', appSecret()).update(normalizeEmail(email)).digest('hex');
+  const digest = createHmac('sha256', referenceSecret()).update(normalizeEmail(email)).digest('hex');
   return `acct_${digest}`;
 }
 
