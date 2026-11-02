@@ -942,6 +942,13 @@ export default function App() {
     const nextSeason = career.season + 1;
     void loadSwiss().then(({ createTournament }) => {
       track('season_start', { season: nextSeason, pool: draft.pool });
+      // funil: o gancho 'market' já existia em HOOKS (UpsellCard.tsx) — texto
+      // pronto pra "montando seu elenco" — mas nenhuma tela chamava. O card de
+      // upsell é a superfície que mais converte paywall_view em checkout_open
+      // (~2%); a janela de transferências é o único momento do Draft grátis sem
+      // gancho. O UpsellCard decide se mostra (#159: só depois do 1º valor, 1
+      // oferta automática por sessão, mesmo cooldown dos outros ganchos).
+      if (!account?.paid) window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'market' } }));
       setCareer((c) => ({ ...c, season: nextSeason, budget: c.budget - cost, lastPrize: undefined }));
       rngRef.current = makeRng(randomSeed());
       const t = createTournament(
@@ -1288,7 +1295,17 @@ export default function App() {
     return withShell(
       <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Ranking')} crumbs={[{ label: ct('Progresso') }]} nav={homeNav('leaderboard')} active="leaderboard" onNav={onHomeNav} mobileNav={homeMobileNav}>
         <Suspense fallback={<Loader text="…" />}>
-          <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); goToCheckout(); }} />
+          <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => {
+            setCheckoutSrc('leaderboard');
+            /* funil: dado real (28d) — 59 paywall_view / 52 sids no Ranking e
+               NENHUM checkout_open. goToCheckout manda pra Landing com o modal
+               em modo CADASTRO sempre, mesmo pra quem já tem conta grátis
+               logada aqui — o mesmo buraco já corrigido no Perfil e no
+               home-rtp-direto (cai num formulário de "criar conta" com o
+               e-mail que já existe). Quem já tem conta pula direto pro
+               pagamento. */
+            if (account) startCheckout(); else goToCheckout();
+          }} />
         </Suspense>
       </GameShell>,
     );

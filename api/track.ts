@@ -48,6 +48,12 @@ const ALLOWED_TYPES = new Set([
   'major_pickem_submit',    // {} — completou o pick'em (campeão escolhido)
   'major_sg_campaign_done', // {champion: 0|1} — terminou um Major jogado com um time
   'first_match_done',       // {mode, secs} — 1ª partida concluída e segundos desde a 1ª visita
+  // conv/loop-20261007: o botão de pagar ficava simplesmente desabilitado quando
+  // faltava algo no cadastro (e-mail, senha, confirmação ou termos), sem dizer o
+  // quê — quem travava aqui desistia em silêncio, fora do funil (paywall_view
+  // tem ~2.1k sessões/28d, signup_start menos de 50). Agora o clique é sempre
+  // aceito e mostra o motivo; este evento mede QUAL motivo trava mais gente.
+  'checkout_blocked', // {src, reason} — clicou em pagar com o cadastro incompleto
 ]);
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();

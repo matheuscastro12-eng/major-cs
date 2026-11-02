@@ -42,6 +42,7 @@ test('paywall_view: trava, dentro do checkout ou vitrine', () => {
   assert.equal(paywallTrigger('mkt-lock'), 'gate');
   assert.equal(paywallTrigger('pix-wait-longo'), 'checkout');
   assert.equal(paywallTrigger('checkout-nudge'), 'checkout');
+  assert.equal(paywallTrigger('upsell-nudge'), 'checkout'); // nudge do Pix no card de upsell (#89)
   assert.equal(paywallTrigger('landing'), 'surface');
   assert.equal(paywallTrigger('src-que-ainda-nao-existe'), 'surface');
 });

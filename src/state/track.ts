@@ -30,7 +30,7 @@ export function sessionId(): string {
 // share_card {kind, channel} entra aqui: 1 evento por clique em compartilhar —
 // volume ínfimo e é o numerador do K-factor (quanto compartilhamento vira visita).
 const FUNNEL_TYPES = new Set([
-  'paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'pix_copy_click', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card',
+  'paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'checkout_blocked', 'pix_copy_click', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card',
   // [medição do Major e da ativação] marcos raros, sem dado pessoal (só sid, ref e o modo/superfície)
   'major_sg_view', 'major_vitrine_click', 'major_pickem_submit', 'major_sg_campaign_done', 'first_match_done',
 ]);
@@ -174,7 +174,7 @@ export function trackPaywallView(src: string): void {
 //   checkout → já está no pagamento (avisos dentro do QR Pix / nudge do checkout)
 //   surface  → viu uma vitrine de venda navegando (landing, Início, perfil, ranking…)
 const PAYWALL_GATES = new Set(['rtp-demo-gate', 'mkt-lock', 'home-ultimate', 'wl-guest', 'wl-free']);
-const PAYWALL_IN_CHECKOUT = new Set(['pix-wait-longo', 'pix-cartao-cedo', 'upsell-pix-cartao-cedo', 'checkout-nudge']);
+const PAYWALL_IN_CHECKOUT = new Set(['pix-wait-longo', 'pix-cartao-cedo', 'upsell-pix-cartao-cedo', 'checkout-nudge', 'upsell-nudge']);
 export type PaywallTrigger = 'gate' | 'checkout' | 'surface';
 export function paywallTrigger(src: string): PaywallTrigger {
   if (PAYWALL_GATES.has(src)) return 'gate';
@@ -260,6 +260,17 @@ export function trackPixCopy(ok: boolean): void {
  *  sem esse evento não dá pra separar "abriu e desistiu" de "nem chegou a abrir". */
 export function trackCheckoutError(method: 'stripe' | 'pix', reason: string): void {
   track('checkout_error', { src: getCheckoutSrc() || 'direto', method, reason: reason.slice(0, 120) });
+}
+
+/** Clicou em "Pagar com Pix"/"Ativar com cartão" com o cadastro incompleto —
+ *  antes disso o botão só ficava desabilitado, sem dizer o motivo. 1x/sessão
+ *  por motivo (não é pra medir quantos cliques, é pra medir ONDE as pessoas
+ *  travam: e-mail, senha curta, senhas diferentes ou termos não aceitos). */
+export function trackCheckoutBlocked(reason: string): void {
+  const key = `checkout_blocked_${reason}`;
+  if (seenPaywalls.has(key)) return;
+  seenPaywalls.add(key);
+  track('checkout_blocked', { src: getCheckoutSrc() || 'direto', reason });
 }
 
 // ─── FUNIL DA DEMO DO RtP ────────────────────────────────────────────────────
