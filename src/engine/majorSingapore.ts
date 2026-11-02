@@ -396,6 +396,22 @@ export function bracketSides(d: MajorData, p: MajorPicks): [string, string][] {
  * Ajusta o palpite depois de uma mudança: tira dos stages seguintes quem não
  * está mais no pool, e limpa vencedores de chave que deixaram de estar na chave.
  */
+/** times de um palpite salvo (cru, do localStorage) que não estão mais na lista
+ *  do Major: o normalizePicks os tira em silêncio, a tela avisa. Puro. */
+export function droppedPickIds(d: MajorData, raw: unknown): string[] {
+  const ids = new Set(d.teams.map((t) => t.id));
+  const out = new Set<string>();
+  const walk = (x: unknown) => {
+    if (typeof x === 'string') { if (x && !ids.has(x)) out.add(x); return; }
+    if (Array.isArray(x)) x.forEach(walk);
+  };
+  if (raw && typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+    for (const k of ['s1', 's2', 's3', 'bracket', 'x30', 'x03']) walk(r[k]);
+  }
+  return [...out];
+}
+
 export function normalizePicks(d: MajorData, p: MajorPicks): MajorPicks {
   const three = (x: unknown): [string[], string[], string[]] => {
     const a = Array.isArray(x) ? x : [];
