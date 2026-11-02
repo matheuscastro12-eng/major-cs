@@ -3,8 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
 const i18n = readFileSync(ROOT + 'src/state/i18n.tsx', 'utf8');
 const comp = readFileSync(ROOT + 'src/components/Onboarding.tsx', 'utf8');
 
