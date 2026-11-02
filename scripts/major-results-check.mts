@@ -19,10 +19,11 @@ import {
   type MajorData, type MajorPicks, type StageNo,
 } from '../src/engine/majorSingapore.ts';
 import { scoreSoFar, validateMajorResults, type Mark } from '../src/engine/pickemScore.ts';
+import { fileURLToPath } from 'node:url';
 
 const D = data as unknown as MajorData;
 const DEFAULT = 'src/data/major-singapore-2026-results.json';
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
 const teams = new Map(D.teams.map((t) => [t.id, t]));
 const name = (id: string) => teams.get(id)?.name ?? id;
 
