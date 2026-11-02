@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { AccountError, useAccount, beginPix, fetchMe, type PixCharge } from '../state/account';
-import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView } from '../state/track';
+import { sessionId, setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView } from '../state/track';
 import { ct } from '../state/career-i18n';
 import { FounderCounter } from './FounderCounter';
 import { useFounders } from '../state/founders';
 import { priceLabel, usePrice } from '../state/price';
 import { pixErrorKind, type PixErrorKind } from '../state/pixView';
 import { PixPanel } from './PixPanel';
-import { autoOfferAllowed, autoOfferUsed, hasFirstValue, markAutoOfferUsed } from '../state/paywallPolicy';
+import { PAYWALL_VARIANTS, autoOfferAllowed, autoOffersShown, hasFirstValue, markAutoOfferShown, variantOf } from '../state/paywallPolicy';
+
+// variante do teste do teto por sessão (state/paywallPolicy.ts); ?pw=a|b força
+const PW_VARIANT = (() => {
+  let o: string | null = null;
+  try { o = new URLSearchParams(window.location.search).get('pw'); } catch { /* sem window */ }
+  return variantOf(sessionId(), o);
+})();
+const PW = PAYWALL_VARIANTS[PW_VARIANT];
 
 // Card de ativação (upsell) pra contas GRÁTIS. Abre em momentos estratégicos do
 // jogo (fim de split, título conquistado, etc.) via evento global, o usuário pode
@@ -16,11 +24,11 @@ import { autoOfferAllowed, autoOfferUsed, hasFirstValue, markAutoOfferUsed } fro
 //
 // Disparo de qualquer lugar:  window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'split-win' } }))
 
-const COOLDOWN_MS = 1000 * 60 * 45; // no máximo 1 vez a cada 45 min
 const LAST_KEY = 'rtm_upsell_last';
 
 // mensagem do topo por gatilho (contexto), pra parecer natural e não genérico
 const HOOKS: Record<string, string> = {
+  'pickem': 'Palpite do Major fechado! Com a conta vitalícia ele fica salvo na nuvem e vale no ranking.',
   'split-win': 'Você acabou de conquistar um título. Que tal guardar essa campanha pra sempre?',
   'major': 'Campanha histórica! Não perca esse progresso.',
   'major-stage': 'Você se classificou pro MAJOR! Esse momento é histórico — garante ele na nuvem.',
@@ -53,6 +61,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
   const founderSlotsLeft = founderStats ? founderStats.founders < founderStats.limit : false;
   const [open, setOpen] = useState(false);
   const [hook, setHook] = useState(HOOKS.default);
+  const [soft, setSoft] = useState(false); // lembrete leve (faixa) entre os momentos
   // Pix inline: contas já autenticadas (é o público do UpsellCard) não precisam de
   // cadastro pra gerar a cobrança — dado real mostra que Pix confirma bem mais que
   // o Stripe (checkout_open×rtm_paid_emails), mas essa superfície só oferecia Stripe.
@@ -104,14 +113,21 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
       const trigger = (e as CustomEvent).detail?.trigger as string | undefined;
       const force = Boolean((e as CustomEvent).detail?.force); // clique explícito do usuário fura o cooldown
       const last = Number(localStorage.getItem(LAST_KEY) || 0);
-      // disparo automático: só depois do 1º valor, 1x por sessão e com o
-      // cooldown (state/paywallPolicy.ts); clique explícito abre sempre
-      if (!autoOfferAllowed({ force, firstValue: hasFirstValue(), usedThisSession: autoOfferUsed(), msSinceLast: Date.now() - last, cooldownMs: COOLDOWN_MS })) return;
-      if (!force) markAutoOfferUsed();
+      const moment = trigger ?? 'default';
+      // disparo automático: só depois do 1º valor, 1x por momento, até o teto
+      // da variante e fora do intervalo (state/paywallPolicy.ts); clique abre sempre
+      const shown = autoOffersShown();
+      if (!autoOfferAllowed({ force, firstValue: hasFirstValue(), moment, shown, cap: PW.cap, msSinceLast: Date.now() - last, cooldownMs: PW.cooldownMs })) {
+        // entre os momentos: só o lembrete leve, que não bloqueia a tela
+        if (hasFirstValue() && shown.length > 0) setSoft(true);
+        return;
+      }
+      if (!force) markAutoOfferShown(moment);
+      setSoft(false);
       setHook(HOOKS[trigger ?? 'default'] ?? HOOKS.default);
       setCardSwitching(false); // botão de cartão destravado a cada abertura (só UI)
       setOpen(true);
-      trackPaywallView('upsell-card'); // funil: card de upsell exibido (1x/sessão)
+      trackPaywallView('upsell-card', { moment, cap: PW.cap, variant: PW_VARIANT }); // funil: 1 por momento, com a variante do teto
       localStorage.setItem(LAST_KEY, String(Date.now()));
     };
     window.addEventListener('rtm:upsell', onEvt);
@@ -153,7 +169,18 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     setCheckingNow(false);
   };
 
-  if (!open || account?.paid) return null;
+  if (account?.paid) return null;
+  if (!open) {
+    if (!soft) return null;
+    return (
+      <div className="upsell-soft" role="complementary" aria-label={ct('Conta vitalícia')}>
+        <button className="upsell-soft__cta" onClick={() => { setSoft(false); window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'soft', force: true } })); }}>
+          ★ {ct('Conta vitalícia')} · {priceLabel()}
+        </button>
+        <button className="upsell-soft__x" onClick={() => setSoft(false)} aria-label={ct('fechar')}>✕</button>
+      </div>
+    );
+  }
 
   const close = () => {
     if (pix && !pixConfirmed.current && !pixSwitchedMethod.current) trackCheckoutAbandon('pix', (Date.now() - pixOpenedAt.current) / 1000);

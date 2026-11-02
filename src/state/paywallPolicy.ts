@@ -17,9 +17,8 @@ export type FirstValue = 'match' | 'pickem' | 'pack';
 const VALUE_KEY = 'rtm-first-value';
 // gravado por trackFirstMatchDone (track.ts) na 1ª série concluída
 const FIRST_MATCH_KEY = 'rtm-first-match';
-const AUTO_KEY = 'rtm-paywall-auto';
+const AUTO_KEY = 'rtm-paywall-moments';
 let memoryValue = false;
-let memoryAuto = false;
 
 /** Marca o 1º valor do jogador neste navegador (só o primeiro fica gravado). */
 export function markFirstValue(kind: FirstValue): void {
@@ -33,12 +32,35 @@ export function hasFirstValue(): boolean {
   try { return !!(localStorage.getItem(VALUE_KEY) || localStorage.getItem(FIRST_MATCH_KEY)); } catch { return false; }
 }
 
+// Correção do Matheus (02/11): a oferta aparece nos MOMENTOS de valor (trava,
+// fim de partida/campanha, palpite do Major fechado, volta do visitante), no
+// máximo 1x por momento e com um teto por sessão que é configurável para o
+// teste A/B: variante 'a' = 1 por sessão (45 min entre ofertas), 'b' = 3 por
+// sessão (10 min). A variante sai do sid (estável na sessão) e pode ser forçada
+// com ?pw=a|b para QA. Vai junto do paywall_view (cap) para comparar as duas.
+export type PaywallVariant = 'a' | 'b';
+export const PAYWALL_VARIANTS: Record<PaywallVariant, { cap: number; cooldownMs: number }> = {
+  a: { cap: 1, cooldownMs: 45 * 60_000 },
+  b: { cap: 3, cooldownMs: 10 * 60_000 },
+};
+
+/** variante a partir do sid (hash simples, metade/metade). Puro. */
+export function variantOf(sid: string, override?: string | null): PaywallVariant {
+  if (override === 'a' || override === 'b') return override;
+  let h = 0;
+  for (let i = 0; i < sid.length; i++) h = (h * 31 + sid.charCodeAt(i)) >>> 0;
+  return h % 2 === 0 ? 'a' : 'b';
+}
+
 export interface AutoOfferInput {
   /** clique explícito do jogador (ex.: "Valer no ladder") */
   force: boolean;
   firstValue: boolean;
-  /** já houve uma interrupção automática nesta sessão */
-  usedThisSession: boolean;
+  /** momento que pediu a oferta (o trigger do rtm:upsell) */
+  moment: string;
+  /** momentos que já mostraram a oferta nesta sessão */
+  shown: string[];
+  cap: number;
   msSinceLast: number;
   cooldownMs: number;
 }
@@ -46,15 +68,18 @@ export interface AutoOfferInput {
 /** A oferta automática pode abrir agora? Puro (testado em scripts/test-paywall-policy.mts). */
 export function autoOfferAllowed(i: AutoOfferInput): boolean {
   if (i.force) return true;
-  return i.firstValue && !i.usedThisSession && i.msSinceLast >= i.cooldownMs;
+  return i.firstValue && !i.shown.includes(i.moment) && i.shown.length < i.cap && i.msSinceLast >= i.cooldownMs;
 }
 
-export function autoOfferUsed(): boolean {
-  if (memoryAuto) return true;
-  try { return sessionStorage.getItem(AUTO_KEY) === '1'; } catch { return false; }
+/** momentos que já mostraram a oferta nesta sessão */
+let memoryShown: string[] = [];
+export function autoOffersShown(): string[] {
+  try { const v = JSON.parse(sessionStorage.getItem(AUTO_KEY) || '[]') as unknown; if (Array.isArray(v)) return v.map(String); } catch { /* sem storage */ }
+  return memoryShown;
 }
 
-export function markAutoOfferUsed(): void {
-  memoryAuto = true;
-  try { sessionStorage.setItem(AUTO_KEY, '1'); } catch { /* sem storage: fica em memória */ }
+export function markAutoOfferShown(moment: string): void {
+  const next = [...new Set([...autoOffersShown(), moment])];
+  memoryShown = next;
+  try { sessionStorage.setItem(AUTO_KEY, JSON.stringify(next)); } catch { /* sem storage: fica em memória */ }
 }
