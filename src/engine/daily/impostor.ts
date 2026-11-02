@@ -5,7 +5,7 @@
 import { makeRng } from '../rng';
 import { hashStr } from '../../state/hash';
 import { HISTORIC_LINES, type HistoricLine, type LinePlayer } from './lineups';
-import { dayNumberOf, normalizeGuess } from './lines';
+import { dayNumberOf, normalizeGuess, DAILY_URL } from './lines';
 
 export const IMPOSTOR_TRIES = 2;
 
@@ -91,5 +91,5 @@ export function shareTextOfImpostor(dateKey: string, round: ImpostorRound, p: Im
       : `Achei o impostor da ${round.team} ${round.year} ${grid}`
     : `O impostor da ${round.team} ${round.year} me enganou ${grid}`;
   const tail = streak >= 2 ? ` · 🔥 ${streak} dias seguidos` : '';
-  return `O IMPOSTOR #${day} · ROAD TO MAJOR\n${head}${tail}\nroadtomajor.com.br/diario`;
+  return `O IMPOSTOR #${day} · ROAD TO MAJOR\n${head}${tail}\n${DAILY_URL}`;
 }

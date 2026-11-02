@@ -87,6 +87,8 @@ export interface RoundSpec {
   // [fase 2 · tática] opcionais (ausentes = motor de antes, bit a bit):
   phaseBias?: [number, number, number]; // logit a favor do T por fase: [abertura, meio, pós-plant]
   timeMult?: number;                    // chance de o tempo acabar (ritmo do T)
+  // [estilo de jogo] opcional: peso da mira no duelo (K × kMult). < 1 = mais variância.
+  kMult?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -137,13 +139,14 @@ function duelTable(spec: RoundSpec, key: number, diff: number, extra = 0): Float
   const bias = spec.bias + (key === 8 ? DUEL.OPEN_T : 0) + (pl ? DUEL.POST_T : 0) + DUEL.NUM_ADV * diff
     + (pb ? (key === 8 ? pb[0] : pl ? pb[2] : pb[1]) : 0) + extra;
   const out = new Float64Array(N * N);
+  const K = spec.kMult != null ? DUEL.K * spec.kMult : DUEL.K;
   for (let i = 0; i < N; i++) {
     const pi = powerOf(T, i, key, tAlone);
     const ei = eqOf(T, 0, i, pl);
     for (let j = 0; j < N; j++) {
       const pj = powerOf(C, j, key, cAlone);
       const ej = eqOf(C, 1, j, pl);
-      out[i * N + j] = sigmoid(DUEL.K * (pi - pj) + ei - ej + bias);
+      out[i * N + j] = sigmoid(K * (pi - pj) + ei - ej + bias);
     }
   }
   return out;

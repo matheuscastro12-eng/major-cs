@@ -203,14 +203,14 @@ export function sellerAsk(p: Player, seller: { team: TeamSeason; strategy: ClubS
 export function clubsSnapshot(a: {
   teams: TeamSeason[]; split: number; formOf: (teamId: string) => number;
   vrsOf?: (teamId: string) => number; ageOf: (p: Player) => number; budgets?: Record<string, number>;
-  seed?: string;
+  seed?: string; budgetMul?: number;
 }): { budgets: Record<string, number>; strategies: Record<string, ClubStrategy>; ranks: Record<string, number> } {
   const ranks = rankClubs(a.teams, a.vrsOf);
   const budgets: Record<string, number> = {};
   const strategies: Record<string, ClubStrategy> = {};
   for (const t of a.teams) {
     const form = a.formOf(t.id);
-    budgets[t.id] = a.budgets?.[t.id] ?? clubBudget(t, { rank: ranks[t.id], form, split: a.split, seed: a.seed });
+    budgets[t.id] = a.budgets?.[t.id] ?? round10k(clubBudget(t, { rank: ranks[t.id], form, split: a.split, seed: a.seed }) * (a.budgetMul ?? 1));
     const xi = starters(t);
     const avgAge = xi.length ? xi.reduce((s, p) => s + a.ageOf(p), 0) / xi.length : 26;
     strategies[t.id] = clubStrategy(t, { budget: budgets[t.id], form, avgAge, seed: a.seed });
@@ -258,7 +258,18 @@ export interface WorldTickArgs {
   /** Semente do save (mundo.seed): cada Carreira tem o seu mercado. Ausente =
    *  as chaves de hash de sempre (medições e testes antigos). */
   seed?: string;
+  /** [equilíbrio] orçamento dos clubes da IA × modo (Normal 1,0 · Difícil 1,2 · Lendário 1,4). */
+  budgetMul?: number;
+  /** [equilíbrio] a IA assina primeiro os free agents a partir deste OVR (Difícil/Lendário). Ausente = desligado. */
+  faFirstOvr?: number;
 }
+
+/** [equilíbrio] mercado da IA por modo da Carreira. */
+export const AI_MARKET_BY_MODE = {
+  normal: { budgetMul: 1.0, faFirstOvr: undefined },
+  hard: { budgetMul: 1.2, faFirstOvr: 80 },
+  legend: { budgetMul: 1.4, faFirstOvr: 80 },
+} as const;
 
 export interface WorldTickResult {
   moves: Record<string, string>;      // patch pra save.moves
@@ -326,7 +337,7 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
 
   const forms: Record<string, number> = {};
   for (const t of a.teams) forms[t.id] = a.formOf(t.id);
-  const snap = clubsSnapshot({ teams: a.teams, split, formOf: (id) => forms[id], vrsOf: a.vrsOf, ageOf, budgets: a.budgets, seed: a.seed });
+  const snap = clubsSnapshot({ teams: a.teams, split, formOf: (id) => forms[id], vrsOf: a.vrsOf, ageOf, budgets: a.budgets, seed: a.seed, budgetMul: a.budgetMul });
   const budgets = snap.budgets;
   const strategies = snap.strategies;
   const movable = (p: Player) => a.movableIds.has(p.id) && !protectedIds.has(p.id);
@@ -369,6 +380,45 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
   // reposição de quem vendeu sempre é tentada (senão o vendedor fica sem 5 e o
   // mundo enche de jovens da base)
   let started = 0;
+
+  // [equilíbrio] Difícil/Lendário: a IA chega primeiro nos free agents de nível
+  // (OVR ≥ faFirstOvr) — o clube que mais ganha com ele (mesma função, titular
+  // pelo menos 2 abaixo, caixa pra luvas, sem virar elenco de elite) assina
+  // antes de o mercado abrir pra você.
+  if (a.faFirstOvr != null) {
+    const stars = free.filter((p) => movable(p) && ovrOf(p) >= a.faFirstOvr!).sort((x, y) => ovrOf(y) - ovrOf(x) || byId(x, y));
+    for (const p of stars) {
+      if (started >= maxMoves) break;
+      const ovr = ovrOf(p);
+      let best: { buyerId: string; out: Player; gain: number } | null = null;
+      for (const t of a.teams) {
+        if (bought.has(t.id) || (ovr >= 88 && aiTierOf(t) !== 1)) continue;
+        const buyer = view(t.id);
+        const xi = starters(buyer);
+        if (xi.length < 5 || playerWage(p) > budgets[t.id]) continue;
+        const out = xi.filter((x) => roleFits(x, p.role) && movable(x) && !used.has(x.id)).sort((x, y) => ovrOf(x) - ovrOf(y) || byId(x, y))[0];
+        if (!out || ovrOf(out) > ovr - 2) continue;
+        const after = squadOvr([...buyer.players.filter((x) => x.id !== out.id), p]);
+        if (after >= ELITE_SQUAD && after > squadOvr(buyer.players)) continue;
+        const gain = ovr - ovrOf(out) + (hashStr(seeded(a.seed, `fa1:${t.id}:${p.id}:${split}`)) % 7) / 10;
+        if (!best || gain > best.gain) best = { buyerId: t.id, out, gain };
+      }
+      if (!best) continue;
+      const buyer = view(best.buyerId);
+      movePlayer(p, FREE_TEAM_ID, best.buyerId, true);
+      movePlayer(best.out, best.buyerId, FREE_TEAM_ID, false);
+      used.add(p.id); used.add(best.out.id); bought.add(best.buyerId);
+      arrivals[p.id] = split;
+      budgets[best.buyerId] -= playerWage(p);
+      started++;
+      log.push({
+        kind: 'free', playerId: p.id, nick: p.nick, country: p.country, role: p.role, ovr, age: ageOf(p), fee: 0,
+        fromId: FREE_TEAM_ID, fromTag: 'FA', fromName: '', toId: best.buyerId, toTag: buyer.tag, toName: buyer.team,
+        outPlayerId: best.out.id, outNick: best.out.nick, reason: 'upgrade', strategy: strategies[best.buyerId],
+      });
+    }
+  }
+
   while (queue.length) {
     const need = queue.shift()!;
     const buyerId = need.teamId;

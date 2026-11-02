@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAccount, beginPix, fetchMe, type PixCharge } from '../state/account';
+import { AccountError, useAccount, beginPix, fetchMe, type PixCharge } from '../state/account';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView } from '../state/track';
 import { ct } from '../state/career-i18n';
 import { FounderCounter } from './FounderCounter';
 import { useFounders } from '../state/founders';
+import { priceLabel, usePrice } from '../state/price';
+import { pixErrorKind, type PixErrorKind } from '../state/pixView';
+import { PixPanel } from './PixPanel';
+import { Button } from './ds';
+import { autoOfferAllowed, autoOfferUsed, hasFirstValue, markAutoOfferUsed } from '../state/paywallPolicy';
 
 // Card de ativação (upsell) pra contas GRÁTIS. Abre em momentos estratégicos do
 // jogo (fim de split, título conquistado, etc.) via evento global, o usuário pode
@@ -35,7 +40,12 @@ const HOOKS: Record<string, string> = {
   default: 'Leve sua carreira pro próximo nível.',
 };
 
+// nudge anti-abandono do QR Pix deste card: no máximo 1x por sessão de navegação
+// (guard de módulo), igual ao do modal de conta da Landing (checkout-nudge).
+const upsellNudgeShown = new Set<string>();
+
 export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade: () => void; onGuestUpgrade?: () => void; onPixPaid: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const { account } = useAccount();
   // funil: dado real (rtm_accounts) mostra os 500 Fundadores esgotados (500/500).
   // A lista de benefícios prometia o selo de Fundador com número baixo pra
@@ -51,31 +61,36 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
   // Pix inline: contas já autenticadas (é o público do UpsellCard) não precisam de
   // cadastro pra gerar a cobrança — dado real mostra que Pix confirma bem mais que
   // o Stripe (checkout_open×rtm_paid_emails), mas essa superfície só oferecia Stripe.
+  // A tela do QR é o PixPanel (a mesma do modal de conta da Landing).
   const [pix, setPix] = useState<PixCharge | null>(null);
+  const [pixAt, setPixAt] = useState(0); // quando a cobrança chegou (base do prazo do Woovi)
   const [pixBusy, setPixBusy] = useState(false);
-  const [pixErr, setPixErr] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [nudge, setNudge] = useState(false); // nudge anti-abandono na tela do QR (requestClose)
+  const [pixErr, setPixErr] = useState<PixErrorKind | null>(null);
+  // o polling automático bateu no teto de 15 min: a tela pede o "verificar agora"
+  const [pollPaused, setPollPaused] = useState(false);
   const pixOpenedAt = useRef(0);
   const pixConfirmed = useRef(false);
-  // funil: dado real (checkout_abandon, method=pix, 28d) mostra abandono
-  // concentrado bem depois dos primeiros segundos — mediana de ~79s pra fechar
-  // sem pagar — mas esta superfície (upsell in-game) nunca deu nenhuma
-  // reassurance de espera, diferente do modal de conta da Landing. Mesma
-  // lógica honesta aplicada aqui: depois de 1min sem confirmar, troca o
-  // silêncio por uma expectativa real de quanto falta.
+  // funil: dado real (checkout_abandon, method=pix, 28d) mostra 35,6% dos
+  // QRs abertos (21 de 59) fechando sem pagar, com quase 40% desses abandonos
+  // (9 de 24, bucket <15s–<60s) acontecendo ANTES dos 60s — ou seja, antes de
+  // qualquer reassurance aparecer aqui. A Landing já validou antecipar esse
+  // mesmo aviso pra 25s (commit 113cc3d) com base num achado idêntico; esta
+  // superfície (upsell in-game, a que mais abre checkout_open do funil) ficou
+  // parada nos 60s antigos. Alinha no mesmo timer já comprovado.
   const [pixWaitLong, setPixWaitLong] = useState(false);
   useEffect(() => {
     if (!pix) { setPixWaitLong(false); return; }
-    const t = window.setTimeout(() => setPixWaitLong(true), 60_000);
+    const t = window.setTimeout(() => setPixWaitLong(true), 25_000);
     return () => window.clearTimeout(t);
   }, [pix]);
-  // funil: dado real (checkout_abandon, method=pix, 21d) mostra abandono
-  // concentrado bem antes dos 60s daqui de cima — boa parte desiste rápido
-  // demais pra ver a reassurance. A Landing já validou uma saída honesta pro
-  // cartão desde a abertura do QR (não só depois do timer), mas essa troca
-  // nunca chegou nesta superfície — que sozinha abre mais checkout do que
-  // qualquer outra (upsell-card lidera checkout_open no funil). Mesmo padrão
-  // aqui: Pix continua o CTA primário, o QR não some, só ganha uma saída.
+  useEffect(() => {
+    if (pixWaitLong) trackPaywallView('upsell-pix-wait-longo'); // funil: reassurance exibida — src próprio (mede esta superfície, como 'pix-wait-longo' mede a Landing)
+  }, [pixWaitLong]);
+  // funil: dado real (checkout_abandon, method=pix, 21d, achado anterior) já
+  // mostrava abandono concentrado antes dos 60s — motivou a saída honesta pro
+  // cartão desde a abertura do QR (não só depois do timer). A Landing já
+  // validou essa saída (não é novidade aqui, só o alinhamento do timer acima).
   const [cardSwitching, setCardSwitching] = useState(false);
   const pixSwitchedMethod = useRef(false); // trocou pro cartão em vez de desistir — não conta como abandono
   useEffect(() => {
@@ -88,24 +103,6 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     close();
     onUpgrade();
   };
-  // funil: o upsell in-game é quem mais abre checkout no app inteiro (lidera
-  // checkout_open), mas fechava o QR Pix com UM clique — overlay inteiro e o ✕
-  // chamavam close() direto, sem a fricção leve que a Landing já validou (nudge
-  // 1x/sessão antes de deixar fechar). Num card in-game, com ❌ grande e overlay
-  // de fundo cobrindo a tela, um toque sem querer custa a cobrança gerada — e
-  // parte dos abandonos de Pix (28d) fecha rápido demais pra ser decisão
-  // consciente. Mesmo padrão da Landing: 1 nudge honesto, depois fecha mesmo.
-  const nudgeShown = useRef(false);
-  const [nudge, setNudge] = useState(false);
-  const requestClose = () => {
-    if (pix && !pixConfirmed.current && !pixSwitchedMethod.current && !nudgeShown.current) {
-      nudgeShown.current = true;
-      setNudge(true);
-      trackPaywallView('upsell-nudge'); // funil: nudge exibido nesta superfície (src próprio, mede separado do 'checkout-nudge' da Landing)
-      return;
-    }
-    close();
-  };
 
   useEffect(() => {
     const onEvt = (e: Event) => {
@@ -113,8 +110,12 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
       const trigger = (e as CustomEvent).detail?.trigger as string | undefined;
       const force = Boolean((e as CustomEvent).detail?.force); // clique explícito do usuário fura o cooldown
       const last = Number(localStorage.getItem(LAST_KEY) || 0);
-      if (!force && Date.now() - last < COOLDOWN_MS) return; // respeita cooldown só nos disparos automáticos
+      // disparo automático: só depois do 1º valor, 1x por sessão e com o
+      // cooldown (state/paywallPolicy.ts); clique explícito abre sempre
+      if (!autoOfferAllowed({ force, firstValue: hasFirstValue(), usedThisSession: autoOfferUsed(), msSinceLast: Date.now() - last, cooldownMs: COOLDOWN_MS })) return;
+      if (!force) markAutoOfferUsed();
       setHook(HOOKS[trigger ?? 'default'] ?? HOOKS.default);
+      setCardSwitching(false); // botão de cartão destravado a cada abertura (só UI)
       setOpen(true);
       trackPaywallView('upsell-card'); // funil: card de upsell exibido (1x/sessão)
       localStorage.setItem(LAST_KEY, String(Date.now()));
@@ -130,11 +131,12 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     let alive = true;
     const startedAt = Date.now();
     const CAP_MS = 15 * 60_000;
+    setPollPaused(false);
     const check = async () => {
       try { const me = await fetchMe(); if (alive && me?.paid) { pixConfirmed.current = true; setPix(null); setOpen(false); onPixPaid(); } } catch { /* ignora */ }
     };
     const t = window.setInterval(() => {
-      if (Date.now() - startedAt > CAP_MS) { window.clearInterval(t); return; }
+      if (Date.now() - startedAt > CAP_MS) { window.clearInterval(t); if (alive) setPollPaused(true); return; }
       if (document.hidden) return;
       void check();
     }, 6000);
@@ -143,134 +145,139 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     return () => { alive = false; window.clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [pix, onPixPaid]);
 
+  // "Já paguei, verificar agora": o mesmo /me do polling, na hora que a pessoa
+  // pede (igual ao modal da Landing; aqui sem paywall_view, que não tem src desta
+  // superfície).
+  const [checkingNow, setCheckingNow] = useState(false);
+  const checkPixNow = async () => {
+    if (!pix || checkingNow) return;
+    setCheckingNow(true);
+    try {
+      const me = await fetchMe();
+      if (me?.paid) { pixConfirmed.current = true; setPix(null); setOpen(false); onPixPaid(); }
+    } catch { /* segue esperando o polling automático */ }
+    setCheckingNow(false);
+  };
+
   if (!open || account?.paid) return null;
 
+  // fechar com o QR Pix aberto e sem pagamento: UM nudge leve inline (1x por
+  // sessão), honesto e descartável — o mesmo da Landing. Depois, fechar fecha.
+  const requestClose = () => {
+    if (pix && !pixConfirmed.current && !pixSwitchedMethod.current && !upsellNudgeShown.has('pix')) {
+      upsellNudgeShown.add('pix');
+      setNudge(true);
+      trackPaywallView('upsell-nudge'); // funil: src próprio, mede separado do checkout-nudge da Landing
+      return;
+    }
+    close();
+  };
   const close = () => {
     if (pix && !pixConfirmed.current && !pixSwitchedMethod.current) trackCheckoutAbandon('pix', (Date.now() - pixOpenedAt.current) / 1000);
-    setPix(null); setPixErr(''); setPixBusy(false); setNudge(false);
+    setPix(null); setPixErr(null); setPixBusy(false); setNudge(false);
+    pixOpenedAt.current = 0; // a próxima abertura do card é outro checkout (conta outro checkout_open)
     setOpen(false);
   };
 
+  // Também é o "Gerar novo código" / "Tentar de novo" do PixPanel: o
+  // checkout_open conta só a 1ª vez que um QR aparece nesta abertura do card, e o
+  // pixOpenedAt (base do abandono) fica nessa 1ª vez.
   const payPix = async () => {
     if (pixBusy) return;
     setCheckoutSrc('upsell-card');
-    setPixBusy(true); setPixErr('');
+    setPixBusy(true); setPixErr(null);
     try {
       const charge = await beginPix();
-      if (!charge) { setOpen(false); onPixPaid(); return; } // já estava paga
-      setPix(charge);
-      pixOpenedAt.current = Date.now();
-      trackCheckoutOpen('pix'); // funil: QR Pix aberto direto do upsell in-game
-    } catch (e) { setPixErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); }
+      if (!charge) { pixConfirmed.current = true; setPix(null); setOpen(false); onPixPaid(); return; } // já estava paga
+      setPix(charge); setPixAt(Date.now());
+      if (!pixOpenedAt.current) {
+        pixOpenedAt.current = Date.now();
+        trackCheckoutOpen('pix'); // funil: QR Pix aberto direto do upsell in-game
+      }
+    } catch (e) {
+      // sem token o beginPix nem chega no servidor: é sessão (como o 401)
+      setPixErr(pixErrorKind(e instanceof AccountError ? e.status : 401));
+    }
     setPixBusy(false);
   };
-
-  const copyBr = async () => {
-    if (!pix?.brCode) return;
-    try { await navigator.clipboard.writeText(pix.brCode); setCopied(true); setTimeout(() => setCopied(false), 2200); } catch { /* sem permissão */ }
-  };
+  // com o Pix pedido, o card vira só o Pix: antes o QR entrava embaixo da lista e
+  // dos botões e, no celular, ficava fora da tela (o overlay não rolava)
+  const pixMode = !!pix || pixBusy || !!pixErr;
 
   return (
-    <div className="upsell-overlay" role="dialog" aria-modal="true" onClick={requestClose}>
+    <div className={`upsell-overlay${pixMode ? ' upsell-overlay--pix' : ''}`} role="dialog" aria-modal="true" onClick={requestClose}>
       <div className="upsell-card" onClick={(e) => e.stopPropagation()}>
         <button className="upsell-x" onClick={requestClose} aria-label={ct('fechar')}>✕</button>
         <div className="upsell-kicker">{ct('Conta vitalícia')}</div>
-        <h3 className="upsell-title">{ct(hook)}</h3>
-        <ul className="upsell-list">
-          <li><b>{ct('Save na nuvem')}</b> {ct('· jogue em qualquer aparelho e nunca perca a carreira')}</li>
-          <li><b>{ct('Até 5 carreiras')}</b> {ct('· toque várias orgs ao mesmo tempo')}</li>
-          <li><b>{ct('Ranqueada com pontuação')}</b> {ct('· suba no ladder e dispute o topo')}</li>
-          <li><b>{ct('Perfil e selo de apoiador')}</b> {ct('· identidade no jogo todo')}</li>
-          {founderSlotsLeft && (
-            <li><b>{ct('Selo de Fundador #001–#500')}</b> {ct('· logo própria do clube + número baixo é troféu (500 primeiros)')}</li>
-          )}
-        </ul>
-        {/* prova social real: única superfície de venda com tráfego relevante que ainda não mostrava (iter48) */}
-        <FounderCounter style={{ marginBottom: '4px' }} />
-        <div className="upsell-actions">
-          {account ? (
-            <>
-              {/* Pix vira o CTA primário aqui: dado real (checkout_open × rtm_paid_emails)
-                  mostra Pix confirmando bem mais que o Stripe, e essa era a única
-                  superfície de venda que nunca oferecia Pix (só o redirect pro Stripe). */}
-              <button className="btn gold big" disabled={pixBusy} onClick={payPix}>
-                {pixBusy ? ct('Aguarde…') : `${ct('Pagar com Pix')} · R$20`}
-              </button>
-              <button className="upsell-card-btn" disabled={pixBusy} onClick={() => { setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}>
-                {ct('Ativar com cartão (Stripe)')}
-              </button>
-            </>
-          ) : (
-            /* funil: convidado (sem token) não consegue pagar direto — beginPix/
-               beginCheckout exigem login e os botões acima quebravam pra ele (28d:
-               154 checkout_open Stripe × 6 Pix nesta superfície, e o botão Pix
-               "primário" nunca decolou — sinal de que boa parte desse tráfego
-               nem tinha conta). Manda pro fluxo de cadastro+pagamento da landing,
-               que já lida com convidado do início ao fim. */
-            <button className="btn gold big" onClick={() => { setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }}>
-              {ct('Criar conta e ativar')} · R$20
-            </button>
-          )}
-          <button className="upsell-later" onClick={requestClose}>{ct('Agora não')}</button>
-        </div>
-        {pixErr && <p style={{ color: '#e2574c', fontSize: '0.78rem', margin: '10px 0 0' }}>{pixErr}</p>}
-        {pix && (
-          <div style={{ marginTop: '14px', background: 'color-mix(in srgb, var(--c-win) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-win) 35%, transparent)', borderRadius: '6px', padding: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 8px var(--c-win)' }} />
-              <b style={{ fontSize: '0.8rem', color: 'var(--em-text, #fff)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
-            </div>
-            {pix.qrCodeImage && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
-                <img src={pix.qrCodeImage} alt="QR Pix" style={{ width: '180px', height: '180px', background: '#fff', padding: '8px', borderRadius: '8px' }} />
-              </div>
-            )}
-            {pix.brCode && (
-              <button type="button" onClick={copyBr}
-                style={{ width: '100%', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'color-mix(in srgb, var(--c-win) 20%, transparent)' : 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.15)', color: 'inherit', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                {copied ? ct('Copiado!') : ct('Copiar código Pix')}
-              </button>
-            )}
-            <p style={{ fontSize: '0.72rem', opacity: 0.75, margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
-              {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera sozinho.')}
-            </p>
-            {/* saída honesta pro cartão — visível desde que o QR abre, mesmo padrão
-                já validado no modal de conta da Landing. Pix segue o CTA primário
-                e o QR não some; só quem não quer esperar tem pra onde ir. */}
-            <button
-              type="button"
-              onClick={switchToCard}
-              disabled={cardSwitching}
-              style={{ display: 'block', width: '100%', marginTop: '10px', padding: '8px', borderRadius: '6px', cursor: cardSwitching ? 'default' : 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,.15)', color: 'var(--em-muted, #9aa4b2)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: cardSwitching ? 0.6 : 1 }}
-            >
-              {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
-            </button>
-            {pixWaitLong && (
-              /* reassurance honesta pra quem passou de 1min esperando (ver comentário acima) */
-              <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
-                {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
-              </p>
-            )}
-            {nudge && (
-              /* nudge anti-abandono (1x/sessão), mesmo padrão da Landing: honesto,
-                 descartável — um segundo clique em "Fechar" sempre fecha mesmo. */
-              <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(232,193,112,.08)', border: '1px solid rgba(232,193,112,.4)', borderRadius: '6px' }}>
-                <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--em-text, #fff)', lineHeight: 1.5 }}>
-                  {ct('Ficou alguma dúvida? O acesso é vitalício e o Pix confirma na hora.')}
-                </p>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button type="button" onClick={() => setNudge(false)}
-                    style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                    {ct('Continuar pagamento')}
-                  </button>
-                  <button type="button" onClick={close}
-                    style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,.15)', color: 'var(--em-muted, #9aa4b2)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                    {ct('Fechar')}
-                  </button>
+        {pixMode ? (
+          <PixPanel
+            charge={pix}
+            chargeAt={pixAt}
+            generating={pixBusy}
+            error={pixErr}
+            onRegenerate={() => void payPix()}
+            /* saída honesta pro cartão — visível desde que o QR abre, mesmo padrão
+               já validado no modal de conta da Landing. Pix segue o CTA primário
+               e o QR não some; só quem não quer esperar tem pra onde ir. */
+            /* sem QR ainda (erro ao gerar) é o mesmo botão de cartão do card */
+            onCard={pix ? switchToCard : () => { setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}
+            cardSwitching={cardSwitching}
+            /* reassurance honesta a partir dos 25s (ver comentário do pixWaitLong) */
+            waitLong={pixWaitLong}
+            onCheckNow={() => void checkPixNow()}
+            checkingNow={checkingNow}
+            pollPaused={pollPaused}
+            interrupt={nudge ? (
+              <div className="pix-panel__nudge" role="group" aria-label={ct('Continuar pagamento')}>
+                <p>{ct('Ficou alguma dúvida? O acesso é vitalício e o Pix confirma na hora.')}</p>
+                <div className="pix-panel__nudge-actions">
+                  <Button variant="secondary" autoFocus onClick={() => setNudge(false)}>{ct('Continuar pagamento')}</Button>
+                  <Button variant="ghost" onClick={close}>{ct('Fechar')}</Button>
                 </div>
               </div>
-            )}
-          </div>
+            ) : undefined}
+          />
+        ) : (
+          <>
+            <h3 className="upsell-title">{ct(hook)}</h3>
+            <ul className="upsell-list">
+              <li><b>{ct('Save na nuvem')}</b> {ct('· jogue em qualquer aparelho e nunca perca a carreira')}</li>
+              <li><b>{ct('Até 5 carreiras')}</b> {ct('· toque várias orgs ao mesmo tempo')}</li>
+              <li><b>{ct('Ranqueada com pontuação')}</b> {ct('· suba no ladder e dispute o topo')}</li>
+              <li><b>{ct('Perfil e selo de apoiador')}</b> {ct('· identidade no jogo todo')}</li>
+              {founderSlotsLeft && (
+                <li><b>{ct('Selo de Fundador #001–#500')}</b> {ct('· logo própria do clube + número baixo é troféu (500 primeiros)')}</li>
+              )}
+            </ul>
+            {/* prova social real: única superfície de venda com tráfego relevante que ainda não mostrava (iter48) */}
+            <FounderCounter style={{ marginBottom: '4px' }} />
+            <div className="upsell-actions">
+              {account ? (
+                <>
+                  {/* Pix vira o CTA primário aqui: dado real (checkout_open × rtm_paid_emails)
+                      mostra Pix confirmando bem mais que o Stripe, e essa era a única
+                      superfície de venda que nunca oferecia Pix (só o redirect pro Stripe). */}
+                  <button className="btn gold big" disabled={pixBusy} onClick={payPix}>
+                    {pixBusy ? ct('Aguarde…') : `${ct('Pagar com Pix')} · ${priceLabel()}`}
+                  </button>
+                  <button className="upsell-card-btn" disabled={pixBusy} onClick={() => { setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}>
+                    {ct('Ativar com cartão (Stripe)')}
+                  </button>
+                </>
+              ) : (
+                /* funil: convidado (sem token) não consegue pagar direto — beginPix/
+                   beginCheckout exigem login e os botões acima quebravam pra ele (28d:
+                   154 checkout_open Stripe × 6 Pix nesta superfície, e o botão Pix
+                   "primário" nunca decolou — sinal de que boa parte desse tráfego
+                   nem tinha conta). Manda pro fluxo de cadastro+pagamento da landing,
+                   que já lida com convidado do início ao fim. */
+                <button className="btn gold big" onClick={() => { setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }}>
+                  {ct('Criar conta e ativar')} · {priceLabel()}
+                </button>
+              )}
+              <button className="upsell-later" onClick={requestClose}>{ct('Agora não')}</button>
+            </div>
+          </>
         )}
         <div className="upsell-foot">{ct('Pagamento único. Sem mensalidade. Apoia o desenvolvimento do jogo.')}</div>
       </div>

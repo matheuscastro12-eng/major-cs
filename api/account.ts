@@ -1,8 +1,8 @@
-// Contas (e-mail + senha) + entitlement da conta vitalícia R$20.
+// Contas (e-mail + senha) + entitlement da conta vitalícia (preço: PIX_PRICE_CENTS).
 // Ações (POST body.action): signup | login | me | checkout | claim | export | delete.
 // - senha: scrypt (node:crypto), guardada como "salt:hash".
 // - token: HMAC-SHA256 stateless ("body.sig", body = email|exp), env APP_SECRET.
-// - checkout: cria a URL do Payment Link ligada à conta autenticada.
+// - checkout: cria uma Checkout Session (preço PIX_PRICE_CENTS) ligada à conta; fallback Payment Link.
 // - claim: confirma a sessão do Stripe no retorno; o webhook é a fonte principal.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -14,13 +14,17 @@ import {
   checkoutBelongsToAccount,
   checkoutHasExpectedPrice,
   checkoutIsPaid,
+  accountCheckoutUrl,
+  accountPriceCents,
+  accountPixChargeUse,
+  accountPixCorrelations,
+  ACCOUNT_PIX_EXPIRES_SEC,
   checkoutUrl,
   cleanEnv,
   COIN_TIERS,
   findPaidCheckoutForEmail,
   passTier,
   PASS_PRICE_CENTS,
-  pixAccountPriceCents,
   retrieveCheckout,
   stripeClient,
 } from '../server/payments.js';
@@ -28,6 +32,12 @@ import { claimPaidOrders } from '../server/paid-credit.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
 import { mailConfigured, sendMail } from '../server/mail.js';
 import { findReusableCharge, rememberCharge } from '../server/order-settle.js';
+
+// [preço] cobrança de cartão da vitalícia (signup, login e checkout): Checkout
+// Session com PIX_PRICE_CENTS; Stripe ausente ou com erro → Payment Link legado.
+async function safeCheckoutUrl(email: string, origin: unknown): Promise<string> {
+  try { return await accountCheckoutUrl(email, origin); } catch { return checkoutUrl(email); }
+}
 import { nickProblem, nickTaken, normalizeNick } from '../server/nick.js';
 import { clientIp, rateLimitHit, respondLimited, type RateRule, type RateSql } from '../server/rate-limit.js';
 
@@ -157,7 +167,7 @@ export default async function handler(
   // protegido por cache em memória (60s por instância) contra rajadas.
   if (req.method === 'GET') {
     const dbUrl = cleanEnv(process.env.DATABASE_URL);
-    if (!dbUrl) { res.status(500).json({ error: 'indisponível' }); return; }
+    if (!dbUrl) { res.status(500).json({ error: 'indisponível', priceCents: accountPriceCents() }); return; }
     try {
       if (!foundersCache || Date.now() - foundersCache.at > 60_000) {
         const sql = neon(dbUrl);
@@ -168,8 +178,8 @@ export default async function handler(
         foundersCache = { at: Date.now(), founders: Number(r[0]?.founders ?? 0) };
       }
       res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
-      res.status(200).json({ founders: foundersCache.founders, limit: FOUNDER_LIMIT });
-    } catch { res.status(500).json({ error: 'indisponível' }); }
+      res.status(200).json({ founders: foundersCache.founders, limit: FOUNDER_LIMIT, priceCents: accountPriceCents() });
+    } catch { res.status(500).json({ error: 'indisponível', priceCents: accountPriceCents() }); }
     return;
   }
 
@@ -324,7 +334,7 @@ export default async function handler(
     }
     await sql`INSERT INTO rtm_pending_signups (email, nick, pass_hash) VALUES (${email}, ${nick}, ${passHash})
               ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, created_at=now()`;
-    res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, url: checkoutUrl(email) });
+    res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, url: await safeCheckoutUrl(email, body.origin) });
     return;
   }
 
@@ -334,7 +344,7 @@ export default async function handler(
     if (!r.length || !verifyPw(password, String(r[0].pass_hash))) { res.status(401).json({ error: 'E-mail ou senha incorretos.' }); return; }
     await ensureReference(email);
     const paid = await resolvePaid(email, Boolean(r[0].paid), true);
-    if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento do save na nuvem.', url: checkoutUrl(email) }); return; }
+    if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento do save na nuvem.', url: await safeCheckoutUrl(email, body.origin) }); return; }
     res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: true, ...(await founderOf(email)) });
     return;
   }
@@ -468,44 +478,80 @@ export default async function handler(
       res.status(200).json({ paid: true });
       return;
     }
-    res.status(200).json({ paid: false, url: checkoutUrl(em) });
+    // [preço] sessão dinâmica com PIX_PRICE_CENTS; falha no Stripe → Payment Link legado.
+    res.status(200).json({ paid: false, url: await safeCheckoutUrl(em, body.origin) });
     return;
   }
 
-  // pix: gera uma cobrança Pix no Woovi pra esta conta (correlationID = email).
-  // O webhook (/api/woovi-webhook) marca pago quando o Pix cai. Retorna o QR e
-  // o BR Code (copia-e-cola) pra mostrar inline no jogo. Requer env OPENPIX_APP_ID.
+  // pix: cobrança Pix no Woovi pra esta conta. O webhook (/api/woovi-webhook)
+  // marca pago quando o Pix cai. Retorna o QR e o BR Code (copia-e-cola) pra
+  // mostrar inline no jogo. Requer env OPENPIX_APP_ID.
+  // Reabrir o modal devolve a MESMA cobrança enquanto ela vale (correlationID
+  // estável por janela, ver accountPixCorrelations em server/payments.ts): com
+  // uma cobrança só não dá pra pagar a conta duas vezes.
   if (action === 'pix') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login antes de pagar.' }); return; }
     if (await resolvePaid(em, false, true)) { res.status(200).json({ paid: true }); return; }
     const appId = cleanEnv(process.env.OPENPIX_APP_ID);
     if (!appId) { res.status(500).json({ error: 'Pix indisponível: OPENPIX_APP_ID não configurada.' }); return; }
-    // valor em CENTAVOS (R$20 = 2000). Editável via PIX_PRICE_CENTS (mesma régua do Stripe).
-    const value = pixAccountPriceCents();
-    const nick = String(((await sql`SELECT nick FROM rtm_accounts WHERE email=${em}`)[0]?.nick) ?? '').slice(0, 80) || em;
+    // valor em CENTAVOS (padrão 2000 = R$20). Fonte única: PIX_PRICE_CENTS (mesma do Stripe e do front).
+    const value = accountPriceCents();
+    const chargeOut = (c: Record<string, unknown>, expiresIn: unknown, extra: Record<string, unknown> = {}) => ({
+      paid: false,
+      qrCodeImage: c.qrCodeImage ?? null,
+      brCode: c.brCode ?? null,
+      paymentLinkUrl: c.paymentLinkUrl ?? null,
+      expiresIn: expiresIn ?? null,
+      ...extra,
+    });
+    const { previous, current } = accountPixCorrelations(em, Date.now());
+    // 1) a cobrança da janela anterior ainda pode estar aberta (ou paga, com o
+    // webhook a caminho). Falha na consulta não bloqueia: segue pra criar.
     try {
-      const r = await fetch('https://api.openpix.com.br/api/v1/charge', {
+      const r = await fetch(`https://api.openpix.com.br/api/v1/charge/${encodeURIComponent(previous)}`, {
+        headers: { Authorization: appId },
+        signal: AbortSignal.timeout(6000),
+      });
+      if (r.ok) {
+        const c = ((await r.json()) as { charge?: Record<string, unknown> })?.charge ?? {};
+        const u = accountPixChargeUse(c, value, Date.now());
+        if (u?.use === 'reuse') { res.status(200).json(chargeOut(c, u.expiresIn, { reused: true })); return; }
+        if (u?.use === 'paid') { res.status(200).json(chargeOut(c, 0, { processing: true })); return; }
+      }
+    } catch { /* sem resposta do Woovi: trata como sem cobrança aberta */ }
+    // 2) a da janela atual: return_existing devolve a que já existe com este
+    // correlationID em vez de criar outra. 3) se a que voltou não serve
+    // (expirada, preço antigo), cria uma avulsa como antes.
+    const nick = String(((await sql`SELECT nick FROM rtm_accounts WHERE email=${em}`)[0]?.nick) ?? '').slice(0, 80) || em;
+    const create = async (correlationID: string, returnExisting: boolean) => {
+      const r = await fetch(`https://api.openpix.com.br/api/v1/charge${returnExisting ? '?return_existing=true' : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: appId },
         body: JSON.stringify({
-          correlationID: `rtm-${em}-${Math.floor(Date.now() / 1000)}`,
+          correlationID,
           value,
           comment: 'Road to Major · conta vitalícia',
           customer: { name: nick, email: em },
+          expiresIn: ACCOUNT_PIX_EXPIRES_SEC,
         }),
         signal: AbortSignal.timeout(12000),
       });
-      if (!r.ok) { res.status(502).json({ error: 'Falha ao gerar Pix. Tente de novo.' }); return; }
-      const j = (await r.json()) as { charge?: Record<string, unknown> };
-      const c = j?.charge ?? {};
-      res.status(200).json({
-        paid: false,
-        qrCodeImage: c.qrCodeImage ?? null,
-        brCode: c.brCode ?? null,
-        paymentLinkUrl: c.paymentLinkUrl ?? null,
-        expiresIn: c.expiresIn ?? null,
-      });
+      if (!r.ok) return null;
+      return ((await r.json()) as { charge?: Record<string, unknown> })?.charge ?? {};
+    };
+    try {
+      const c = await create(current, true);
+      if (!c) { res.status(502).json({ error: 'Falha ao gerar Pix. Tente de novo.' }); return; }
+      const u = accountPixChargeUse(c, value, Date.now());
+      if (u?.use === 'reuse') { res.status(200).json(chargeOut(c, u.expiresIn)); return; }
+      if (u?.use === 'paid') { res.status(200).json(chargeOut(c, 0, { processing: true })); return; }
+      // resposta sem status/validade legível: devolve como sempre devolveu
+      if (!u) { res.status(200).json(chargeOut(c, c.expiresIn)); return; }
+      console.warn('[pix] cobrança da janela não serve (expirada ou preço antigo); criando avulsa:', c.status, c.value);
+      const fresh = await create(`rtm-${em}-${Math.floor(Date.now() / 1000)}`, false);
+      if (!fresh) { res.status(502).json({ error: 'Falha ao gerar Pix. Tente de novo.' }); return; }
+      res.status(200).json(chargeOut(fresh, fresh.expiresIn));
     } catch { res.status(502).json({ error: 'Falha ao falar com o Woovi.' }); }
     return;
   }

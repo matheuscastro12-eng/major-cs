@@ -289,7 +289,7 @@ export function JuventudeTab({ split, mundo, moves, clubOf, scoutAccuracy, orgNa
           rowKey={(r) => `${r.id}:${r.split}`}
           caption={ct('Aposentadorias na cena')}
           defaultSort={{ key: 'ovr', dir: 'desc' }}
-          empty={ct('Ninguém se aposentou no último ano. A virada de ano (a cada 3 splits) é quando os veteranos param.')}
+          empty={ct('Ninguém se aposentou no último ano. A virada de ano (a cada temporada, 4 splits) é quando os veteranos param.')}
         />
       </Panel>
     </div>

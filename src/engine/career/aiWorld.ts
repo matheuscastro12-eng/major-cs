@@ -13,6 +13,8 @@ import { FREE_TEAM_ID } from './transferAI';
 import { REAL_AGES, baseAge, effectiveAge, type YouthDebut } from './playerAge';
 import { isNewgenId } from '../mundo/juventude';
 import { RETIRED_TEAM_ID } from '../mundo/editor';
+import { SPLITS_PER_YEAR } from '../clock';
+import { replayPlayer, type EvoClock, type WorldEvoEntry, type WorldEvoMap } from './worldEvo';
 
 export type PlayerPhase = 'rising' | 'prime' | 'declining';
 
@@ -101,38 +103,11 @@ export function playerPhase(_pid: string, age: number): PlayerPhase {
   return 'declining';
 }
 
-// ─── CURVA DE ENVELHECIMENTO DA IA (fase 4 · frente K, recalibrada) ─────────
-// Antes: o jovem subia +1..+3 por split até o teto, o auge ficava parado e o
-// declínio só começava aos 31–35 — o OVR médio do top 20 inflava ≈ +4 em 10
-// splits (scripts/measure-mundo-10-splits.mts). Agora a curva é a do CS real:
-//   - CRESCIMENTO (até o teto de potencial): forte até ~21, some aos ~26;
-//   - PICO ~22–26; DECLÍNIO a partir dos ~28, acelerando depois dos 31;
-//   - a LONGEVIDADE (−1..+3 anos, mesmo eixo de `longevityShift` da evolução
-//     por atributo) adia a queda de quem envelhece bem (lendas tipo karrigan).
-// É a MESMA régua em OVR que a evolução por atributo produz (reflexos caem
-// primeiro, leitura de jogo segura até os 30+): os 5 números da IA movem juntos,
-// então a curva aqui é a média ponderada das classes.
-// Média por split (3 splits = 1 ano); o sorteio por hash vira inteiro.
-export const AI_GROWTH_BY_AGE: [maxAge: number, mean: number][] = [[19, 0.9], [21, 0.6], [23, 0.3], [26, 0.12], [99, 0]];
-export const AI_DECLINE_BY_AGE: [maxAge: number, mean: number][] = [[25, 0], [26, 0.1], [27, 0.2], [28, 0.35], [30, 0.55], [32, 0.85], [34, 1.15], [99, 1.45]];
-const bandOf = (table: [number, number][], age: number) => (table.find(([max]) => age <= max) ?? table[table.length - 1])[1];
-/** Anos que a longevidade adia o declínio: −1..+3 (determinístico por jogador). */
-export function aiLongevity(pid: string): number {
-  return Math.floor((hashStr(`long:${pid}`) % 100) / 20) - 1;
-}
-const rollMean = (mean: number, r: number) => {
-  const m = Math.abs(mean);
-  const whole = Math.floor(m);
-  return Math.sign(mean) * (whole + (r < (m - whole) * 100 ? 1 : 0));
-};
-// delta da janela: cresce rumo ao teto (parado no teto) e cai pela idade efetiva.
-export function evoDelta(pid: string, split: number, age: number, atCeiling: boolean): number {
-  const r = hashStr(`evo:${pid}:${split}`) % 100;
-  const q = hashStr(`evd:${pid}:${split}`) % 100;
-  const grow = atCeiling ? 0 : rollMean(bandOf(AI_GROWTH_BY_AGE, age), r);
-  const decline = rollMean(bandOf(AI_DECLINE_BY_AGE, age - aiLongevity(pid)), q);
-  return grow - decline;
-}
+// ─── CURVA DA IA = CURVA DO SEU ELENCO (evolução · out/2026) ────────────────
+// A IA não tem mais curva própria em OVR (evoDelta/driftFrom): cada jogador do
+// mundo evolui atributo a atributo pela MESMA `evolveAttrs` do seu elenco, em
+// contexto neutro, por replay determinístico (engine/career/worldEvo.ts). Quem
+// saiu do seu elenco continua do estado gravado em `save.worldEvo`.
 
 // idade em que um jogador da IA se aposenta (determinístico): longevidade,
 // NÍVEL (quem está em queda num tier baixo para mais cedo; estrela segue) e
@@ -154,22 +129,32 @@ export function aiPotentialOvr(pid: string, baseOvr: number, a0: number): number
   const squeeze = Math.max(0.2, Math.min(1, (AI_POT_TOP - baseOvr) / AI_POT_SPAN));
   return Math.min(99, baseOvr + Math.round((room + talent) * squeeze));
 }
-export const AI_POT_TOP = 88;
+// [evolução · out/2026] 88 → 90: com a curva única (crescimento espalhado e
+// desacelerando nos últimos ~9 de OVR) os jovens da IA paravam 3+ abaixo do teto
+export const AI_POT_TOP = 90;
 export const AI_POT_SPAN = 18;
 
-// drift de OVR entre o split de estreia e o atual, pelo relógio de idade próprio
-// do jogador (serve tanto pro titular original quanto pro jovem da base).
-export function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, split: number, potCap?: number): number {
-  if (split <= debut) return 0;
-  // jovem da base (regen) mira o nível da vaga que herdou (teto = titular que
-  // saiu + 0..2); os demais, o teto da idade comprimido no topo da escala
-  const pot = potCap != null ? Math.min(99, potCap - (hashStr(`rgpot:${pid}`) % 3)) : aiPotentialOvr(pid, baseOvr, a0);
-  let cur = baseOvr;
-  for (let s = debut; s < split; s++) {
-    const age = a0 + Math.floor((s - debut) / 3);
-    cur = Math.max(40, Math.min(99, cur + evoDelta(pid, s, age, cur >= pot)));
-  }
-  return Math.round(Math.max(-12, Math.min(12, cur - baseOvr)));
+/** Teto do jovem da base (regen): o nível da vaga que herdou (titular original + 2, −0..2). */
+export function regenPotOvr(pid: string, anchorOvr: number): number {
+  return Math.min(99, anchorOvr + 2 - (hashStr(`rgpot:${pid}`) % 3));
+}
+
+/** Relógio de evolução de um jogador do mundo que estreou em `debut` com `a0` anos. */
+export function aiClock(debut: number, a0: number, pot: number, evo?: WorldEvoEntry): EvoClock {
+  const d = Math.max(1, Math.floor(debut));
+  const ageAt = (s: number) => Math.max(15, Math.round(a0)) + Math.floor(Math.max(0, s - d) / SPLITS_PER_YEAR);
+  // saiu do seu elenco: a IA continua do estado da saída (com o teto que ele tinha)
+  if (evo && evo.split >= d) return { from: evo.split, ageAt, pot: evo.pot ?? pot, start: evo.attrDelta };
+  return { from: d, ageAt, pot };
+}
+
+/**
+ * O jogador da IA no split pela curva única: o titular original (debut 1, teto
+ * da idade) ou o jovem da base que herdou a vaga (debut/idade no id, teto da vaga).
+ * É a MESMA conta que a Carreira usa para resolver o contratado (findSigning).
+ */
+export function aiEvolvedPlayer(p: Player, split: number, debut: number, a0: number, pot: number, evo?: WorldEvoEntry): Player {
+  return replayPlayer(p, split, aiClock(debut, a0, pot, evo));
 }
 
 /** Faixa do OVR de estreia do jovem que assume uma vaga (ele cresce depois, pelo
@@ -209,8 +194,7 @@ export function regenYouth(team: TeamSeason, slot: number, gen: number, debut: n
 // resolve o jogador ATUAL de uma vaga da IA no split dado: o titular original
 // envelhece até se aposentar; aí um jovem da base (academia) assume e evolui no
 // lugar dele — e assim por diante. Mantém os elencos da IA vivos e renovados.
-export function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split: number, skip: Set<string>): Player {
-  const clamp = (v: number) => Math.max(40, Math.min(99, v));
+export function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split: number, skip: Set<string>, worldEvo?: WorldEvoMap): Player {
   const anchor = playerOvr(orig); // nível da vaga: a base entra perto disso
   let curPlayer = orig, curId = orig.id, curBaseOvr = anchor, curA0 = baseAge(orig), debut = 1, gen = 0, isYouth = false;
   for (let guard = 0; guard < 8; guard++) {
@@ -218,26 +202,24 @@ export function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split
     // joga mais 2–4 anos (a despedida se espalha; nada de onda no split 2)
     const grace = gen === 0 ? 2 + (hashStr(`grace:${curId}`) % 3) : 0;
     const need = Math.max(aiRetireAge(curId, curBaseOvr) - curA0, grace);
-    const retireSplit = need <= 0 ? debut + 1 : debut + 3 * need;
+    const retireSplit = need <= 0 ? debut + 1 : debut + SPLITS_PER_YEAR * need;
     if (split < retireSplit) break; // titular atual ainda em atividade
     gen++; debut = retireSplit;
     const a0 = 17 + (hashStr(`yage:${team.id}:${slot}:${gen}:${debut}`) % 3); // estreia 17-19
     curPlayer = regenYouth(team, slot, gen, debut, a0, orig);
     curId = curPlayer.id; curBaseOvr = playerOvr(curPlayer); curA0 = a0; isYouth = true;
   }
-  if (skip.has(curId)) return curPlayer; // se o usuário contratou esse jovem, ele evolui pelo save.evo
+  if (skip.has(curId)) return curPlayer; // no seu elenco: evolui pelo save (attrEvo)
   // jovem da base pode crescer até um pouco acima do titular que saiu (não vira monstro)
-  const d = driftFrom(curId, curBaseOvr, curA0, debut, split, isYouth ? anchor + 2 : undefined);
-  if (!d) return isYouth ? curPlayer : orig;
-  const p = curPlayer;
-  return { ...p, aim: clamp(p.aim + d), consistency: clamp(p.consistency + d), clutch: clamp(p.clutch + d), awp: clamp(p.awp + d), igl: clamp(p.igl + d) };
+  const pot = isYouth ? regenPotOvr(curId, anchor) : aiPotentialOvr(curId, curBaseOvr, curA0);
+  return aiEvolvedPlayer(curPlayer, split, debut, curA0, pot, worldEvo?.[curId]);
 }
 
-export function applyAiAging(teams: TeamSeason[], split: number, skip: Set<string>): TeamSeason[] {
+export function applyAiAging(teams: TeamSeason[], split: number, skip: Set<string>, worldEvo?: WorldEvoMap): TeamSeason[] {
   if (split <= 1) return teams;
   // [fase 4 · juventude] jovem gerado (newgen) já vem no estado atual (evolui
   // atributo a atributo no fechamento do split): não passa pelo relógio da vaga
-  return teams.map((t) => ({ ...t, players: t.players.map((p, i) => (skip.has(p.id) || isNewgenId(p.id) ? p : aiSlotPlayer(p, t, i, split, skip))) }));
+  return teams.map((t) => ({ ...t, players: t.players.map((p, i) => (skip.has(p.id) || isNewgenId(p.id) ? p : aiSlotPlayer(p, t, i, split, skip, worldEvo))) }));
 }
 
 // reconstrói os elencos aplicando as transferências acumuladas (playerId -> teamId).
@@ -293,6 +275,10 @@ export interface AiWorldArgs {
    *  entra na FRENTE do elenco (joga entre os 5), o banco fica no fim. Vazio =
    *  ordem de sempre (saves antigos não mudam). */
   arrivals?: Record<string, number>;
+  /** [evolução] quem saiu do seu elenco: a IA continua do estado gravado */
+  worldEvo?: WorldEvoMap;
+  /** relógio da base promovida (idade dos vendidos da academia no comprador) */
+  youthDebut?: Record<string, YouthDebut>;
 }
 
 // quem chegou pelo mercado joga: vai pra frente do elenco (mais recente primeiro)
@@ -334,13 +320,34 @@ export function withExtrasInFront(
   return { ...t, players: all.map((x) => x.p) };
 }
 
+// [evolução] vendido sem id na base (academia, base promovida, regen, newgen):
+// a cópia da venda é o estado na saída e evolui pela curva única desde a chegada
+export function extraClock(e: { player: Player; arrival: number }, worldEvo?: WorldEvoMap, youthDebut?: Record<string, YouthDebut>): EvoClock {
+  const p = e.player;
+  // a cópia é o estado NA CHEGADA (venda consumada na virada): evolui dali
+  const from = Math.max(1, Math.floor(e.arrival));
+  const ageAt = (s: number) => aiAgeOf(p, s, youthDebut);
+  const ovr = playerOvr(p);
+  const pot = worldEvo?.[p.id]?.pot ?? Math.max(ovr, aiPotentialOvr(p.id, ovr, ageAt(from)));
+  return { from, ageAt, pot };
+}
+export function evolvedExtras(
+  list: { player: Player; arrival: number }[] | undefined, split: number, worldEvo?: WorldEvoMap, youthDebut?: Record<string, YouthDebut>,
+): { player: Player; arrival: number }[] | undefined {
+  if (!list || list.length === 0) return list;
+  return list.map((e) => {
+    const p = replayPlayer(e.player, split, extraClock(e, worldEvo, youthDebut));
+    return p === e.player ? e : { ...e, player: p };
+  });
+}
+
 export function buildAiWorld(a: AiWorldArgs): TeamSeason[] {
   const moved = orderArrivals(applyMoves(a.base, a.moves), a.moves, a.arrivals);
-  return applyAiAging(moved, a.split, a.skip)
+  return applyAiAging(moved, a.split, a.skip, a.worldEvo)
     .filter((t) => t.id !== FREE_TEAM_ID && (!t.defunct || t.id === a.takeoverId))
     // vendidos antes do backfill: o jovem sintético da base só completa o que
     // o elenco (com os vendidos) não completa
-    .map((t) => withExtrasInFront(t, a.extraOnTeam?.[t.id], a.moves, a.arrivals))
+    .map((t) => withExtrasInFront(t, evolvedExtras(a.extraOnTeam?.[t.id], a.split, a.worldEvo, a.youthDebut), a.moves, a.arrivals))
     .map((t) => (t.players.length >= 5 ? t : { ...t, players: [...t.players, ...backfillPlayers(t, 5 - t.players.length)] }))
     .map((t) => {
       const d = a.aiDrift?.[t.id];
@@ -352,10 +359,10 @@ export function buildAiWorld(a: AiWorldArgs): TeamSeason[] {
 
 // free agents ATUAIS, envelhecidos como o resto do mundo (quem passou da idade
 // se aposenta e vira um jovem sem id da base — fora do mercado)
-export function agedFreeAgents(base: TeamSeason[], moves: Record<string, string> | undefined, split: number, skip: Set<string>): Player[] {
+export function agedFreeAgents(base: TeamSeason[], moves: Record<string, string> | undefined, split: number, skip: Set<string>, worldEvo?: WorldEvoMap): Player[] {
   const free = applyMoves(base, moves).find((t) => t.id === FREE_TEAM_ID);
   if (!free) return [];
-  return applyAiAging([free], split, skip)[0].players;
+  return applyAiAging([free], split, skip, worldEvo)[0].players;
 }
 
 // MERCADO VIVO — drift de força do fechamento de split: cada time da IA move o

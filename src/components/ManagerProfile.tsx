@@ -12,6 +12,7 @@ import type { Manager } from '../state/manager';
 import { ct } from '../state/career-i18n';
 import { trackPaywallView } from '../state/track';
 import { FounderCounter } from './FounderCounter';
+import { priceLabel, usePrice } from '../state/price';
 
 export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, onAccountDeleted, onManageSaves }: {
   manager: Manager;
@@ -22,6 +23,7 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
   onAccountDeleted: () => void;
   onManageSaves?: () => void;
 }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const paid = !!account?.paid;
   const [rank, setRank] = useState<MyRank | null>(null);
   const [dataBusy, setDataBusy] = useState(false);
@@ -166,7 +168,7 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
               <div>
                 <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>{ct('Você joga tudo de graça com save no navegador. A conta opcional paga a infraestrutura para guardar dados na nuvem e persistir o ranking online.')}</p>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '12px' }}>
-                  <span style={{ ...cond, fontSize: '30px', color: 'var(--rtm-gold)' }}>R$20</span>
+                  <span style={{ ...cond, fontSize: '30px', color: 'var(--rtm-gold)' }}>{priceLabel()}</span>
                   <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{ct('uma vez, sem mensalidade')}</span>
                 </div>
                 <FounderCounter style={{ marginBottom: '10px', display: 'block' }} />

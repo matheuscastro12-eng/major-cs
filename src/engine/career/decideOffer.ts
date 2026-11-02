@@ -76,6 +76,8 @@ export interface DecideOfferCtx {
   /** #37: multa da cláusula de rescisão (buyout.ts). Piso ABSOLUTO do alvo —
    *  nem o desconto de infeliz fura (o clube segura o papel do contrato). */
   buyoutFloor?: number;
+  /** [equilíbrio] modo da Carreira: estrelas mais protegidas e ágio maior no Difícil/Lendário. */
+  difficulty?: 'normal' | 'hard' | 'legend';
 }
 
 export interface DecideOfferArgs {
@@ -90,6 +92,13 @@ export interface DecideOfferArgs {
 
 // ágio mínimo pra tirar o coração do time (franchise-core): 1.7× o valor
 export const FRANCHISE_CORE_RATIO = 1.7;
+// [equilíbrio] mercado por modo: "não está à venda" (OVR mínimo, entrosamento
+// mínimo do clube, chance) e ágio do franchise-core. Normal = a regra de sempre.
+export const MARKET_BY_MODE = {
+  normal: { nfsOvr: 89, nfsTeamwork: 84, nfsChance: 55, coreRatio: FRANCHISE_CORE_RATIO },
+  hard: { nfsOvr: 86, nfsTeamwork: 80, nfsChance: 70, coreRatio: 2.0 },
+  legend: { nfsOvr: 84, nfsTeamwork: 78, nfsChance: 85, coreRatio: 2.4 },
+} as const;
 // teto de sanidade da contraproposta/piso: nunca acima de 2× o valor de
 // mercado (a não ser que a própria pedida-base já seja maior — estrela de top)
 export const COUNTER_CAP_RATIO = 2.0;
@@ -135,7 +144,8 @@ export function decideOffer(args: DecideOfferArgs): NegoReply {
 
   // estrela de time forte às vezes simplesmente não está à venda (regra
   // preservada do clubReply antigo — mesmo hash, saves se comportam igual)
-  if (ovr >= 89 && fromTeamwork >= 84 && round === 0 && hashStr(`${player.id}:nfs`) % 100 < 55) {
+  const mm = MARKET_BY_MODE[ctx.difficulty ?? 'normal'] ?? MARKET_BY_MODE.normal;
+  if (ovr >= mm.nfsOvr && fromTeamwork >= mm.nfsTeamwork && round === 0 && hashStr(`${player.id}:nfs`) % 100 < mm.nfsChance) {
     return { kind: 'reject', firm: true, msg: `${player.nick} ${ct('não está à venda. O clube não quer nem ouvir.')}` };
   }
 
@@ -189,10 +199,10 @@ export function decideOffer(args: DecideOfferArgs): NegoReply {
   // unhappyF multiplica DEPOIS do clamp — com desconto 0 o comportamento
   // antigo é preservado bit a bit; com desconto, o alvo cai de verdade.
   const adj = clamp(importanceF * replacementF * prestigeF * formF, 0.8, 1.45) * unhappyF;
-  const cap = Math.max(asking, Math.round(marketValue * COUNTER_CAP_RATIO));
+  const cap = Math.max(asking, Math.round(marketValue * Math.max(COUNTER_CAP_RATIO, mm.coreRatio)));
   // alvo da rodada 0 (fixo entre rodadas — garante contraproposta monotônica)
   let target = Math.round(asking * adj);
-  if (isCore) target = Math.max(target, Math.round(marketValue * FRANCHISE_CORE_RATIO));
+  if (isCore) target = Math.max(target, Math.round(marketValue * mm.coreRatio));
   // #37: cláusula ativa = piso absoluto (aplicado DEPOIS do desconto de
   // infeliz e ANTES do cap — a multa vale mesmo que passe de 2× o valor)
   const buyout = Math.max(0, Math.round(ctx.buyoutFloor ?? 0));

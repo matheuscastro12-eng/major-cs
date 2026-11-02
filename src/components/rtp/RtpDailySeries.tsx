@@ -6,10 +6,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ct } from '../../state/career-i18n';
 import { track } from '../../state/track';
+import { postOnX, shareText } from '../../state/shareX';
 import { RtpIcon } from './RtpIcon';
 import { RtpRoundRoom } from './RtpRoundRoom';
 import {
-  dailyChallengeOf, finishDailySeries, dailyScoreOf, dailyShareText, dateKeyOf,
+  dailyChallengeOf, finishDailySeries, dailyScoreOf, dailyShareText, dateKeyOf, DAILY_SERIES_URL,
   ghostInviteText, type GhostChallenge,
 } from '../../engine/rtp/dailySeries';
 import { fetchDailyLadder, fetchDailyWeekLadder, reportDailySeries, loadDailyPlayed, saveDailyPlayed, type DailyLadder, type DailyWeekLadder, type DailyPlayed } from '../../state/dailySeriesApi';
@@ -91,8 +92,11 @@ export function RtpDailySeries({ onExit, save, onUpdate }: { onExit: () => void;
   const share = async () => {
     if (!played) return;
     const text = dailyShareText(ch.day, { rating: played.rating, won: played.won, mapScore: played.mapScore }, played.rank, played.streak);
-    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cancelado */ }
-    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* sem clipboard */ }
+    if (await shareText('rtp-series', text) === 'copy') { setCopied(true); setTimeout(() => setCopied(false), 1800); }
+  };
+  const shareX = () => {
+    if (!played) return;
+    postOnX('rtp-series', dailyShareText(ch.day, { rating: played.rating, won: played.won, mapScore: played.mapScore }, played.rank, played.streak), DAILY_SERIES_URL);
   };
 
   // desafio de fantasma: convite com o SEU rating + link — quem abrir joga a
@@ -197,6 +201,7 @@ export function RtpDailySeries({ onExit, save, onUpdate }: { onExit: () => void;
           )}
           <div className="rtp-daily-share-row">
             <button type="button" className="rtp-cta" onClick={share}>{copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}</button>
+            <button type="button" className="rtp-cta" onClick={shareX}>{ct('Postar no X')}</button>
             <button type="button" className="rtp-cta rtp-cta-ghostduel" onClick={invite}>{invited ? ct('Link copiado! Manda pro alvo 🥊') : ct('Desafiar um amigo')}</button>
           </div>
           <span className="rtp-daily-tomorrow">{ct('Próxima série à meia-noite.')}</span>

@@ -26,7 +26,7 @@ import {
 } from './moments';
 import {
   buildBeatPlan, ctxForBeat, initialLiveScore, bridgeToBeat, closeMapFromLive,
-  mapPlayOf, HALF_ROUNDS, WIN_ROUNDS,
+  mapPlayOf, HALF_ROUNDS, WIN_ROUNDS, beatsLeftInMap,
   type BeatSpec, type LiveScore, type Interlude, type RoundCtx,
 } from './roundModel';
 import { MINIGAMES, type MiniGameDef } from './minigames';
@@ -179,11 +179,7 @@ function initClutch(b: BeatSpec): ClutchState {
 export function currentBeat(s: RoomState): BeatSpec { return s.beats[s.idx]; }
 export function isLastBeat(s: RoomState): boolean { return s.idx >= s.beats.length - 1; }
 // quantos beats restam NO MAPA do beat `idx` (contando ele) — 1 = último do mapa.
-export function beatsLeftInMap(beats: BeatSpec[], idx: number): number {
-  let n = 0;
-  for (let i = idx; i < beats.length && beats[i].mapIndex === beats[idx].mapIndex; i++) n++;
-  return Math.max(1, n);
-}
+export { beatsLeftInMap };
 export function isLastOfMap(s: RoomState): boolean { return beatsLeftInMap(s.beats, s.idx) === 1; }
 export function inClutchOf(s: RoomState): boolean { return currentBeat(s).kind === 'clutch' && !!s.clutch; }
 

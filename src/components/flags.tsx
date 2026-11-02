@@ -1,3 +1,4 @@
+import { isLiquipediaLogo } from '../data/media';
 import { ct } from '../state/career-i18n';
 import { useState } from 'react';
 import { coreIdentity, orgCore, MACRO_REGION_LABELS, REGION_LABELS, type CoreId, type MacroRegion, type RegionKey } from '../data/regions';
@@ -207,7 +208,10 @@ export function MatchBanner({
 }) {
   const showScore = scoreA !== undefined && scoreB !== undefined;
   return (
-    <div className="match-banner">
+    // data-theme: o banner tem fundo escuro fixo; com o atributo, as camadas
+    // legadas (--text, --dim…) são recalculadas aqui e o texto não some no tema
+    // claro (index.css: [data-theme='light'] .match-banner)
+    <div className="match-banner" data-theme="dark">
       <div className="mb-side left">
         <div className="mb-flag">
           <CoreFlag players={teamA.players} />
@@ -245,7 +249,8 @@ export function MatchBanner({
   );
 }
 
-function LogoChip({ tag, colors, logoUrl }: { tag: string; colors: [string, string]; logoUrl?: string }) {
+function LogoChip({ tag, colors, logoUrl: logoUrlProp }: { tag: string; colors: [string, string]; logoUrl?: string }) {
+  const logoUrl = isLiquipediaLogo(logoUrlProp) ? undefined : logoUrlProp;
   const [failedUrl, setFailedUrl] = useState('');
   if (logoUrl && failedUrl !== logoUrl) {
     return (

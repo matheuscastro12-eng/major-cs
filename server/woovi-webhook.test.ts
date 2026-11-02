@@ -7,6 +7,7 @@ import test from 'node:test';
 import wooviWebhook from '../api/woovi-webhook.js';
 import { FakeNeonHttp, type Row, type SeenQuery } from './neon-fetch.mock.js';
 import { isPaidEvent, rtmEmailFromCorrelation, wooviCorrelation, wooviPaidCents, wooviPaymentKey } from './woovi.js';
+import { accountPixCorrelations } from './payments.js';
 
 process.env.APP_SECRET = 'test-secret';
 process.env.DATABASE_URL = 'postgresql://user:pw@fake-neon.test/db';
@@ -131,6 +132,26 @@ test('mesmo Pix entregue 2× (CHARGE_COMPLETED + TRANSACTION_RECEIVED) processa 
     assert.equal(b.body.duplicate, true);
     assert.deepEqual(paidEmails, ['dono@x.com']);
     assert.equal(db.texts().filter((t) => t.startsWith('INSERT INTO rtm_paid_emails')).length, 1);
+  } finally { uninstall(); }
+});
+
+test('vitalícia com o correlationID da janela (cobrança reaproveitada): credita a conta uma vez só', async () => {
+  const { paidEmails, db, uninstall } = setup();
+  try {
+    // o mesmo formato "rtm-<email>-<unix>" que o action 'pix' passa a usar
+    const { current } = accountPixCorrelations('dono@x.com', Date.UTC(2026, 10, 24, 15));
+    const charge = { correlationID: current, value: 2000 };
+    const a = await post({ event: 'OPENPIX:CHARGE_COMPLETED', charge, pix: { value: 2000, endToEndId: 'E-janela' } });
+    const b = await post({ event: 'OPENPIX:TRANSACTION_RECEIVED', pix: { value: 2000, endToEndId: 'E-janela', charge } });
+    const again = await post({ event: 'OPENPIX:CHARGE_COMPLETED', charge, pix: { value: 2000, endToEndId: 'E-janela' } }); // re-entrega
+    assert.equal(a.body.processed, true);
+    assert.equal(b.body.duplicate, true);
+    assert.equal(again.body.duplicate, true);
+    assert.deepEqual(paidEmails, ['dono@x.com']);
+    // e mesmo que um 2º Pix da mesma cobrança chegasse com outra chave, o crédito
+    // é idempotente: e-mail pago sem duplicar e conta só vira paid=true
+    const credit = db.texts().find((t) => t.startsWith('INSERT INTO rtm_paid_emails'));
+    assert.match(String(credit), /ON CONFLICT DO NOTHING/);
   } finally { uninstall(); }
 });
 

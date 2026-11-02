@@ -14,6 +14,7 @@ import { GAME_COMPONENTS } from './minigames';
 import type { MatchPrep } from '../../engine/rtp/matchSim';
 import { matchAtmosphere, crowdBeatLine, interludeAmbientLine, pressureKicker } from '../../engine/rtp/atmosphere';
 import { MAP_LABELS } from '../../types';
+import { TeamBadge } from '../ui';
 
 import type { RoadToProSave } from '../../engine/rtp/types';
 import { RtpSituationBoard } from './RtpSituationBoard';
@@ -186,6 +187,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
       {flash && sub === 'result' && <div key={flash.k} className={`rtp-room-flash f-${flash.type}${flash.big ? ' big' : ''}`} aria-hidden />}
       {/* scorebug do round room — série (mapas) + placar do mapa atual */}
       <div className="rtp-room-bug">
+        {save.team.logo && <TeamBadge tag={save.team.tag} colors={save.team.colors} logoUrl={save.team.logo} size={22} />}
         <span className="rtp-room-bug-team you">{save.team.tag}</span>
         {prep.maps.length > 1 && <span className="rtp-room-bug-maps you">{live.seriesScore[0]}</span>}
         <span className="rtp-room-bug-score">{live.mapScore[0]}</span>
@@ -193,6 +195,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
         <span className="rtp-room-bug-score">{live.mapScore[1]}</span>
         {prep.maps.length > 1 && <span className="rtp-room-bug-maps">{live.seriesScore[1]}</span>}
         <span className="rtp-room-bug-team">{prep.opp.tag}</span>
+        {prep.opp.logoUrl && <TeamBadge tag={prep.opp.tag} colors={prep.opp.colors} logoUrl={prep.opp.logoUrl} size={22} />}
         <span className="rtp-room-bug-prog">
           {prep.maps.length > 1 ? `MAPA ${Math.min(live.mapIndex + 1, prep.maps.length)}/${prep.maps.length} · ` : ''}MOMENTO {room.idx + 1}/{room.beats.length}
         </span>
