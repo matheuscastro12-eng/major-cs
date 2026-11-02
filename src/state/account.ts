@@ -78,7 +78,10 @@ export type MeOutcome =
 export async function fetchMeOutcome(): Promise<MeOutcome> {
   const token = getToken(); if (!token) return { kind: 'anon' };
   try {
-    const account = toAcct(await post({ action: 'me', token }, ME_TIMEOUT_MS));
+    const raw = await post({ action: 'me', token }, ME_TIMEOUT_MS);
+    // troca de chave do servidor (#107): o `me` devolve um token novo para guardar
+    if (typeof raw.token === 'string' && raw.token) setToken(raw.token);
+    const account = toAcct(raw);
     writeCachedAccount(account);
     return { kind: 'online', account };
   } catch (e) {
