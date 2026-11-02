@@ -5,8 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { firstMatchPayload, onceKey, paywallTrigger } from '../src/state/track.ts';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
 const client = readFileSync(ROOT + 'src/state/track.ts', 'utf8');
 const server = readFileSync(ROOT + 'api/track.ts', 'utf8');
 
