@@ -56,6 +56,7 @@ export async function getFinance(password: string): Promise<FinanceData | null> 
 export interface RevenueDay {
   day: string;
   vitPix: number; vitStripe: number; vitOther: number; vitAdmin: number;
+  vitPixCents: number; vitStripeCents: number; vitOtherCents: number; // valor pago em cada venda (antigas: R$ 20)
   orders: number; ordPixCents: number; ordStripeCents: number;
   coinsCents: number; passeCents: number;
   visitors: number;
@@ -67,7 +68,7 @@ export interface RevenueData {
   vitPriceCents: number;
   visitorsAvailable: boolean;
   days: RevenueDay[];
-  allTime: { vitByMethod: MethodCount[]; orders: RevenueAllTimeOrder[] };
+  allTime: { vitByMethod: (MethodCount & { cents: number })[]; orders: RevenueAllTimeOrder[] };
   /** opcional: servidor antigo (sem o funil deployado) não devolve o campo */
   funnel?: { available: boolean; days: FunnelEventDay[]; ab?: { type: string; src: string; variant: string; n: number }[] };
 }

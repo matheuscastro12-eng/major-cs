@@ -117,7 +117,7 @@ export default async function handler(
   if (action === 'grant') {
     if (!emailValid) { res.status(400).json({ error: 'e-mail inválido' }); return; }
     await sql.transaction([
-      sql`INSERT INTO rtm_paid_emails (email) VALUES (${email}) ON CONFLICT DO NOTHING`,
+      sql`INSERT INTO rtm_paid_emails (email, price_cents) VALUES (${email}, 0) ON CONFLICT DO NOTHING`,
       // se houver cadastro pendente, promove em conta paga
       sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
           SELECT email, nick, pass_hash, true, ${accountReference(email)} FROM rtm_pending_signups WHERE email=${email}
@@ -272,7 +272,9 @@ export default async function handler(
   // - Visitantes: events (type='visit', sid distinto/dia) — mesma fonte do
   //   api/metrics.ts, estendida de 14 pra 60 dias, fuso America/Sao_Paulo.
   if (action === 'revenue') {
-    const VIT_PRICE_CENTS = accountPriceCents(); // preço configurado (PIX_PRICE_CENTS; sem registro por venda)
+    const VIT_PRICE_CENTS = accountPriceCents(); // preço de HOJE (PIX_PRICE_CENTS); a receita usa o valor gravado em cada venda
+    // venda antiga sem price_cents gravado: o preço era R$ 20 (subiu pra R$ 35 em 02/11/2026)
+    const LEGACY_VIT_CENTS = 2000;
     // série 60d: vitalícias por método × pedidos (coins/passe) por método/produto,
     // tudo num único round-trip com generate_series + 2 CTEs pré-agregadas.
     const days = await sql`
@@ -282,7 +284,8 @@ export default async function handler(
       vit AS (
         SELECT (p.created_at AT TIME ZONE 'America/Sao_Paulo')::date AS day,
                COALESCE(a.payment_method,
-                 CASE WHEN EXISTS (SELECT 1 FROM rtm_payment_sessions s WHERE s.email = p.email) THEN 'stripe' ELSE 'desconhecido' END) AS method
+                 CASE WHEN EXISTS (SELECT 1 FROM rtm_payment_sessions s WHERE s.email = p.email) THEN 'stripe' ELSE 'desconhecido' END) AS method,
+               COALESCE(p.price_cents, ${LEGACY_VIT_CENTS})::int AS cents
         FROM rtm_paid_emails p LEFT JOIN rtm_accounts a ON a.email = p.email
         WHERE p.created_at > now() - interval '61 days'
       ),
@@ -291,7 +294,10 @@ export default async function handler(
           count(*) FILTER (WHERE method = 'pix')::int AS vit_pix,
           count(*) FILTER (WHERE method = 'stripe')::int AS vit_stripe,
           count(*) FILTER (WHERE method NOT IN ('pix','stripe','admin'))::int AS vit_other,
-          count(*) FILTER (WHERE method = 'admin')::int AS vit_admin
+          count(*) FILTER (WHERE method = 'admin')::int AS vit_admin,
+          COALESCE(sum(cents) FILTER (WHERE method = 'pix'), 0)::bigint AS vit_pix_cents,
+          COALESCE(sum(cents) FILTER (WHERE method = 'stripe'), 0)::bigint AS vit_stripe_cents,
+          COALESCE(sum(cents) FILTER (WHERE method NOT IN ('pix','stripe','admin')), 0)::bigint AS vit_other_cents
         FROM vit GROUP BY 1
       ),
       ord AS (
@@ -312,6 +318,7 @@ export default async function handler(
       SELECT d.day,
         COALESCE(v.vit_pix, 0)::int AS vit_pix, COALESCE(v.vit_stripe, 0)::int AS vit_stripe,
         COALESCE(v.vit_other, 0)::int AS vit_other, COALESCE(v.vit_admin, 0)::int AS vit_admin,
+        COALESCE(v.vit_pix_cents, 0)::bigint AS vit_pix_cents, COALESCE(v.vit_stripe_cents, 0)::bigint AS vit_stripe_cents, COALESCE(v.vit_other_cents, 0)::bigint AS vit_other_cents,
         COALESCE(o.orders, 0)::int AS orders,
         COALESCE(o.ord_pix_cents, 0)::bigint AS ord_pix_cents, COALESCE(o.ord_stripe_cents, 0)::bigint AS ord_stripe_cents,
         COALESCE(o.coins_cents, 0)::bigint AS coins_cents, COALESCE(o.passe_cents, 0)::bigint AS passe_cents
@@ -362,7 +369,7 @@ export default async function handler(
     const vitAll = await sql`
       SELECT COALESCE(a.payment_method,
                CASE WHEN EXISTS (SELECT 1 FROM rtm_payment_sessions s WHERE s.email = p.email) THEN 'stripe' ELSE 'desconhecido' END) AS method,
-             count(*)::int AS n
+             count(*)::int AS n, COALESCE(sum(COALESCE(p.price_cents, ${LEGACY_VIT_CENTS})), 0)::bigint AS cents
       FROM rtm_paid_emails p LEFT JOIN rtm_accounts a ON a.email = p.email GROUP BY 1`;
     const ordAll = await sql`
       SELECT COALESCE(method, 'pix') AS method,
@@ -377,6 +384,7 @@ export default async function handler(
         return {
           day,
           vitPix: Number(r.vit_pix), vitStripe: Number(r.vit_stripe), vitOther: Number(r.vit_other), vitAdmin: Number(r.vit_admin),
+          vitPixCents: Number(r.vit_pix_cents), vitStripeCents: Number(r.vit_stripe_cents), vitOtherCents: Number(r.vit_other_cents),
           orders: Number(r.orders),
           ordPixCents: Number(r.ord_pix_cents), ordStripeCents: Number(r.ord_stripe_cents),
           coinsCents: Number(r.coins_cents), passeCents: Number(r.passe_cents),
@@ -384,7 +392,7 @@ export default async function handler(
         };
       }),
       allTime: {
-        vitByMethod: vitAll.map((r) => ({ method: String(r.method), n: Number(r.n) })),
+        vitByMethod: vitAll.map((r) => ({ method: String(r.method), n: Number(r.n), cents: Number(r.cents) })),
         orders: ordAll.map((r) => ({ method: String(r.method), product: String(r.product), orders: Number(r.orders), cents: Number(r.cents) })),
       },
       // funil visit → paywall_view → checkout_open → venda (janela de 28d)
