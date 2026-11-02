@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MAP_IMAGES, isLiquipediaLogo, photoForNick } from '../data/media';
-import { loadMapImages } from '../state/crm';
+import { loadMapImages } from '../state/mapImages';
 import { hashStr } from '../state/hash';
 import { MAP_LABELS, type MapId, type TTeam } from '../types';
 import { readableInk } from '../state/contrast';

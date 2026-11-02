@@ -59,7 +59,8 @@ export default defineConfig({
             { name: 'bo3', test: src('data[\\\\/]bo3(\\.ts|-2026\\.json)'), tags: ['$initial'], priority: 50 },
             { name: 'ratings', test: src('(engine[\\\\/]ratings\\.ts|data[\\\\/]bo3-earnings\\.json)'), tags: ['$initial'], priority: 40 },
             { name: 'match', test: src('engine[\\\\/](match|rng|career[\\\\/]teamIdentity)\\.ts'), tags: ['$initial'], priority: 40 },
-            { name: 'ui', test: src('(components[\\\\/]ui\\.tsx|state[\\\\/]crm\\.ts|data[\\\\/]teams\\.(ts|json))'), tags: ['$initial'], priority: 30 },
+            // a base histórica (data/teams + state/crm) saiu da carga inicial: chunk lazy próprio (state/baseDataset.ts)
+            { name: 'ui', test: src('components[\\\\/]ui\\.tsx'), tags: ['$initial'], priority: 30 },
             { name: 'ds', test: new RegExp(`${sep}src${sep}components${sep}ds${sep}`), tags: ['$initial'], priority: 20 },
           ],
         },

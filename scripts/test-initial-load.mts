@@ -11,8 +11,10 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
 
-// import/export com valor (import type/export type não entram no bundle)
-const IMPORT_RE = /^\s*import\s+(?!type\b)[^;]*?\s+from\s+['"]([^'"]+)['"]|^\s*import\s+['"]([^'"]+)['"]|^\s*export\s+(?!type\b)[^;]*?\s+from\s+['"]([^'"]+)['"]/gm;
+// import/export com valor (import type/export type não entram no bundle).
+// A cláusula não atravessa aspas: sem isso, num arquivo sem `;` o `import './x.css'`
+// casava até o `from` do import seguinte e o CSS (ou o módulo) sumia do grafo.
+const IMPORT_RE = /^\s*import\s+(?!type\b)[^;'"]*?\s+from\s+['"]([^'"]+)['"]|^\s*import\s+['"]([^'"]+)['"]|^\s*export\s+(?!type\b)[^;'"]*?\s+from\s+['"]([^'"]+)['"]/gm;
 
 function resolve(from: string, spec: string): string | null {
   if (!spec.startsWith('.')) return null;
@@ -59,6 +61,19 @@ const FORA_DA_CARGA_INICIAL = [
   'src/state/saveMigrations.ts', // motores da Carreira inteiros (o CareerScreen instala)
   'src/engine/swiss.ts', // simulação das séries da IA
   'src/engine/match.ts', // motor de partida
+  // base histórica (chunk lazy via state/baseDataset.ts): elencos + atributos reais
+  'src/data/teams.json',
+  'src/data/teams.ts',
+  'src/state/crm.ts', // lê a base (BASE_TEAMS/BASE_REV); as imagens de mapa ficam em state/mapImages.ts
+  'src/data/playerAttrs.ts', // import.meta.glob do player-attrs-2026.json (o grafo não vê o glob)
+  // CSS das telas de jogo (render-blocking se voltar): chegam no telas.css, sob
+  // demanda (state/telasCss.ts); na carga inicial fica só o carga-inicial.css
+  'src/index.css',
+  'src/styles/career-dashboard.css',
+  'src/styles/career-player-page.css',
+  'src/styles/career-team-page.css',
+  'src/styles/play-hub.css',
+  'src/styles/rtp.css',
 ];
 
 test('módulos pesados não entram nos imports estáticos do main.tsx', () => {
@@ -76,6 +91,10 @@ const FORA_DO_MAJOR_SG = [
   'src/data/bo3.ts',
   'src/engine/match.ts',
   'src/engine/swiss.ts',
+  'src/data/teams.json',
+  'src/index.css',
+  'src/styles/rtp.css',
+  'src/styles/career-dashboard.css',
 ];
 
 test('a tela do /major-singapore não importa a campanha de forma estática', () => {

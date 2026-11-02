@@ -45,7 +45,7 @@ interface Props {
   onDonate: () => void;
   onHall: () => void;
   onAchievements?: () => void;
-  teamCount: number;
+  teamCount?: number; // undefined enquanto a base histórica baixa
   playerCount: number;
   savedCampaign?: { name: string; phase: string } | null;
   onResume?: () => void;
@@ -245,7 +245,7 @@ export function Home(props: Props) {
               <li><b>{ct('Playoffs')}</b><span>{ct('Veto de mapas e partida ao vivo com timeouts táticos, em MD3.')}</span></li>
               <li><b>{ct('Temporadas')}</b><span>{ct('Campeão ou não, a janela de transferências abre a próxima.')}</span></li>
             </ol>
-            <p className="ds-dim">{teamCount} {ct('times · do 1.6 ao CS2 · scoreboards estilo HLTV')}</p>
+            <p className="ds-dim">{teamCount ?? '…'} {ct('times · do 1.6 ao CS2 · scoreboards estilo HLTV')}</p>
           </Panel>
         </div>
       </GameShell>

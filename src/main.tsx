@@ -7,12 +7,11 @@ import { BrowserRouter } from 'react-router-dom'
 import './styles/tokens.css'
 import './styles/tokens-legacy.css'
 import './styles/base.css'
-import './index.css'
-import './styles/career-dashboard.css'
-import './styles/career-player-page.css'
-import './styles/career-team-page.css'
-import './styles/play-hub.css'
-import './styles/rtp.css'
+// index.css e os CSS das telas de jogo (carreira, RtP, play-hub) saíram da carga
+// inicial: aqui fica só a cópia das regras que a landing, o Início, o shell e o
+// /major-singapore usam (gerada por scripts/gen-css-inicial.mts). O resto chega
+// com as telas de jogo, no lugar exato de antes (state/telasCss.ts).
+import './styles/carga-inicial.css'
 // primitivos por último: .ds-* ganha empate de especificidade com o CSS legado
 import './styles/primitives.css'
 // shell universal (trilho + sidebar + topbar + CONTINUAR + paleta + peek)
@@ -43,6 +42,14 @@ import { SeasonRecapModalHost, closeSeasonRecap } from './components/SeasonRecap
 import { TrophyRoomHost, closeTrophyRoom } from './components/TrophyRoomHost'
 import { CoachProfileHost, closeCoachProfile } from './components/CoachProfileHost'
 import { HostBoundary } from './components/HostBoundary'
+import { telasCss } from './state/telasCss'
+
+// o CSS das telas de jogo entra logo depois do CSS global (state/telasCss.ts): marca
+// o fim dele agora, antes de qualquer chunk lazy anexar o próprio CSS. Em dev ele
+// carrega já, em toda tela: quem edita index.css (ou um CSS das telas) vê a mudança
+// na landing sem regenerar o carga-inicial.css (o teste do gerador cobra antes do merge).
+telasCss.markGlobalEnd()
+if (import.meta.env.DEV) void telasCss.load()
 
 installErrorLogging() // captura crash de runtime em producao (fire-and-forget)
 installPwa()          // registra o SW e guarda o convite de instalacao (ver state/pwa.ts)
