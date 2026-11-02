@@ -95,7 +95,7 @@ export async function savePick(sql: SqlTag, email: string, nick: string, stage: 
     INSERT INTO rtm_pickem_picks (email, stage, nick, pick, saved_at)
     SELECT ${email}, s.stage, ${nick}, ${JSON.stringify(v.pick)}::jsonb, now()
       FROM rtm_pickem_stages s WHERE s.stage = ${stage} AND s.locks_at IS NOT NULL AND now() < s.locks_at
-    ON CONFLICT (email, stage) DO UPDATE SET pick = EXCLUDED.pick, nick = EXCLUDED.nick, saved_at = now()
+    ON CONFLICT (email, stage) DO UPDATE SET pick = EXCLUDED.pick, nick = EXCLUDED.nick
       WHERE now() < (SELECT locks_at FROM rtm_pickem_stages WHERE stage = EXCLUDED.stage)
     RETURNING saved_at`;
   if (!rows.length) return { ok: false, status: 423, error: 'Palpites deste Stage já estão travados.' };
@@ -114,7 +114,9 @@ export async function board(sql: SqlTag, cfg = PICKEM_SCORING): Promise<Ranked[]
     const e = by.get(email) ?? { email, nick: String(r.nick), picks: {}, savedAt: iso(r.saved_at)! };
     e.picks[r.stage] = asObj<StagePick>(r.pick)!;
     const t = iso(r.saved_at)!;
-    if (t > e.savedAt) e.savedAt = t; // desempate: horário do ÚLTIMO palpite salvo
+    // saved_at = 1º envio de cada Stage (editar antes da trava não muda o horário);
+    // desempate: quem completou os Stages primeiro
+    if (t > e.savedAt) e.savedAt = t;
     by.set(email, e);
   }
   return rankEntries([...by.values()], results, cfg);
