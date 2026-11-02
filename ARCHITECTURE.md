@@ -91,6 +91,14 @@ docs/              # planos e referências; docs/marketing/ para posts e media k
 `vercel.json`**, senão o F5 dá 404 na Vercel. `scripts/test-vercel-rewrites.mts`
 confere isso para todo `SCREEN_PATH` e para os deep links da Carreira.
 
+SEO: o `vite build` termina rodando `scripts/prerender.mts` (plugin em
+`vite.config.ts`), que grava `dist/app.html` (o `index.html` do Vite intacto, a
+casca do SPA), a landing (`dist/index.html`) e as páginas públicas
+(`dist/p/*.html`, texto de `src/seo/`) com metas, JSON-LD e texto no `#root`, mais
+o `sitemap.xml`. Rota do jogo reescreve para `/app.html`; página pública ganha
+entrada em `src/seo/pages.ts` e reescreve para `/p/<nome>.html`
+(`scripts/test-seo.mts` confere, e o build falha se um destino não existir).
+
 ## Versões de save
 
 Cada save guarda a própria versão em `_v` e migra em cadeia até a atual, sempre
@@ -98,13 +106,13 @@ com backfill (nada é removido).
 
 | Save | Constante | Arquivo | Chave no localStorage |
 |---|---|---|---|
-| Carreira | `SAVE_VERSION = 30` | `src/state/saveMigrations.ts` | `rtm-career-v1` (+ slots `__s2..s5`) |
+| Carreira | `SAVE_VERSION = 30` | `src/state/saveVersion.ts` (migrations em `saveMigrations.ts`) | `rtm-career-v1` (+ slots `__s2..s5`) |
 | Road to Pro | `RTP_SAVE_VERSION = 17` | `src/engine/rtp/createSave.ts` | `rtm-rtp-v1` |
 | Ultimate | `ULTIMATE_VERSION = 1` | `src/engine/ultimate/state.ts` | `rtm-ultimate-v1` |
 | Draft (campanha) | `DRAFT_SESSION_VERSION = 2` | `src/state/draftSession.ts` | `major-session-v3` |
 
-Migração nova na Carreira: `SAVE_VERSION += 1` em `saveMigrations.ts`, registre
-a função `vN → vN+1`, cubra em `scripts/test-save-migration.mts` e atualize a
+Migração nova na Carreira: `SAVE_VERSION += 1` em `saveVersion.ts`, registre
+a função `vN → vN+1` em `saveMigrations.ts`, cubra em `scripts/test-save-migration.mts` e atualize a
 tabela acima.
 
 Evolução (out/2026, sem subir o SAVE_VERSION): CURVA ÚNICA — o mundo da IA evolui

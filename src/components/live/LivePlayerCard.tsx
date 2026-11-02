@@ -2,8 +2,7 @@
 // [Foto] · NICK · HP · Arma · KDA · Money
 //
 // Por enquanto:
-//   - Foto: PlayerAvatar (initials por hash). Vai melhorar quando tivermos
-//     fotos reais por player_id em data/player-photos.json (já existe a infra).
+//   - Foto: PlayerAvatar (foto do bo3.gg quando existe; senão iniciais por hash).
 //   - HP: 100 se alive, 0 se morto (sem dano gradual no piloto)
 //   - Arma: AK pra T, M4A1 pra CT (sem track real ainda)
 //   - KDA: vem direto do `agent.stats` (cumulativo no mapa). ANTES eu filtrava

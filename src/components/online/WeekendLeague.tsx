@@ -13,6 +13,7 @@ import {
 import { ct } from '../../state/career-i18n';
 import { setCheckoutSrc, trackPaywallView } from '../../state/track';
 import { FounderCounter } from '../FounderCounter';
+import { priceLabel, usePrice } from '../../state/price';
 
 // countdown legível: "1d 4h", "6h 32min", "12min"
 function fmtLeft(ms: number): string {
@@ -32,6 +33,7 @@ const PLACEMENT_PRIZES = [70000, 40000, 25000, 15000, 10000, 7000, 5000, 4000, 3
 const prizeForPlace = (rank: number): number => (rank >= 1 && rank <= PLACEMENT_PRIZES.length ? PLACEMENT_PRIZES[rank - 1] : 0);
 
 export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { account: Account | null; onHub: () => void; onPlay?: () => void; onCreateAccount?: () => void }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   const [status, setStatus] = useState<WlStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -108,18 +110,20 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
               {ct('Torneio semanal (quarta a sábado) valendo coins — 70.000 pro campeão. Crie uma conta grátis pra entrar.')}
             </p>
             {/* funil: era um <a href="/"> cru — reload da página inteira, sem
-                setCheckoutSrc, sem abrir o modal de conta direto. Troca pelo
-                mesmo padrão de botão já usado no convite abaixo (conta grátis)
-                e no resto do app; sem onCreateAccount (rota antiga do Online
-                Mode, hoje sem uso), mantém o link como fallback. */}
+                setCheckoutSrc, sem abrir o modal de conta direto. Já foi
+                trocado por um botão real, mas o botão continuava com o peso
+                visual de link de texto sublinhado (sem fundo, sem padding).
+                23 sids viram esse convite em 28d e 0 chegaram a signup_start/
+                checkout_open com src 'wl-guest' — o mesmo padrão de link fraco
+                que já emagreceu outras superfícies (ex.: home-skip, hoje
+                0,29% × 0,85%+ do botão equivalente). Aqui o convite é pra
+                conta GRÁTIS (sem preço, sem trava) — só o peso visual muda,
+                pro mesmo padrão `variant="gold"` já usado nos outros 2
+                botões desta tela. Mede pelo mesmo src que já existia. */}
             {onCreateAccount ? (
-              <button
-                type="button"
-                onClick={() => { setCheckoutSrc('wl-guest'); onCreateAccount(); }}
-                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}
-              >
+              <Button variant="gold" onClick={() => { setCheckoutSrc('wl-guest'); onCreateAccount(); }}>
                 {ct('Criar conta grátis / entrar →')}
-              </button>
+              </Button>
             ) : (
               <a href="/" style={{ color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px' }}>{ct('Criar conta grátis / entrar →')}</a>
             )}
@@ -205,13 +209,21 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
             <FounderCounter style={{ display: 'inline-block', marginLeft: 4 }} />
           </span>
           {onCreateAccount && (
-            <button
-              type="button"
-              onClick={() => { setCheckoutSrc('wl-free'); onCreateAccount(); }}
-              style={{ flexShrink: 0, padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
-            >
-              {ct('Criar conta vitalícia')} · R$20
-            </button>
+            // funil: amostra pequena (wl-free teve só 1 paywall_view/28d — tráfego
+            // raro demais pra concluir algo isolado aqui), então é ajuste de baixo
+            // risco por CONSISTÊNCIA: todo outro CTA de preço do jogo (Home, RtP,
+            // upsell-card) reforça "pagamento único" do lado do preço — este botão
+            // era o único sem essa reasseguração, só o preço cru.
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => { setCheckoutSrc('wl-free'); onCreateAccount(); }}
+                style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
+              >
+                {ct('Criar conta vitalícia')} · {priceLabel()}
+              </button>
+              <small className="ds-dim" style={{ fontSize: '10.5px' }}>{ct('pagamento único · sem mensalidade')}</small>
+            </div>
           )}
         </div>
       )}

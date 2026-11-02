@@ -159,9 +159,9 @@ import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
 import { getManager } from '../state/manager';
 import { getActiveSlot } from '../state/careerSaves';
-import { useGame, type Hydrator } from '../state/gameStore';
+import { useGame, installSaveMigrations, type Hydrator } from '../state/gameStore';
 import { compactCareerSave } from '../state/careerSaveCompact';
-import type { VersionedSave } from '../state/saveMigrations';
+import { migrateSave, type VersionedSave } from '../state/saveMigrations';
 import {
   FILL_ROLES, REGION_CC, prospectIdentity, backfillPlayers, baseAge, playerPhase, regenYouth, aiClock, regenPotOvr, extraClock,
   currentFreeAgents, BASE_PLAYER_IDS, buildAiWorld, applyMoves, nextAiDrift, agedFreeAgents, aiAgeOf, baseOvrOf, aiPotentialOvr, type PlayerPhase,
@@ -190,6 +190,9 @@ import {
   type CareerGamePlan,
 } from '../engine/career/equilibrio';
 import { setStyle, styleOf, STYLE_SHORT } from '../engine/gestao/estilo';
+// o gameStore nasce sem a cadeia de migrations (fora da carga inicial): esta
+// tela é quem carrega o save, então instala antes do primeiro loadFromSlot
+installSaveMigrations(migrateSave);
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // PLANO DE JOGO: atalho da decisão pré-partida. [integração] Sem bônus de força:
@@ -696,13 +699,12 @@ function teamTier(t: TeamSeason): number {
 }
 
 // orgs reais SEM line de CS2 (saíram do jogo): o jogador assume a marca e monta
-// o elenco do zero, com verba alta. Logos via Liquipedia (proxy Photon).
-const PHOTON = (p: string) => `https://i0.wp.com/liquipedia.net${p}?w=240&ssl=1`;
-interface EmptyOrg { id: string; name: string; tag: string; colors: [string, string]; logoUrl: string; blurb: string; budget: number }
+// o elenco do zero, com verba alta. Logo: só a local (public/logos); sem ela → sigla.
+interface EmptyOrg { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; blurb: string; budget: number }
 const EMPTY_ORGS: EmptyOrg[] = [
-  { id: 'org_cloud9', name: 'Cloud9', tag: 'C9', colors: ['#0a1a2f', '#00aeef'], logoUrl: PHOTON('/commons/images/b/bb/Cloud9_2023_allmode.png'), blurb: ct('Gigante norte-americana fora do CS2. Marca enorme e caixa cheio pra reconstruir do zero.'), budget: 4_200_000 },
-  { id: 'org_eg', name: 'Evil Geniuses', tag: 'EG', colors: ['#101014', '#5b2be0'], logoUrl: PHOTON('/commons/images/1/14/Evil_Geniuses_2023_lightmode.png'), blurb: ct('Org lendária sem elenco ativo. Verba boa pra recolocar o nome no topo.'), budget: 3_600_000 },
-  { id: 'org_dignitas', name: 'Dignitas', tag: 'DIG', colors: ['#0b0b0b', '#e7b53b'], logoUrl: PHOTON('/commons/images/5/56/Dignitas_2021_allmode.png'), blurb: ct('Tradicional, sem line desde 2022. Orçamento mediano: monte com inteligência.'), budget: 2_900_000 },
+  { id: 'org_cloud9', name: 'Cloud9', tag: 'C9', colors: ['#0a1a2f', '#00aeef'], logoUrl: '/logos/cloud9.png', blurb: ct('Gigante norte-americana fora do CS2. Marca enorme e caixa cheio pra reconstruir do zero.'), budget: 4_200_000 },
+  { id: 'org_eg', name: 'Evil Geniuses', tag: 'EG', colors: ['#101014', '#5b2be0'], logoUrl: '/logos/eg.png', blurb: ct('Org lendária sem elenco ativo. Verba boa pra recolocar o nome no topo.'), budget: 3_600_000 },
+  { id: 'org_dignitas', name: 'Dignitas', tag: 'DIG', colors: ['#0b0b0b', '#e7b53b'], blurb: ct('Tradicional, sem line desde 2022. Orçamento mediano: monte com inteligência.'), budget: 2_900_000 },
 ];
 
 

@@ -8,15 +8,15 @@
 // UI renderiza. Cada beat resolve por resolveMoment (inalterado) e alimenta o
 // momentScore existente. O placar OFICIAL continua sendo o Scoreboard pós-jogo.
 
-import { makeRng, pick, type Rng } from '../rng';
-import { hashStr } from '../../state/hash';
+import { makeRng, pick, type Rng } from '../rng.js';
+import { hashStr } from '../../state/hash.js';
 import type { MapId, Role } from '../../types';
 import type { MiniGameId } from './minigames';
 import {
   generateMoments, generateEntry, generateRetake, generateEconomy, generateIGL,
   generateForcedEco, generateAntiEco, generatePostPlant, generateSaveCall, generateTimeout, generateLastRoundHalf,
   type Moment, type MomentOption, type MomentOutcome,
-} from './moments';
+} from './moments.js';
 
 export type Side = 'CT' | 'T';
 export type BuyTier = 'eco' | 'force' | 'full';
@@ -250,6 +250,14 @@ export function initialLiveScore(): LiveScore {
 // que NÃO é o último do mapa fecha o mapa (entra com ≤11, sai com ≤12), e o
 // último entra com no máximo 12 — o match point legítimo. 12-12 nunca nasce na
 // ponte (só a jogada do último beat abre a prorrogação).
+// quantos beats faltam no mapa do beat `idx` (contando ele). Extraído da Sala
+// (room.ts) pra o PvP do Ultimate usar a mesma régua sem puxar a Sala inteira.
+export function beatsLeftInMap(beats: BeatSpec[], idx: number): number {
+  let n = 0;
+  for (let i = idx; i < beats.length && beats[i].mapIndex === beats[idx].mapIndex; i++) n++;
+  return Math.max(1, n);
+}
+
 export const capBeforeBeat = (beatsLeft: number): number => Math.min(WIN_ROUNDS - 1, WIN_ROUNDS - Math.max(1, beatsLeft));
 
 export function bridgeToBeat(

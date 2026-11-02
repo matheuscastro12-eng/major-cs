@@ -31,6 +31,11 @@ export interface UltCard {
   rarity: UltRarity;
   ovr: number;
   stats: CardStats;
+  // [CSM-2] versão de evento: id/rótulo do evento e a raridade base que ela
+  // substitui no sorteio (packs e drops) enquanto o evento está ativo.
+  eventId?: string;
+  eventLabel?: string;
+  poolRarity?: UltRarity;
 }
 
 const clampStat = (n: number): number => Math.max(1, Math.min(99, Math.round(n)));

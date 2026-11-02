@@ -12,6 +12,7 @@ import { BrandMark } from '../brand';
 import { FounderCounter } from '../FounderCounter';
 import { ct } from '../../state/career-i18n';
 import { trackPaywallView } from '../../state/track';
+import { priceLabel, usePrice } from '../../state/price';
 
 export function UltimateGate({
   onGuest,
@@ -24,6 +25,7 @@ export function UltimateGate({
   onLogin: () => void;
   onClose: () => void;
 }) {
+  usePrice(); // re-renderiza quando o preço do servidor chega
   // App.tsx já chama setCheckoutSrc('home-ultimate') antes de abrir este gate
   // (único ponto de entrada), então reusa o mesmo src aqui — é a mesma métrica
   // que ficou órfã quando este modal substituiu o card travado da Home.
@@ -44,7 +46,7 @@ export function UltimateGate({
       {/* Vantagens da conta vitalícia — o caminho recomendado */}
       <div style={{ background: 'rgba(232,193,112,0.08)', border: '1px solid rgba(232,193,112,0.4)', borderRadius: 8, padding: '14px 16px', marginBottom: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--em-gold)' }}>R$20</span>
+          <span style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--em-gold)' }}>{priceLabel()}</span>
           <span style={{ fontSize: '0.78rem', color: 'var(--em-muted)' }}>{ct('pagamento único · acesso vitalício, sem mensalidade')}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.82rem', color: 'var(--em-text)', fontWeight: 600 }}>

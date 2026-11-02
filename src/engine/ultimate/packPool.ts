@@ -3,6 +3,7 @@
 import type { UltCard } from './cards.js';
 import { BASE_RARITY_ORDER } from './rarities.js';
 import { totwForWeek, weekIndex } from './totw.js';
+import { activeEventVersionDecl, applyEventVersions } from './eventVersions.js';
 
 export function weeklyPackPool(catalog: UltCard[], now: Date): UltCard[] | null {
   const week = weekIndex(now);
@@ -13,4 +14,12 @@ export function weeklyPackPool(catalog: UltCard[], now: Date): UltCard[] | null 
   // Snapshot vencido/incompleto: nunca trocar silenciosamente a garantia.
   if (!ids.size || [...ids].some((id) => !available.has(id))) return null;
   return catalog.filter((c) => c.rarity !== 'totw' || ids.has(c.playerId));
+}
+
+// [CSM-2] pool de abertura com as versões de evento aplicadas (mesma função no
+// cliente e no servidor). null = pool indisponível (TOTW vencido).
+export function openingPool(catalog: UltCard[], packId: string, now: Date): UltCard[] | null {
+  const pool = packId === 'totw' ? weeklyPackPool(catalog, now) : catalog;
+  if (!pool) return null;
+  return applyEventVersions(pool, activeEventVersionDecl(now.getTime(), catalog));
 }
