@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import type Stripe from 'stripe';
 import { expectedOrder, logSettleAttention, settleOrder, stripePaidCents } from '../server/order-settle.js';
+import { productOfTier, recordPurchase } from '../server/purchase-event.js';
 import {
   accountReference,
   assignFounderNumbers,
@@ -70,6 +71,8 @@ async function fetchHandler(request: Request): Promise<Response> {
     };
     const r = await settleOrder(sql, coinCorr, cents, 'stripe', orphan);
     logSettleAttention('stripe', coinCorr, cents, r);
+    // funil: só a baixa nova ('already' = o Stripe reenviou o evento)
+    if (r.status === 'paid') await recordPurchase(sql, { provider: 'stripe', product: productOfTier(tier), tier, cents, corr: coinCorr });
     return Response.json({ received: true, processed: r.status === 'paid' || r.status === 'already', coins: true, status: r.status });
   }
 
@@ -100,8 +103,8 @@ async function fetchHandler(request: Request): Promise<Response> {
     return Response.json({ received: true, processed: false });
   }
 
-  await sql.transaction([
-    sql`INSERT INTO rtm_payment_sessions (session_id, email, stripe_event_id) VALUES (${session.id}, ${email}, ${event.id}) ON CONFLICT (session_id) DO NOTHING`,
+  const [newSession] = await sql.transaction([
+    sql`INSERT INTO rtm_payment_sessions (session_id, email, stripe_event_id) VALUES (${session.id}, ${email}, ${event.id}) ON CONFLICT (session_id) DO NOTHING RETURNING session_id`,
     sql`INSERT INTO rtm_paid_emails (email) VALUES (${email}) ON CONFLICT DO NOTHING`,
     // promove o cadastro pendente em conta paga (só pago tem conta)
     sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
@@ -116,6 +119,8 @@ async function fetchHandler(request: Request): Promise<Response> {
 
   // número de Fundador na ordem do pagamento, atribuído uma vez só (O0-42).
   await assignFounderNumbers(sql);
+  // funil: 1 purchase_done por sessão paga (o reenvio do Stripe não insere a sessão de novo)
+  if (newSession.length) await recordPurchase(sql, { provider: 'stripe', product: 'vitalicia', cents: stripePaidCents(session), corr: session.id });
 
   return Response.json({ received: true, processed: true });
 }

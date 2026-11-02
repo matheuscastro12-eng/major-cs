@@ -141,7 +141,10 @@ async function handle(req: Req, res: Res) {
       { key: `pickem:email:${email}`, limit: 60, windowSec: 3600 },
     ]))) return;
     if (!isStageId(body.stage)) { res.status(400).json({ error: 'stage inválido' }); return; }
-    const acc = await neonSql`SELECT nick FROM rtm_accounts WHERE email=${email}`;
+    // vale conta paga E cadastro pendente (decisão do Matheus, 02/11): o pendente
+    // já tem token do signup; sem nenhum dos dois, 401
+    let acc = await neonSql`SELECT nick FROM rtm_accounts WHERE email=${email}`;
+    if (!acc.length) acc = await neonSql`SELECT nick FROM rtm_pending_signups WHERE email=${email}`;
     if (!acc.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
     const r = await savePick(sql, email, normalizeNick(acc[0].nick) || 'manager', body.stage, body.pick);
     if (!r.ok) { res.status(r.status).json({ error: r.error }); return; }

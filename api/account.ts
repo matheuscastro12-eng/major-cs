@@ -6,7 +6,7 @@
 // - claim: confirma a sessão do Stripe no retorno; o webhook é a fonte principal.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
-import { ADMIN_SESSION_TTL_SEC, respondMissingSecret, signAccountToken, signAdminSession, verifyAccountToken } from '../server/auth.js';
+import { ADMIN_SESSION_TTL_SEC, accountTokenNeedsRefresh, respondMissingSecret, signAccountToken, signAdminSession, verifyAccountToken } from '../server/auth.js';
 import {
   accountReference,
   assignFounderNumbers,
@@ -434,7 +434,9 @@ export default async function handler(
     }
     if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
     await ensureReference(em);
-    res.status(200).json({ email: em, nick: r[0].nick, paid, ...(await founderOf(em)) });
+    // dupla chave: token antigo (reserva) válido → devolve um assinado com a APP_SECRET
+    const refreshed = accountTokenNeedsRefresh(String(body.token ?? '')) ? { token: signAccountToken(em) } : {};
+    res.status(200).json({ email: em, nick: r[0].nick, paid, ...(await founderOf(em)), ...refreshed });
     return;
   }
 

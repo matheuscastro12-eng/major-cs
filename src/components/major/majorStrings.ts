@@ -54,6 +54,9 @@ const S = {
   sharedBanner: { pt: 'Você está vendo o palpite de outra pessoa.', en: 'You are viewing someone else’s picks.', es: 'Estás viendo el pronóstico de otra persona.' },
   useShared: { pt: 'Usar como meu', en: 'Use as mine', es: 'Usar como mío' },
   backToMine: { pt: 'Voltar ao meu', en: 'Back to mine', es: 'Volver al mío' },
+  droppedTitle: { pt: 'A lista oficial saiu: complete os times que mudaram', en: 'The official list is out: fill in the teams that changed', es: 'Salió la lista oficial: completa los equipos que cambiaron' },
+  droppedBody: { pt: 'Seu palpite tinha times que não estão no Major ({n}). Eles saíram do palpite; escolha outros nos lugares vazios.', en: 'Your picks had teams that are not in the Major ({n}). They were removed; choose others for the empty spots.', es: 'Tu pronóstico tenía equipos que no están en el Major ({n}). Se quitaron; elige otros en los lugares vacíos.' },
+  droppedOk: { pt: 'Entendi', en: 'Got it', es: 'Entendido' },
   badLink: { pt: 'Esse link é de outra versão da lista de times e não pôde ser aberto.', en: 'This link is from another version of the team list and could not be opened.', es: 'Este enlace es de otra versión de la lista de equipos y no se pudo abrir.' },
   // desafio entre amigos (MajorChallenge.tsx): {who} = apelido ou "Seu amigo", {champ} = time
   chKicker: { pt: 'Desafio', en: 'Challenge', es: 'Desafío' },
@@ -205,7 +208,7 @@ const S = {
   refresh: { pt: "Atualizar", en: "Refresh", es: "Actualizar" },
   prizeTitle: { pt: "Prêmio do Pick'em", en: "Pick'em prize", es: "Premio del Pick'em" },
   prizeText: { pt: "Top 3 do pick'em ganha conta vitalícia + carta exclusiva do Ultimate", en: "Pick'em top 3 win a lifetime account + an exclusive Ultimate card", es: "El top 3 del pick'em gana cuenta vitalicia + carta exclusiva del Ultimate" },
-  prizeRules: { pt: "Vale para qualquer conta, inclusive grátis. São 3 ganhadores: os 3 primeiros do ranking do pick'em com o resultado real do Major. É preciso estar logado para concorrer.", en: "Any account counts, including free ones. 3 winners: the top 3 of the pick'em leaderboard with the real Major results. You must be logged in to compete.", es: "Vale para cualquier cuenta, incluso gratis. Son 3 ganadores: los 3 primeros del ranking del pick'em con el resultado real del Major. Hay que iniciar sesión para competir." },
+  prizeRules: { pt: "Vale para qualquer conta, inclusive cadastro sem pagamento. São 3 ganhadores: os 3 primeiros do ranking do pick'em com o resultado real do Major (empate: quem enviou primeiro). Quem ganhar sem conta paga recebe a vitalícia por liberação manual. Todo ganhador passa por conferência. É preciso estar logado para concorrer.", en: "Any account counts, including unpaid sign-ups. 3 winners: the top 3 of the pick'em leaderboard with the real Major results (tie: earliest submission). Winners without a paid account get the lifetime account through a manual grant. Every winner is reviewed. You must be logged in to compete.", es: "Vale para cualquier cuenta, incluso registros sin pago. Son 3 ganadores: los 3 primeros del ranking del pick'em con el resultado real del Major (empate: quien envió primero). Quien gane sin cuenta paga recibe la vitalicia por liberación manual. Todo ganador pasa por revisión. Hay que iniciar sesión para competir." },
   rostersTitle: { pt: 'Elencos', en: 'Rosters', es: 'Plantillas' },
   rostersSource: { pt: 'Elencos da VRS oficial da Valve de 05/10/2026', en: "Rosters from Valve's official VRS, Oct 5 2026", es: 'Plantillas del VRS oficial de Valve, 05/10/2026' },
   rosterLink: { pt: 'fonte', en: 'source', es: 'fuente' },

@@ -55,10 +55,11 @@ test('HOTFIX: sem APP_SECRET, usa o reserva legado e aceita os tokens já em cir
     const body = `jogador@example.com|${Math.floor(Date.now() / 1000) + 3600}`;
     const sig = createHmac('sha256', 'fallback:postgresql://prod').update(body).digest('base64url');
     assert.equal(verifyAccountToken(`${Buffer.from(body).toString('base64url')}.${sig}`), 'jogador@example.com');
-    // e com APP_SECRET configurada ela vence o reserva
+    // com APP_SECRET configurada ela assina o que é novo, e o token antigo segue
+    // aceito (dupla chave, etapa 1 do #107: ninguém é deslogado)
     process.env.APP_SECRET = 'novo';
     assert.equal(appSecret(), 'novo');
-    assert.equal(verifyAccountToken(`${Buffer.from(body).toString('base64url')}.${sig}`), null);
+    assert.equal(verifyAccountToken(`${Buffer.from(body).toString('base64url')}.${sig}`), 'jogador@example.com');
   },
 ));
 

@@ -9,7 +9,7 @@ import { Check, Copy, Download, Dices, Eraser, Sparkles, Trophy } from 'lucide-r
 import { lazy, Suspense } from 'react';
 import data from '../../data/major-singapore-2026.json';
 import {
-  EXTREME_PICKS, bracketSides, decodePicks, emptyPicks, encodePicks, normalizePicks, pickPool, picksComplete,
+  EXTREME_PICKS, bracketSides, decodePicks, droppedPickIds, emptyPicks, encodePicks, normalizePicks, pickPool, picksComplete,
   phaseOdds, scorePicks, simulateMajor, stageEntrants,
   type MajorData, type MajorPicks, type MajorResult, type MajorTeam, type StageNo,
 } from '../../engine/majorSingapore';
@@ -61,6 +61,20 @@ function loadMine(): MajorPicks {
   return emptyPicks();
 }
 
+// times que saíram do palpite local quando a lista oficial entrou (magic, B8…):
+// guardado até a pessoa fechar o aviso, porque o palpite já é regravado limpo
+const DROPPED = 'rtm-major-sg-dropped-v1';
+function loadDropped(): string[] {
+  try {
+    const raw = localStorage.getItem(STORE);
+    const now = raw ? droppedPickIds(D, JSON.parse(raw)) : [];
+    const prev = JSON.parse(localStorage.getItem(DROPPED) || '[]') as unknown;
+    const all = [...new Set([...(Array.isArray(prev) ? prev.map(String) : []), ...now])];
+    if (all.length) localStorage.setItem(DROPPED, JSON.stringify(all));
+    return all;
+  } catch { return []; }
+}
+
 function readSharedCode(): string | null {
   try { return new URLSearchParams(window.location.search).get('p'); } catch { return null; }
 }
@@ -82,6 +96,7 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
     if (firstTab.current) { firstTab.current = false; return; }
     if (onTab) window.scrollTo({ top: 0 });
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [dropped, setDropped] = useState<string[]>(loadDropped); // antes do loadMine regravar o palpite limpo
   const [mine, setMine] = useState<MajorPicks>(loadMine);
   const [viewShared, setViewShared] = useState(!!shared);
   const [sim, setSim] = useState<MajorResult | null>(null);
@@ -163,7 +178,13 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
   const complete = picksComplete(picks);
   // pick'em fechado (campeão escolhido) no palpite do próprio jogador; 1x por sessão (track.ts)
   // e conta como o 1º valor do jogador (a oferta passiva só aparece depois: state/paywallPolicy.ts)
-  useEffect(() => { if (complete && !readOnly) { track('major_pickem_submit', {}); markFirstValue('pickem'); } }, [complete, readOnly]);
+  useEffect(() => {
+    if (!complete || readOnly) return;
+    track('major_pickem_submit', {});
+    markFirstValue('pickem');
+    // momento de valor: o palpite fechou (a política decide se o card abre)
+    window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'pickem' } }));
+  }, [complete, readOnly]);
   const link = complete ? shareUrl(`${MAJOR_PATH}?p=${encodePicks(D, picks)}`, 'major-pickem') : '';
   const champName = teams.get(picks.bracket[6])?.name ?? '';
   const copyLink = async () => {
@@ -217,6 +238,12 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
         <div className="msg-stack">
           <PrizePanel t={t} />
           <PickemBoard />
+          {dropped.length > 0 && (
+            <Alert tone="warn" title={t('droppedTitle')}
+              action={<Button size="sm" variant="secondary" onClick={() => { setDropped([]); try { localStorage.removeItem(DROPPED); } catch { /* sem storage */ } }}>{t('droppedOk')}</Button>}>
+              {t('droppedBody').replace('{n}', dropped.map((id) => id.toUpperCase()).join(', '))}
+            </Alert>
+          )}
           {sharedCode && !shared && <Alert tone="danger">{t('badLink')}</Alert>}
           {shared && (
             <ChallengeBanner ch={challenge} viewing={viewShared} onView={() => setViewShared(true)} onBuild={() => setViewShared(false)}

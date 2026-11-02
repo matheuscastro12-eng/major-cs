@@ -21,19 +21,31 @@ g.fetch = async (_url: string, init?: { body?: string }) => {
   return { ok: true, json: async () => ({}) };
 };
 
-const { autoOfferAllowed, hasFirstValue, markFirstValue, autoOfferUsed, markAutoOfferUsed } = await import('../src/state/paywallPolicy.ts');
+const { autoOfferAllowed, hasFirstValue, markFirstValue, autoOffersShown, markAutoOfferShown, variantOf, PAYWALL_VARIANTS } = await import('../src/state/paywallPolicy.ts');
 
-const base = { force: false, firstValue: true, usedThisSession: false, msSinceLast: 60 * 60_000, cooldownMs: 45 * 60_000 };
+const base = { force: false, firstValue: true, moment: 'draft-win', shown: [] as string[], cap: 1, msSinceLast: 60 * 60_000, cooldownMs: 45 * 60_000 };
 
-test('oferta automática: só depois do 1º valor, 1x por sessão e fora do cooldown', () => {
+test('oferta automática: depois do 1º valor, 1x por momento, até o teto e fora do intervalo', () => {
   assert.equal(autoOfferAllowed(base), true);
-  assert.equal(autoOfferAllowed({ ...base, firstValue: false }), false, 'antes da 1ª partida não abre sozinha');
-  assert.equal(autoOfferAllowed({ ...base, usedThisSession: true }), false, 'segunda interrupção na mesma sessão');
-  assert.equal(autoOfferAllowed({ ...base, msSinceLast: 10 * 60_000 }), false, 'dentro dos 45 min');
+  assert.equal(autoOfferAllowed({ ...base, firstValue: false }), false, 'antes do 1º valor não abre sozinha');
+  assert.equal(autoOfferAllowed({ ...base, shown: ['draft-win'], cap: 3 }), false, 'o mesmo momento não repete');
+  assert.equal(autoOfferAllowed({ ...base, shown: ['return'], cap: 1 }), false, 'variante a: teto de 1 por sessão');
+  assert.equal(autoOfferAllowed({ ...base, shown: ['return'], cap: 3, cooldownMs: 10 * 60_000, msSinceLast: 11 * 60_000 }), true, 'variante b: outro momento');
+  assert.equal(autoOfferAllowed({ ...base, shown: ['return', 'pickem', 'major'], cap: 3, cooldownMs: 0 }), false, 'variante b: teto de 3');
+  assert.equal(autoOfferAllowed({ ...base, msSinceLast: 10 * 60_000 }), false, 'dentro do intervalo');
 });
 
 test('clique explícito (force) abre sempre', () => {
-  assert.equal(autoOfferAllowed({ force: true, firstValue: false, usedThisSession: true, msSinceLast: 0, cooldownMs: 45 * 60_000 }), true);
+  assert.equal(autoOfferAllowed({ ...base, force: true, firstValue: false, shown: ['draft-win'], msSinceLast: 0 }), true);
+});
+
+test('variante do teto: estável pelo sid, metade/metade, ?pw força', () => {
+  assert.equal(variantOf('abc123'), variantOf('abc123'));
+  const n = Array.from({ length: 400 }, (_, i) => variantOf(`sid${i}x${i * 7}`)).filter((v) => v === 'a').length;
+  assert.ok(n > 140 && n < 260, `a=${n}`);
+  assert.equal(variantOf('qualquer', 'b'), 'b');
+  assert.deepEqual(PAYWALL_VARIANTS.a.cap, 1);
+  assert.deepEqual(PAYWALL_VARIANTS.b.cap, 3);
 });
 
 test('1º valor: pick\'em, pacote ou a 1ª série (flag do first_match_done)', () => {
@@ -49,11 +61,13 @@ test('1º valor: pick\'em, pacote ou a 1ª série (flag do first_match_done)', (
   assert.equal(hasFirstValue(), true);
 });
 
-test('a interrupção automática da sessão fica marcada', () => {
-  assert.equal(autoOfferUsed(), false);
-  markAutoOfferUsed();
-  assert.equal(autoOfferUsed(), true);
-  assert.equal(g.sessionStorage.getItem('rtm-paywall-auto'), '1');
+test('momentos já mostrados ficam na sessão', () => {
+  assert.deepEqual(autoOffersShown(), []);
+  markAutoOfferShown('return');
+  markAutoOfferShown('return');
+  markAutoOfferShown('pickem');
+  assert.deepEqual(autoOffersShown(), ['return', 'pickem']);
+  assert.equal(g.sessionStorage.getItem('rtm-paywall-moments'), JSON.stringify(['return', 'pickem']));
 });
 
 test('paywall_view: cada superfície 1x por sessão, mantendo {src, surface, trigger}', async () => {
