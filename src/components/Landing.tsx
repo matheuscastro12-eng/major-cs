@@ -14,7 +14,7 @@
 // Estilos em src/styles/landing.css (só tokens).
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, Crosshair, Gift, Globe, Play, Star, Swords, Target, Trophy } from 'lucide-react';
-import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
+import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutBlocked, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
 import {
   MAJOR_FAVORITES, MAJOR_SG_MILESTONES, landingDoors, landingHero, landingMajorCta, landingModes, majorPhase, milestonesReached,
   type LandingDoor, type LandingDoorId, type LandingHero, type LandingMajorCta, type LandingModeId, type MajorPhase,
@@ -648,6 +648,26 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const pwMismatch = mode === 'signup' && pw2.length > 0 && pw !== pw2;
   const valid = mode === 'pay' || (/\S+@\S+\.\S+/.test(email) && pw.length >= 6
     && (mode === 'login' || (accepted && pw === pw2)));
+  // funil: os botões de pagar ficavam desabilitados quando faltava algo no
+  // cadastro, sem dizer o quê — quem travava aqui (ex.: esqueceu de marcar os
+  // Termos) desistia em silêncio, fora do funil. Agora o clique é aceito e diz
+  // o que falta (checkout_blocked mede qual motivo trava mais gente). Só no
+  // CADASTRO: o login é só e-mail + senha, e o modo 'pay' não tem formulário.
+  type BlockReason = 'email' | 'senha-curta' | 'senha-diferente' | 'termos';
+  const signupBlockReason = (): BlockReason | null => {
+    if (mode !== 'signup') return null;
+    if (!/\S+@\S+\.\S+/.test(email)) return 'email';
+    if (pw.length < 6) return 'senha-curta';
+    if (pw !== pw2) return 'senha-diferente';
+    if (!accepted) return 'termos';
+    return null;
+  };
+  const blockedMessage = (reason: BlockReason): string => ({
+    email: ct('Preencha um e-mail válido.'),
+    'senha-curta': ct('A senha precisa de pelo menos 6 caracteres.'),
+    'senha-diferente': ct('As senhas não são iguais — confira os dois campos.'),
+    termos: ct('Marque a caixa dos Termos acima pra continuar.'),
+  })[reason];
   // conta (nova, login ou a grátis já logada) que vai pagar
   const resolveAccount = async () => {
     if (mode === 'pay' && payAcct) return { ...payAcct, paid: false };
@@ -657,7 +677,11 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     return acct;
   };
   const go = async () => {
-    if (!valid || busy) return;
+    if (busy) return;
+    if (mode === 'signup') {
+      const reason = signupBlockReason();
+      if (reason) { setErr(blockedMessage(reason)); trackCheckoutBlocked(reason); return; }
+    } else if (!valid) return;
     setBusy(true); setErr('');
     try {
       const acct = await resolveAccount();
@@ -688,7 +712,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     setPixGenerating(false);
   };
   const goPix = async () => {
-    if (!valid || busy) return;
+    if (busy) return;
+    const reason = signupBlockReason(); // só bloqueia no cadastro; no modo 'pay' não há formulário
+    if (reason) { setErr(blockedMessage(reason)); trackCheckoutBlocked(reason); return; }
     setBusy(true); setErr('');
     try {
       const acct = pixEmail ? { email: pixEmail, paid: false } : await resolveAccount();
@@ -876,11 +902,12 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
             {ct('Tenha o app do banco à mão: o código Pix aparece logo em seguida')}
           </p>
-          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '8px' }} onClick={goPix}>
+          {/* sem o !valid: o clique com cadastro incompleto diz o que falta (signupBlockReason) */}
+          <Button variant="gold" disabled={busy} style={{ width: '100%', marginTop: '8px' }} onClick={goPix}>
             {busy ? ct('Aguarde…') : ct('Pagar com Pix')}
           </Button>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '6px 0 0' }}>{ct('Confirma na hora, sem sair desta tela')}</p>
-          <Button variant="ghost" disabled={!valid || busy} style={{ width: '100%', marginTop: '10px' }} onClick={go}>
+          <Button variant="ghost" disabled={busy} style={{ width: '100%', marginTop: '10px' }} onClick={go}>
             {busy ? ct('Aguarde…') : ct('Ativar com cartão (Stripe)')}
           </Button>
         </>
