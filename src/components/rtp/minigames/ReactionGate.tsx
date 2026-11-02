@@ -16,7 +16,11 @@ export function ReactionGate({ seed, durationMs, difficulty, onFinish }: MiniGam
     [seed],
   );
   const [round, setRound] = useState(0);
-  const [state, setState] = useState<State>('wait');
+  const [state, setStateView] = useState<State>('wait');
+  // [RTP-TAP] estado em ref: o closure do render ficava velho entre dois toques
+  // rápidos (dois advance na mesma rodada / clique ignorado).
+  const stateRef = useRef<State>('wait');
+  const setState = (v: State) => { stateRef.current = v; setStateView(v); };
   const scores = useRef<number[]>([]);
   const goAt = useRef(0);
   const finished = useRef(false);
@@ -48,13 +52,17 @@ export function ReactionGate({ seed, durationMs, difficulty, onFinish }: MiniGam
   }, []);
 
   const advance = (sc: number) => {
+    if (finished.current || scores.current.length >= ROUNDS) return;
+    stateRef.current = 'wait'; // trava novos toques até o effect da próxima rodada
     scores.current.push(sc);
     if (scores.current.length >= ROUNDS) { finish(); return; }
     setRound((r) => r + 1);
   };
 
-  const click = () => {
+  const click = (e?: { preventDefault?: () => void }) => {
+    e?.preventDefault?.();
     if (finished.current) return;
+    const state = stateRef.current;
     if (state === 'wait') {
       // adiantou: zera a rodada e segue. Guarda no timer ref pra o cleanup do
       // effect limpar se o modal fechar antes dos 420ms (sem setState pós-unmount).
@@ -72,8 +80,8 @@ export function ReactionGate({ seed, durationMs, difficulty, onFinish }: MiniGam
     <button
       type="button"
       className={`rtp-mini-react s-${state}`}
-      style={{ width: 320, height: 320 }}
-      onMouseDown={click}
+      style={{ width: 320, height: 320, maxWidth: '100%', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+      onPointerDown={click}
     >
       <div className="rtp-mini-hud"><span>{ct('Rodada')} {Math.min(round + 1, ROUNDS)}/{ROUNDS}</span></div>
       <div className="rtp-mini-react-msg">

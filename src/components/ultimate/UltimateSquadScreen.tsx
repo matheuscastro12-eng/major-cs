@@ -1307,6 +1307,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const [mktBusy, setMktBusy] = useState(false);
   const [mktBuyItem, setMktBuyItem] = useState<MktBrowseItem | null>(null);
   const [mktSellPick, setMktSellPick] = useState(false); // modal: escolher carta pra vender
+  // ids que o SERVIDOR conhece (null = ainda carregando/offline). Cartas fora
+  // desse set só existem no aparelho e o mktList devolveria not_owner — o
+  // picker as desabilita com o motivo em vez de falhar depois do preço.
+  const [mktServerIds, setMktServerIds] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (!mktSellPick) return;
+    let alive = true;
+    setMktServerIds(null);
+    void fetchServerCardIds().then((ids) => { if (alive) setMktServerIds(ids); }).catch(() => {});
+    return () => { alive = false; };
+  }, [mktSellPick]);
   const [mktSellTarget, setMktSellTarget] = useState<{ o: OwnedCard; card: UltCard } | null>(null);
   const [histCard, setHistCard] = useState<{ card: UltCard; ownedIds: string[] } | null>(null); // [CSM-3] história da carta
   const [mktPrice, setMktPrice] = useState('');
@@ -4563,10 +4574,14 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10, maxHeight: 440, overflowY: 'auto', justifyItems: 'center' }}>
                 {cands.map(({ o, card, n }) => {
                   const special = isSpecial(card.rarity);
+                  const legacy = isLegacyCard({ playerId: card.playerId }) || o.cardKey.startsWith('rtp_legacy_');
                   const locked = o.locked === 'squad';
-                  const blocked = special || locked;
+                  const deviceOnly = !legacy && mktServerIds !== null && !mktServerIds.has(o.id);
+                  const blocked = special || legacy || locked || deviceOnly;
                   const tip = special ? ct('Cartas especiais (TOTS/Major/Promo) não podem ir ao Mercado.')
+                    : legacy ? ct('Cartas do Legado do Road to Pro são exclusivas da sua conta e não vão ao Mercado.')
                     : locked ? ct('Carta escalada no squad — remova do slot pra listar.')
+                    : deviceOnly ? ct('Essa cópia só existe neste aparelho (não está na sua conta online) e não pode ser listada.')
                     : ct('Listar esta carta');
                   return (
                     <button
@@ -4577,7 +4592,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     >
                       <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} ed={editionOf(o)} />
                       {special && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#f2c078' }}>{ct('especial')}</span>}
-                      {!special && locked && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
+                      {!special && legacy && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#ffd700' }}>{ct('legado')}</span>}
+                      {!special && !legacy && !locked && deviceOnly && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#ff9f6e' }}>{ct('só no aparelho')}</span>}
+                      {!special && !legacy && locked && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
                     </button>
                   );
                 })}

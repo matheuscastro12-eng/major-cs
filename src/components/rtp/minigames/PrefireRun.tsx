@@ -47,8 +47,10 @@ export function PrefireRun({ seed, durationMs, difficulty, onFinish }: MiniGameP
 
   useEffect(() => {
     const start = performance.now();
-    const loop = (now: number) => {
-      const t = Math.max(0, (now - start) / passMs); // [RTP-RAF] rAF pode vir antes do start
+    const loop = () => {
+      // [RTP-RAF] relógio único (performance.now) — o timestamp do rAF pode vir
+      // de outra base/antes do start em alguns WebViews e a mira não andava.
+      const t = Math.max(0, (performance.now() - start) / passMs); // [RTP-RAF] rAF pode vir antes do start
       if (t >= PASSES) { finish(); return; }
       // ida e volta: passada par vai L→R, ímpar volta R→L
       const p = t % 1;
@@ -90,8 +92,8 @@ export function PrefireRun({ seed, durationMs, difficulty, onFinish }: MiniGameP
   return (
     <div
       className="rtp-mini-prefire"
-      style={{ width: SIZE, aspectRatio: '1', maxWidth: '100%', touchAction: 'none' }}
-      onPointerDown={shoot}
+      style={{ width: SIZE, aspectRatio: '1', maxWidth: '100%', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+      onPointerDown={(e) => { e.preventDefault(); shoot(); }}
     >
       <div className="rtp-mini-hud">
         <span>{ct('Prefire')} {done}/{N}</span>

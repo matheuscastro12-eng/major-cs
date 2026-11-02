@@ -20,6 +20,7 @@ export function TempoLock({ seed, durationMs, difficulty, onFinish }: MiniGamePr
   }, [seed, difficulty]);
   const speed = diffLerp(1.05, 1.35, difficulty);
   const [round, setRound] = useState(0);
+  const roundRef = useRef(0); // [RTP-TAP] closure do render ficava velho entre toques rápidos
   const [pos, setPos] = useState(0);
   const posRef = useRef(0);
   const dir = useRef(1);
@@ -38,7 +39,9 @@ export function TempoLock({ seed, durationMs, difficulty, onFinish }: MiniGamePr
   useEffect(() => {
     let last = performance.now();
     const loop = (now: number) => {
-      const dt = (now - last) / 1000;
+      // [RTP-RAF] rAF pode vir com timestamp < last (1º frame) e, após aba em
+      // 2º plano, com um salto enorme: clamp evita agulha presa/teleportando.
+      const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
       last = now;
       let p = posRef.current + dir.current * speed * dt;
       if (p >= 1) { p = 1; dir.current = -1; } else if (p <= 0) { p = 0; dir.current = 1; }
@@ -52,19 +55,21 @@ export function TempoLock({ seed, durationMs, difficulty, onFinish }: MiniGamePr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const lock = () => {
-    if (finished.current) return;
-    const z = zones[round];
+  const lock = (e?: { preventDefault?: () => void }) => {
+    e?.preventDefault?.();
+    if (finished.current || roundRef.current >= ROUNDS) return;
+    const z = zones[roundRef.current];
     const sc = Math.max(0, 1 - Math.abs(posRef.current - z.center) / z.half);
     scores.current.push(sc);
+    roundRef.current += 1;
     if (scores.current.length >= ROUNDS) { finish(); return; }
-    setRound((r) => r + 1);
+    setRound(roundRef.current);
   };
 
-  const z = zones[round];
+  const z = zones[Math.min(round, ROUNDS - 1)];
   return (
-    <button type="button" className="rtp-mini-tempo" style={{ width: W }} onMouseDown={lock}>
-      <div className="rtp-mini-hud"><span>{ct('Rodada')} {round + 1}/{ROUNDS}</span><span>{ct('clique na zona')}</span></div>
+    <button type="button" className="rtp-mini-tempo" style={{ width: W, maxWidth: '100%', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }} onPointerDown={lock}>
+      <div className="rtp-mini-hud"><span>{ct('Rodada')} {Math.min(round + 1, ROUNDS)}/{ROUNDS}</span><span>{ct('clique na zona')}</span></div>
       <div className="rtp-mini-tempo-track">
         <div className="rtp-mini-tempo-zone" style={{ left: `${(z.center - z.half) * 100}%`, width: `${z.half * 2 * 100}%` }} />
         <div className="rtp-mini-tempo-needle" style={{ left: `${pos * 100}%` }} />
