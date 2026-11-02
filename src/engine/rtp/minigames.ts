@@ -65,7 +65,7 @@ export const MINIGAMES: Record<MiniGameId, MiniGameDef> = {
 export const TIER_DIFFICULTY: Record<Tier, number> = {
   academy: 0, access: 1 / 3, challenger: 2 / 3, elite: 1,
 };
-export function tierDifficulty(tier: Tier): number { return TIER_DIFFICULTY[tier]; }
+export function tierDifficulty(tier: Tier): number { return TIER_DIFFICULTY[tier] ?? 0; } // save antigo/sem tier ⇒ base
 
 // Rótulo curto pra UI (chip no intro do modal).
 export const TIER_DIFF_LABEL: Record<Tier, string> = {
@@ -74,7 +74,7 @@ export const TIER_DIFF_LABEL: Record<Tier, string> = {
 
 // interpolação padrão dos knobs: base (d=0) → hard (d=1)
 export function diffLerp(base: number, hard: number, d: number): number {
-  const t = Math.max(0, Math.min(1, d));
+  const t = Number.isFinite(d) ? Math.max(0, Math.min(1, d)) : 0;
   return base + (hard - base) * t;
 }
 

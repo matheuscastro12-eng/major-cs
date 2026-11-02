@@ -44,8 +44,10 @@ export function SprayTracer({ seed, durationMs, difficulty, onFinish }: MiniGame
     const start = performance.now();
     let last = start;
     const loop = (now: number) => {
-      const t = Math.min(1, (now - start) / DUR);
-      const d = path[Math.min(path.length - 1, Math.floor(t * (path.length - 1)))];
+      // [RTP-RAF] o timestamp do rAF pode vir ANTES do performance.now() do
+      // effect: t<0 ⇒ índice -1 ⇒ path[-1] undefined (crash 'reading x').
+      const t = Math.max(0, Math.min(1, (now - start) / DUR));
+      const d = path[Math.max(0, Math.min(path.length - 1, Math.floor(t * (path.length - 1))))];
       const near = Math.hypot(cursorRef.current.x - d.x, cursorRef.current.y - d.y) <= TOL;
       const dt = now - last;
       last = now;

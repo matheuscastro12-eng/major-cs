@@ -103,7 +103,10 @@ const num = (v: unknown, d = 0): number => (Number.isFinite(Number(v)) ? Number(
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
 // 401/403 → conta deslogada/grátis; 0/5xx/429 → offline (a UI mostra estado amigável)
-function commonFail(status: number): 'unpaid' | 'offline' | null {
+// [UT-MKT403] 403 também é 'not_owner' (carta fora da coleção do servidor) —
+// quem chama confere data.error ANTES; aqui 403 só vira 'unpaid' sem esse corpo.
+export function commonFail(status: number, data?: Record<string, unknown> | null): 'unpaid' | 'offline' | null {
+  if (status === 403 && data && data.error === 'not_owner') return null;
   if (status === 401 || status === 403) return 'unpaid';
   if (status === 0 || status === 429 || status >= 500) return 'offline';
   return null;
@@ -120,7 +123,7 @@ export async function mktList(cardId: string, price: number): Promise<MktListOut
     if (status >= 200 && status < 300 && data) {
       return { ok: true, listingId: num(data.listingId), expiresAt: str(data.expiresAt) };
     }
-    const cf = commonFail(status);
+    const cf = commonFail(status, data);
     if (cf) return { ok: false, error: cf };
     const err = str(data?.error);
     // 400 'preço fora da faixa' vem com min/max do catálogo do servidor
@@ -151,7 +154,7 @@ export async function mktBuy(listingId: number): Promise<MktBuyOutcome> {
         listingId: num(data.listingId, listingId), cardId: str(data.cardId), cardKey: str(data.cardKey), price: num(data.price),
       };
     }
-    const cf = commonFail(status);
+    const cf = commonFail(status, data);
     if (cf) return { ok: false, error: cf };
     const err = str(data?.error);
     if (err === 'insufficient_credits') return { ok: false, error: 'insufficient_credits', credits: num(data?.credits) };
@@ -171,7 +174,7 @@ export async function mktCancel(listingId: number): Promise<MktCancelOutcome> {
   try {
     const { status, data } = await post({ action: 'mktCancel', listingId });
     if (status >= 200 && status < 300) return { ok: true };
-    const cf = commonFail(status);
+    const cf = commonFail(status, data);
     if (cf) return { ok: false, error: cf };
     if (status === 404) return { ok: false, error: 'not_found' };
     if (str(data?.error) === 'not_active') return { ok: false, error: 'not_active' };
@@ -204,7 +207,7 @@ export async function mktBrowse(filters: { cardKey?: string; maxPrice?: number; 
       }
       return { ok: true, listings };
     }
-    return { ok: false, error: commonFail(status) ?? 'unknown' };
+    return { ok: false, error: commonFail(status, data) ?? 'unknown' };
   } catch (e) {
     captureError(e, 'ult-mkt');
     return { ok: false, error: 'unknown' };
@@ -238,7 +241,7 @@ export async function mktMine(): Promise<{ ok: true; listings: MktMineItem[] } |
       }
       return { ok: true, listings };
     }
-    return { ok: false, error: commonFail(status) ?? 'unknown' };
+    return { ok: false, error: commonFail(status, data) ?? 'unknown' };
   } catch (e) {
     captureError(e, 'ult-mkt');
     return { ok: false, error: 'unknown' };
@@ -287,7 +290,7 @@ export async function mktSalesFor(cardKey: string): Promise<{ ok: true; sales: M
       salesCache.set(cardKey, { at: Date.now(), value: out });
       return { ok: true, sales: out };
     }
-    return { ok: false, error: commonFail(status) ?? 'unknown' };
+    return { ok: false, error: commonFail(status, data) ?? 'unknown' };
   } catch (e) {
     captureError(e, 'ult-mkt');
     return { ok: false, error: 'unknown' };
@@ -313,7 +316,7 @@ export async function mktRecentSales(): Promise<{ ok: true; recent: MktRecentSal
       salesCache.set('@global', { at: Date.now(), value: recent });
       return { ok: true, recent };
     }
-    return { ok: false, error: commonFail(status) ?? 'unknown' };
+    return { ok: false, error: commonFail(status, data) ?? 'unknown' };
   } catch (e) {
     captureError(e, 'ult-mkt');
     return { ok: false, error: 'unknown' };

@@ -66,7 +66,7 @@ import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { DRAFT_ENTRY, DRAFT_OPTIONS, DRAFT_REWARDS, DRAFT_ROLES, DRAFT_TARGET, draftOptions, draftOppTarget } from '../../engine/ultimate/draft';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
 import { bestOnlineSwap } from '../../engine/ultimate/onlineSwap';
-import { fetchServerCardIds } from '../../state/ultimateShadow';
+import { fetchServerCardIds, healRankedCards } from '../../state/ultimateShadow';
 import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, passSeasonId, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
 import { claimableLevels, ensurePass, levelForXp, passLevels, passTitleLabel, passTitleSlug, totalXpForLevel, xpForLevel, PASS_MAX_LEVEL, type PassReward, type PassTrack } from '../../engine/ultimate/seasonPass';
 import { cardMatchPlayer, estimateCardValue, type UltCard } from '../../engine/ultimate/cards';
@@ -1478,7 +1478,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     }
     setMktBusy(true);
     try {
-      const r = await mktList(mktSellTarget.o.id, p);
+      let r = await mktList(mktSellTarget.o.id, p);
+      // [UT-MKT403] carta só no aparelho (prêmio de SBC/pacote antigo que não
+      // chegou ao servidor): tenta a cura do ledger e lista de novo uma vez.
+      let healTried = false;
+      if (!r.ok && r.error === 'not_owner') {
+        healTried = true;
+        const healed = await healRankedCards([mktSellTarget.o.id]);
+        if (healed.includes(mktSellTarget.o.id)) r = await mktList(mktSellTarget.o.id, p);
+      }
       if (r.ok) {
         // custódia: a carta SAI da coleção local (o servidor já a removeu) —
         // sem espelho-sombra (a perna 'escrow' já existe no ledger).
@@ -1496,7 +1504,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       } else if (r.error === 'special_not_listable') {
         flash(ct('Cartas especiais (TOTS/Major/Promo) não podem ir ao Mercado.'));
       } else if (r.error === 'not_owner') {
-        flash(ct('Essa cópia não está mais disponível — atualizando suas listagens.'));
+        if (healTried) flash(ct('Essa cópia ainda não está sincronizada com sua conta — ela só existe neste aparelho, então não pode ir ao Mercado por enquanto.'), 3600);
+        else flash(ct('Essa cópia não está mais disponível — atualizando suas listagens.'));
         void refreshMine();
       } else if (r.error === 'unpaid') {
         flash(`🔒 ${ct('O Mercado é da conta vitalícia — entre na sua conta.')}`, 2800);
