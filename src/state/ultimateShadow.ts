@@ -283,6 +283,14 @@ export function mirrorUltimateChange(prev: UltimateState, next: UltimateState, k
     }
     // (o desbloqueio do Passe Premium PAGO não passa mais por aqui: o servidor
     // grava pass:<season> no passClaim — O0-46)
+    // [UT-REW2] prêmio com `claim`: vai pra fila do rewardClaim (o servidor
+    // recalcula crédito e confere as cartas). O tx-sombra daria 400 (O0-02).
+    const claim = meta?.claim as RewardClaimSpec | undefined;
+    if (claim) {
+      const added = cards.filter((c) => c.op === 'add').map((c) => ({ cardId: c.cardId, cardKey: c.cardKey ?? '', ...(typeof c.meta?.ed === 'number' ? { ed: c.meta.ed } : {}) }));
+      queueRewardClaim({ src: claim.src, key: claim.key, p: claim.p, cards: claim.noCards ? [] : added });
+      return;
+    }
     shadowTx(kind, creditsDelta, cards, meta);
   } catch (e) {
     captureError(e, 'ult-shadow');
@@ -550,6 +558,7 @@ export function bootUltimateShadow(): void {
   void (async () => {
     try {
       await flushShadowQueue();
+      await flushRewardClaims(); // [UT-REW2] prêmios pendentes da sessão anterior
       await importLocalOnce(); // [F1] 1× por conta, antes da leitura servidor↔local
       await reconcileFlip();
     } catch (e) {
@@ -609,6 +618,61 @@ export async function sbcSubmitOnServer(sbcId: string, cardIds: string[]): Promi
   return out;
 }
 
+// ------------------------------------------- [UT-REW2] fila do rewardClaim
+// Prêmio só do aparelho → servidor. Persistida ANTES do fetch; drena em ordem
+// (o bônus semanal depende das semanais, o estágio N do Gauntlet do N-1).
+// ok/recusado sai da fila; offline (rede/5xx/429) fica pra próxima.
+export interface RewardClaimSpec { src: string; key: string; p: Record<string, string | number | boolean>; noCards?: boolean }
+interface QueuedClaim extends RewardClaimSpec { cards: { cardId: string; cardKey: string; ed?: number }[]; tries?: number }
+const CLAIM_QUEUE_KEY = 'rtm-ult-claims-v1';
+const CLAIM_QUEUE_MAX = 60;
+
+function readClaimQueue(): QueuedClaim[] {
+  try { const v = JSON.parse(localStorage.getItem(CLAIM_QUEUE_KEY) ?? '[]'); return Array.isArray(v) ? v as QueuedClaim[] : []; } catch { return []; }
+}
+function writeClaimQueue(q: QueuedClaim[]): void {
+  try { localStorage.setItem(CLAIM_QUEUE_KEY, JSON.stringify(q.slice(-CLAIM_QUEUE_MAX))); } catch { /* best-effort */ }
+}
+
+export function queueRewardClaim(c: QueuedClaim): void {
+  const q = readClaimQueue().filter((x) => !(x.src === c.src && x.key === c.key));
+  q.push(c);
+  writeClaimQueue(q);
+  void flushRewardClaims();
+}
+
+let claimFlush: Promise<void> | null = null;
+export function flushRewardClaims(): Promise<void> {
+  if (claimFlush) return claimFlush;
+  claimFlush = (async () => {
+    try {
+      if (!ultOnline()) return;
+      for (;;) {
+        const q = readClaimQueue();
+        const head = q[0];
+        if (!head) return;
+        const r = await postEconomy({ action: 'rewardClaim', claim: { src: head.src, key: head.key, cards: head.cards, p: head.p } });
+        const out = classifyServerCall(r.status, r.data);
+        if (out.kind === 'offline') {
+          const tries = (head.tries ?? 0) + 1;
+          // backoff simples: depois de 8 quedas seguidas vai pro fim da fila (não trava as outras)
+          writeClaimQueue(tries >= 8 ? [...q.slice(1), { ...head, tries: 0 }] : [{ ...head, tries }, ...q.slice(1)]);
+          return;
+        }
+        if (out.kind !== 'ok') captureError(new Error(`ult-claim ${head.src}:${head.key} → ${out.kind === 'rejected' ? out.error : out.kind}`), 'ult-claim');
+        writeClaimQueue(readClaimQueue().filter((x) => !(x.src === head.src && x.key === head.key)));
+      }
+    } catch (e) {
+      captureError(e, 'ult-claim');
+    } finally {
+      claimFlush = null;
+    }
+  })();
+  return claimFlush;
+}
+
+export function pendingRewardClaims(): number { return readClaimQueue().length; }
+
 export async function objectiveClaimOnServer(objectiveId: string): Promise<ServerCall> {
   const r = await postEconomy({ action: 'objectiveClaim', objectiveId });
   return classifyServerCall(r.status, r.data);
@@ -618,6 +682,7 @@ export async function objectiveClaimOnServer(objectiveId: string): Promise<Serve
 // importou, o save inteiro) — o servidor só aceita o que o ledger justifica.
 export async function healRankedCards(cardIds: string[]): Promise<string[]> {
   try {
+    await flushRewardClaims(); // [UT-REW2] prêmio na fila pode ser justamente a carta recusada
     let local: UltimateState | null = null;
     try { const raw = localStorage.getItem(LOCAL_SAVE_KEY); local = raw ? (JSON.parse(raw) as UltimateState) : null; } catch { local = null; }
     const payload = {

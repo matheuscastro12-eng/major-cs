@@ -11,9 +11,9 @@
 // commit-on-start do openPack). Ver docs-but-map.md §4.
 
 import type { Role } from '../../types';
-import { makeRng, type Rng } from '../rng';
+import { makeRng, type Rng } from '../rng.js';
 import type { UltCard } from './cards';
-import { rarityInfo, type UltRarity } from './rarities';
+import { rarityInfo, type UltRarity } from './rarities.js';
 
 export const DRAFT_ENTRY = 15_000;      // inscrição (credits)
 export const DRAFT_TARGET = 4;          // vitórias pra campanha perfeita

@@ -24,7 +24,11 @@ import { applyUltTransaction, ultPayloadHash, type SqlTag, type UltCardOp } from
 
 export type CardLookup = (cardKey: string) => UltCard | null | undefined;
 export type RarityPool = (rarity: string) => UltCard[];
-export interface RewardDeps { lookup: CardLookup; pool: RarityPool; rng?: () => number; uuid?: () => string }
+export interface RewardDeps {
+  lookup: CardLookup; pool: RarityPool; rng?: () => number; uuid?: () => string;
+  // [UT-REW2] SBC agendada do live-ops ('lo-<id>'): def lida do rtm_liveops ATIVO no servidor
+  liveSbc?: (sbcId: string) => Promise<SbcDef | undefined>;
+}
 
 export type RewardError = 'unknown_sbc' | 'bad_input' | 'duplicate_ids' | 'not_owner' | 'requirements' | 'empty_pool'
   | 'unknown_objective' | 'no_card_reward' | 'unverifiable' | 'not_reached' | 'op_conflict';
@@ -95,7 +99,8 @@ export async function submitSbcServer(
   }
   const rows = ids.length ? await sql`SELECT card_id, card_key FROM rtm_ult_cards WHERE email=${email} AND card_id = ANY(${ids})` : [];
   const owned = rows.map((r) => ({ cardId: String(r.card_id ?? ''), cardKey: String(r.card_key ?? '') }));
-  const plan = planSbc(sbcById(sbcId), req.cardIds, owned, deps);
+  const def = sbcById(sbcId) ?? (sbcId.startsWith('lo-') && deps.liveSbc ? await deps.liveSbc(sbcId) : undefined);
+  const plan = planSbc(def, req.cardIds, owned, deps);
   if (!plan.ok) return plan;
   const r = await applyUltTransaction(sql, email, {
     opId, kind: 'sbc', creditsDelta: plan.creditsDelta, cards: plan.cards, meta: { sbcId, source: 'sbcSubmit', rewarded: true },

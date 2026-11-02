@@ -464,7 +464,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
     // pack aberto no cliente (fase 3a): espelha custo+cartas com o seed usado —
     // o servidor ainda não rola o pack (isso é a fase 3b via action packOpen).
-    mirrorUltimateChange(prev, s, 'pack', { packId: pack.id, seed });
+    // [UT-REW2] Promo/Temporada rolam SÓ aqui: o servidor debita e grava as cartas (rewardClaim 'pack-paid')
+    const paid = pack.id === PROMO_PACK.id || isSeasonPack(pack.id);
+    mirrorUltimateChange(prev, s, 'pack', { packId: pack.id, seed, ...(paid ? { claim: { src: 'pack-paid', key: `${pack.id}:${seed}`, p: { packId: pack.id, seed } } } : {}) });
     return { ok: true, cards };
   },
   openPackCloud: async (packId) => {
@@ -636,7 +638,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       const s = _grantPassXp(r.state, 'daily', dateKey(new Date()));
       persist(s);
       set({ state: s });
-      mirrorUltimateChange(prev, s, 'reward', { src: 'daily' });
+      mirrorUltimateChange(prev, s, 'reward', { src: 'daily', claim: { src: 'daily', key: dateKey(new Date()), p: { date: dateKey(new Date()), day: r.result.day } } });
     }
     return r.result;
   },
@@ -704,7 +706,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (def.frame) s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, [def.frame]), equippedFrame: s.profile.equippedFrame ?? def.frame } };
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(st, s, 'reward', { src: 'streak', days });
+    mirrorUltimateChange(st, s, 'reward', { src: 'streak', days, claim: { src: 'streak', key: String(days), p: { days } } });
     return { ok: true, credits: def.coins, frame: def.frame };
   },
   setTarget: (cardKey) =>
@@ -734,7 +736,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _mergeTitles(s, ['rookie']).state;
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(prev, s, 'grant', { src: 'starter' });
+    mirrorUltimateChange(prev, s, 'grant', { src: 'starter', claim: { src: 'starter', key: 'v1', p: {} } });
     return cards;
   },
   submitSbc: (sbcId, ownedIds, server) => {
@@ -778,8 +780,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
   },
   submitSbcOnline: async (sbcId, ownedIds) => {
     if (!ultOnline()) return get().submitSbc(sbcId, ownedIds);
-    const def = sbcById(sbcId);
-    // SBC agendada do live-ops ainda não existe no servidor: caminho antigo
+    // [UT-REW2] SBC agendada ('lo-…') também vai pro servidor (def do rtm_liveops ativo lá)
+    const def = sbcById(sbcId) ?? scheduledSbcById(sbcId);
     if (!def) return get().submitSbc(sbcId, ownedIds);
     const st = get().state;
     const idx = ultimateIndex();
@@ -839,7 +841,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _grantPassXp(s, 'objective', dateKey(new Date()));
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(st, s, 'reward', { src: 'objective', id });
+    // [UT-REW2] crédito (e a carta, se a métrica não é conferível no servidor) → servidor
+    mirrorUltimateChange(st, s, 'reward', { src: 'objective', id, claim: { src: 'objective', key: id, p: { id }, ...(server ? { noCards: true } : {}) } });
     return { ok: true, reward: def.reward, grantedCard };
   },
   claimObjectiveOnline: async (id) => {
@@ -894,7 +897,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     }
     persist(ns);
     set({ state: ns });
-    mirrorUltimateChange(st, ns, 'reward', { src: 'season', id });
+    mirrorUltimateChange(st, ns, 'reward', { src: 'season', id, claim: { src: 'season-tier', key: `${s.n}:${id}`, p: { season: s.n, id } } });
     return { ok: true, reward: def.reward, grantedCard };
   },
   claimSeasonMilestone: (cardKey) => {
@@ -912,7 +915,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     ns = _grantCard(ns, card.key, 'reward', { id: `msleg_${Math.random().toString(36).slice(2, 9)}` });
     persist(ns);
     set({ state: ns });
-    mirrorUltimateChange(st, ns, 'reward', { src: 'season-milestone', cardKey });
+    mirrorUltimateChange(st, ns, 'reward', { src: 'season-milestone', cardKey, claim: { src: 'season-milestone', key: String(s.n), p: { season: s.n } } });
     return { ok: true, grantedCard: card };
   },
   gauntletStart: (today) =>
@@ -942,7 +945,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (won) s = _grantPassXp(s, 'gauntletWin', dateKey(new Date())); // XP por estágio vencido
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(prev, s, 'reward', { src: 'gauntlet' });
+    // [UT-REW2] estágio vencido (crédito) / campanha completa (carta Elite) → servidor
+    const gDate = prev.profile.gauntlet.date ?? dateKey(new Date());
+    mirrorUltimateChange(prev, s, 'reward', { src: 'gauntlet', ...(won ? { claim: { src: 'gauntlet', key: `${gDate}:${r.wins}`, p: { date: gDate, wins: r.wins } } } : {}) });
     return { wins: r.wins, completed: r.completed, over: r.over, credits, grantedCard };
   },
   // ── Ultimate Draft: inscrição → picks → run (mesmo padrão do gauntlet) ──
@@ -984,7 +989,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (won) s = _grantPassXp(s, 'gauntletWin', dateKey(new Date())); // mesmo XP por estágio do gauntlet
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(prev, s, 'reward', { src: 'draft' });
+    // [UT-REW2] fim do run: recompensa (crédito + carta) gravada no servidor, 1× por seed do run
+    const dSeed = prev.profile.draft.seed;
+    mirrorUltimateChange(prev, s, 'reward', { src: 'draft', ...(r.over ? { claim: { src: 'draft', key: String(dSeed), p: { seed: dSeed, wins: r.wins } } } : {}) });
     return { wins: r.wins, completed: r.completed, over: r.over, credits: r.credits, grantedCard };
   },
   syncMissions: (today) =>
@@ -1013,7 +1020,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _grantPassXp(s, 'mission', dateKey(new Date()));
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(st, s, 'reward', { src: 'mission', id });
+    mirrorUltimateChange(st, s, 'reward', { src: 'mission', id, claim: { src: 'mission', key: `${m.day}:${id}`, p: { day: m.day, id } } });
     return { ok: true, credits: def.credits };
   },
   syncWeekly: (week) =>
@@ -1035,7 +1042,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _grantPassXp(s, 'weekly', dateKey(new Date()));
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(st, s, 'reward', { src: 'weekly', id });
+    mirrorUltimateChange(st, s, 'reward', { src: 'weekly', id, claim: { src: 'weekly', key: `${w.week}:${id}`, p: { week: w.week, id } } });
     return { ok: true, credits: def.credits };
   },
   claimWeeklyBonus: () => {
@@ -1055,7 +1062,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     for (const c of cards) s = _grantCard(s, c.key, 'reward');
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(st, s, 'reward', { src: 'weekly-bonus', seed });
+    mirrorUltimateChange(st, s, 'reward', { src: 'weekly-bonus', seed, claim: { src: 'weekly-bonus', key: w.week, p: { week: w.week, seed } } });
     return { ok: true, cards };
   },
   claimCommunityGoal: (weekId, credits, packTier) => {
@@ -1076,7 +1083,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (s === st) return { credits: 0, cards: [] };
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(st, s, 'reward', { src: 'community-goal', weekId, credits, packTier: packTier ?? '' });
+    mirrorUltimateChange(st, s, 'reward', { src: 'community-goal', weekId, credits, packTier: packTier ?? '',
+      ...(pack ? { claim: { src: 'community', key: weekId, p: { weekId, packTier: pack.id, seed: s.profile.packSeedCounter } } } : {}) });
     return { credits, cards };
   },
   marketListCard: (ownedId) =>
@@ -1230,7 +1238,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (reward.title) s = _mergeTitles(s, [passTitleSlug(pass.seasonId)]).state;
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(st, s, 'reward', { src: 'pass', level, track });
+    mirrorUltimateChange(st, s, 'reward', { src: 'pass', level, track, claim: { src: 'pass', key: `${pass.seasonId}:${track}:${level}`, p: { season: pass.seasonId, track, level, seed: s.profile.packSeedCounter } } });
     return { ok: true, reward, grantedCard, packCards };
   },
   claimLegacyCard: (cardKey) => {
@@ -1244,7 +1252,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _grantPassXp(s, 'objective', dateKey(new Date()));
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(prev, s, 'reward', { src: 'legacy', cardKey });
+    mirrorUltimateChange(prev, s, 'reward', { src: 'legacy', cardKey, claim: { src: 'legacy', key: cardKey, p: {} } });
     return { ok: true, already: false, card };
   },
   grantEventCard: (eventId, cardKey) => {
