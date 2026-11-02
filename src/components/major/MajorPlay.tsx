@@ -20,6 +20,7 @@ import { MajorResultView } from './MajorResultView';
 import { CampaignInvite } from './MajorShareInvite';
 import { MajorCrest } from './MajorCrest';
 import type { MajorKey } from './majorStrings';
+import { MajorPaywall } from './MajorPaywall';
 
 const D = data as unknown as MajorData;
 const STORE = 'rtm-major-sg-campaign-v1';
@@ -39,7 +40,8 @@ const phaseLabel = (p: PendingSeries['phase']) => (p === 4 ? 'Playoffs' : `Stage
 const roundLabel = (label: string, t: T) =>
   label.startsWith('QF') ? t('qf') : label.startsWith('SF') ? t('sf') : label === 'F' ? t('final') : label;
 
-export function MajorPlay({ t }: { t: T }) {
+/** `lockPhase(phase)`: true = a série dessa fase está travada (flag do paywall, state/paywallGate.ts) */
+export function MajorPlay({ t, lockPhase }: { t: T; lockPhase?: (phase: number) => boolean }) {
   const teams = useMemo(() => new Map(D.teams.map((x) => [x.id, x])), []);
   const [camp, setCamp] = useState<MajorCampaign | null>(loadCampaign);
   const [teamId, setTeamId] = useState(camp?.teamId ?? 'furia');
@@ -60,7 +62,8 @@ export function MajorPlay({ t }: { t: T }) {
   const name = (id: string) => teams.get(id)?.name ?? id;
 
   // ── a Sala (mesmo root .rtp da Série do Dia: sem ele, as vars --rtp-* somem)
-  if (camp && view?.next && setup) {
+  const nextLocked = !!(view?.next && lockPhase?.(view.next.phase));
+  if (camp && view?.next && setup && !nextLocked) {
     const next = view.next;
     const onComplete = (outcomes: MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]) => {
       const c = recordSeries(D, camp, next, outcomes, liveMaps);
@@ -152,7 +155,8 @@ export function MajorPlay({ t }: { t: T }) {
         )}
       </Panel>
 
-      {view?.next && (
+      {view?.next && nextLocked && <MajorPaywall src="major-sg-gate" />}
+      {view?.next && !nextLocked && (
         <Panel title={t('nextSeries')} accent="blue">
           <p className="msg-next">
             <Tag tone="accent">{phaseLabel(view.next.phase)} · {roundLabel(view.next.label, t)} · {t('bo')}{view.next.bestOf}</Tag>

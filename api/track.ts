@@ -54,6 +54,7 @@ const ALLOWED_TYPES = new Set([
   // tem ~2.1k sessões/28d, signup_start menos de 50). Agora o clique é sempre
   // aceito e mostra o motivo; este evento mede QUAL motivo trava mais gente.
   'checkout_blocked', // {src, reason} — clicou em pagar com o cadastro incompleto
+  'pix_confirmed',    // {src, secondsOpen, where} — o polling viu a conta paga com o QR na tela
 ]);
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();

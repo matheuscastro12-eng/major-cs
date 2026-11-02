@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, Crosshair, Gift, Globe, Play, Star, Swords, Target, Trophy } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutBlocked, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
+import { track } from '../state/track'; // pix_confirmed (linha própria: evita conflito com o PR #181)
 import {
   MAJOR_FAVORITES, MAJOR_SG_MILESTONES, landingDoors, landingHero, landingMajorCta, landingModes, majorPhase, milestonesReached,
   type LandingDoor, type LandingDoorId, type LandingHero, type LandingMajorCta, type LandingModeId, type MajorPhase,
@@ -523,8 +524,10 @@ function FinalCta({ hero, cta, onMajor, onAccount, onPlay }: { hero: LandingHero
 // módulo). Honesto e descartável — sem timer fake, sem segunda modal.
 const nudgeShownThisSession = new Set<string>();
 
-export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup', pixFirst = false, payingAccount = null, playerNick = '' }: {
+export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMode = 'signup', pixFirst = false, payingAccount = null, playerNick = '' }: {
   onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login';
+  /** o polling viu o Pix pago: quem abriu mostra o aviso "pagamento confirmado" */
+  onPixPaid?: () => void;
   /** Checkout aberto por cima da trava do Road to Pro: o QR Pix é o passo
    *  seguinte automático e, com ele na tela, o formulário sai do caminho (o QR
    *  e a troca pro cartão cabem sem rolar no celular). O cartão continua. */
@@ -592,7 +595,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     trackPaywallView('pix-check-manual'); // funil: usou o "verificar agora" (src próprio)
     try {
       const me = await fetchMe();
-      if (me?.paid) { pixConfirmed.current = true; setPix(null); onPlay(); return; }
+      if (me?.paid) { notePixPaid('modal-check'); setPix(null); onPlay(); return; }
     } catch { /* ignora: a tela segue esperando o polling automático */ }
     setCheckingNow(false);
   };
@@ -611,6 +614,13 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   // QR chegou a abrir e o pagamento não foi confirmado pelo polling.
   const pixOpenedAt = useRef(0);
   const pixConfirmed = useRef(false);
+  // Pix pago visto na tela: funil (pix_confirmed) + aviso "pagamento confirmado" de quem abriu
+  const notePixPaid = (where: string) => {
+    if (pixConfirmed.current) return;
+    pixConfirmed.current = true;
+    track('pix_confirmed', { where, secondsOpen: pixOpenedAt.current ? Math.round((Date.now() - pixOpenedAt.current) / 1000) : 0 });
+    onPixPaid?.();
+  };
   // trocou pro cartão em vez de desistir (ver switchToCard mais abaixo) — não
   // é abandono, é o mesmo usuário concluindo por outro método.
   const pixSwitchedMethod = useRef(false);
@@ -630,7 +640,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     const CAP_MS = 15 * 60_000;
     setPollPaused(false);
     const check = async () => {
-      try { const me = await fetchMe(); if (alive && me?.paid) { pixConfirmed.current = true; setPix(null); onPlay(); } } catch { /* ignora */ }
+      try { const me = await fetchMe(); if (alive && me?.paid) { notePixPaid('modal-poll'); setPix(null); onPlay(); } } catch { /* ignora */ }
     };
     const t = setInterval(() => {
       if (Date.now() - startedAt > CAP_MS) { clearInterval(t); if (alive) setPollPaused(true); return; } // Pix expirou: a tela oferece o "verificar agora"
@@ -640,6 +650,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     const onVis = () => { if (alive && !document.hidden) void check(); }; // voltou à aba: re-checa já
     document.addEventListener('visibilitychange', onVis);
     return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- notePixPaid só lê refs e o callback do pai
   }, [pix, onPlay]);
   // Input/label nativos puxam os overrides em-* via body.career-dash (Fase 0/1),
   // então não precisamos mais de inline style nos campos.

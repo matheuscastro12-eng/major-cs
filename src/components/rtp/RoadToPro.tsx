@@ -19,6 +19,7 @@ import { acceptOffer, negotiateOffer, declineOffers } from '../../engine/rtp/tra
 import { RtpLegacy } from './RtpLegacy';
 import { RtpDailySeries } from './RtpDailySeries';
 import { RtpDemoGate, DEMO_WEEKS } from './RtpDemoGate';
+import { usePaywallGate, rtpDemoLocked, gateTag } from '../../state/paywallGate';
 import { RtpDemoCliffBanner } from './RtpDemoCliff';
 import { ensureDemoCliff, deliverDemoCliff } from '../../engine/rtp/demoCliff';
 import { RtpEraClose } from './RtpEraClose';
@@ -86,6 +87,7 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   const [playing, setPlaying] = useState(false);   // hub vs partida (liga)
   const [playingMajor, setPlayingMajor] = useState(false);   // partida do Major
   const [dailyOpen, setDailyOpen] = useState(false);         // SÉRIE DO DIA (desafio global)
+  const gateOn = usePaywallGate(); // flag do paywall (padrão OFF)
   const [notice, setNotice] = useState<RtpNotice | null>(null);
   // Resultado do SIMULAR (modal com placar + stats — não só uma notificação).
   const [simResult, setSimResult] = useState<{ result: ProMatchResult; consequence: MatchConsequence } | null>(null);
@@ -206,6 +208,12 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   }
   // DEMO: a trava fecha quando a degustação acaba (ou quando o convidado
   // tenta abrir a Série do Dia — exclusiva da vitalícia).
+  // FLAG DO PAYWALL (state/paywallGate.ts, padrão OFF): com ela ligada a demo
+  // fecha logo depois da 2ª partida — a trava aparece no fim dessa série, com o
+  // upsell (src 'rtp-demo-match2'). Desligada, vale a regra antiga das semanas.
+  if (demo && rtpDemoLocked(gateOn, demo, save.history?.matchesPlayed ?? 0)) {
+    return <RtpDemoGate save={save} src="rtp-demo-match2" gateTag={gateTag(gateOn)} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(save.player.nick); }} onExit={() => { setDailyOpen(false); onExit(); }} />;
+  }
   if (demo && (save.world.week > DEMO_WEEKS || dailyOpen)) {
     return <RtpDemoGate save={save} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(save.player.nick); }} onExit={() => { setDailyOpen(false); onExit(); }} onBack={save.world.week > DEMO_WEEKS ? undefined : () => setDailyOpen(false)} />;
   }
