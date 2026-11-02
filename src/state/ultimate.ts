@@ -15,7 +15,7 @@ import { registerSaveRetry, reportLocalSave } from './saveHealth';
 // nem lança (tudo fire-and-forget dentro do próprio módulo).
 // Fase 3b (o FLIP): pack de conta paga rola NO SERVIDOR (openPackOnServer) —
 // roll autoritativo com op_id crash-safe; fallback local se a rede falhar.
-import { bootUltimateShadow, markFlipDrift, mirrorUltimateChange, openPackOnServer } from './ultimateShadow';
+import { bootUltimateShadow, markFlipDrift, mirrorUltimateChange, objectiveClaimOnServer, openPackOnServer, sbcSubmitOnServer, ultOnline, type ServerGrant } from './ultimateShadow';
 import { scheduledPromo, scheduledSbcById } from './liveops';
 import { mktLegacySeenTags, mktSeenHas } from './ultimateMarket'; // [O0-37] "já vi" legado (localStorage por aparelho)
 import type { PaidVoucher } from './account'; // [O0-46]
@@ -331,10 +331,13 @@ interface UltimateStore {
   // [URG-5] meta comunitária: coins + pacote (o servidor já marcou o claim — padrão coinsClaim)
   claimCommunityGoal: (weekId: string, credits: number, packTier: 'gold' | null) => { credits: number; cards: UltCard[] };
   // SBC + season (P5)
-  submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
+  submitSbc: (sbcId: string, ownedIds: string[], server?: ServerGrant) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
+  // [UT-REW] conta logada: a SBC roda NO SERVIDOR (prêmio vale na ranqueada)
+  submitSbcOnline: (sbcId: string, ownedIds: string[]) => Promise<{ ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard }>;
   tickSeason: () => SeasonRollover;
   // objetivos/missões (profundidade)
-  claimObjective: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
+  claimObjective: (id: string, server?: ServerGrant) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
+  claimObjectiveOnline: (id: string) => Promise<{ ok: boolean; reason?: string; reward?: { credits?: number; card?: string }; grantedCard?: UltCard }>;
   // evolução de cartas
   evolveCard: (ownedId: string) => { ok: boolean; cost?: number; newBoost?: number; reason?: string };
   // estilos de química (iter33): compra+aplicação numa carta (substitui o anterior)
@@ -474,7 +477,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     //   - Pacote da Temporada [URG-1] (o carimbo `ed` é local; o servidor não o conhece);
     //   - qualquer falha de rede/rota (o jogo NUNCA bloqueia esperando rede).
     const localRoll = () => ({ ...get().openPack(packId), source: 'local' as const });
-    if (!cloudEnabled() || packId === PROMO_PACK.id || isSeasonPack(packId)) return localRoll();
+    if (!ultOnline() || packId === PROMO_PACK.id || isSeasonPack(packId)) return localRoll();
     const pack = packById(packId);
     if (!pack) return { ok: false, cards: [], reason: 'unknown_pack' as const, source: 'local' as const };
     if (get().state.profile.credits < pack.cost) return { ok: false, cards: [], reason: 'insufficient' as const, source: 'local' as const };
@@ -485,6 +488,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     let r: Awaited<ReturnType<typeof openPackOnServer>>;
     try { r = await openPackOnServer(pack.id); } finally { _packOpenInFlight = false; }
     if (!r) return localRoll(); // fallback: roll local (espelhado como sempre) — drift já anotado
+    if ('offline' in r) return { ok: false, cards: [], reason: 'unavailable' as const, source: 'server' as const };
     if ('unavailable' in r) return { ok: false, cards: [], reason: 'unavailable' as const, source: 'server' as const };
     const prev = get().state;
     // O roll do SERVIDOR substitui o local INTEIRO: as cópias entram com o
@@ -733,7 +737,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     mirrorUltimateChange(prev, s, 'grant', { src: 'starter' });
     return cards;
   },
-  submitSbc: (sbcId, ownedIds) => {
+  submitSbc: (sbcId, ownedIds, server) => {
     // 'lo-…' = SBC agendada do live-ops: resolve a def do snapshot (mesma forma
     // de SbcDef; a recompensa flui pelo MESMO caminho, inclusive o espelho-sombra)
     const def = sbcById(sbcId) ?? scheduledSbcById(sbcId);
@@ -751,19 +755,46 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (def.reward.credits) s = _addCredits(s, def.reward.credits);
     let grantedCard: UltCard | undefined;
     if (def.reward.card) {
-      const pool = ultimateCatalog().filter((c) => c.rarity === def.reward.card);
-      if (pool.length) {
-        grantedCard = pool[Math.floor(Math.random() * pool.length)];
-        const id = `sbc_${Math.random().toString(36).slice(2, 9)}`;
-        s = _grantCard(s, grantedCard.key, 'sbc', { id });
+      const srvCard = server ? ultimateIndex().get(server.cardKey) : undefined;
+      if (server && srvCard) {
+        grantedCard = srvCard;
+        s = _grantCard(s, server.cardKey, 'sbc', { id: server.cardId });
+      } else {
+        const pool = ultimateCatalog().filter((c) => c.rarity === def.reward.card);
+        if (pool.length) {
+          grantedCard = pool[Math.floor(Math.random() * pool.length)];
+          const id = `sbc_${Math.random().toString(36).slice(2, 9)}`;
+          s = _grantCard(s, grantedCard.key, 'sbc', { id });
+        }
       }
     }
     s = { ...s, profile: { ...s.profile, sbcDone: [...s.profile.sbcDone, def.id] } };
     s = _grantPassXp(s, 'sbc', dateKey(new Date()));
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(st, s, 'sbc', { sbcId: def.id });
+    // servidor já gravou a tx (insumos + prêmio): espelhar duplicaria a saída
+    if (!server) mirrorUltimateChange(st, s, 'sbc', { sbcId: def.id });
     return { ok: true, reward: def.reward, grantedCard };
+  },
+  submitSbcOnline: async (sbcId, ownedIds) => {
+    if (!ultOnline()) return get().submitSbc(sbcId, ownedIds);
+    const def = sbcById(sbcId);
+    // SBC agendada do live-ops ainda não existe no servidor: caminho antigo
+    if (!def) return get().submitSbc(sbcId, ownedIds);
+    const st = get().state;
+    const idx = ultimateIndex();
+    const owned = ownedIds.map((id) => st.inventory.find((o) => o.id === id)).filter((o): o is NonNullable<typeof o> => !!o);
+    if (owned.length !== ownedIds.length || new Set(ownedIds).size !== ownedIds.length) return { ok: false, reason: 'missing' };
+    if (owned.some((o) => o.locked === 'squad')) return { ok: false, reason: 'locked' };
+    const cards = owned.map((o) => idx.get(o.cardKey)).filter((c): c is UltCard => !!c);
+    if (!checkSbc(cards, def.req).ok) return { ok: false, reason: 'requirements' };
+    const r = await sbcSubmitOnServer(def.id, ownedIds);
+    if (r.kind === 'ok') return get().submitSbc(sbcId, ownedIds, r.card ?? undefined);
+    // insumos que o servidor não conhece (prêmio antigo só do aparelho): o
+    // prêmio seria só local de qualquer jeito — segue o caminho antigo.
+    if (r.kind === 'not_owner') return get().submitSbc(sbcId, ownedIds);
+    // rede/servidor fora: NADA muda (não queima carta nem cria prêmio só local)
+    return { ok: false, reason: 'offline' };
   },
   tickSeason: () => {
     // [U09] direitos preservados: antes do rollover apagar o passe, resgata TUDO o que
@@ -783,7 +814,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     }
     return r.result;
   },
-  claimObjective: (id) => {
+  claimObjective: (id, server) => {
     const def = objectiveById(id);
     if (!def) return { ok: false };
     const st = get().state;
@@ -792,11 +823,17 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (def.reward.credits) s = _addCredits(s, def.reward.credits);
     let grantedCard: UltCard | undefined;
     if (def.reward.card) {
-      const pool = ultimateCatalog().filter((c) => c.rarity === def.reward.card);
-      if (pool.length) {
-        grantedCard = pool[Math.floor(Math.random() * pool.length)];
-        const gid = `obj_${Math.random().toString(36).slice(2, 9)}`;
-        s = _grantCard(s, grantedCard.key, 'reward', { id: gid });
+      const srvCard = server ? ultimateIndex().get(server.cardKey) : undefined;
+      if (server && srvCard) {
+        grantedCard = srvCard;
+        s = _grantCard(s, server.cardKey, 'reward', { id: server.cardId });
+      } else {
+        const pool = ultimateCatalog().filter((c) => c.rarity === def.reward.card);
+        if (pool.length) {
+          grantedCard = pool[Math.floor(Math.random() * pool.length)];
+          const gid = `obj_${Math.random().toString(36).slice(2, 9)}`;
+          s = _grantCard(s, grantedCard.key, 'reward', { id: gid });
+        }
       }
     }
     s = _grantPassXp(s, 'objective', dateKey(new Date()));
@@ -804,6 +841,16 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
     mirrorUltimateChange(st, s, 'reward', { src: 'objective', id });
     return { ok: true, reward: def.reward, grantedCard };
+  },
+  claimObjectiveOnline: async (id) => {
+    const def = objectiveById(id);
+    if (!def || !def.reward.card || !ultOnline()) return get().claimObjective(id);
+    if (get().state.profile.objectivesClaimed.includes(id)) return { ok: false };
+    const r = await objectiveClaimOnServer(id);
+    if (r.kind === 'ok' && r.card) return get().claimObjective(id, r.card);
+    if (r.kind === 'offline') return { ok: false, reason: 'offline' };
+    // métrica que o servidor ainda não confere (ex.: sequência): caminho antigo
+    return get().claimObjective(id);
   },
   evolveCard: (ownedId) => {
     const prev = get().state;

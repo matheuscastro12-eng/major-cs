@@ -65,6 +65,8 @@ import {
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { DRAFT_ENTRY, DRAFT_OPTIONS, DRAFT_REWARDS, DRAFT_ROLES, DRAFT_TARGET, draftOptions, draftOppTarget } from '../../engine/ultimate/draft';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
+import { bestOnlineSwap } from '../../engine/ultimate/onlineSwap';
+import { fetchServerCardIds } from '../../state/ultimateShadow';
 import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, passSeasonId, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
 import { claimableLevels, ensurePass, levelForXp, passLevels, passTitleLabel, passTitleSlug, totalXpForLevel, xpForLevel, PASS_MAX_LEVEL, type PassReward, type PassTrack } from '../../engine/ultimate/seasonPass';
 import { cardMatchPlayer, estimateCardValue, type UltCard } from '../../engine/ultimate/cards';
@@ -460,7 +462,7 @@ interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: numbe
 
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade, tabRequest }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void; tabRequest?: { tab: string; n: number } | null }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, claimCommunityGoal, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection, grantEventCard } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbcOnline, tickSeason, claimObjectiveOnline, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, claimCommunityGoal, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection, grantEventCard } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>((tabRequest?.tab as 'hub' | undefined) ?? TAB_FROM_URL ?? 'hub');
   // shell: o trilho pede uma aba (Online → Ranqueada; Ultimate → Hub)
@@ -940,6 +942,20 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // ── squad building ──
   const ownedById = useMemo(() => new Map(state.inventory.map((o) => [o.id, o] as const)), [state.inventory]);
   const squad = activeSquad(state);
+  // [UT-REW] ranqueada recusou cartas só do aparelho: troca pelas melhores que o servidor conhece
+  const swapToOnline = async (rejectedIds: string[]): Promise<number> => {
+    const ids = await fetchServerCardIds();
+    if (!ids || !squad) return 0;
+    const moves = bestOnlineSwap(squad.slots, state.inventory, ids, rejectedIds, (k) => index.get(k));
+    for (const m of moves) placeInSquad(m.slot, m.ownedId);
+    if (moves.length) trackUltFunnel('squad_adjusted');
+    return moves.length === rejectedIds.length ? moves.length : 0;
+  };
+  const describeOwned = (ownedId: string): string => {
+    const o = state.inventory.find((x) => x.id === ownedId);
+    const c = o ? index.get(o.cardKey) : undefined;
+    return c ? `${c.nick} (${c.ovr})` : ownedId;
+  };
   const form = formationById(squad?.formation ?? 'standard');
   const slotCard = (slotIdx: number): { owned: OwnedCard; card: UltCard } | null => {
     const entry = squad?.slots.find((s) => s.slot === slotIdx);
@@ -1229,8 +1245,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     if (aD !== bD) return aD ? 1 : -1;
     return b.pct - a.pct;
   });
-  const claimObj = (o: (typeof objectives)[number]) => {
-    const r = claimObjective(o.def.id);
+  const claimObj = async (o: (typeof objectives)[number]) => {
+    const r = await claimObjectiveOnline(o.def.id);
+    if (r.reason === 'offline') { flash(ct('Sem conexão com o servidor. Tente de novo em instantes.')); return; }
     if (r.ok) {
       if (r.grantedCard) setReveal([r.grantedCard]);
       flash(`✅ ${ct('Objetivo concluído')}: ${o.def.name}${r.reward?.credits ? ` · +${fmt(r.reward.credits)} 🪙` : ''}`, 2400);
@@ -3637,7 +3654,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             {rankedMode === 'rivals' ? (
               // Rivals = PvP online de verdade: a fila pareia com outro manager por RP.
               <div style={{ marginTop: 12 }}>
-                {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} onServerResult={finishServerPvp} eventId={rankedEvent} onQueueEmpty={() => flash(`${ct('Fila vazia por enquanto.')} ${ct('Alternativa: jogue um Amistoso vs IA neste formato (não vale o evento).')}`, 3600)} />
+                {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="ranked" onSwapToOnline={swapToOnline} describeCard={describeOwned} nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} onServerResult={finishServerPvp} eventId={rankedEvent} onQueueEmpty={() => flash(`${ct('Fila vazia por enquanto.')} ${ct('Alternativa: jogue um Amistoso vs IA neste formato (não vale o evento).')}`, 3600)} />
                 <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
                   {ct('Você enfrenta o squad de outro manager de verdade. Vitória sobe RP, pode promover de divisão e conta no ranking global. Derrota tira RP.')}
                 </div>
@@ -4263,7 +4280,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         const chk = checkSbc(sel, sbcDef.req);
         const eligible = state.inventory.filter((o) => o.locked !== 'squad').map((o) => ({ o, card: index.get(o.cardKey) })).filter((x): x is { o: OwnedCard; card: UltCard } => !!x.card).sort((a, b) => b.card.ovr - a.card.ovr);
         const toggle = (id: string) => setSbcSel((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : (cur.length < sbcDef.req.count ? [...cur, id] : cur));
-        const submit = () => { const r = submitSbc(sbcDef.id, sbcSel); if (r.ok) { setSbcDef(null); setSbcSel([]); if (r.grantedCard) setReveal([r.grantedCard]); flash(`✅ ${ct('Desafio concluído!')}${r.reward?.credits ? ` +${fmt(r.reward.credits)} 🪙` : ''}`); } else { flash(ct('Requisitos não cumpridos.')); } };
+        const submit = async () => { const r = await submitSbcOnline(sbcDef.id, sbcSel); if (r.reason === 'offline') { flash(ct('Sem conexão com o servidor. Nenhuma carta foi gasta; tente de novo.')); return; } if (r.ok) { setSbcDef(null); setSbcSel([]); if (r.grantedCard) setReveal([r.grantedCard]); flash(`✅ ${ct('Desafio concluído!')}${r.reward?.credits ? ` +${fmt(r.reward.credits)} 🪙` : ''}`); } else { flash(ct('Requisitos não cumpridos.')); } };
         return (
           <Modal open onClose={() => { setSbcDef(null); setSbcSel([]); }} title={sbcDef.name} size="lg"
             footer={<Button variant="primary" disabled={!chk.ok} onClick={submit}>{ct('Enviar')} ({sbcSel.length}/{sbcDef.req.count})</Button>}>

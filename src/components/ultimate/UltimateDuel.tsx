@@ -11,6 +11,7 @@ import { startResultError, staleRoomError } from '../../state/duelStart';
 import { ct } from '../../state/career-i18n';
 import { Copy, Globe, LogOut, Plus, RefreshCw, Swords, Users, Zap } from 'lucide-react';
 import { UltimatePvpLive } from './UltimatePvpLive';
+import { healRankedCards } from '../../state/ultimateShadow';
 import type { MatchView } from '../../engine/ultimate/pvpMatch';
 
 export interface DuelPlayArgs {
@@ -39,7 +40,10 @@ function watchedMatch(key: string): boolean {
   try { return (JSON.parse(localStorage.getItem(LEDGER_KEY) ?? '[]') as string[]).includes(key); } catch { return false; }
 }
 
-export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, variant = 'private', initialJoinCode, eventId = null, onQueueEmpty }: {
+export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, variant = 'private', initialJoinCode, eventId = null, onQueueEmpty, onSwapToOnline, describeCard }: {
+  // [UT-REW] cartas recusadas na ranqueada: troca pelas melhores do servidor (devolve quantas trocou)
+  onSwapToOnline?: (rejected: string[]) => Promise<number>;
+  describeCard?: (ownedId: string) => string;
   nick: string;
   // [U11] convite por link (?duelo=CODE): entra na sala uma vez ao montar
   initialJoinCode?: string | null;
@@ -65,6 +69,20 @@ export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, varia
   const [state, setState] = useState<LobbyState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [rejected, setRejected] = useState<string[]>([]); // [UT-REW] cópias recusadas pelo servidor
+  const healTried = useRef('');
+  const [swapping, setSwapping] = useState(false);
+  const rejectedUi = rejected.length > 0 && (
+    <div className="ut-duel__err" style={{ marginTop: 6 }}>
+      <div>{ct('Cartas só do aparelho')}: {rejected.map((id) => describeCard?.(id) ?? id).join(', ')}</div>
+      {onSwapToOnline && (
+        <button className="ut-btn" style={{ marginTop: 6, padding: '5px 13px', fontSize: '0.78rem' }} disabled={swapping}
+          onClick={() => { setSwapping(true); void onSwapToOnline(rejected).then((n) => { if (n > 0) { setRejected([]); setError(''); } else setError(ct('Não há cartas online suficientes pra trocar.')); }).finally(() => setSwapping(false)); }}>
+          {ct('Trocar pelas melhores online')}
+        </button>
+      )}
+    </div>
+  );
   // fila ranqueada: null = fora; senão desde quando + telemetria do servidor
   const [queue, setQueue] = useState<{ since: number; waiting?: number; window?: number } | null>(null);
   const [serverEnded, setServerEnded] = useState(''); // [F2] code:run_seed da partida no servidor já encerrada
@@ -203,6 +221,20 @@ export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, varia
     lobbyApi({ action: 'pick', code, nick, picks: squad.cards.map((c) => c.pid), squad, cardIds: squad.cardIds, formationId: squad.formationId, done: true })
       .then((r) => {
         if (r.ok) return;
+        // [UT-REW] cura: o servidor tenta justificar as cartas recusadas pelo
+        // ledger (SBC antiga / migração que nunca rodou) e o pick re-tenta 1×.
+        if (r.squadError && r.code === 'not_owner' && Array.isArray(r.cardIds) && r.cardIds.length && healTried.current !== key) {
+          healTried.current = key;
+          const ids = r.cardIds;
+          void healRankedCards(ids).then((healed) => {
+            const left = ids.filter((id) => !healed.includes(id));
+            if (!left.length) { rearm(); return; }
+            setRejected(left);
+            setError(r.error ?? ct('Não foi possível confirmar seu squad.'));
+          });
+          return;
+        }
+        if (r.squadError && r.code === 'not_owner' && Array.isArray(r.cardIds)) setRejected(r.cardIds);
         if (r.squadError || r.needAccount) { setError(r.error ?? ct('Não foi possível confirmar seu squad.')); return; }
         rearm();
       })
@@ -319,7 +351,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, varia
           {isHost && !liveArgs.ranked && serverEnded === `${code}:${liveArgs.runSeed}` && (
             <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', padding: '11px' }} disabled={busy} onClick={() => void rematch()}><Swords size={15} /> {ct('REVANCHE')}</button>
           )}
-          {error && <div className="ut-duel__err">{error}</div>}
+          {error && <div className="ut-duel__err">{error}</div>}{rejectedUi}
         </div>
       );
     }
@@ -358,7 +390,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, varia
           {players.length < 2 && <div className="ut-duel__pl empty"><Users size={15} /> <span style={{ color: 'var(--ut-muted)' }}>{ct('vaga aberta — compartilhe o código')}</span></div>}
         </div>
 
-        {error && <div className="ut-duel__err">{error}</div>}
+        {error && <div className="ut-duel__err">{error}</div>}{rejectedUi}
 
         {status === 'waiting' && isHost && (
           <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', padding: '12px' }} disabled={busy || players.length < 2} onClick={() => void startDuel()}>
@@ -448,7 +480,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, onServerResult, varia
         </>
       )}
 
-      {error && <div className="ut-duel__err">{error}</div>}
+      {error && <div className="ut-duel__err">{error}</div>}{rejectedUi}
     </div>
   );
 }

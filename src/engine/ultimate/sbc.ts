@@ -4,7 +4,7 @@
 
 import type { Role } from '../../types';
 import type { UltCard } from './cards';
-import { rarityInfo, type UltRarity } from './rarities';
+import { rarityInfo, type UltRarity } from './rarities.js';
 
 export interface SbcReq {
   count: number;         // nº exato de cartas a submeter
