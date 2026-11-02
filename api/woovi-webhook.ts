@@ -7,6 +7,7 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { createVerify } from 'node:crypto';
 import { expectedOrder, logSettleAttention, settleOrder } from '../server/order-settle.js';
+import { productOfTier, recordPurchase } from '../server/purchase-event.js';
 import {
   accountReference,
   assignFounderNumbers,
@@ -74,6 +75,8 @@ async function processPaid(sql: NeonQueryFunction<false, false>, body: Record<st
     const orphan = pack ? { email: wooviPayerEmail(body), tier, coins: pack.coins, cents: pack.cents } : undefined;
     const r = await settleOrder(sql, corr, paid, 'pix', orphan);
     logSettleAttention('woovi', corr, paid, r);
+    // funil: só a baixa nova ('already' = webhook repetido do mesmo pedido)
+    if (r.status === 'paid') await recordPurchase(sql, { provider: 'woovi', product: productOfTier(tier), tier, cents: paid, corr });
     return { handled: r.status !== 'not_found', body: { received: true, processed: r.status === 'paid' || r.status === 'already', coins: true, status: r.status } };
   }
 
@@ -103,6 +106,8 @@ async function processPaid(sql: NeonQueryFunction<false, false>, body: Record<st
     sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
   ]);
   await assignFounderNumbers(sql); // número de Fundador na ordem do pagamento, uma vez só
+  // funil: o webhook repetido do mesmo Pix já parou na chave de idempotência
+  await recordPurchase(sql, { provider: 'woovi', product: 'vitalicia', cents: paid, corr });
 
   return { handled: true, body: { received: true, processed: true } };
 }
