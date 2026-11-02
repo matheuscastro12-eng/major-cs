@@ -15,7 +15,7 @@ import { DEFAULT_PRICE_CENTS, priceLabel } from '../state/price';
 export const SITE_URL = 'https://roadtomajor.com.br';
 export const SITE_NAME = 'Road to Major';
 /** imagem padrão; se o index.html já trouxer og:image absoluto, vale o dele (render.ts) */
-export const OG_IMAGE = `${SITE_URL}/og.png`;
+export const OG_IMAGE = `${SITE_URL}/og/roadtomajor-share.jpg`; // capa com gameplay real (public/og/); o /og.png antigo fica só por compatibilidade
 export const X_HANDLE = '@castroomath';
 
 /** Item de lista: título opcional (em negrito, com link se houver página), texto e metadado. */
