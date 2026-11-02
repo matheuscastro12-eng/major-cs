@@ -491,9 +491,18 @@ export function Home(props: Props) {
                 {onAccount && <button type="button" className="home-link" onClick={onAccount}>{ct('Já tenho conta · entrar')}</button>}
               </div>
             ) : !account ? (
+              // funil: maior audiência da Home (1236 sids/28d viram este painel,
+              // src 'acct-chip-guest') e a PIOR conversão do funil — 1 signup_start
+              // em 28d (~0,08%), muito abaixo de qualquer outro CTA de venda. O
+              // texto prometia "salvar na nuvem" pra QUALQUER conta, mas o cloud
+              // sync é só da vitalícia (App.tsx: cloudEnabled = !!account?.paid) —
+              // quem criasse a conta aqui sem concluir o pagamento não teria o que
+              // o texto prometeu. Copy agora liga a promessa ao que o botão de
+              // fato vende (mesmo padrão já usado no Major da Semana), sem mudar
+              // preço nem fluxo. Mede pelo mesmo src que já existia (sem evento novo).
               <div className="home-acct">
-                <p>{ct('Você está jogando sem conta. Crie a sua pra salvar na nuvem e jogar no PC e no celular.')}</p>
-                <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · {priceLabel()}</Button>
+                <p>{ct('Você está jogando sem conta: o progresso fica só neste navegador. A conta vitalícia salva tudo na nuvem e libera o jogo no PC e no celular.')}</p>
+                <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta vitalícia')} · {priceLabel()}</Button>
                 <small className="ds-dim">{ct('pagamento único · sem mensalidade')}</small>
                 <FounderCounter />
                 {onAccount && <button type="button" className="home-link" onClick={onAccount}>{ct('Já tenho conta · entrar')}</button>}
