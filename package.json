@@ -11,7 +11,10 @@
     "test": "tsx --test server/*.test.ts",
     "test:sim": "tsx --test scripts/test-*.mts",
     "preview": "vite preview",
-    "gen:ult-catalog": "tsx scripts/gen-ult-catalog.mts"
+    "gen:ult-catalog": "tsx scripts/gen-ult-catalog.mts",
+    "stats:major-titulo": "tsx scripts/stats/major-titulo.mts",
+    "stats:prob-jogo": "tsx scripts/stats/prob-jogo.mts",
+    "stats:runs": "tsx scripts/stats/runs-agregado.mts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
