@@ -54,6 +54,9 @@ const S = {
   sharedBanner: { pt: 'Você está vendo o palpite de outra pessoa.', en: 'You are viewing someone else’s picks.', es: 'Estás viendo el pronóstico de otra persona.' },
   useShared: { pt: 'Usar como meu', en: 'Use as mine', es: 'Usar como mío' },
   backToMine: { pt: 'Voltar ao meu', en: 'Back to mine', es: 'Volver al mío' },
+  droppedTitle: { pt: 'A lista oficial saiu: complete os times que mudaram', en: 'The official list is out: fill in the teams that changed', es: 'Salió la lista oficial: completa los equipos que cambiaron' },
+  droppedBody: { pt: 'Seu palpite tinha times que não estão no Major ({n}). Eles saíram do palpite; escolha outros nos lugares vazios.', en: 'Your picks had teams that are not in the Major ({n}). They were removed; choose others for the empty spots.', es: 'Tu pronóstico tenía equipos que no están en el Major ({n}). Se quitaron; elige otros en los lugares vacíos.' },
+  droppedOk: { pt: 'Entendi', en: 'Got it', es: 'Entendido' },
   badLink: { pt: 'Esse link é de outra versão da lista de times e não pôde ser aberto.', en: 'This link is from another version of the team list and could not be opened.', es: 'Este enlace es de otra versión de la lista de equipos y no se pudo abrir.' },
   // desafio entre amigos (MajorChallenge.tsx): {who} = apelido ou "Seu amigo", {champ} = time
   chKicker: { pt: 'Desafio', en: 'Challenge', es: 'Desafío' },
