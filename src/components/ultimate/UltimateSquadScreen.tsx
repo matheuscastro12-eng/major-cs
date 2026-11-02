@@ -83,6 +83,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
+import { UltimateStarterOffer } from './UltimateStarterOffer';
 import { setCheckoutSrc, trackPaywallView, trackShare, trackUltFunnel } from '../../state/track';
 import { markFirstValue } from '../../state/paywallPolicy';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, beginPassPix, beginPassCheckout, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
@@ -95,6 +96,7 @@ import { WlResultBanner } from './WlResultBanner'; // [O0-22]
 import { UtPanel, UtEmpty } from './UtPanel';
 import { CardArtCredit } from './CardArtCredit';
 import { FounderCounter } from '../FounderCounter';
+import { useFounders } from '../../state/founders';
 import {
   LayoutGrid, Layers, Shirt, FlaskConical, ArrowLeftRight, Package, Crosshair,
   Swords, ListOrdered, Coins, Trophy, Zap, CalendarDays, Lock,
@@ -519,6 +521,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // mostra o link estático do Woovi como fallback.
   const [coinModal, setCoinModal] = useState<{ pack: CoinPack; charge: CoinCharge | null; error?: boolean } | null>(null);
   const { account, ready: accountReady } = useAccount();
+  // funil: Fundadores esgotados (500/500, dado real) — usado pra não prometer
+  // "virar Fundador" na trava do Mercado (abaixo) quando o selo já acabou,
+  // mesma contradição ("Edição esgotada" + CTA "virar Fundador" na mesma
+  // tela) já corrigida no Home.tsx e no UpsellCard.
+  const founderStats = useFounders();
+  const founderSoldOut = !!founderStats && founderStats.founders >= founderStats.limit;
   // funil: convidado viu o aviso/CTA de conta vitalícia no topo do Ultimate
   // (única superfície de venda do modo convidado, aberto desde o guest mode)
   useEffect(() => { if (guest) trackPaywallView('ultimate-guest'); }, [guest]);
@@ -2929,6 +2937,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     baixo risco: aplica o mesmo padrão aqui — amostra pequena demais
                     (53 sessões) pra provar que isso sozinho resolve, mas alinha esta
                     trava ao resto do funil. */}
+                {/* funil: Fundadores esgotados (500/500) desde antes deste período —
+                    o FounderCounter bem acima já avisa "esgotada" honestamente, mas
+                    este botão seguia prometendo "virar Fundador", a mesma tela dizendo
+                    duas coisas opostas no momento da compra (contradição já corrigida
+                    no Home.tsx e no UpsellCard). Copy condicional ao estoque real. */}
                 {(guest ? onCreateAccount : onUpgrade) ? (
                   <button
                     type="button"
@@ -2936,7 +2949,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     style={{ padding: '9px 20px', fontSize: '0.82rem', marginTop: 2 }}
                     onClick={() => { setCheckoutSrc('mkt-lock'); (guest ? onCreateAccount : onUpgrade)?.(); }}
                   >
-                    {withPrice(ct('Virar Fundador · {preço} · destravar o Mercado'))}
+                    {withPrice(founderSoldOut ? ct('Virar conta vitalícia · {preço} · destravar o Mercado') : ct('Virar Fundador · {preço} · destravar o Mercado'))}
                   </button>
                 ) : (
                   <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
@@ -3160,6 +3173,14 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             {/* fase 3b: selinho discreto quando o último pack foi rolado no servidor */}
             {packFromCloud && <span style={{ marginLeft: 8, whiteSpace: 'nowrap', opacity: 0.85 }}>☁️ {ct('economia sincronizada')}</span>}
           </p>
+          {/* [U08] oferta inicial: atrás da flag VITE_FF_ULTIMATE_STARTER (OFF),
+              enabled=false e sem preço → não renderiza. Pedidos reais (orders) e
+              checkout entram junto com o tier no servidor. */}
+          <UltimateStarterOffer
+            orders={[]}
+            matchesPlayed={state.profile.w + state.profile.l}
+            onBuy={() => { /* checkout do tier 'starter-v1': pendente (servidor + preço) */ }}
+          />
           {/* coins com dinheiro real (Pix) — acelera, não substitui: os mesmos
               packs continuam compráveis só jogando */}
           <div className="ut-coinshop">

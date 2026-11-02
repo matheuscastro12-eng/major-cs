@@ -209,13 +209,21 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
             <FounderCounter style={{ display: 'inline-block', marginLeft: 4 }} />
           </span>
           {onCreateAccount && (
-            <button
-              type="button"
-              onClick={() => { setCheckoutSrc('wl-free'); onCreateAccount(); }}
-              style={{ flexShrink: 0, padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
-            >
-              {ct('Criar conta vitalícia')} · {priceLabel()}
-            </button>
+            // funil: amostra pequena (wl-free teve só 1 paywall_view/28d — tráfego
+            // raro demais pra concluir algo isolado aqui), então é ajuste de baixo
+            // risco por CONSISTÊNCIA: todo outro CTA de preço do jogo (Home, RtP,
+            // upsell-card) reforça "pagamento único" do lado do preço — este botão
+            // era o único sem essa reasseguração, só o preço cru.
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => { setCheckoutSrc('wl-free'); onCreateAccount(); }}
+                style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
+              >
+                {ct('Criar conta vitalícia')} · {priceLabel()}
+              </button>
+              <small className="ds-dim" style={{ fontSize: '10.5px' }}>{ct('pagamento único · sem mensalidade')}</small>
+            </div>
           )}
         </div>
       )}

@@ -13,6 +13,8 @@
 //   jogador chegando juntos (Pix + cartão em abas diferentes).
 import type { NeonQueryFunction } from '@neondatabase/serverless';
 
+import { COIN_TIERS, PASS_PRICE_CENTS, parsePassTier } from './payments.js';
+
 export type SettleSql = NeonQueryFunction<false, false>;
 export type OrderMethod = 'pix' | 'stripe';
 // already = webhook repetido (o pedido já tinha saído de pending)
@@ -28,6 +30,26 @@ export interface SettleResult { status: SettleStatus; email?: string; tier?: str
 export interface OrphanOrder { email: string; tier: string; coins: number; cents: number }
 
 const isPassTier = (tier: string) => /^pass-s\d+$/.test(tier);
+
+// Valor e coins ESPERADOS de um tier, pela tabela única do servidor (COIN_TIERS
+// e PASS_PRICE_CENTS). Pedido órfão é reconstruído SÓ com isso — nunca com o
+// valor pago nem com metadata — pra que a checagem pago == pedido continue
+// valendo também na rede de segurança (antes o Stripe usava o próprio
+// amount_total como "preço do pedido", e qualquer valor batia).
+export function expectedOrder(tier: string): { cents: number; coins: number } | undefined {
+  const pack = COIN_TIERS[tier];
+  if (pack) return { cents: pack.cents, coins: pack.coins };
+  return parsePassTier(tier) ? { cents: PASS_PRICE_CENTS, coins: 0 } : undefined;
+}
+
+// Valor pago numa sessão do Stripe, em centavos de BRL. Moeda diferente de BRL
+// (ou valor ausente) vira -1: nunca bate com pedido e cai em value_mismatch.
+export function stripePaidCents(session: { amount_total?: number | null; currency?: string | null }): number {
+  if (String(session.currency ?? '').toLowerCase() !== 'brl') return -1;
+  if (session.amount_total == null) return -1;
+  const n = Number(session.amount_total);
+  return Number.isFinite(n) ? Math.round(n) : -1;
+}
 
 // centavos inteiros; valor ausente/NaN vira -1 (nunca bate com pedido nenhum e
 // não quebra o cast ::int no Postgres)

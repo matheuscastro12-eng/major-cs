@@ -5,8 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildMajorIcs, icsEscape, icsFold, nextDay } from '../src/engine/majorCalendar.ts';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
 const data = JSON.parse(readFileSync(ROOT + 'src/data/major-singapore-2026.json', 'utf8')) as { event: { name: string; start: string; playoffsStart: string; end: string } };
 const NOW = Date.UTC(2026, 9, 30, 12, 0, 0);
 const URL_ = 'https://roadtomajor.com.br/major-singapore?ref=major-ics-major&utm_source=share&utm_medium=major-ics-major';

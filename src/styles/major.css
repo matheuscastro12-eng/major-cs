@@ -266,6 +266,8 @@
 .msg-roster__p { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 52px; }
 .msg-roster__p small { font-size: 11px; opacity: .85; }
 .msg-roster__p.is-coach { opacity: .8; }
+.msg-roster__src { align-self: center; font-size: 11px; color: var(--c-ink-dim); text-decoration: underline; text-underline-offset: 2px; }
+.msg-roster__src:hover { color: var(--c-ink); }
 .msg-pred-wrap { overflow-x: auto; }
 .msg-pred { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
 .msg-pred th, .msg-pred td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--c-line); white-space: nowrap; }
