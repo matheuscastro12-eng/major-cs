@@ -459,7 +459,7 @@ export function majorStandings(major: OnlineMajor) {
 
 // ---- chamadas de API ----
 
-export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; matched?: boolean; queued?: boolean; waiting?: number; waitedMs?: number; window?: number; needAccount?: boolean; squadError?: boolean }> {
+export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; matched?: boolean; queued?: boolean; waiting?: number; waitedMs?: number; window?: number; needAccount?: boolean; squadError?: boolean; cardIds?: string[] }> {
   // [F1] a conta viaja em toda chamada quando existe: fila e sala ranqueada/de
   // evento exigem; o amistoso por código ignora.
   const token = getToken();
@@ -469,7 +469,7 @@ export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: bo
     body: JSON.stringify(token ? { ...body, token } : body),
     signal: AbortSignal.timeout(9000),
   });
-  return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; needAccount?: boolean; squadError?: boolean };
+  return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; needAccount?: boolean; squadError?: boolean; cardIds?: string[] };
 }
 
 // [F2] partida PvP resolvida no servidor: matchStart | matchState | decide.

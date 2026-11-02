@@ -24,7 +24,6 @@
 //   - NUNCA apaga/modifica o save local nem o cloud-save.
 
 import { getToken } from './account';
-import { cloudEnabled } from './cloud';
 import { captureError } from './errlog';
 import type { UltimateState } from '../engine/ultimate/state';
 
@@ -186,7 +185,7 @@ export async function flushShadowQueue(): Promise<void> {
   if (flushing) return;
   flushing = true;
   try {
-    if (!cloudEnabled()) return;
+    if (!ultOnline()) return;
     const q = loadQueue();
     while (q.length > 0) {
       const entry = q[0];
@@ -232,7 +231,7 @@ export async function flushShadowQueue(): Promise<void> {
 // deslogada: retorna sem tocar em NADA (nem storage de fila, nem rede).
 export function shadowTx(kind: UltShadowKind, creditsDelta: number, cards: ShadowCardOp[] = [], meta?: Record<string, unknown>): void {
   try {
-    if (!cloudEnabled()) return;
+    if (!ultOnline()) return;
     const bound = serverBoundTx(kind, creditsDelta, cards);
     if (!bound) return; // [O0-02] mutação só local (prêmio / carta ganha no cliente)
     ({ creditsDelta, cards } = bound);
@@ -265,7 +264,7 @@ export function shadowTx(kind: UltShadowKind, creditsDelta: number, cards: Shado
 // não dá pra "esquecer" um campo. Nunca lança.
 export function mirrorUltimateChange(prev: UltimateState, next: UltimateState, kind: UltShadowKind, meta?: Record<string, unknown>): void {
   try {
-    if (!cloudEnabled()) return;
+    if (!ultOnline()) return;
     const creditsDelta = next.profile.credits - prev.profile.credits;
     const prevIds = new Set(prev.inventory.map((o) => o.id));
     const nextIds = new Set(next.inventory.map((o) => o.id));
@@ -375,9 +374,9 @@ async function postPackOpen(opId: string, packId: string): Promise<{ status: num
 // crash reenvia o MESMO op_id e recebe as mesmas cartas (replay idempotente).
 // 'op_conflict' (op_id já usado por tx que NÃO é pack — registro corrompido):
 // descarta o pendente, gera op_id novo e tenta UMA vez.
-export async function openPackOnServer(packId: string): Promise<ServerPackResult | { unavailable: true } | null> {
+export async function openPackOnServer(packId: string): Promise<ServerPackResult | { unavailable: true } | { offline: true } | null> {
   try {
-    if (!cloudEnabled()) return null;
+    if (!ultOnline()) return null;
     let pending = readPendingOpen();
     // pendente de OUTRO pack (crash antigo + jogador mudou de pack): descarta.
     // Se o servidor tiver aplicado aquela tx, fica como divergência só-log
@@ -425,6 +424,10 @@ export async function openPackOnServer(packId: string): Promise<ServerPackResult
     // divergido (409 insufficient — esperado desde o O0-02 quando o save tem
     // prêmio só local): marca o drift. O pendente é limpo: esta op não será
     // re-tentada — o roll local que sai agora é a versão que vale.
+    // [UT-REW] rede/servidor fora: NÃO cai pro roll local (carta só do
+    // aparelho quebrava a ranqueada). O pendente FICA: o próximo clique reusa
+    // o op_id e, se o servidor tinha aplicado, devolve as mesmas cartas.
+    if (r.status === 0 || r.status >= 500 || r.status === 429) return { offline: true };
     clearPendingOpen();
     markFlipDrift(`packOpen fallback status=${r.status}`, r.status === 423 || (r.status === 409 && r.data?.error === 'insufficient_credits'));
     return null;
@@ -448,7 +451,7 @@ export async function openPackOnServer(packId: string): Promise<ServerPackResult
 //     aparelho, pra triagem — nunca manda tx.
 async function reconcileFlip(): Promise<void> {
   try {
-    if (!cloudEnabled()) return;
+    if (!ultOnline()) return;
     if (loadQueue().length > 0) return;
     const server = await fetchServerState();
     if (!server) return;
@@ -508,7 +511,7 @@ function tokenEmail(token: string): string {
 
 export async function importLocalOnce(): Promise<void> {
   try {
-    if (!cloudEnabled()) return;
+    if (!ultOnline()) return;
     const token = getToken();
     if (!token) return;
     const email = tokenEmail(token);
@@ -553,4 +556,83 @@ export function bootUltimateShadow(): void {
       captureError(e, 'ult-shadow');
     }
   })();
+}
+
+// [UT-REW] economia do Ultimate vale pra QUALQUER conta logada (grátis ou
+// vitalícia) — antes só a paga (cloudEnabled) importava/espelhava, e a conta
+// grátis nunca tinha carta no servidor (ranqueada sempre recusava o squad).
+export function ultOnline(): boolean {
+  return !!getToken();
+}
+
+export interface ServerGrant { cardId: string; cardKey: string }
+type ServerCall = { kind: 'ok'; card: ServerGrant | null } | { kind: 'not_owner' } | { kind: 'rejected'; error: string } | { kind: 'offline' };
+
+async function postEconomy(body: Record<string, unknown>): Promise<{ status: number; data: Record<string, unknown> | null }> {
+  const token = getToken();
+  if (!token) return { status: 401, data: null };
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), PACK_OPEN_TIMEOUT_MS) : null;
+  try {
+    const r = await fetch('/api/ultimate-economy', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...body, token }), ...(ctrl ? { signal: ctrl.signal } : {}),
+    });
+    return { status: r.status, data: (await r.json().catch(() => null)) as Record<string, unknown> | null };
+  } catch { return { status: 0, data: null }; } finally { if (timer) clearTimeout(timer); }
+}
+
+function grantOf(data: Record<string, unknown> | null): ServerGrant | null {
+  const c = data?.card as Record<string, unknown> | null | undefined;
+  return c && typeof c.cardId === 'string' && typeof c.cardKey === 'string' && c.cardId && c.cardKey ? { cardId: c.cardId, cardKey: c.cardKey } : null;
+}
+
+export function classifyServerCall(status: number, data: Record<string, unknown> | null): ServerCall {
+  if (status >= 200 && status < 300 && data?.ok === true) return { kind: 'ok', card: grantOf(data) };
+  if (status === 403 && data?.error === 'not_owner') return { kind: 'not_owner' };
+  if (status === 0 || status >= 500 || status === 429) return { kind: 'offline' };
+  return { kind: 'rejected', error: String(data?.error ?? status) };
+}
+
+// SBC no servidor. op_id persistido por SBC+insumos: retry após queda reusa o
+// mesmo op_id (replay devolve o MESMO prêmio, nunca queima 2×).
+const SBC_PENDING_KEY = 'rtm-ult-sbc-pending-v1';
+export async function sbcSubmitOnServer(sbcId: string, cardIds: string[]): Promise<ServerCall> {
+  const sig = `${sbcId}:${[...cardIds].sort().join(',')}`;
+  let opId = '';
+  try { const p = JSON.parse(localStorage.getItem(SBC_PENDING_KEY) ?? 'null') as { sig?: string; opId?: string } | null; if (p?.sig === sig && p.opId) opId = p.opId; } catch { /* sem storage */ }
+  if (!opId) opId = makeOpId();
+  try { localStorage.setItem(SBC_PENDING_KEY, JSON.stringify({ sig, opId })); } catch { /* best-effort */ }
+  const r = await postEconomy({ action: 'sbcSubmit', op_id: opId, sbcId, cardIds });
+  const out = classifyServerCall(r.status, r.data);
+  if (out.kind !== 'offline') { try { localStorage.removeItem(SBC_PENDING_KEY); } catch { /* best-effort */ } }
+  return out;
+}
+
+export async function objectiveClaimOnServer(objectiveId: string): Promise<ServerCall> {
+  const r = await postEconomy({ action: 'objectiveClaim', objectiveId });
+  return classifyServerCall(r.status, r.data);
+}
+
+// Cura da ranqueada: manda as cartas recusadas (e, se a conta nunca
+// importou, o save inteiro) — o servidor só aceita o que o ledger justifica.
+export async function healRankedCards(cardIds: string[]): Promise<string[]> {
+  try {
+    let local: UltimateState | null = null;
+    try { const raw = localStorage.getItem(LOCAL_SAVE_KEY); local = raw ? (JSON.parse(raw) as UltimateState) : null; } catch { local = null; }
+    const payload = {
+      credits: Math.max(0, Math.trunc(local?.profile?.credits ?? 0) || 0),
+      cards: (Array.isArray(local?.inventory) ? local!.inventory : []).map((o) => ({ id: o.id, cardKey: o.cardKey, boost: o.boost, ed: o.ed, style: o.style })),
+    };
+    const r = await postEconomy({ action: 'ultHeal', cardIds, local: payload });
+    if (r.status !== 200 || !r.data) return [];
+    return Array.isArray(r.data.healed) ? (r.data.healed as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+  } catch (e) { captureError(e, 'ult-heal'); return []; }
+}
+
+// ids das cópias que o servidor conhece (action 'state') — null se offline
+export async function fetchServerCardIds(): Promise<Set<string> | null> {
+  const r = await postEconomy({ action: 'state' });
+  if (r.status !== 200 || !r.data || !Array.isArray(r.data.cards)) return null;
+  return new Set((r.data.cards as Record<string, unknown>[]).map((c) => String(c?.cardId ?? '')).filter(Boolean));
 }

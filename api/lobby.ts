@@ -879,7 +879,7 @@ export default async function handler(
           const built = await buildServerSquad(sql as unknown as SqlTag, accountEmail, {
             cardIds: body.cardIds, formationId: body.formationId, name: rawSq.name, elo: rawSq.elo, approach: rawSq.approach,
           }, serverSquadLookup());
-          if (!built.ok) { res.status(400).json({ squadError: true, code: built.error, error: built.message }); return; }
+          if (!built.ok) { res.status(400).json({ squadError: true, code: built.error, error: built.message, ...(built.cardIds ? { cardIds: built.cardIds } : {}) }); return; }
           // [F2] cliente novo joga a partida no servidor (pvpLive); o antigo segue no replay local
           serverSquad = JSON.stringify({ ...built.squad, ...(rawSq.live === true ? { live: true } : {}) });
           // a regra do evento é checada com o squad DO SERVIDOR (abaixo)

@@ -36,6 +36,7 @@ import { loadDropCatalog, loadMktCardLookup, loadPackModule, loadQuicksellValuer
 import { dropOpen, dropPick, dropStatus, sqlDropStore, ultDropSchemaQueries } from '../server/ultimate-drops.js'; // [CSM-1]
 import { readCardStats } from '../server/ultimate-card-stats.js'; // [CSM-3]
 import { importLocalCollection } from '../server/ultimate-import.js';
+import { claimObjectiveServer, healSbcCards, submitSbcServer, type RewardDeps } from '../server/ultimate-rewards.js'; // [UT-REW]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -114,7 +115,7 @@ export default async function handler(
   // [O0-02] carteira congelada pelo admin (varredura do ledger): mercado e
   // packs pausados até a contestação. 423 + mensagem padrão pro jogador.
   const frozenReply = () => res.status(423).json({ error: 'wallet_frozen', message: ultFrozenMessage(clean(process.env.SUPPORT_EMAIL)) });
-  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen' || action === 'ultImport' || action === 'dropOpen' || action === 'dropPick';
+  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen' || action === 'ultImport' || action === 'sbcSubmit' || action === 'objectiveClaim' || action === 'ultHeal' || action === 'dropOpen' || action === 'dropPick';
   const frozen = action === 'state' || guardedAction ? await isUltWalletFrozen(sql, email) : false;
   if (frozen && guardedAction) { frozenReply(); return; }
 
@@ -141,6 +142,39 @@ export default async function handler(
     if (!packMod) { res.status(503).json({ error: 'catalog_unavailable' }); return; }
     const r = await importLocalCollection(sql, email, body.local, (key) => packMod.serverCardByKeyAnyMonth(key) ?? null);
     res.status(200).json(r);
+    return;
+  }
+
+  // [UT-REW] prêmios de carta autoritativos + cura da ranqueada
+  if (action === 'sbcSubmit' || action === 'objectiveClaim' || action === 'ultHeal') {
+    const packMod = await loadPackModule();
+    if (!packMod) { res.status(503).json({ error: 'catalog_unavailable' }); return; }
+    const now = new Date();
+    const deps: RewardDeps = {
+      lookup: (key) => packMod.serverCardByKeyAnyMonth(key) ?? null,
+      pool: (rarity) => packMod.buildServerCatalog(now).filter((c) => c.rarity === rarity),
+    };
+    if (action === 'sbcSubmit') {
+      const r = await submitSbcServer(sql, email, { opId: body.op_id ?? body.opId, sbcId: body.sbcId, cardIds: body.cardIds }, deps);
+      if (!r.ok) { res.status(r.error === 'not_owner' ? 403 : r.error === 'op_conflict' ? 409 : 400).json({ error: r.error }); return; }
+      res.status(200).json(r);
+      return;
+    }
+    if (action === 'objectiveClaim') {
+      const r = await claimObjectiveServer(sql, email, body.objectiveId, deps);
+      if (!r.ok) { res.status(400).json({ error: r.error }); return; }
+      res.status(200).json(r);
+      return;
+    }
+    // ultHeal: (1) migração única se a conta nunca importou; (2) cartas sbc_* que o ledger justifica
+    const imp = await importLocalCollection(sql, email, body.local, (key) => packMod.serverCardByKeyAnyMonth(key) ?? null);
+    const want = new Set(Array.isArray(body.cardIds) ? body.cardIds.filter((x): x is string => typeof x === 'string').slice(0, 10) : []);
+    const localCards = (body.local && typeof body.local === 'object' && Array.isArray((body.local as Record<string, unknown>).cards) ? (body.local as { cards: unknown[] }).cards : [])
+      .map((c) => (c && typeof c === 'object' ? c as Record<string, unknown> : {}))
+      .filter((c) => typeof c.id === 'string' && want.has(c.id) && typeof c.cardKey === 'string')
+      .map((c) => ({ cardId: String(c.id), cardKey: String(c.cardKey) }));
+    const healed = await healSbcCards(sql, email, localCards, deps.lookup);
+    res.status(200).json({ ok: true, imported: !imp.already, healed });
     return;
   }
 
