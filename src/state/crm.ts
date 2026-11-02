@@ -131,58 +131,6 @@ export function importDatasetFromFile(file: File): Promise<TeamSeason[]> {
   });
 }
 
-// ---- imagens customizadas de mapas (upload no CRM) ----
-const MAPIMG_KEY = 'major-map-images-v1';
-let mapImgCache: Record<string, string> | null = null;
-
-export function loadMapImages(): Record<string, string> {
-  if (mapImgCache) return mapImgCache;
-  try {
-    mapImgCache = JSON.parse(localStorage.getItem(MAPIMG_KEY) ?? '{}') as Record<string, string>;
-  } catch {
-    mapImgCache = {};
-  }
-  return mapImgCache;
-}
-
-export function saveMapImage(map: string, dataUrl: string | null): Record<string, string> {
-  const imgs = { ...loadMapImages() };
-  if (dataUrl) imgs[map] = dataUrl;
-  else delete imgs[map];
-  mapImgCache = imgs;
-  try {
-    localStorage.setItem(MAPIMG_KEY, JSON.stringify(imgs));
-  } catch {
-    alert(ct('Não foi possível salvar a imagem (limite de armazenamento do navegador). Use uma imagem menor.'));
-  }
-  return imgs;
-}
-
-// redimensiona um arquivo de imagem para dataURL (mantém proporção)
-export function fileToDataUrl(file: File, maxDim: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('falha ao ler arquivo'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('arquivo não é uma imagem'));
-      img.onload = () => {
-        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-        const w = Math.max(1, Math.round(img.width * scale));
-        const h = Math.max(1, Math.round(img.height * scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 // Fonte primária remota: banco Neon servido por /api/teams (Vercel).
 // Retorna null se indisponível (dev local sem backend, offline, erro) -
 // nesse caso o app segue com o dataset embutido/localStorage.
@@ -251,6 +199,19 @@ export function mergePendingBaseTeams(teams: TeamSeason[]): TeamSeason[] {
   const deleted = new Set(getDeletedTeamIds());
   const extras = BASE_TEAMS.filter((t) => t.pending && !have.has(t.id) && !deleted.has(t.id));
   return extras.length ? [...teams, ...extras] : teams;
+}
+
+// Base que o app adota quando o banco responde (saía do efeito do App.tsx; veio
+// pra cá porque precisa do BASE_TEAMS/BASE_REV, que agora só existem no chunk da base).
+export function adoptRemoteDataset(remote: { teams: TeamSeason[]; rev: string }): TeamSeason[] {
+  // banco salvo CONTRA este build: tem as edições mais novas do admin
+  if (remote.rev && remote.rev === BASE_REV) return mergePendingBaseTeams(remote.teams);
+  // banco salvo num build ANTIGO (ou sem rev): o deploy novo manda. Usa a
+  // base fresca do build e preserva só os times que existem SÓ no banco
+  // (criados pelo admin e ainda não trazidos pro teams.json).
+  const buildIds = new Set(BASE_TEAMS.map((t) => t.id));
+  const dbOnly = remote.teams.filter((t) => !buildIds.has(t.id));
+  return [...structuredClone(BASE_TEAMS), ...dbOnly];
 }
 
 // Retorna a base do banco + o rev do build com que ela foi salva (header

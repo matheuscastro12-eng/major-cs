@@ -35,16 +35,19 @@ import { PickemInvite } from './MajorShareInvite';
 import { initialMajorTab, type MajorTab } from './majorTabs';
 import { ensurePickSnapshots } from '../../state/pickSnapshots';
 import '../../styles/major.css';
+import { comCssDasTelas } from '../../state/telasCss';
 
 const D = data as unknown as MajorData;
 type Bo3Team = { id: string; players: { nick: string }[]; coach?: { nick: string } };
 const ROSTERS = new Map((bo3Teams as unknown as Bo3Team[]).map((x) => [x.id, x]));
-// a Sala (RtpRoundRoom + engine do RtP) só carrega quando a aba Jogar abre
-const MajorPlay = lazy(() => import('./MajorPlay').then((m) => ({ default: m.MajorPlay })));
+// a Sala (RtpRoundRoom + engine do RtP) só carrega quando a aba Jogar abre.
+// Jogar, resultado e liga usam o CSS das telas (rtp.css e cia., fora da carga
+// inicial): o lazy espera a folha junto com o chunk (state/telasCss.ts)
+const MajorPlay = lazy(() => comCssDasTelas(import('./MajorPlay')).then((m) => ({ default: m.MajorPlay })));
 // o resultado da simulação (e a liga, que mostra o mesmo resultado) traz a
 // campanha (motor do RtP, base bo3, partida): a aba de abertura não precisa
-const MajorResultView = lazy(() => import('./MajorResultView').then((m) => ({ default: m.MajorResultView })));
-const MajorLeague = lazy(() => import('./MajorLeague').then((m) => ({ default: m.MajorLeague })));
+const MajorResultView = lazy(() => comCssDasTelas(import('./MajorResultView')).then((m) => ({ default: m.MajorResultView })));
+const MajorLeague = lazy(() => comCssDasTelas(import('./MajorLeague')).then((m) => ({ default: m.MajorLeague })));
 const STORE = 'rtm-major-sg-picks-v1';
 const MAJOR_PATH = '/major-singapore';
 

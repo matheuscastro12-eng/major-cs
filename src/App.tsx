@@ -72,35 +72,37 @@ if (typeof window !== 'undefined') {
 }
 
 // telas pesadas e/ou pouco usadas: carregadas sob demanda (code-splitting) pra
-// deixar o carregamento inicial bem mais leve.
-const Admin = lazyWithReload(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
-const CareerScreen = lazyWithReload(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
-const CareerSaves = lazyWithReload(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
-const CareerCRM = lazyWithReload(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
+// deixar o carregamento inicial bem mais leve. Toda tela de jogo espera também o
+// CSS das telas (comCssDasTelas, state/telasCss.ts), que saiu do CSS global; só o
+// /major-singapore abre sem ele (a visão geral vive com o carga-inicial.css).
+const Admin = lazyWithReload(() => comCssDasTelas(import('./components/Admin')).then((m) => ({ default: m.Admin })));
+const CareerScreen = lazyWithReload(() => comCssDasTelas(import('./components/CareerScreen')).then((m) => ({ default: m.CareerScreen })));
+const CareerSaves = lazyWithReload(() => comCssDasTelas(import('./components/CareerSaves')).then((m) => ({ default: m.CareerSaves })));
+const CareerCRM = lazyWithReload(() => comCssDasTelas(import('./components/CareerCRM')).then((m) => ({ default: m.CareerCRM })));
 // [fase 4] editor de base (carrega a base oficial: chunk próprio, como a Carreira)
-const DatabaseEditor = lazyWithReload(() => import('./components/editor/DatabaseEditor').then((m) => ({ default: m.DatabaseEditor })));
-const RevenueCRM = lazyWithReload(() => import('./components/RevenueCRM').then((m) => ({ default: m.RevenueCRM })));
-const LiveopsCRM = lazyWithReload(() => import('./components/LiveopsCRM').then((m) => ({ default: m.LiveopsCRM })));
-const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
-const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
-const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
+const DatabaseEditor = lazyWithReload(() => comCssDasTelas(import('./components/editor/DatabaseEditor')).then((m) => ({ default: m.DatabaseEditor })));
+const RevenueCRM = lazyWithReload(() => comCssDasTelas(import('./components/RevenueCRM')).then((m) => ({ default: m.RevenueCRM })));
+const LiveopsCRM = lazyWithReload(() => comCssDasTelas(import('./components/LiveopsCRM')).then((m) => ({ default: m.LiveopsCRM })));
+const FinalScreen = lazyWithReload(() => comCssDasTelas(import('./components/FinalScreen')).then((m) => ({ default: m.FinalScreen })));
+const HallScreen = lazyWithReload(() => comCssDasTelas(import('./components/HallScreen')).then((m) => ({ default: m.HallScreen })));
+const LabScreen = lazyWithReload(() => comCssDasTelas(import('./components/LabScreen')).then((m) => ({ default: m.LabScreen })));
 // style guide do design system "Broadcast Desk" (/design) — fora do bundle das telas
-const DesignScreen = lazyWithReload(() => import('./pages/DesignScreen').then((m) => ({ default: m.DesignScreen })));
-const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
+const DesignScreen = lazyWithReload(() => comCssDasTelas(import('./pages/DesignScreen')).then((m) => ({ default: m.DesignScreen })));
+const UltimateSquadScreen = lazyWithReload(() => comCssDasTelas(import('./components/ultimate/UltimateSquadScreen')).then((m) => ({ default: m.UltimateSquadScreen })));
 const MajorSingaporeScreen = lazyWithReload(() => import('./components/major/MajorSingaporeScreen').then((m) => ({ default: m.MajorSingaporeScreen })));
-const RoadToPro = lazyWithReload(() => import('./components/rtp/RoadToPro').then((m) => ({ default: m.RoadToPro })));
+const RoadToPro = lazyWithReload(() => comCssDasTelas(import('./components/rtp/RoadToPro')).then((m) => ({ default: m.RoadToPro })));
 // o Diário puxa a base de jogadores (bo3) e o catálogo do Ultimate: fora da carga inicial
-const DailyScreen = lazyWithReload(() => import('./components/daily/DailyScreen').then((m) => ({ default: m.DailyScreen })));
+const DailyScreen = lazyWithReload(() => comCssDasTelas(import('./components/daily/DailyScreen')).then((m) => ({ default: m.DailyScreen })));
 // a criação de perfil puxa o Hall do Road to Pro (motor do RtP + base de jogadores)
-const ManagerSetup = lazyWithReload(() => import('./components/ManagerSetup').then((m) => ({ default: m.ManagerSetup })));
+const ManagerSetup = lazyWithReload(() => comCssDasTelas(import('./components/ManagerSetup')).then((m) => ({ default: m.ManagerSetup })));
 // telas de dentro do jogo: a landing e o /major-singapore não precisam delas
 // (a partida puxa o radar 2D, a narração e o canvas ao vivo)
-const Draft = lazyWithReload(() => import('./components/Draft').then((m) => ({ default: m.Draft })));
-const Hub = lazyWithReload(() => import('./components/Hub').then((m) => ({ default: m.Hub })));
-const VetoScreen = lazyWithReload(() => import('./components/VetoScreen').then((m) => ({ default: m.VetoScreen })));
-const MatchScreen = lazyWithReload(() => import('./components/MatchScreen').then((m) => ({ default: m.MatchScreen })));
-const ManagerProfile = lazyWithReload(() => import('./components/ManagerProfile').then((m) => ({ default: m.ManagerProfile })));
-const Leaderboard = lazyWithReload(() => import('./components/Leaderboard').then((m) => ({ default: m.Leaderboard })));
+const Draft = lazyWithReload(() => comCssDasTelas(import('./components/Draft')).then((m) => ({ default: m.Draft })));
+const Hub = lazyWithReload(() => comCssDasTelas(import('./components/Hub')).then((m) => ({ default: m.Hub })));
+const VetoScreen = lazyWithReload(() => comCssDasTelas(import('./components/VetoScreen')).then((m) => ({ default: m.VetoScreen })));
+const MatchScreen = lazyWithReload(() => comCssDasTelas(import('./components/MatchScreen')).then((m) => ({ default: m.MatchScreen })));
+const ManagerProfile = lazyWithReload(() => comCssDasTelas(import('./components/ManagerProfile')).then((m) => ({ default: m.ManagerProfile })));
+const Leaderboard = lazyWithReload(() => comCssDasTelas(import('./components/Leaderboard')).then((m) => ({ default: m.Leaderboard })));
 
 // Ultimate Squad: VISÍVEL em localhost (dev/preview local), OCULTO no site real
 // (roadtomajor.com.br). O código existe no bundle, mas o menu e a rota só ligam
@@ -126,8 +128,8 @@ const RTP_ENABLED = (() => {
     return true;
   }
 })();
-const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
-const TournamentStats = lazyWithReload(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
+const MatchDetail = lazyWithReload(() => comCssDasTelas(import('./components/MatchDetail')).then((m) => ({ default: m.MatchDetail })));
+const TournamentStats = lazyWithReload(() => comCssDasTelas(import('./components/TournamentStats')).then((m) => ({ default: m.TournamentStats })));
 import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
@@ -135,8 +137,10 @@ import { getTeam, pairingBestOf, phaseLabelDisplay, placementCode, userMapRecord
 // o motor do suíço (simula as séries da IA com o motor de partida inteiro) só
 // carrega quando o jogo roda: a landing e o /major-singapore não precisam dele
 const loadSwiss = () => import('./engine/swiss');
-import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendingBaseTeams, resetDataset, saveDataset } from './state/crm';
-import { BASE_TEAMS, BASE_REV } from './data/teams';
+// a base histórica (teams.json + atributos) e o state/crm.ts chegam num chunk à
+// parte: a landing e o /major-singapore não esperam por ela (ver state/baseDataset.ts)
+import { baseDataset } from './state/baseDataset';
+import { comCssDasTelas } from './state/telasCss';
 import { useLang } from './state/i18n';
 import { ct, setCareerLang } from './state/career-i18n';
 import { Landing, AccountModal } from './components/Landing';
@@ -344,6 +348,10 @@ try {
 captureDuelInviteFromUrl();
 // posição da entrada de chegada na pilha do jogo (Voltar/Avançar do shell)
 initAppHistory();
+// telas que usam a base histórica (dataset): no boot nelas a base já começa a
+// baixar; o resto (landing, Modo Major, legais, setup…) não puxa a base
+const BASE_SCREENS = new Set<Screen>(['home', 'draft', 'final', 'transfer', 'career', 'careerSaves', 'admin', 'lab']);
+const NO_TEAMS: TeamSeason[] = [];
 const WANTS_SIGNUP = (() => {
   try {
     return new URLSearchParams(window.location.search).get('criar') !== null
@@ -352,7 +360,9 @@ const WANTS_SIGNUP = (() => {
 })();
 
 export default function App() {
-  const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
+  // null enquanto a base histórica baixa: as telas que dependem dela mostram o Loader
+  const [dataset, setDataset] = useState<TeamSeason[] | null>(null);
+  const teams = dataset ?? NO_TEAMS;
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
   // funil: as travas dentro do app (home-rtp, home-ultimate, mkt-lock, perfil,
@@ -457,8 +467,8 @@ export default function App() {
   setCareerLang(lang); // idioma global: ct() traduz em QUALQUER tela (não só na carreira)
 
   // jogadores só veem times aprovados (pending fica oculto até liberar no CRM)
-  const eligible = useMemo(() => dataset.filter((t) => t.players.length >= 5 && !t.pending), [dataset]);
-  const playerCount = useMemo(() => dataset.reduce((s, t) => s + t.players.length, 0), [dataset]);
+  const eligible = useMemo(() => teams.filter((t) => t.players.length >= 5 && !t.pending), [teams]);
+  const playerCount = useMemo(() => teams.reduce((s, t) => s + t.players.length, 0), [teams]);
   const brEligible = useMemo(() => eligible.filter((t) => t.country === 'br'), [eligible]);
 
   const poolTeams = useCallback(
@@ -695,37 +705,51 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, [screen]);
 
-  // fonte primária: banco Neon via /api/teams (verdade compartilhada).
+  // base histórica: as telas que usam o dataset pedem o download (o load() é
+  // memoizado; numa falha de rede, a próxima troca de tela tenta de novo)
+  const needsBase = BASE_SCREENS.has(screen);
+  useEffect(() => {
+    if (needsBase) baseDataset.load().catch(() => { /* sem rede: o Loader segue até a próxima tentativa */ });
+  }, [needsBase, screen]);
+
+  // quando a base chega: cache local (rev do build, edições do admin) e depois a
+  // fonte primária, o banco Neon via /api/teams (verdade compartilhada).
   // Só NÃO adota o servidor se o usuário tem edições locais ainda não salvas;
   // assim o "Salvar no banco" do admin chega a todos os jogadores.
   useEffect(() => {
-    if (hasUnsavedEdits()) return;
     let cancelled = false;
-    fetchRemoteDataset().then((remote) => {
-      if (!remote || cancelled) return;
-      if (remote.rev && remote.rev === BASE_REV) {
-        // banco salvo CONTRA este build: tem as edições mais novas do admin
-        const merged = mergePendingBaseTeams(remote.teams);
-        setDataset(merged);
-        saveDataset(merged);
-      } else {
-        // banco salvo num build ANTIGO (ou sem rev): o deploy novo manda. Usa a
-        // base fresca do build e preserva só os times que existem SÓ no banco
-        // (criados pelo admin e ainda não trazidos pro teams.json).
-        const buildIds = new Set(BASE_TEAMS.map((t) => t.id));
-        const dbOnly = remote.teams.filter((t) => !buildIds.has(t.id));
-        const fresh = [...structuredClone(BASE_TEAMS), ...dbOnly];
-        setDataset(fresh);
-        saveDataset(fresh);
-      }
+    void baseDataset.ready.then((crm) => {
+      if (cancelled) return;
+      setDataset(crm.loadDataset());
+      if (crm.hasUnsavedEdits()) return;
+      void crm.fetchRemoteDataset().then((remote) => {
+        if (!remote || cancelled) return;
+        const next = crm.adoptRemoteDataset(remote);
+        setDataset(next);
+        crm.saveDataset(next);
+      });
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // clique em "Começar" (ou na próxima temporada) antes de a base chegar: a
+  // ação fica guardada e roda assim que o dataset existir
+  const pendingBaseAction = useRef<{ kind: 'start'; args: Parameters<typeof startDraft> } | { kind: 'transfer' } | null>(null);
+  useEffect(() => {
+    const a = pendingBaseAction.current;
+    if (!dataset || !a) return;
+    pendingBaseAction.current = null;
+    // saiu da tela enquanto esperava: não puxa o jogador de volta
+    if (a.kind === 'start') { if (screen === 'draft') startDraft(...a.args); }
+    else if (screen === 'final') openTransferWindow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataset]);
+
   // ---------- fluxo: home → draft ----------
   const startDraft = (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => {
+    if (!dataset) { pendingBaseAction.current = { kind: 'start', args: [mode, teamName, pool, difficulty] }; setScreen('draft'); return; }
     rngRef.current = makeRng(randomSeed());
     const base = poolTeams(pool);
     if (base.length < 16) {
@@ -775,10 +799,10 @@ export default function App() {
 
   const pickCoach = (teamSeasonId: string) => {
     if (!draft) return;
-    const coachTeam = dataset.find((t) => t.id === teamSeasonId);
+    const coachTeam = teams.find((t) => t.id === teamSeasonId);
     if (!coachTeam) return;
     const picks = draft.rounds.map((r) => {
-      const from = dataset.find((t) => t.id === r.teamSeasonId)!;
+      const from = teams.find((t) => t.id === r.teamSeasonId)!;
       const player = from.players.find((p) => p.id === r.pickedPlayerId)!;
       return { player, from };
     });
@@ -917,6 +941,7 @@ export default function App() {
   // ---------- modo carreira ----------
   const openTransferWindow = () => {
     if (!tournament || !draft) return;
+    if (!dataset) { pendingBaseAction.current = { kind: 'transfer' }; return; }
     const user = userTeam(tournament);
     const evolution = buildEvolution(user);
     const evolved = applyEvolution(user, evolution);
@@ -968,10 +993,12 @@ export default function App() {
   };
 
   // ---------- CRM ----------
-  const changeDataset = (teams: TeamSeason[]) => {
-    setDataset(teams);
-    saveDataset(teams);
-    markDirty(); // edições locais: só valem aqui até o admin "Salvar no banco"
+  // o Admin só monta com o dataset carregado, então o módulo da base já está aqui
+  const changeDataset = (next: TeamSeason[]) => {
+    const crm = baseDataset.peek();
+    setDataset(next);
+    crm?.saveDataset(next);
+    crm?.markDirty(); // edições locais: só valem aqui até o admin "Salvar no banco"
   };
 
 
@@ -1457,7 +1484,7 @@ export default function App() {
           onLogout={() => { logout(); setCloudEnabled(false); }}
           onAdmin={account?.admin ? () => setScreen('admin') : undefined}
           onAchievements={() => setAchOpen(true)}
-          teamCount={dataset.length}
+          teamCount={dataset?.length}
           playerCount={playerCount}
           savedCampaign={savedSession?.tournament ? { name: savedSession.tournament.name, phase: savedSession.tournament.phase } : null}
           onResume={resumeSession}
@@ -1564,7 +1591,7 @@ export default function App() {
       {screen === 'career' && (
         !accountReady || (account?.paid && !careerSynced)
           ? <Loader text="☁ …" />
-          : (
+          : !dataset ? <Loader text="…" /> : (
             <ModeErrorBoundary mode="career" onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')}>
               <CareerScreen key={careerEpoch} dataset={dataset} founder={!!account?.founder} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} onOpenEditor={() => openEditor('career')} />
             </ModeErrorBoundary>
@@ -1592,7 +1619,8 @@ export default function App() {
         </AdminGate>
       )}
 
-      {screen === 'draft' && draft && majorShell('draft',
+      {screen === 'draft' && !dataset && <Loader text="…" />}
+      {screen === 'draft' && dataset && draft && majorShell('draft',
         <Draft draft={draft} dataset={dataset} onPick={pickPlayer} onPickCoach={pickCoach} onReroll={rerollDraft} />,
         { title: `Draft · ${draft.current < 5 ? `Pick ${draft.current + 1}/5` : ct('Coach')}` },
       )}
@@ -1625,7 +1653,7 @@ export default function App() {
         </GameShell>
       )}
 
-      {screen === 'lab' && <LabScreen dataset={eligible} onBack={() => setScreen('admin')} />}
+      {screen === 'lab' && (dataset ? <LabScreen dataset={eligible} onBack={() => setScreen('admin')} /> : <Loader text="…" />)}
 
       {screen === 'transfer' && transferCtx && majorShell('final',
         <TransferScreen
@@ -1683,13 +1711,15 @@ export default function App() {
 
       {screen === 'admin' && (
         <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>
-          <Admin
-            dataset={dataset}
-            onChange={changeDataset}
-            onReset={() => setDataset(resetDataset())}
-            onLab={() => setScreen('lab')}
-            onBack={() => setScreen(tournament && tournament.phase !== 'done' ? 'hub' : 'home')}
-          />
+          {dataset ? (
+            <Admin
+              dataset={dataset}
+              onChange={changeDataset}
+              onReset={() => { const crm = baseDataset.peek(); if (crm) setDataset(crm.resetDataset()); }}
+              onLab={() => setScreen('lab')}
+              onBack={() => setScreen(tournament && tournament.phase !== 'done' ? 'hub' : 'home')}
+            />
+          ) : <Loader text="…" />}
         </AdminGate>
       )}
       </Suspense>

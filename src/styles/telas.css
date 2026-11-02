@@ -1,0 +1,17 @@
+/* GERADO por scripts/gen-css-inicial.mts: não edite à mão (npm run gen:css-inicial). */
+/* CSS das telas de jogo: os arquivos que saíram da carga inicial + todo o CSS
+   global que vinha depois deles, na ordem do bundle. state/telasCss.ts insere esta
+   folha logo depois do CSS global, então a cascata é a mesma de antes. */
+@import '../index.css';
+@import './career-dashboard.css';
+@import './career-player-page.css';
+@import './career-team-page.css';
+@import './play-hub.css';
+@import './rtp.css';
+@import './primitives.css';
+@import './shell.css';
+@import './home.css';
+@import './screens.css';
+@import './skin.css';
+@import './pix-panel.css';
+@import './landing.css';
