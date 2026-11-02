@@ -25,7 +25,8 @@ const ALLOWED_TYPES = new Set([
   // funil de conversão da vitalícia (iter39): visão de paywall → checkout → abandono
   'paywall_view',     // {src} — superfície de venda vista (1x/sessão/src no cliente)
   'checkout_open',    // {src, method} — Stripe redirect ou QR Pix aberto (substitui o antigo checkout_start)
-  'checkout_abandon', // {src, method, secondsOpen} — QR Pix fechado sem pagar
+  'checkout_abandon', // {src, method, secondsOpen, step?, copied?, copyFailed?} — QR Pix fechado sem pagar; step = vista na hora ('gerando'|'qr'|'espera'|'expirou'|'erro')
+  'pix_copy_click',   // {src, ok} — tocou em "Copiar código Pix" (ok=false: o navegador bloqueou); 1 de cada por abertura do QR
   // dado real (28d): checkout_open Stripe converte ~9% em pago contra ~70% do
   // Pix — e o startCheckout() do App.tsx não tinha try/catch: beginCheckout()
   // podia rejeitar (sessão expirada, erro do Stripe) e o clique sumia sem

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { firstMatchPayload, onceKey, paywallTrigger } from '../src/state/track.ts';
+import { firstMatchPayload, onceKey, paywallTrigger, pixStep, setPixStep, trackCheckoutAbandon, trackCheckoutOpen, trackPixCopy } from '../src/state/track.ts';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
@@ -52,4 +52,47 @@ test('first_match_done: segundos desde a 1ª visita, sem nada pessoal', () => {
   assert.deepEqual(firstMatchPayload('draft', null, t0), { mode: 'draft', secs: null });
   assert.deepEqual(firstMatchPayload('draft', t0 + 1, t0), { mode: 'draft', secs: null }); // relógio voltou
   assert.deepEqual(Object.keys(firstMatchPayload('ultimate', t0, t0)).sort(), ['mode', 'secs']);
+});
+
+test('passo do Pix: a vista da PixPanel vira o step do abandono', () => {
+  assert.equal(pixStep({ view: 'loading', error: false, waitLong: false }), 'gerando');
+  assert.equal(pixStep({ view: 'ready', error: false, waitLong: false }), 'qr');
+  assert.equal(pixStep({ view: 'ready', error: false, waitLong: true }), 'espera');
+  assert.equal(pixStep({ view: 'expired', error: false, waitLong: true }), 'expirou');
+  assert.equal(pixStep({ view: 'error', error: false, waitLong: false }), 'erro');
+  assert.equal(pixStep({ view: 'loading', error: true, waitLong: false }), 'erro'); // "Tentar de novo" com a falha na tela
+});
+
+test('pix_copy_click 1x de cada por abertura e checkout_abandon com step/copied', async () => {
+  const sent: { type: string; data: Record<string, unknown> }[] = [];
+  const prev = globalThis.fetch;
+  globalThis.fetch = (async (_u: unknown, init?: { body?: string }) => {
+    sent.push(JSON.parse(String(init?.body)));
+    return new Response('{}');
+  }) as typeof fetch;
+  try {
+    trackCheckoutOpen('pix');
+    setPixStep('qr');
+    trackPixCopy(false);
+    trackPixCopy(true);
+    trackPixCopy(true); // 2º toque no mesmo QR não gera outro evento
+    setPixStep('espera');
+    trackCheckoutAbandon('pix', 41.6);
+    trackCheckoutOpen('pix'); // abertura nova: o "copiou" da anterior não vaza
+    setPixStep('expirou');
+    trackCheckoutAbandon('pix', 900);
+    trackCheckoutAbandon('stripe', 3); // só o Pix leva o passo
+  } finally { globalThis.fetch = prev; }
+  const types = sent.map((e) => e.type);
+  assert.deepEqual(types, ['checkout_open', 'pix_copy_click', 'pix_copy_click', 'checkout_abandon', 'checkout_open', 'checkout_abandon', 'checkout_abandon']);
+  assert.deepEqual(sent.filter((e) => e.type === 'pix_copy_click').map((e) => e.data.ok), [false, true]);
+  const [a1, a2, a3] = sent.filter((e) => e.type === 'checkout_abandon').map((e) => e.data);
+  assert.deepEqual({ step: a1.step, copied: a1.copied, copyFailed: a1.copyFailed, secondsOpen: a1.secondsOpen }, { step: 'espera', copied: true, copyFailed: true, secondsOpen: 42 });
+  assert.deepEqual({ step: a2.step, copied: a2.copied, copyFailed: a2.copyFailed }, { step: 'expirou', copied: false, copyFailed: false });
+  assert.equal(a3.step, undefined);
+});
+
+test('pix_copy_click está liberado no cliente e no servidor', () => {
+  assert.ok(setLiteral(client, 'FUNNEL_TYPES').includes('pix_copy_click'));
+  assert.ok(setLiteral(server, 'ALLOWED_TYPES').includes('pix_copy_click'));
 });

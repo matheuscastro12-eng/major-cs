@@ -30,7 +30,7 @@ export function sessionId(): string {
 // share_card {kind, channel} entra aqui: 1 evento por clique em compartilhar —
 // volume ínfimo e é o numerador do K-factor (quanto compartilhamento vira visita).
 const FUNNEL_TYPES = new Set([
-  'paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card',
+  'paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'pix_copy_click', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card',
   // [medição do Major e da ativação] marcos raros, sem dado pessoal (só sid, ref e o modo/superfície)
   'major_sg_view', 'major_vitrine_click', 'major_pickem_submit', 'major_sg_campaign_done', 'first_match_done',
 ]);
@@ -60,7 +60,7 @@ function seenOnce(key: string): boolean {
   return false;
 }
 // eventos de VENDA que carregam o ref de compartilhamento da sessão (first-touch)
-const REF_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done']);
+const REF_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'pix_copy_click', 'signup_start', 'signup_done']);
 
 // ─── ATRIBUIÇÃO DE COMPARTILHAMENTO ──────────────────────────────────────────
 // Links gerados por state/shareLink.ts chegam com ?ref=daily&utm_source=share…
@@ -143,7 +143,8 @@ export function startPresenceHeartbeat(): () => void {
 //                           (1x por sessão do navegador por src, em sessionStorage)
 // checkout_open {src,method} → a UI de pagamento realmente abriu (Stripe redirect
 //                           ou QR Pix na tela); src = atribuição de PRIMEIRO clique
-// checkout_abandon {src,method,secondsOpen} → fechou o QR Pix sem pagar (best-effort)
+// checkout_abandon {src,method,secondsOpen,step,copied,copyFailed} → fechou o QR Pix sem pagar (best-effort)
+// pix_copy_click {src,ok} → tocou em "Copiar código Pix" (ok=false: cópia bloqueada)
 // signup_start/done {src} → cadastro pré-pagamento (rtm_pending_signups) começou/terminou
 
 // paywall_view: 1x por sessão do navegador por src (sessionStorage, como os
@@ -194,6 +195,7 @@ function getCheckoutSrc(): string {
 
 /** A UI de pagamento da vitalícia abriu de verdade (redirect Stripe ou QR Pix). */
 export function trackCheckoutOpen(method: 'stripe' | 'pix'): void {
+  if (method === 'pix') resetPixCheckout(); // abertura nova do QR: copiar volta a contar
   // product: este checkout é só o da conta vitalícia; coins e Passe vão no
   // ult_funnel (purchase_intent {product_kind}).
   track('checkout_open', { src: getCheckoutSrc() || 'direto', method, product: 'vitalicia' });
@@ -201,7 +203,56 @@ export function trackCheckoutOpen(method: 'stripe' | 'pix'): void {
 
 /** QR Pix da vitalícia fechado sem pagamento confirmado (best-effort). */
 export function trackCheckoutAbandon(method: 'stripe' | 'pix', secondsOpen: number): void {
-  track('checkout_abandon', { src: getCheckoutSrc() || 'direto', method, secondsOpen: Math.round(secondsOpen) });
+  const base = { src: getCheckoutSrc() || 'direto', method, secondsOpen: Math.round(secondsOpen) };
+  track('checkout_abandon', method === 'pix' ? { ...base, ...pixAbandonData() } : base);
+}
+
+// ─── Passo do Pix (checkout_abandon.step e pix_copy_click) ──────────────────
+// 25 de 40 checkouts (28 dias) abandonam o QR Pix, e até aqui o abandono só
+// dizia QUANTO tempo o QR ficou aberto, não ONDE a pessoa parou. O QR da
+// vitalícia é sempre a PixPanel (modal de conta da Landing e UpsellCard): ela
+// informa aqui a vista em que está e se o código foi copiado.
+//   step       → vista na hora de fechar: 'gerando' | 'qr' | 'espera' (passou
+//                dos 25s, com o aviso) | 'expirou' | 'erro'
+//   copied     → copiou o "copia e cola" pelo menos 1x nesta abertura
+//   copyFailed → o navegador bloqueou a cópia (ficou o código para copiar à mão)
+// pix_qr_shown NÃO é evento novo: é o checkout_open {method:'pix'}, que já sai
+// quando o QR chega na tela.
+export type PixStep = 'gerando' | 'qr' | 'espera' | 'expirou' | 'erro';
+
+/** Passo do Pix a partir da vista da PixPanel. Puro, testado em scripts/test-track-funnel.mts */
+export function pixStep(v: { view: 'loading' | 'error' | 'expired' | 'ready'; error: boolean; waitLong: boolean }): PixStep {
+  if (v.error || v.view === 'error') return 'erro';
+  if (v.view === 'expired') return 'expirou';
+  if (v.view === 'loading') return 'gerando';
+  return v.waitLong ? 'espera' : 'qr';
+}
+
+const pixCheckout = { step: 'gerando' as PixStep, copied: false, copyFailed: false, copyTracked: new Set<boolean>() };
+
+function resetPixCheckout(): void {
+  pixCheckout.copied = false;
+  pixCheckout.copyFailed = false;
+  pixCheckout.copyTracked.clear();
+}
+
+/** A PixPanel avisa a vista atual (a cada troca de vista). */
+export function setPixStep(step: PixStep): void {
+  pixCheckout.step = step;
+}
+
+/** o que vai junto do checkout_abandon do Pix */
+export function pixAbandonData(): { step: PixStep; copied: boolean; copyFailed: boolean } {
+  return { step: pixCheckout.step, copied: pixCheckout.copied, copyFailed: pixCheckout.copyFailed };
+}
+
+/** Clique em "Copiar código Pix". ok=false: o navegador bloqueou a cópia.
+ *  No máximo 1 evento de cada (ok e falha) por abertura do QR. */
+export function trackPixCopy(ok: boolean): void {
+  if (ok) pixCheckout.copied = true; else pixCheckout.copyFailed = true;
+  if (pixCheckout.copyTracked.has(ok)) return;
+  pixCheckout.copyTracked.add(ok);
+  track('pix_copy_click', { src: getCheckoutSrc() || 'direto', ok });
 }
 
 /** beginCheckout()/beginPix() rejeitou (sessão expirada, erro do Stripe/Woovi):
