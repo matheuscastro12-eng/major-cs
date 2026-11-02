@@ -16,6 +16,7 @@ import {
 } from '../server/liveops.js';
 import { mergeWeekendEvent, serverWeekendCatalog } from '../server/weekendEvent.js'; // [URG-2]
 import { requireAdmin } from '../server/admin-auth.js';
+import { readPaywallGate } from '../server/paywall-gate.js';
 import type { RateSql } from '../server/rate-limit.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
@@ -80,8 +81,11 @@ export default async function handler(
     // [URG-2] o evento automático de fim de semana entra aqui quando não há item manual com o mesmo id
     const now = new Date();
     const rows = mergeWeekendEvent(await activeLiveops(sql, now), now, serverWeekendCatalog);
+    // flag do paywall (server/paywall-gate.ts): só SELECT, tolera tabela ausente, padrão OFF
+    const paywallGate = await readPaywallGate(sql as never, clean(process.env.PAYWALL_GATE));
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.status(200).json({
+      flags: { paywallGate },
       items: rows.map((r) => ({ id: r.id, kind: r.kind, payload: r.payload, startsAt: r.startsAt, endsAt: r.endsAt })),
     });
     return;

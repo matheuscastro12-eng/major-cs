@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AccountError, useAccount, beginPix, fetchMe, type PixCharge } from '../state/account';
 import { sessionId, setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView } from '../state/track';
+import { track } from '../state/track'; // pix_confirmed
 import { offerVariant } from '../state/offerAb';
 import { OfferPixCta } from './OfferPixCta';
 import { ct } from '../state/career-i18n';
@@ -31,6 +32,9 @@ const LAST_KEY = 'rtm_upsell_last';
 
 // mensagem do topo por gatilho (contexto), pra parecer natural e não genérico
 const HOOKS: Record<string, string> = {
+  // trava do Major (flag do paywall, MajorPaywall.tsx)
+  'major-sg-gate': 'Seu time passou do Stage 1. Libere o resto do Major com a conta vitalícia.',
+  'major-pickem-gate': 'Stage 1 palpitado! Feche Stage 2, Stage 3 e os playoffs com a conta vitalícia.',
   'pickem': 'Palpite do Major fechado! Com a conta vitalícia ele fica salvo na nuvem e vale no ranking.',
   'split-win': 'Você acabou de conquistar um título. Que tal guardar essa campanha pra sempre?',
   'major': 'Campanha histórica! Não perca esse progresso.',
@@ -153,7 +157,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     const CAP_MS = 15 * 60_000;
     setPollPaused(false);
     const check = async () => {
-      try { const me = await fetchMe(); if (alive && me?.paid) { pixConfirmed.current = true; setPix(null); setOpen(false); onPixPaid(); } } catch { /* ignora */ }
+      try { const me = await fetchMe(); if (alive && me?.paid) { if (!pixConfirmed.current) track('pix_confirmed', { where: 'upsell-poll' }); pixConfirmed.current = true; setPix(null); setOpen(false); onPixPaid(); } } catch { /* ignora */ }
     };
     const t = window.setInterval(() => {
       if (Date.now() - startedAt > CAP_MS) { window.clearInterval(t); if (alive) setPollPaused(true); return; }
@@ -174,7 +178,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     setCheckingNow(true);
     try {
       const me = await fetchMe();
-      if (me?.paid) { pixConfirmed.current = true; setPix(null); setOpen(false); onPixPaid(); }
+      if (me?.paid) { if (!pixConfirmed.current) track('pix_confirmed', { where: 'upsell-check' }); pixConfirmed.current = true; setPix(null); setOpen(false); onPixPaid(); }
     } catch { /* segue esperando o polling automático */ }
     setCheckingNow(false);
   };

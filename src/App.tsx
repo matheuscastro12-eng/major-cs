@@ -1,4 +1,5 @@
 import { DRAFT_SESSION_VERSION, migrateDraftSession, type DraftSession } from './state/draftSession';
+import { paywallGateOn, gateTag } from './state/paywallGate'; // flag do paywall nos eventos de jogo
 import { hasIntent } from './state/purchaseIntent';
 import { captureDuelInviteFromUrl, hasDuelInvite } from './state/duelInvite';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
@@ -793,7 +794,7 @@ export default function App() {
         tournamentName(draft.pool, 1),
         DIFFICULTY_OPP_BOOST[draft.difficulty],
       );
-      track('game_start', { pool: draft.pool, difficulty: draft.difficulty, mode: draft.mode });
+      track('game_start', { pool: draft.pool, difficulty: draft.difficulty, mode: draft.mode, paywallGate: gateTag(paywallGateOn()) });
       setDraft({ ...draft, pickedCoachTeamId: teamSeasonId });
       setTournament(t);
       setScreen('hub');
@@ -872,6 +873,7 @@ export default function App() {
         difficulty: draft?.difficulty ?? 'normal',
         pool: draft?.pool ?? 'world',
         season: career.season,
+        paywallGate: gateTag(paywallGateOn()),
       });
       // conquistas: detecta desbloqueios e mostra um toast
       const champ = clone.championId === 'user';
@@ -1318,7 +1320,7 @@ export default function App() {
 
       {paidToast && (
         <div className="paid-toast" role="status">
-          <span>{ct('★ Conta com save ativada! Nuvem e ranking persistente liberados.')}</span>
+          <span>{ct('✔ Pagamento confirmado! Conta vitalícia ativada: nuvem e ranking persistente liberados.')}</span>
           <button onClick={() => setPaidToast(false)} aria-label={ct('fechar')}>✕</button>
         </div>
       )}
@@ -1382,10 +1384,11 @@ export default function App() {
         <AccountModal
           initialMode={authMode}
           payingAccount={account}
-          pixFirst={screen === 'rtp' || inlineCheckout}
+          pixFirst={screen === 'rtp' || inlineCheckout || (!!account && !account.paid)} // conta grátis logada: QR Pix na hora (cartão logo abaixo)
           playerNick={checkoutNick}
           onClose={() => { setAuthOpen(false); setAuthMode('login'); setInlineCheckout(false); }}
           onCheckout={startCheckout}
+          onPixPaid={() => setPaidToast(true)}
           onPlay={async () => {
             setAuthOpen(false); setInlineCheckout(false);
             await refreshAccount();

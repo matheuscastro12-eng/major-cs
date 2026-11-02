@@ -396,6 +396,15 @@ export default async function handler(
   // integrity: saúde do ranking PvP (rtm_match_reports). `conflict` = os dois
   // jogadores reclamaram o MESMO resultado (tentativa de fraude ou bug) — a
   // partida não conta. Reincidência de conflito é o sinal forte de fraude.
+  // abandonedCheckouts: candidatos ao lembrete de checkout abandonado — SÓ
+  // LEITURA, nada é enviado (server/abandoned-checkout.ts, REMINDER_SEND_ENABLED=false).
+  if (action === 'abandonedCheckouts') {
+    const { listReminderCandidates, REMINDER_SEND_ENABLED } = await import('../server/abandoned-checkout.js');
+    const r = await listReminderCandidates(sql as never);
+    res.status(200).json({ ...r, count: r.candidates.length, sendEnabled: REMINDER_SEND_ENABLED });
+    return;
+  }
+
   if (action === 'integrity') {
     // contagens por status (total e últimos 7 dias)
     const byStatus = await sql`

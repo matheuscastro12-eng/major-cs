@@ -26,8 +26,12 @@ import { priceLabel, usePrice } from '../../state/price';
 
 export { DEMO_WEEKS }; // semanas jogáveis na demo (a trava fecha na 4ª) — vive no engine (demoCliff.ts)
 
-export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate }: {
+export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate, src = 'rtp-demo-gate', gateTag }: {
   save: RoadToProSave;
+  /** origem do paywall_view: 'rtp-demo-gate' (fim das semanas) ou 'rtp-demo-match2' (flag do paywall, após a 2ª partida) */
+  src?: string;
+  /** estado da flag do paywall ('on'|'off'), vai no paywall_view para comparar */
+  gateTag?: 'on' | 'off';
   onUpgrade: () => void;
   onExit: () => void;
   /** Voltar da topbar: aberta pela Série do Dia, volta pro hub; senão sai */
@@ -42,7 +46,7 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate }: {
   useEffect(() => {
     if (armed.current) return;
     armed.current = true;
-    trackPaywallView('rtp-demo-gate');
+    trackPaywallView(src, gateTag ? { paywallGate: gateTag } : {});
     const t = Date.now();
     // SEGUNDA CHANCE: expirada há 3+ dias e ainda com rodada → o clube volta
     // com a proposta revisada. Antes de tratar expiração (senão ela seria lida
@@ -63,7 +67,7 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate }: {
     // trava aberta, então entra na mesa agora — quem compra a vê ao sair da trava.
     if (base !== save) next = deliverDemoCliff(next, t);
     if (next !== save) onUpdate?.(next);
-  }, [save, onUpdate]);
+  }, [save, onUpdate, src, gateTag]);
   // o relógio venceu com a trava aberta: vira "expirada" na hora (sem reload).
   useEffect(() => {
     const c = save.demoCliff;
@@ -75,7 +79,7 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate }: {
 
   const p = save.player;
   const revised = !!cliff && cliffRound(cliff) > 1;   // 2ª rodada: a proposta revisada
-  const goUpgrade = () => { if (cliff) goUpgradeFromCliff(onUpgrade); else { setCheckoutSrc('rtp-demo'); onUpgrade(); } };
+  const goUpgrade = () => { if (cliff) goUpgradeFromCliff(onUpgrade); else { setCheckoutSrc(src === 'rtp-demo-gate' ? 'rtp-demo' : src); onUpgrade(); } };
   // no shell (RtpFrame): trilho, topbar e Voltar, como as outras telas de
   // fluxo do RtP; antes ocupava a tela inteira, sem saída além do botão
   return (

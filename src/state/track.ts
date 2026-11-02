@@ -33,6 +33,13 @@ const FUNNEL_TYPES = new Set([
   'paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'checkout_blocked', 'pix_copy_click', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card',
   // [medição do Major e da ativação] marcos raros, sem dado pessoal (só sid, ref e o modo/superfície)
   'major_sg_view', 'major_vitrine_click', 'major_pickem_submit', 'major_sg_campaign_done', 'first_match_done',
+  // game_start/game_end (modo clássico): o corte de custo 3bf5f3f transformou
+  // TODO evento fora desta lista em no-op no cliente, e eles sumiram do admin
+  // (api/metrics.ts ainda os conta). Volume: 1 por campeonato iniciado/terminado
+  // — ordem de grandeza do first_match_done, não do presence.
+  'game_start', 'game_end',
+  // Pix confirmado na tela (polling viu a conta paga): fecha o funil do QR
+  'pix_confirmed',
 ]);
 // Marcos que valem 1x por sessão do navegador (sessionStorage, então F5 não
 // repete): a chave inclui a superfície quando houver. Volume esperado: ≤ 5
@@ -199,7 +206,7 @@ export function trackPaywallView(src: string, extra: Record<string, string | num
 //   gate     → o jogador tentou usar algo travado (demo do RtP, mercado, Ultimate sem conta…)
 //   checkout → já está no pagamento (avisos dentro do QR Pix / nudge do checkout)
 //   surface  → viu uma vitrine de venda navegando (landing, Início, perfil, ranking…)
-const PAYWALL_GATES = new Set(['rtp-demo-gate', 'mkt-lock', 'home-ultimate', 'wl-guest', 'wl-free']);
+const PAYWALL_GATES = new Set(['rtp-demo-gate', 'mkt-lock', 'home-ultimate', 'wl-guest', 'wl-free', 'rtp-demo-match2', 'major-sg-gate', 'major-pickem-gate']);
 const PAYWALL_IN_CHECKOUT = new Set(['pix-wait-longo', 'pix-cartao-cedo', 'upsell-pix-cartao-cedo', 'checkout-nudge', 'upsell-nudge']);
 export type PaywallTrigger = 'gate' | 'checkout' | 'surface';
 export function paywallTrigger(src: string): PaywallTrigger {
