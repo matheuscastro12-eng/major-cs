@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import data from '../src/data/major-singapore-2026.json' with { type: 'json' };
 import { titleOdds, type MajorData } from '../src/engine/majorSingapore.ts';
 import { MAJOR_SG_PROMO_ENDS_MS } from '../src/data/majorWindow.ts';
@@ -16,7 +17,7 @@ import {
 } from '../src/data/majorLanding.ts';
 
 const D = data as unknown as MajorData;
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 // AAAA-MM-DD de um instante no fuso de Brasília (UTC-3, sem horário de verão)
 const brDate = (ms: number) => new Date(ms - 3 * 3600_000).toISOString().slice(0, 10);
