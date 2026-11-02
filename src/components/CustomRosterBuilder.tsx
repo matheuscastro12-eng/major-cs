@@ -111,7 +111,7 @@ export function CustomRosterBuilder({
         country: s.country,
         role: s.role,
         // idade escolhida pelo user; a carreira começa no split 1, então age é a
-        // idade-base exata (effectiveAge soma +1 ano a cada 3 splits a partir daqui)
+        // idade-base exata (effectiveAge soma +1 ano a cada temporada a partir daqui)
         age: Math.max(16, Math.min(40, Math.round(s.age))),
         aim: s.aim,
         consistency: s.consistency,

@@ -15,7 +15,7 @@ import {
   eventMeta,
   scoutOppPlayerStats,
   effectiveAge,
-  playerPotentialOvr,
+  careerPotentialOvr,
   isMajorSplit,
   type GamePlan,
   type SeasonStat,
@@ -145,7 +145,7 @@ export function OverviewTab({
   for (const p of squadPlayers) {
     const age = effectiveAge(p, save.split, save.youthAge, save.youthDebut);
     ages[p.id] = age;
-    potentialMap[p.id] = playerPotentialOvr(p, age);
+    potentialMap[p.id] = careerPotentialOvr(save, p);
   }
   const oppScoutStats: Record<string, { rating: number; adr: number }> = {};
   if (opp) {

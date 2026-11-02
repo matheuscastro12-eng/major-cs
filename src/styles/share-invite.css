@@ -1,0 +1,51 @@
+/* CONVITE PARA COMPARTILHAR (components/ShareInvite.tsx): pick'em fechado, fim
+   da série e fim da campanha do Major. Tokens do Broadcast Desk; o painel é o
+   .ds-panel--accent do design system. Só opacity/transform animam, e o
+   movimento reduzido desliga a entrada (base.css também zera animação). */
+
+.shi {
+  animation: shi-in var(--dur-3) var(--ease-out);
+  /* reveal (scrollIntoView): não esconder atrás da barra do topo */
+  scroll-margin-top: calc(var(--gs-top-h, var(--shell-top)) + var(--sp-4));
+  scroll-margin-bottom: var(--sp-4);
+}
+
+.shi__lead {
+  margin: 0 0 var(--sp-3);
+  color: var(--c-ink);
+  font-size: var(--fs-4);
+  line-height: var(--lh-snug);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.shi__lead strong { color: var(--c-brand); font-weight: 700; }
+
+.shi__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* lado a lado e do tamanho do texto; no celular estreito cada um ocupa a linha */
+.shi__actions > .ds-btn { flex: 0 0 auto; min-width: 12rem; }
+
+.shi__status { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-3); line-height: var(--lh-body); }
+.shi__status:not(:empty) { margin-top: var(--sp-2); }
+
+/* compacto: dentro de outro bloco (resultado da série), separado por um fio */
+.shi--compact {
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--c-line-soft);
+}
+.shi--compact .shi__lead { color: var(--c-ink-dim); font-size: var(--fs-3); }
+
+/* o assinar com nick (reaproveita .mch-sign do desafio) logo abaixo dos botões */
+.shi .mch-sign { margin-top: var(--sp-2); }
+
+@keyframes shi-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* celular/tablet: a tab bar do shell é fixa no pé */
+@media (max-width: 1023px) {
+  .shi { scroll-margin-bottom: calc(var(--shell-tabbar) + env(safe-area-inset-bottom) + var(--sp-4)); }
+}
+@media (max-width: 560px) {
+  .shi__actions > .ds-btn { flex: 1 1 100%; min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shi { animation: none; }
+}

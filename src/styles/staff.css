@@ -108,3 +108,29 @@
   .staff-market .ds-seg { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
   .staff-market .ds-seg__btn { flex: none; }
 }
+
+/* [equilíbrio] o que o técnico rende NA PARTIDA + escolha do estilo */
+.staff-match {
+  display: flex; flex-direction: column; gap: 2px; margin: 0 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3); border-radius: 8px; background: var(--c-surface-2); border: 1px solid var(--c-line-soft);
+}
+.staff-match b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 800; font-size: var(--fs-3); }
+.staff-match[data-tone='up'] b { color: var(--c-win); }
+.staff-match[data-tone='down'] b { color: var(--c-loss); }
+.staff-match small { color: var(--c-ink-faint); font-size: var(--fs-2); line-height: 1.4; }
+.staff-match-cell { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
+.staff-match-cell[data-tone='up'] { color: var(--c-win); }
+.staff-match-cell[data-tone='down'] { color: var(--c-loss); }
+.staff-match-cell small { color: var(--c-ink-faint); font-weight: 600; font-size: var(--fs-2); }
+.staff-coach-style { display: flex; flex-direction: column; gap: var(--sp-2); }
+.staff-style-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--sp-2); }
+.staff-style {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; padding: var(--sp-3); border-radius: 8px; cursor: pointer;
+  background: var(--c-surface-2); border: 1px solid var(--c-line-strong); color: inherit; font: inherit;
+}
+.staff-style:hover { background: var(--c-surface-3); }
+.staff-style:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.staff-style.is-on { border-color: var(--c-brand); box-shadow: inset 0 0 0 1px var(--c-brand); }
+.staff-style b { font-size: var(--fs-3); }
+.staff-style small { color: var(--c-ink-faint); font-size: var(--fs-2); line-height: 1.35; }
+.staff-style__pow { color: var(--c-ink-dim); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }

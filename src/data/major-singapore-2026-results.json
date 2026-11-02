@@ -1,0 +1,31 @@
+{
+ "$comment": "Resultados oficiais do PGL Major Singapore 2026 para o placar do pick'em. Formato e regras no topo de src/data/majorResults.ts. Antes do merge: npx tsx scripts/major-results-check.mts",
+ "stage1": {
+  "qualified": [],
+  "x30": [],
+  "x03": [],
+  "source": null,
+  "updatedAt": null
+ },
+ "stage2": {
+  "qualified": [],
+  "x30": [],
+  "x03": [],
+  "source": null,
+  "updatedAt": null
+ },
+ "stage3": {
+  "qualified": [],
+  "x30": [],
+  "x03": [],
+  "source": null,
+  "updatedAt": null
+ },
+ "playoffs": {
+  "qf": [],
+  "sf": [],
+  "champion": null,
+  "source": null,
+  "updatedAt": null
+ }
+}

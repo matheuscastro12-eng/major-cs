@@ -1,5 +1,5 @@
 // Minimapa central — canvas onde os 10 agentes andam, spike planta, tiros são
-// desenhados, etc. Quando o radar PNG do CS2 está disponível pro mapa, desenha
+// desenhados, etc. Quando o mapa tem radar (a nossa planta, planRadar.ts), desenha
 // por baixo; senão usa o layout abstrato com grid + sites destacados.
 //
 // V2 (após feedback do user):

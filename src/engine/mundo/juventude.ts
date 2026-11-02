@@ -1,6 +1,6 @@
 // [fase 4 · frente JUVENTUDE] Jovens gerados (newgens): geração anual, evolução e poda.
 //
-// GERAÇÃO ANUAL (uma vez por ano de Carreira = 3 splits): cada macro-região
+// GERAÇÃO ANUAL (uma vez por ano de Carreira = 1 temporada = 4 splits): cada macro-região
 // revela uma leva de jovens de 16–18 anos. Quantidade e qualidade seguem a
 // força da cena (Europa/CIS mais e melhores; Oceania/África menos). O PA segue
 // uma distribuição realista — a maioria 90–130, poucos 130–160 e raros 160+ —
@@ -44,8 +44,9 @@ import { youthCountry, youthIdentity } from './juventudeNomes';
 export function defaultNewgens(_save?: Record<string, unknown>): Record<string, Player> { return {}; }
 export function defaultIntake(_save?: Record<string, unknown>): YouthIntakeLog[] { return []; }
 
-export const SPLITS_PER_YEAR = 3;
-/** Ano de Carreira (0-based) do split: splits 1–3 = ano 0. */
+export { SPLITS_PER_YEAR } from '../clock';
+import { SPLITS_PER_YEAR } from '../clock';
+/** Ano de Carreira (0-based) do split: splits 1–4 = ano 0 (1 ano = 1 temporada). */
 export const careerYearOf = (split: number) => Math.floor((Math.max(1, Math.floor(split)) - 1) / SPLITS_PER_YEAR);
 /** Primeiro split de um ano de Carreira. */
 export const firstSplitOfYear = (year: number) => year * SPLITS_PER_YEAR + 1;
@@ -70,7 +71,7 @@ export function parseNewgenId(id: string): NewgenId | null {
   return { debut: Number(m[1]), ageAtDebut: Number(m[2]), region, n: Number(m[4]) };
 }
 export const isNewgenId = (id: string) => NEWGEN_RX.test(id);
-/** Idade do jovem no split (sobe 1 a cada 3 splits desde a estreia). */
+/** Idade do jovem no split (sobe 1 a cada temporada desde a estreia). */
 export function newgenAge(id: string, split: number): number | null {
   const g = parseNewgenId(id);
   if (!g) return null;

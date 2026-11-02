@@ -41,7 +41,8 @@
 
 import type { MapId, Playstyle, Role, TTeam } from '../../types';
 import { MAP_POOL, derivePlaystyle } from '../../types';
-import type { CtSetup, MapRole, MapTactic, TacticDuelMods, TacticsState, TExecute, TeamInstructions } from './model';
+import type { CtSetup, MapRole, MapTactic, TacticDuelMods, TacticsState, TExecute, TeamInstructions, TeamStyle } from './model';
+import { aiStyle, styleAfterSeries, styleDuelMods, styleFamOf, styleOf, styleProfile, styleQuality, type StyleProfile } from './estilo';
 import { attrsOf } from '../attrs/model';
 import { hashStr } from '../../state/hash';
 
@@ -275,6 +276,11 @@ export interface TeamPlan {
   fam: number;            // 0–100
   oppId: string | null;   // adversário estudado
   read: number;           // 0..1 — fração da mistura deslocada pro contra (anti-strat)
+  // [estilo de jogo] (estilo.ts) — Padrão nos dois lados = nada muda
+  style: TeamStyle;
+  players?: PlanPlayer[];            // elenco (para recalcular o perfil ao trocar de estilo ao vivo)
+  styleQ: { t: number; ct: number }; // qualidade de execução (familiaridade do estilo × do mapa)
+  profile: StyleProfile | null;      // perfil do elenco (só calculado com estilo fora do Padrão)
 }
 
 export function blankMapTactic(map: MapId): MapTactic {
@@ -312,6 +318,9 @@ export function resolveTeamPlan(state: TacticsState, map: MapId, players: PlanPl
     return !!(r[p.id] ?? r[orgId(p.id)] ?? (p.sourcePlayerId ? r[p.sourcePlayerId] : undefined));
   });
   const awp = roles.indexOf('awp');
+  const style = styleOf(state);
+  const fam = mapTacticOf(state, map).familiarity;
+  const styled = style.t !== 'standard' || style.ct !== 'standard';
   return {
     teamId, map,
     ids: players.map((p) => p.id),
@@ -327,6 +336,22 @@ export function resolveTeamPlan(state: TacticsState, map: MapId, players: PlanPl
     fam: mt.familiarity,
     oppId,
     read: antiStratReadOf(state, oppId),
+    style,
+    players,
+    styleQ: { t: styleQuality(styleFamOf(state, 't', style.t), fam), ct: styleQuality(styleFamOf(state, 'ct', style.ct), fam) },
+    profile: styled ? styleProfile(players, roles.indexOf('igl')) : null,
+  };
+}
+
+/** Troca o estilo do plano já resolvido (ajuste ao vivo na partida). */
+export function withPlanStyle(plan: TeamPlan, state: TacticsState | null | undefined, style: TeamStyle): TeamPlan {
+  const st = { ...(state ?? defaultTactics()), style };
+  const fam = plan.fam;
+  return {
+    ...plan,
+    style,
+    styleQ: { t: styleQuality(styleFamOf(st, 't', style.t), fam), ct: styleQuality(styleFamOf(st, 'ct', style.ct), fam) },
+    profile: plan.profile ?? ((style.t !== 'standard' || style.ct !== 'standard') && plan.players ? styleProfile(plan.players, plan.iglSlot) : null),
   };
 }
 
@@ -453,8 +478,33 @@ export function tacticDuelMods(ctx: TacticModsCtx): TacticDuelMods {
       else if (I.tempo === 'slow') { plant *= 0.9; time *= 1.4; phase.mid += 0.03; }
     }
   }
+  // [estilo de jogo] o jeito de jogar do lado, por cima do plano (estilo.ts)
+  const myStyle = side === 't' ? plan.style.t : plan.style.ct;
+  const oppStyle = opp ? (side === 't' ? opp.style.ct : opp.style.t) : null;
+  let kMult: number | undefined, oppPlantMult: number | undefined, engageMid: Record<string, number> | undefined, engagePost: Record<string, number> | undefined;
+  if (myStyle !== 'standard' || (oppStyle && oppStyle !== 'standard')) {
+    const sm = styleDuelMods({
+      side, style: myStyle, q: (side === 't' ? plan.styleQ.t : plan.styleQ.ct) * k,
+      profile: plan.profile ?? styleProfile([]), ids: plan.ids, roles: plan.roles, styles: plan.styles,
+      oppStyle, oppQ: opp ? (side === 't' ? opp.styleQ.ct : opp.styleQ.t) * k : 1, live: ctx.live,
+    });
+    teamLogit += sm.teamLogit;
+    if (sm.phaseLogit) { phase.open += sm.phaseLogit.open / k; phase.mid += sm.phaseLogit.mid / k; phase.post += sm.phaseLogit.post / k; }
+    if (sm.tradeMult) trade *= sm.tradeMult;
+    if (sm.plantMult) plant *= sm.plantMult;
+    if (sm.timeMult) time *= sm.timeMult;
+    if (sm.engageWeight) {
+      engageWeight = { ...(engageWeight ?? {}) };
+      for (const [id, m] of Object.entries(sm.engageWeight)) engageWeight[id] = (engageWeight[id] ?? 1) * m;
+    }
+    kMult = sm.kMult; oppPlantMult = sm.oppPlantMult; engageMid = sm.engageMid; engagePost = sm.engagePost;
+  }
   const out: TacticDuelMods = { teamLogit, roleFit, mapRole };
   if (engageWeight && Object.keys(engageWeight).length) out.engageWeight = engageWeight;
+  if (kMult != null && kMult !== 1) out.kMult = kMult;
+  if (side === 'ct' && oppPlantMult != null && oppPlantMult !== 1) out.oppPlantMult = oppPlantMult;
+  if (engageMid) out.engageMid = engageMid;
+  if (engagePost) out.engagePost = engagePost;
   if (phase.open || phase.mid || phase.post) out.phaseLogit = { open: phase.open * k, mid: phase.mid * k, post: phase.post * k };
   if (side === 't' && plant !== 1) out.plantMult = plant;
   if (side === 't' && time !== 1) out.timeMult = time;
@@ -495,6 +545,8 @@ export function decayFamiliarity(tactics: TacticsState, used: MapId[], amount = 
 export function tacticsAfterSeries(tactics: TacticsState, mapsPlayed: MapId[], famGainMult = 1): TacticsState {
   let t = decayFamiliarity(tactics, mapsPlayed);
   for (const m of mapsPlayed) t = gainFamiliarity(t, m, FAM_MATCH_GAIN * famGainMult);
+  // [estilo de jogo] o estilo usado ganha familiaridade; os parados decaem
+  if (t.style || t.styleFam) t = styleAfterSeries(t, mapsPlayed.length, famGainMult);
   return t;
 }
 
@@ -688,10 +740,12 @@ export const SCRIM_LEAK_READ = 50;
 export function aiTactics(team: AiTeam, vs?: { id: string; scouting: number; leak?: number } | null): TacticsState {
   const maps: Partial<Record<MapId, MapTactic>> = {};
   for (const m of MAP_POOL) maps[m] = aiMapTactic(team, m);
+  const st = aiStyle(team);
   return {
     v: 1,
     instr: aiInstructions(team),
     maps,
+    ...(st.style.t !== 'standard' || st.style.ct !== 'standard' ? { style: st.style, styleFam: st.fam } : {}),
     antiStrat: vs ? { opponentTeamId: vs.id, readiness: Math.round(clamp(clamp(vs.scouting, 0, 1) * AI_PREP * 100 + clamp(vs.leak ?? 0, 0, 1) * SCRIM_LEAK_READ, 0, 100)) } : null,
   };
 }

@@ -21,6 +21,7 @@ import type { MomentOutcome } from './moments';
 import type { RoadToProSave, ArchetypeKind } from './types';
 import type { MapId, Role } from '../../types';
 import type { PlayerPersonality } from '../career/personality';
+import { shareUrl } from '../../state/shareLink';
 
 export { dateKeyOf, dayNumberOf };
 
@@ -81,12 +82,15 @@ export function dailyScoreOf(result: ProMatchResult): DailyScore {
   return { rating: result.heroRating, won: result.won, mapScore: result.mapScore };
 }
 
+/** link da Série do Dia com atribuição (?ref=rtp-series) */
+export const DAILY_SERIES_URL = shareUrl('/', 'rtp-series');
+
 // texto de share (o print é o convite — mesmo padrão do Diário).
 export function dailyShareText(day: number, s: DailyScore, rank: number | null, streakDays = 0): string {
   const res = s.won ? `venci ${s.mapScore[0]}–${s.mapScore[1]}` : `caí ${s.mapScore[0]}–${s.mapScore[1]}`;
   const pos = rank ? ` · top #${rank}` : '';
   const streak = streakDays >= 2 ? ` · 🔥 ${streakDays} dias` : '';
-  return `SÉRIE DO DIA #${day} · ROAD TO MAJOR\nRating ${s.rating.toFixed(2)} — ${res}${pos}${streak}\nMesma série pra todo mundo. Consegue mais?\nroadtomajor.com.br`;
+  return `SÉRIE DO DIA #${day} · ROAD TO MAJOR\nRating ${s.rating.toFixed(2)} — ${res}${pos}${streak}\nMesma série pra todo mundo. Consegue mais?\n${DAILY_SERIES_URL}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,11 +113,10 @@ export function dailyWeekRange(week: number): [number, number] {
 // o amigo joga a MESMA série (o fixture já é o mesmo — dividendo da Sala pura)
 // e o jogo compara os ratings. Quem abre sem vitalícia cai no funil.
 
-export interface GhostChallenge {
-  day: number;
-  nick: string;
-  rating: number;   // 2 casas, faixa real do motor (0..2.5)
-}
+// o desafio e o parser do link moram em ./ghostParam (módulo leve: o boot do
+// app lê ?desafio= sem puxar o motor do Road to Pro nem a base de jogadores)
+export { parseGhostParam, type GhostChallenge } from './ghostParam';
+import type { GhostChallenge } from './ghostParam';
 
 // nick seguro pro param/render: só [a-z0-9_], até 20 chars (o link não é canal
 // de injeção nem de palavrão gigante).
@@ -131,15 +134,6 @@ export function ghostLinkOf(g: GhostChallenge): string {
   return `https://roadtomajor.com.br/?desafio=${ghostParamOf(g)}`;
 }
 
-export function parseGhostParam(raw: string | null | undefined): GhostChallenge | null {
-  if (!raw) return null;
-  const m = /^(\d{1,5})-(\d{1,3})-([a-z0-9_]{1,20})$/.exec(raw.trim());
-  if (!m) return null;
-  const day = Number(m[1]);
-  const rating = Number(m[2]) / 100;
-  if (day < 1 || !(rating >= 0 && rating <= 2.5)) return null;
-  return { day, nick: m[3], rating };
-}
 
 // convite que vai junto do link (o texto é o desafio; o link é a armadilha).
 export function ghostInviteText(g: GhostChallenge): string {

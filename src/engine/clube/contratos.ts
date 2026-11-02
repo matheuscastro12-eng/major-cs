@@ -275,6 +275,8 @@ export interface NegoProfile {
   currentStatus?: SquadStatus | null;
   /** moral 0–100 (renovação). */
   morale?: number;
+  /** [equilíbrio] contratação de free agent (sem taxa de transferência). */
+  freeAgent?: boolean;
 }
 
 /**
@@ -396,7 +398,11 @@ export function demandFor(p: NegoProfile): Demand {
   const wage = Math.max(20000, round5k(target / (1 + extra / term)));
   // o que falta do pacote vira luvas (no piso salarial, pode não sobrar nada)
   const extraBonus = Math.max(0, round5k((target - wage) * term));
-  const bonus = (p.kind === 'renewal' ? round5k(wage) : 0) + extraBonus;
+  // [equilíbrio] free agent de calibre não sai de graça: sem taxa pro clube,
+  // ele cobra luvas de assinatura (80+: 15% do valor de mercado; 85+: 30%)
+  const faBonus = p.kind === 'signing' && p.freeAgent && p.ovr >= FA_BONUS_OVR ? round5k(p.marketValue * (p.ovr >= FA_STAR_OVR ? 0.3 : 0.15)) : 0;
+  if (faBonus > 0) factors.push({ key: 'freeAgent', label: 'Livre no mercado: pede luvas pelo calibre', pct: Math.round((faBonus / Math.max(1, target * term)) * 100) });
+  const bonus = (p.kind === 'renewal' ? round5k(wage) : 0) + extraBonus + faBonus;
 
   // cláusula baixa: ambicioso em clube abaixo do nível dele (ou agente de ambicioso)
   const wantsClause = (gap >= 1 && amb >= 13) || (agent.has && amb >= 15);
@@ -410,9 +416,17 @@ export function demandFor(p: NegoProfile): Demand {
 }
 
 // ─── Disposição: ele aceita sequer conversar? ────────────────────────────
+/** [equilíbrio] free agent a partir deste OVR pede luvas pelo calibre. */
+export const FA_BONUS_OVR = 80;
+/** [equilíbrio] free agent a partir deste OVR não assina com clube de tier 3. */
+export const FA_STAR_OVR = 85;
+
 export function willingToNegotiate(p: NegoProfile): { ok: true } | { ok: false; reason: string } {
   const amb = p.hidden.ambition, loy = p.hidden.loyalty;
   if (p.kind === 'signing') {
+    if (p.freeAgent && p.ovr >= FA_STAR_OVR && p.clubTier >= 3) {
+      return { ok: false, reason: ct('Livre no mercado e de nível de elite: não assina com um clube de tier 3.') };
+    }
     if (p.clubTier - caliberTier(p.ovr) >= 2 && amb >= 16) {
       return { ok: false, reason: ct('Ambicioso demais para descer dois níveis: não quer jogar no seu tier.') };
     }

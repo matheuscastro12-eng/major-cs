@@ -1,0 +1,147 @@
+/* DESAFIO DO PICK'EM (MajorChallenge.tsx): faixa do desafio, painel "Você x
+   amigo" e a barra "Desafiar de volta". Mesmo sistema do major.css: tokens de
+   tokens.css, Oswald no destaque, Barlow Condensed nos rótulos. Só
+   transform/opacity animam (e o base.css zera tudo com movimento reduzido). */
+
+/* ── faixa do desafio (topo do Pick'em, link de outra pessoa) ── */
+.mch-band {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  background: linear-gradient(90deg, var(--c-accent-soft), transparent 55%), var(--c-surface-1);
+  border: 1px solid var(--c-accent-line);
+  border-radius: var(--rad-3);
+  box-shadow: inset 3px 0 0 var(--c-brand);
+  animation: mch-in var(--dur-3) var(--ease-out);
+}
+.mch-band__icon { color: var(--c-brand); }
+.mch-band__txt { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.mch-band__kicker {
+  font-family: var(--font-title); font-weight: 600; font-size: var(--fs-2);
+  letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-brand);
+}
+.mch-band__head {
+  margin: 0;
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-6);
+  line-height: var(--lh-snug); letter-spacing: var(--tracking-display); text-transform: uppercase;
+  text-wrap: balance; overflow-wrap: anywhere;
+}
+.mch-band__who, .mch-band__champ { font-weight: 600; }
+.mch-band__champ { color: var(--c-brand); }
+.mch-band__sub { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-3); line-height: var(--lh-body); }
+.mch-band__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2); }
+
+/* ── painel "Você x amigo" ── */
+.mch-vs { scroll-margin-top: calc(var(--gs-top-h, var(--shell-top)) + var(--sp-4)); }
+.mch-vs:focus:not(:focus-visible) { outline: none; }
+.mch-switch { margin-bottom: var(--sp-3); }
+.mch-vs__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+.mch-vs__head { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); min-width: 0; }
+.mch-vs__detail { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+@media (min-width: 900px) {
+  .mch-vs__body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: var(--sp-6); align-items: start; }
+}
+
+.mch-champs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); width: 100%; }
+.mch-champ {
+  display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--c-surface-2); border: 1px solid var(--c-line); border-radius: var(--rad-2);
+}
+.mch-champ.is-same { border-color: var(--c-brand); }
+.mch-champ__who {
+  font-family: var(--font-title); font-weight: 600; font-size: var(--fs-2);
+  letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-ink-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mch-champ__name {
+  display: flex; align-items: center; gap: var(--sp-2); min-width: 0;
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-5);
+  line-height: var(--lh-tight); text-transform: uppercase; overflow-wrap: anywhere;
+}
+.mch-champ__name svg { color: var(--c-brand); flex: none; }
+
+.mch-total { display: flex; align-items: baseline; gap: var(--sp-2); margin: var(--sp-2) 0 0; color: var(--c-ink-dim); font-size: var(--fs-3); }
+.mch-total strong { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-7); line-height: 1; color: var(--c-ink); font-variant-numeric: tabular-nums; }
+.mch-total small { font-size: var(--fs-5); color: var(--c-ink-faint); }
+
+.mch-rows { list-style: none; margin: 0; padding: 0; width: 100%; }
+.mch-row {
+  display: grid; grid-template-columns: 9rem minmax(0, 1fr) 4ch; align-items: center;
+  gap: var(--sp-1) var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--c-line-soft);
+  font-size: var(--fs-3);
+}
+.mch-row__label {
+  font-family: var(--font-title); font-weight: 600; font-size: var(--fs-2);
+  letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-ink-faint);
+}
+.mch-row__count { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; color: var(--c-ink-dim); }
+.mch-row__count.is-full { color: var(--c-brand); font-weight: 600; }
+.mch-row__ext { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-4); color: var(--c-ink-faint); font-size: var(--fs-2); }
+.mch-row__ext > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
+
+.mch-meter { display: flex; gap: 3px; width: 100%; }
+.mch-meter i { flex: 1; height: 8px; border-radius: 2px; background: var(--c-surface-3); }
+.mch-meter i.is-on { background: var(--c-brand); }
+
+.mch-tags { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); }
+.mch-tag {
+  padding: 2px var(--sp-2); border: 1px solid var(--c-line-strong); border-radius: var(--rad-1);
+  font-family: var(--font-num); font-size: var(--fs-2); color: var(--c-ink);
+}
+.mch-none { color: var(--c-ink-faint); font-size: var(--fs-2); }
+
+.mch-sign { display: flex; align-items: center; gap: var(--sp-2); min-height: var(--tap); cursor: pointer; color: var(--c-ink-dim); font-size: var(--fs-3); }
+.mch-sign input { width: 18px; height: 18px; margin: 0; accent-color: var(--c-brand); flex: none; }
+.mch-sign strong { color: var(--c-ink); }
+
+/* ── barra "Desafiar de volta": gruda no pé enquanto o Pick'em rola ── */
+.mch-bar {
+  position: sticky;
+  bottom: var(--sp-4);
+  z-index: var(--z-sticky);
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-accent-line);
+  border-radius: var(--rad-3);
+  box-shadow: var(--shadow-3);
+  animation: mch-rise var(--dur-3) var(--ease-out);
+}
+.mch-bar__sum {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3);
+  flex: 1; min-width: 0; margin: 0; color: var(--c-ink-dim); font-size: var(--fs-3);
+}
+.mch-bar__vs {
+  font-family: var(--font-title); font-weight: 600; font-size: var(--fs-2);
+  letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--c-brand);
+}
+.mch-bar__sum strong { color: var(--c-ink); font-variant-numeric: tabular-nums; }
+.mch-bar__actions { display: flex; gap: var(--sp-2); flex: none; }
+
+@keyframes mch-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes mch-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* celular/tablet: a tab bar do shell é fixa no pé, a barra fica logo acima dela */
+@media (max-width: 1023px) {
+  .mch-bar { bottom: calc(var(--shell-tabbar) + env(safe-area-inset-bottom) + var(--sp-2)); }
+}
+@media (max-width: 720px) {
+  .mch-band { grid-template-columns: auto minmax(0, 1fr); padding: var(--sp-4); }
+  .mch-band__head { font-size: var(--fs-5); }
+  .mch-band__actions { grid-column: 1 / -1; justify-content: stretch; }
+  .mch-band__actions > .ds-btn--primary { flex: 1; }
+  .mch-bar__sum { display: none; }
+  .mch-bar { padding: var(--sp-2); }
+  .mch-bar__actions { flex: 1; }
+  .mch-bar__go { flex: 1; }
+}
+@media (max-width: 520px) {
+  .mch-row { grid-template-columns: 6.5rem minmax(0, 1fr) 4ch; }
+  .mch-row__ext { grid-column: 1 / -1; }
+  .mch-total strong { font-size: var(--fs-6); }
+  .mch-champ { padding: var(--sp-3); }
+  .mch-champ__name { font-size: var(--fs-4); }
+}

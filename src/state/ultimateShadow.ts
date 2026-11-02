@@ -491,6 +491,54 @@ export function ultFrozenNotice(): string | null {
   try { return localStorage.getItem(FROZEN_KEY); } catch { return null; }
 }
 
+// [F1] MIGRAÇÃO ÚNICA (ultImport): manda o save local UMA vez por conta pro
+// inventário do servidor — depois disso só o servidor cria carta, e o squad da
+// ranqueada só aceita cartas que existem lá. O servidor confere catálogo,
+// clampa boost/ed/style, aplica tetos e marca a conta (imported_at); repetir
+// a chamada é inofensivo. Aqui só guardamos "já foi" por conta no aparelho pra
+// não reenviar a cada boot. 503/rede: tenta de novo no próximo boot.
+const IMPORT_FLAG_KEY = 'rtm-ult-imported-v1';
+
+function tokenEmail(token: string): string {
+  try {
+    const b64 = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+    return atob(b64).split('|')[0] ?? '';
+  } catch { return ''; }
+}
+
+export async function importLocalOnce(): Promise<void> {
+  try {
+    if (!cloudEnabled()) return;
+    const token = getToken();
+    if (!token) return;
+    const email = tokenEmail(token);
+    let done: string[] = [];
+    try { done = JSON.parse(localStorage.getItem(IMPORT_FLAG_KEY) ?? '[]') as string[]; } catch { done = []; }
+    if (!Array.isArray(done)) done = [];
+    if (email && done.includes(email)) return;
+    let local: UltimateState | null = null;
+    try {
+      const raw = localStorage.getItem(LOCAL_SAVE_KEY);
+      local = raw ? (JSON.parse(raw) as UltimateState) : null;
+    } catch { local = null; }
+    const payload = {
+      credits: Math.max(0, Math.trunc(local?.profile?.credits ?? 0) || 0),
+      cards: (Array.isArray(local?.inventory) ? local!.inventory : []).map((o) => ({ id: o.id, cardKey: o.cardKey, boost: o.boost, ed: o.ed, style: o.style })),
+    };
+    const r = await fetch('/api/ultimate-economy', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'ultImport', token, local: payload }),
+    });
+    if (!r.ok) return; // 503 (catálogo) / 423 (congelada) / rede: próximo boot
+    if (email) {
+      try { localStorage.setItem(IMPORT_FLAG_KEY, JSON.stringify([...done, email].slice(-10))); } catch { /* best-effort */ }
+    }
+  } catch (e) {
+    captureError(e, 'ult-import');
+  }
+}
+
 // Boot do espelho: drena a fila que sobrou de sessões anteriores e roda a
 // leitura servidor↔local (só diagnóstico — ver reconcileFlip). Fire-and-forget
 // — chamado após a reconciliação do slot 'ultimate' com a nuvem, nunca
@@ -499,6 +547,7 @@ export function bootUltimateShadow(): void {
   void (async () => {
     try {
       await flushShadowQueue();
+      await importLocalOnce(); // [F1] 1× por conta, antes da leitura servidor↔local
       await reconcileFlip();
     } catch (e) {
       captureError(e, 'ult-shadow');

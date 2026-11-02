@@ -1,0 +1,198 @@
+/* Tela do QR Pix da vitalícia (src/components/PixPanel.tsx): AccountModal e
+   UpsellCard. Só tokens. Celular primeiro: "Copiar código Pix" no topo e o QR
+   na largura útil; com mouse (pointer: fine) o QR sobe para o topo. */
+
+.pix-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  color: var(--c-ink);
+  font-family: var(--font-ui);
+}
+/* :where = especificidade zero: as classes abaixo ganham. Regras com margem ou
+   lista levam o prefixo .pix-panel: o reset da landing (.lp-page :where(p, ol…))
+   tem a mesma especificidade de uma classe e carrega depois. */
+:where(.pix-panel) p { margin: 0; }
+
+.pix-panel__head { display: flex; flex-direction: column; gap: var(--sp-2); }
+.pix-panel__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-4);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  line-height: var(--lh-snug);
+  text-transform: uppercase;
+  color: var(--c-ink);
+}
+.pix-panel__context { font-size: var(--fs-3); font-weight: 600; color: var(--c-win); line-height: var(--lh-snug); }
+
+/* "Aguardando o pagamento…" + prazo */
+.pix-panel__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--c-ink);
+}
+.pix-panel__dot {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: var(--rad-pill);
+  background: var(--c-win);
+  animation: pix-pulse 1.6s var(--ease-in-out) infinite;
+}
+@keyframes pix-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.75); }
+}
+.pix-panel__expiry { font-weight: 500; color: var(--c-ink-dim); }
+.pix-panel__expiry b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--c-ink); }
+.pix-panel__expiry--soon,
+.pix-panel__expiry--soon b { color: var(--c-warn); }
+
+/* gerando a cobrança */
+.pix-panel__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  min-height: 120px;
+  border: 1px dashed var(--c-line-strong);
+  border-radius: var(--rad-3);
+  font-size: var(--fs-3);
+  color: var(--c-ink-dim);
+}
+.pix-panel__spin {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--rad-pill);
+  animation: ds-spin 0.7s linear infinite;
+}
+
+/* corpo: copiar + passos e o QR (a ordem muda com mouse) */
+.pix-panel__main { display: flex; flex-direction: column; gap: var(--sp-5); }
+.pix-panel__copy { display: flex; flex-direction: column; }
+.pix-panel__copy-status { font-size: var(--fs-3); font-weight: 600; line-height: var(--lh-body); color: var(--c-win); }
+.pix-panel__copy-status:not(:empty) { margin-top: var(--sp-2); }
+.pix-panel__copy-status--fail { color: var(--c-warn); }
+
+.pix-panel .pix-panel__code { display: flex; flex-direction: column; gap: var(--sp-1); margin-top: var(--sp-2); }
+.pix-panel__code-label {
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--c-ink-dim);
+}
+/* 16px: input menor que isso dá zoom no iOS ao focar */
+.pix-panel__code .pix-panel__code-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-surface-0);
+  color: var(--c-ink);
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--rad-2);
+  font-family: var(--font-num);
+  font-size: var(--fs-4);
+  line-height: var(--lh-snug);
+  word-break: break-all;
+  resize: none;
+}
+
+.pix-panel .pix-panel__steps {
+  margin: var(--sp-4) 0 0;
+  padding-left: var(--sp-6);
+  list-style: decimal;
+  display: grid;
+  gap: var(--sp-1);
+  font-size: var(--fs-3);
+  line-height: var(--lh-body);
+  color: var(--c-ink);
+}
+.pix-panel__steps li::marker { color: var(--c-accent); font-weight: 700; }
+.pix-panel .pix-panel__note { margin-top: var(--sp-3); font-size: var(--fs-3); line-height: var(--lh-body); color: var(--c-ink-dim); }
+
+.pix-panel .pix-panel__qr { margin: 0; display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
+.pix-panel__qr-label { font-size: var(--fs-3); line-height: var(--lh-snug); color: var(--c-ink-dim); text-align: center; }
+.pix-panel__qr-label--mouse { display: none; }
+/* margem branca (zona de silêncio) em qualquer tema: o leitor de QR precisa dela */
+.pix-panel__qr-frame {
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  padding: var(--sp-4);
+  background: var(--c-on-strong);
+  border-radius: var(--rad-3);
+}
+.pix-panel__qr-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+@media (pointer: fine) {
+  .pix-panel__qr { order: -1; }
+  .pix-panel__qr-frame { max-width: 264px; }
+  .pix-panel__qr-label--touch { display: none; }
+  .pix-panel__qr-label--mouse { display: inline; }
+}
+
+/* cartão, "verificar agora" e suporte */
+.pix-panel__more { display: flex; flex-direction: column; gap: var(--sp-2); }
+.pix-panel__wait { font-size: var(--fs-3); line-height: var(--lh-body); color: var(--c-ink-dim); }
+.pix-panel__support { font-size: var(--fs-3); line-height: var(--lh-body); color: var(--c-ink-dim); }
+.pix-panel .ds-alert .pix-panel__support { margin-top: var(--sp-2); }
+.pix-panel__support a { color: var(--c-accent); font-weight: 600; }
+
+/* nudge anti-abandono do AccountModal (Landing.tsx) */
+.pix-panel__nudge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--c-line-strong);
+  border-left: 3px solid var(--c-accent);
+  border-radius: var(--rad-2);
+  background: var(--c-surface-2);
+  font-size: var(--fs-3);
+  line-height: var(--lh-body);
+}
+.pix-panel__nudge-actions { display: flex; gap: var(--sp-2); }
+.pix-panel__nudge-actions > * { flex: 1; }
+
+/* plano B do copiar (execCommand): fora da vista, 16px pra não dar zoom no iOS */
+.pix-panel .pix-panel__clip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+  font-size: var(--fs-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pix-panel__dot,
+  .pix-panel__spin { animation: none; }
+}
+
+/* UpsellCard com o Pix aberto: o card vira só o Pix, rola quando não cabe
+   (antes o QR ficava cortado abaixo da tela no celular) e usa a superfície do
+   tema, para o texto do painel ter contraste também no tema claro. */
+.upsell-overlay--pix { align-items: flex-start; overflow-y: auto; overscroll-behavior: contain; }
+.upsell-overlay--pix .upsell-card { margin-block: auto; background: var(--c-surface-1); }
+.upsell-overlay--pix .pix-panel { margin-top: var(--sp-3); }
+@media (max-width: 480px) {
+  .upsell-overlay--pix { padding: var(--sp-2); }
+  .upsell-overlay--pix .upsell-card { width: 100%; padding: var(--sp-5) var(--sp-4) var(--sp-4); }
+}
+@media (pointer: coarse) {
+  .upsell-overlay--pix .upsell-x { width: var(--tap); height: var(--tap); top: var(--sp-2); right: var(--sp-2); }
+}

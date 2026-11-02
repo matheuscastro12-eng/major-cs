@@ -1,12 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LiveCanvasGame } from './LiveCanvasGame';
+import { RadarMatch } from './match2d/RadarMatch';
+import { HINT_STYLE, type TipAction } from './match2d/assistant';
 import { analyzeSeries } from '../engine/insights';
+import { StyleLiveBar, StyleStatsPanel } from './MatchStyle';
+import type { TeamStyle } from '../engine/gestao/model';
 import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
 import { movesFor, isKeyRound, EFFECT_LABEL, type CallMove } from '../engine/career/battleCalls';
 // [W5] identidade tática: a sua (save.identity) + a derivada do adversário; opt-in no sim
 import { derivedIdentity, identityCallOf, identityLabel, scoutingOf, type IdentityCall, type IdentityMod, type TeamIdentity } from '../engine/career/teamIdentity';
 import type { DecisionEvent } from '../engine/roundLog';
 import { DecisionReview } from './DecisionReview';
+import { ResultHighlights, ResultInsights, SeriesResultHero, TacticalInvite } from './SeriesResult';
+import { clearTacticalNext, readTacticalNext } from '../state/seriesResult';
+import { Crosshair, Flame } from 'lucide-react';
 import { narrateRound, type RoundNarration } from '../engine/narration';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
@@ -139,6 +146,17 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [moments, setMoments] = useState<RoundNarration[]>([]); // todos os lances narrados (replay no fim)
   const buysByRound = useRef<Record<string, [BuyTier, BuyTier]>>({}); // compra de cada round (pra detectar eco/force)
   const [speedIdx, setSpeedIdx] = useState(DEFAULT_SPEED_IDX);
+  // [radar 2D] apresentação da partida: o radar dita o ritmo no modo automático
+  // (pede cada round quando terminou de encenar o anterior). Só leitura do sim.
+  const [radarOn, setRadarOn] = useState(() => { try { return localStorage.getItem('rtm.radar2d') !== '0'; } catch { return true; } });
+  const radarReqRef = useRef(0);
+  const radarBusyRef = useRef(false);
+  const radarOnRef = useRef(radarOn);
+  useEffect(() => { radarOnRef.current = radarOn; }, [radarOn]);
+  const onRadarBusy = useCallback((b: boolean) => { radarBusyRef.current = b; }, []);
+  const [radarScore, setRadarScore] = useState<[number, number] | null>(null);
+  const [radarStats, setRadarStats] = useState<Record<string, PlayerMapStats> | null>(null);
+  const toggleRadar = () => setRadarOn((v) => { try { localStorage.setItem('rtm.radar2d', v ? '0' : '1'); } catch { /* sem storage */ } return !v; });
   const [stance, setStance] = useState<Stance>('default');
   // hint de descoberta das calls ao vivo (some ao dispensar; 1ª vez forte)
   const [callsHint, setCallsHint] = useState(() => {
@@ -159,7 +177,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   useEffect(() => { callRef.current = pendingCall; }, [pendingCall]);
   useEffect(() => { siteRef.current = pendingSite; }, [pendingSite]);
   // modo Tático: freezetime de 5s antes de cada round pra escolher a chamada
-  const [tactical, setTactical] = useState(false);
+  // o convite do fim da série anterior ("Ligar o Tático na próxima") liga aqui, uma vez
+  const [tactical, setTactical] = useState(readTacticalNext);
+  useEffect(() => { clearTacticalNext(); }, []);
   const [freeze, setFreeze] = useState(0);
   // impacto da última chamada: a call, a postura ativa, a chance que ENFRENTAVA
   // (odds antes do round) e se deu certo — pro card "decisão → resultado".
@@ -218,11 +238,20 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
+  // [estilo de jogo] troca ao vivo do estilo do seu time (vale nos mapas seguintes também)
+  const liveStyleRef = useRef<TeamStyle | null>(null);
+  const changeStyle = (s: TeamStyle) => {
+    const cur = simsRef.current[Math.min(mapIdx, maps.length - 1)];
+    cur?.setStyle?.(userIdx, s);
+    liveStyleRef.current = s;
+    setTick((x) => x + 1);
+  };
   const getSim = (idx: number): MapSim => {
     const safe = Math.min(idx, maps.length - 1); // guarda defensiva contra índice além do veto
     if (!simsRef.current[safe]) {
       // mapIndex: fadiga (stamina) no motor v2; MD5 = final (jogo grande, oculto bigMatch)
       simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy, { identity: identityMods, mapIndex: safe, bigMatch: bestOf === 5, manualTimeouts: userIdx, ...(pressure ? { pressure } : {}) });
+      if (liveStyleRef.current) simsRef.current[safe].setStyle?.(userIdx, liveStyleRef.current);
     }
     return simsRef.current[safe];
   };
@@ -237,12 +266,23 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     if (endedMapsRef.current.has(mapIdx)) return;
     endedMapsRef.current.add(mapIdx);
     resultsRef.current[mapIdx] = sim.result();
+    // [radar 2D] o resultado já está gravado; a TELA só avança quando o radar
+    // terminou de encenar o último round (sem spoiler do fim do mapa)
+    const afterRadar = (fn: () => void) => {
+      const wait = () => {
+        if (radarOnRef.current && radarBusyRef.current) mapTransitionRef.current = window.setTimeout(wait, 250);
+        else { mapTransitionRef.current = null; fn(); }
+      };
+      wait();
+    };
     if (seriesOver()) {
-      const s = buildSeries();
-      setSeries(s);
-      setEvents([...eventsLog.current]);
-      setFinished(true);
-    } else {
+      afterRadar(() => {
+        const s = buildSeries();
+        setSeries(s);
+        setEvents([...eventsLog.current]);
+        setFinished(true);
+      });
+    } else afterRadar(() => {
       const next = maps[mapIdx + 1];
       setPausedMsg(`${t('match.mapEnd')} ${mapIdx + 1}${next ? ` - ${t('match.preparing')} ${MAP_LABELS[next.map]}…` : '…'}`);
       // pausa maior pra dar tempo de ver como ficaram as stats do mapa
@@ -255,8 +295,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         setLastCall(null);
         setCallRecord({ made: 0, won: 0 });
         mapTransitionRef.current = null;
+        radarReqRef.current = 0;
       }, 3500);
-    }
+    });
   };
 
   // loop automático (0.5x..4x). Desligado no modo Tático.
@@ -270,9 +311,17 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       }
       const ms = SPEEDS[speedIdx].ms;
       const now = performance.now();
-      const due = Math.min(10, Math.floor((now - lastStepRef.current) / ms));
+      let due: number;
+      if (radarOn) {
+        // o radar pede os rounds; o relógio da velocidade fica parado
+        due = Math.min(10, radarReqRef.current);
+        radarReqRef.current -= due;
+        lastStepRef.current = now;
+      } else {
+        due = Math.min(10, Math.floor((now - lastStepRef.current) / ms));
+        lastStepRef.current += Math.max(0, due) * ms;
+      }
       if (due <= 0) return;
-      lastStepRef.current += due * ms;
 
       const sim = getSim(mapIdx);
       const stanceMod =
@@ -312,10 +361,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       if (boostsUsed > 0) setBoostRounds((b) => Math.max(0, b - boostsUsed));
       setTick((t) => t + 1);
       if (mapEnded) onMapEnded(sim);
-    }, Math.min(SPEEDS[speedIdx].ms, 250));
+    }, radarOn ? 50 : Math.min(SPEEDS[speedIdx].ms, 250));
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finished, mapIdx, boostRounds, pausedMsg, speedIdx, tactical]);
+  }, [finished, mapIdx, boostRounds, pausedMsg, speedIdx, tactical, radarOn]);
 
   // modo Tático: freezetime de 5s, depois joga UM round e repete
   useEffect(() => {
@@ -473,11 +522,25 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     window.setTimeout(() => setPausedMsg(''), 1400);
   };
 
+  // [radar 2D] o assistente técnico dispara ações que a tela já tem
+  const onTipAction = (a: TipAction) => {
+    if (a.kind === 'stance') setStance(a.mode);
+    else if (a.kind === 'call') { callRef.current = a.call; setPendingCall(a.call); }
+    else if (a.kind === 'timeout') callTimeout();
+    else if (a.kind === 'style') {
+      // [integração] a dica troca o estilo T/CT ao vivo (o mesmo do seletor)
+      const cur = getSim(mapIdx).style?.(userIdx);
+      if (!cur) return;
+      changeStyle(a.side === 't' ? { ...cur, t: HINT_STYLE[a.hint] as typeof cur.t } : { ...cur, ct: HINT_STYLE[a.hint] as typeof cur.ct });
+    }
+  };
+  const radarRequest = useCallback((n: number) => { radarReqRef.current = Math.max(radarReqRef.current, n); }, []);
+
   // `tick` força o re-render a cada round simulado; os valores abaixo são
   // leituras baratas do sim atual, recalculadas a cada render de propósito.
   void tick;
   const sim = getSim(mapIdx);
-  const [sa, sb] = finished && series ? [0, 0] : sim.score();
+  const [sa, sb] = finished && series ? [0, 0] : radarOn && radarScore ? radarScore : sim.score();
   const roundLog = sim.roundLog();
   const buys = sim.buys();
   const myMoney = sim.money()[userIdx];
@@ -618,7 +681,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moments]);
-  const highlightsTitle = lang === 'en' ? '🎬 Best moments' : lang === 'es' ? '🎬 Mejores momentos' : '🎬 Melhores momentos';
+  const highlightsTitle = lang === 'en' ? 'Best moments' : lang === 'es' ? 'Mejores momentos' : 'Melhores momentos';
+  const insight = useMemo(() => (finished && series ? analyzeSeries(series, teams, userIdx, events) : null), [finished, series, teams, userIdx, events]);
 
   return (
     <div className="fade-in">
@@ -629,7 +693,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           {!finished && (
             <>
               <div className="seg" title={t('match.simSpeed')}>
-                {SPEEDS.map((s, i) => (
+                <button className={radarOn ? 'active' : ''} aria-pressed={radarOn} title={ct('Radar 2D ao vivo')} onClick={toggleRadar}>
+                  {ct('Radar 2D')}
+                </button>
+                {!radarOn && SPEEDS.map((s, i) => (
                   <button key={s.label} className={!tactical && speedIdx === i ? 'active' : ''} onClick={() => { setTactical(false); setSpeedIdx(i); }}>
                     {s.label}
                   </button>
@@ -647,14 +714,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
               </button>
             </>
           )}
-          {finished && series && (
-            <button className="btn gold" onClick={() => onFinish(series)}>
-              ▶ {t('common.continue')}
-            </button>
-          )}
         </div>
 
-        {!finished && caster && (() => {
+        {!finished && !radarOn && caster && (() => {
           const beats = caster.beats ?? [caster.text];
           const shown = beats.slice(0, Math.max(1, reveal)).join(' ');
           const pending = reveal < beats.length;
@@ -727,7 +789,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
               </span>
             </div>
           </div>
-          {!finished && mom.team >= 0 && mom.len >= 2 && (
+          {!finished && !radarOn && mom.team >= 0 && mom.len >= 2 && (
             <MomentumMeter team={mom.team as 0 | 1} len={mom.len} teams={teams} userIdx={userIdx} />
           )}
           {pbLive && (
@@ -738,14 +800,35 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
             </div>
           )}
           {pausedMsg && <div className="timeout-flash">{pausedMsg}</div>}
-          {!finished && <KillFeed events={visibleKills} teams={teams} playerById={playerById} />}
+          {!finished && !radarOn && <KillFeed events={visibleKills} teams={teams} playerById={playerById} />}
         </div>
+
+        {!finished && radarOn && (
+          <RadarMatch
+            sim={sim}
+            map={currentMap}
+            mapIdx={mapIdx}
+            teams={teams}
+            userIdx={userIdx}
+            tick={tick}
+            gate={!tactical}
+            paused={!!pausedMsg}
+            requestStep={radarRequest}
+            onShownScore={setRadarScore}
+            stance={stance}
+            timeoutsLeft={timeoutsLeft}
+            onTipAction={onTipAction}
+            canStyle={!!sim.style?.(userIdx)}
+            onBusy={onRadarBusy}
+            onShownStats={setRadarStats}
+          />
+        )}
 
         {!finished && (
           <LiveScoreboard
             teams={teams}
             userIdx={userIdx}
-            stats={sim.stats()}
+            stats={radarOn && radarStats ? radarStats : sim.stats()}
             label={`${MAP_LABELS[currentMap]} · ${sa}:${sb}`}
           />
         )}
@@ -775,6 +858,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 );
               })}
             </div>
+            <StyleLiveBar sim={sim} userIdx={userIdx} onChange={changeStyle} />
             <div className="style-roster">
               {teams[userIdx].players.map((p) => {
                 const ps = p.playstyle ?? derivePlaystyle(p.role);
@@ -1015,62 +1099,58 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         </div>
       </div>
 
-      {finished && series && topMoments.length > 0 && (
-        <div className="panel highlights-panel fade-in">
-          <div className="panel-head">{highlightsTitle}</div>
-          <div className="panel-body">
-            {topMoments.map((m, i) => (
-              <div key={i} className={`caster-line ${m.teamIdx === userIdx ? 'mine' : 'opp'}${m.big ? ' big' : ''}`}>
-                <span className="caster-mic">🎙️</span>
-                <span className="caster-text">{m.text}</span>
-              </div>
-            ))}
+      {/* ── RESULTADO DA SÉRIE: o resultado e as ações primeiro, depois a leitura ── */}
+      {finished && series && (
+        <SeriesResultHero series={series} teams={teams} userIdx={userIdx} onContinue={() => onFinish(series)} />
+      )}
+
+      {finished && series && (() => {
+        const noCalls = decisionLog.current.length === 0 && events.length === 0;
+        const hasStyle = series.maps.some((m) => m.styleStats);
+        return (
+          <div className={`sr-grid${hasStyle ? '' : ' sr-grid--solo'}`}>
+            <div className="sr-main">
+              {insight && <ResultInsights verdict={insight.verdict} bullets={insight.bullets} title={t('match.seriesAnalysis')} />}
+              {noCalls ? <TacticalInvite /> : (
+                <>
+                  <DecisionRecapPanel decisions={decisionLog.current} series={series} maps={maps} teams={teams} userIdx={userIdx} />
+                  {/* [W3] SUAS CHAMADAS — o pós-jogo com evidência (mesma tabela da Sala do RtP) */}
+                  <DecisionReview
+                    mode="career"
+                    title={ct('SUAS CHAMADAS')}
+                    nick={teams[userIdx].tag ? `[${teams[userIdx].tag}] ${teams[userIdx].name}` : teams[userIdx].name}
+                    events={events}
+                    won={series.winner === userIdx}
+                    scoreLabel={`${series.mapScore[userIdx]} — ${series.mapScore[userIdx === 0 ? 1 : 0]} vs ${teams[userIdx === 0 ? 1 : 0].tag || teams[userIdx === 0 ? 1 : 0].name}`}
+                  />
+                </>
+              )}
+              {topMoments.length > 0 && <ResultHighlights moments={topMoments} userIdx={userIdx} title={highlightsTitle} />}
+            </div>
+            {hasStyle && (
+              <aside className="sr-side" aria-label={ct('Estilo em campo')}>
+                <StyleStatsPanel series={series} teams={teams} userIdx={userIdx} />
+              </aside>
+            )}
           </div>
-        </div>
-      )}
-
-      {finished && series && (
-        <DecisionRecapPanel decisions={decisionLog.current} series={series} maps={maps} teams={teams} userIdx={userIdx} />
-      )}
-
-      {/* [W3] SUAS CHAMADAS — o pós-jogo com evidência (mesma tabela da Sala do RtP) */}
-      {finished && series && (
-        <DecisionReview
-          mode="career"
-          title={ct('SUAS CHAMADAS')}
-          nick={teams[userIdx].tag ? `[${teams[userIdx].tag}] ${teams[userIdx].name}` : teams[userIdx].name}
-          events={events}
-          won={series.winner === userIdx}
-          scoreLabel={`${series.mapScore[userIdx]} — ${series.mapScore[userIdx === 0 ? 1 : 0]} vs ${teams[userIdx === 0 ? 1 : 0].tag || teams[userIdx === 0 ? 1 : 0].name}`}
-        />
-      )}
-
-      {finished && series && <InsightPanel series={series} teams={teams} userIdx={userIdx} events={events} />}
+        );
+      })()}
 
       {finished && series && (
         <>
           <Scoreboard series={series} teams={teams} />
           {/* Botões de broadcast 2D por mapa — T2.5. Abre o LiveCanvasGame em
               modo autoplay com o radar/agentes do mapa selecionado. */}
-          <div className="center" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', margin: '12px 0' }}>
+          <div className="sr-broadcast">
             {series.maps.map((m, i) => (
               <button
                 key={i}
                 type="button"
+                className="sr-broadcast__btn"
+                aria-pressed={broadcastMapIdx === i}
                 onClick={() => setBroadcastMapIdx(i)}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: '0.78rem',
-                  fontFamily: 'inherit',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  background: broadcastMapIdx === i ? 'var(--em-gold)' : 'transparent',
-                  color: broadcastMapIdx === i ? '#1a1205' : 'var(--em-text)',
-                  border: '1px solid var(--em-border)',
-                  borderRadius: 3,
-                }}
               >
-                ▶ Broadcast 2D · {m.map}
+                Broadcast 2D · {MAP_LABELS[m.map]}
               </button>
             ))}
           </div>
@@ -1356,14 +1436,14 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
   if (made === 0) {
     return (
       <div className="panel fade-in">
-        <div className="panel-head">🎯 {ct('Resumo tático')}</div>
+        <div className="panel-head"><Crosshair size={16} aria-hidden /> {ct('Resumo tático')}</div>
         <div className="panel-body">
           <div className="muted" style={{ fontSize: '0.84rem', lineHeight: 1.5 }}>
             {ct('Você não deu nenhuma call nesta série — assistiu no automático.')}{' '}
             {ct('Ligue o')} <b>🎯 {ct('Tático')}</b> {ct('no topo da próxima partida pra comandar round a round: postura, timeouts e chamadas mudam o resultado de verdade.')}
           </div>
           {bestRun >= 3 && (
-            <div style={{ marginTop: 10, fontSize: '0.82rem' }}>🔥 {ct('Maior sequência da série')}: <b style={{ color: 'var(--c-win)' }}>{bestRun} {ct('rounds seguidos')}</b></div>
+            <div style={{ marginTop: 10, fontSize: '0.82rem' }}><Flame size={14} aria-hidden /> {ct('Maior sequência da série')}: <b style={{ color: 'var(--c-win)' }}>{bestRun} {ct('rounds seguidos')}</b></div>
           )}
         </div>
       </div>
@@ -1386,13 +1466,13 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
 
   return (
     <div className="panel fade-in">
-      <div className="panel-head">🎯 {ct('Resumo tático')} — {ct('suas decisões')}</div>
+      <div className="panel-head"><Crosshair size={16} aria-hidden /> {ct('Resumo tático')} — {ct('suas decisões')}</div>
       <div className="panel-body">
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
           <span style={{ fontSize: '2rem', fontWeight: 900, color: rateColor, fontFamily: 'var(--font-num)', lineHeight: 1 }}>{won}/{made}</span>
           <span style={{ fontSize: '0.9rem', fontWeight: 700, color: rateColor }}>{Math.round(rate * 100)}% {ct('das calls deram certo')}</span>
           <span className="spacer" />
-          {bestRun >= 3 && <span style={{ fontSize: '0.82rem' }}>🔥 {ct('maior sequência')}: <b style={{ color: 'var(--c-win)' }}>{bestRun}</b></span>}
+          {bestRun >= 3 && <span style={{ fontSize: '0.82rem' }}><Flame size={14} aria-hidden /> {ct('maior sequência')}: <b style={{ color: 'var(--c-win)' }}>{bestRun}</b></span>}
         </div>
         <div style={{ fontSize: '0.82rem', fontStyle: 'italic', color: 'var(--em-text,#d6deea)', marginBottom: 12 }}>{verdict}</div>
 
@@ -1424,27 +1504,6 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
               </div>
             );
           })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InsightPanel({ series, teams, userIdx, events }: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; events?: DecisionEvent[] }) {
-  const { t } = useLang();
-  const insight = useMemo(() => analyzeSeries(series, teams, userIdx, events), [series, teams, userIdx, events]);
-  return (
-    <div className="panel insight-panel fade-in">
-      <div className="panel-head">{t('match.seriesAnalysis')}</div>
-      <div className="panel-body">
-        <div className="verdict">{insight.verdict}</div>
-        <div className="insight-list">
-          {insight.bullets.map((b, i) => (
-            <div key={i} className={`insight-item ${b.tone}`}>
-              <span className="ic">{b.icon}</span>
-              <span>{b.text}</span>
-            </div>
-          ))}
         </div>
       </div>
     </div>

@@ -4,7 +4,12 @@ import { tournamentTeamRecords } from '../engine/hall';
 import { formatMoney } from '../engine/ratings';
 import { getTeam } from '../engine/swiss';
 import { downloadShareCard } from '../state/share';
-import { track } from '../state/track';
+import { trackShare } from '../state/track';
+import { postOnX } from '../state/shareX';
+import { shareUrl } from '../state/shareLink';
+
+// link do resultado do campeonato com atribuição (?ref=final)
+const FINAL_URL = shareUrl('/', 'final');
 import type { Tournament, TournamentPool } from '../types';
 import { Flag, PlayerAvatar, TeamBadge } from './ui';
 import { useLang } from '../state/i18n';
@@ -55,6 +60,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
   const user = getTeam(t, 'user');
   const campaign = useMemo(() => userCampaign(t, tr), [t, tr]);
   const [copied, setCopied] = useState(false);
+  const [xHint, setXHint] = useState(false);
   const [nick, setNick] = useState(() => {
     try { return localStorage.getItem('major-nick') ?? ''; } catch { return ''; }
   });
@@ -118,10 +124,11 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
       champion && !isChampion ? `${tr('final.championLabel')}: ${champion.name}` : '',
       mvp ? `${tr('final.tournamentMvp')}: ${mvp.nick}` : '',
       pickem.total > 0 ? `Pick'Em: ${pickem.score}/${pickem.total}` : '',
-      `${tr('final.shareCta')}: https://roadtomajor.com.br`,
+      `${tr('final.shareCta')}: ${FINAL_URL}`,
     ].filter(Boolean);
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
+      trackShare('final', 'copy');
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -209,7 +216,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
             <button
               className="btn"
               onClick={() => {
-                track('share_card', { champion: isChampion });
+                trackShare(isChampion ? 'final-champion' : 'final', 'copy');
                 downloadShareCard(t, user, campaign.label, mvp?.nick);
               }}
             >
@@ -218,10 +225,23 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
             <button className="btn ghost" onClick={share}>
               {copied ? `✔ ${tr('final.copied')}` : `📋 ${tr('final.copyText')}`}
             </button>
+            <button
+              className="btn ghost"
+              onClick={() => {
+                // intent do X não aceita arquivo: baixa o card e abre o post com o texto pronto
+                try { downloadShareCard(t, user, campaign.label, mvp?.nick); } catch { /* canvas indisponível */ }
+                const head = `${campaign.label.toLowerCase()} com a ${user.name} no road to major${isChampion ? ' 🏆' : ''}`;
+                postOnX(isChampion ? 'final-champion' : 'final', `${head}${mvp ? `\nmvp: ${mvp.nick}` : ''}`, FINAL_URL);
+                setXHint(true);
+              }}
+            >
+              {ct('Postar no X')}
+            </button>
             <button className="btn ghost" onClick={onRestart}>
               {tr('final.newDraft')}
             </button>
           </div>
+          {xHint && <div className="muted small" style={{ textAlign: 'center', marginTop: 6 }}>{ct('Abriu o X: anexa a imagem que baixou 😉')}</div>}
 
           <div className="hall-register">
             {hallStatus === 'saved' ? (
