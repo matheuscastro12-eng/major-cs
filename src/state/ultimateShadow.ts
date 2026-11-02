@@ -135,7 +135,7 @@ async function postTx(tx: { opId: string; kind: string; creditsDelta: number; ca
   } catch { return 0; }
 }
 
-async function fetchServerState(): Promise<{ credits: number; cards: { cardId: string; cardKey: string }[]; ledgerTail: unknown[]; frozenMessage: string | null } | null> {
+async function fetchServerState(): Promise<{ credits: number; cards: { cardId: string; cardKey: string; meta?: Record<string, unknown> }[]; ledgerTail: unknown[]; grants: { opId: string; creditsDelta: number }[]; frozenMessage: string | null } | null> {
   const token = getToken();
   if (!token) return null;
   try {
@@ -153,12 +153,17 @@ async function fetchServerState(): Promise<{ credits: number; cards: { cardId: s
       return {
         cardId: typeof cc.cardId === 'string' ? cc.cardId : '',
         cardKey: typeof cc.cardKey === 'string' ? cc.cardKey : '',
+        meta: cc.meta && typeof cc.meta === 'object' ? (cc.meta as Record<string, unknown>) : undefined,
       };
     }).filter((c) => c.cardId);
     return {
       credits: Number(d.credits ?? 0),
       cards,
       ledgerTail: Array.isArray(d.ledgerTail) ? d.ledgerTail : [],
+      grants: (Array.isArray(d.grants) ? d.grants : []).map((g) => {
+        const gg = (g && typeof g === 'object' ? g : {}) as Record<string, unknown>;
+        return { opId: typeof gg.opId === 'string' ? gg.opId : '', creditsDelta: Number(gg.creditsDelta ?? 0) };
+      }).filter((g) => g.opId),
       frozenMessage: d.frozen === true && typeof d.frozenMessage === 'string' ? d.frozenMessage : null,
     };
   } catch { return null; }
@@ -457,12 +462,19 @@ export async function openPackOnServer(packId: string): Promise<ServerPackResult
 //   - limpa a flag de drift do flip quando os lados batem;
 //   - registra divergência (só TAMANHOS) no errlog no máximo 1×/semana por
 //     aparelho, pra triagem — nunca manda tx.
+// [UT-PULL] o store (ultimate.ts) registra quem aplica as concessões do
+// servidor — evita import circular (ultimate.ts importa este módulo).
+type GrantHandler = (g: { cards: { cardId: string; cardKey: string; meta?: Record<string, unknown> }[]; credits: { opId: string; creditsDelta: number }[] }) => void;
+let grantHandler: GrantHandler | null = null;
+export function setServerGrantHandler(fn: GrantHandler | null): void { grantHandler = fn; }
+
 async function reconcileFlip(): Promise<void> {
   try {
     if (!ultOnline()) return;
     if (loadQueue().length > 0) return;
     const server = await fetchServerState();
     if (!server) return;
+    try { grantHandler?.({ cards: server.cards, credits: server.grants }); } catch (e) { captureError(e, 'ult-pull'); }
     try {
       if (server.frozenMessage) localStorage.setItem(FROZEN_KEY, server.frozenMessage);
       else localStorage.removeItem(FROZEN_KEY);

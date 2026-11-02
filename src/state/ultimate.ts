@@ -15,7 +15,8 @@ import { registerSaveRetry, reportLocalSave } from './saveHealth';
 // nem lança (tudo fire-and-forget dentro do próprio módulo).
 // Fase 3b (o FLIP): pack de conta paga rola NO SERVIDOR (openPackOnServer) —
 // roll autoritativo com op_id crash-safe; fallback local se a rede falhar.
-import { bootUltimateShadow, markFlipDrift, mirrorUltimateChange, objectiveClaimOnServer, openPackOnServer, sbcSubmitOnServer, ultOnline, type ServerGrant } from './ultimateShadow';
+import { bootUltimateShadow, setServerGrantHandler, markFlipDrift, mirrorUltimateChange, objectiveClaimOnServer, openPackOnServer, sbcSubmitOnServer, ultOnline, type ServerGrant } from './ultimateShadow';
+import { adoptServerGrants } from '../engine/ultimate/serverGrants';
 import { scheduledPromo, scheduledSbcById } from './liveops';
 import { mktLegacySeenTags, mktSeenHas } from './ultimateMarket'; // [O0-37] "já vi" legado (localStorage por aparelho)
 import type { PaidVoucher } from './account'; // [O0-46]
@@ -186,6 +187,14 @@ export async function syncUltimateFromCloud(): Promise<SyncResult> {
   // Fase 3a: com o save já reconciliado com a nuvem e a conta conhecida, roda a
   // migração one-time pro ledger do servidor + drena a fila-sombra pendente.
   // Fire-and-forget — não atrasa o retorno pra UI.
+  setServerGrantHandler((g) => {
+    const prev = useUltimate.getState().state;
+    const idx = ultimateIndex();
+    const out = adoptServerGrants(prev, g, (k) => idx.has(k));
+    if (out.state === prev) return;
+    persist(out.state);
+    useUltimate.setState({ state: out.state });
+  });
   bootUltimateShadow();
   return r;
 }

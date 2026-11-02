@@ -318,6 +318,14 @@ export class FakeDb {
     }
     // Replay do packOpen: linha única do ledger por (email, op_id) — o Neon
     // devolve jsonb já parseado, então cards/meta saem como objetos.
+    if (text.includes('FROM rtm_ult_ledger WHERE') && text.includes("op_id LIKE 'heal:%'")) {
+      const email = String(params[0]);
+      return this.ledger
+        .filter((l) => l.email === email && l.opId.startsWith('heal:') && l.delta > 0)
+        .sort((a, b) => b.id - a.id)
+        .slice(0, 50)
+        .map((l) => ({ op_id: l.opId, credits_delta: l.delta }));
+    }
     if (text.includes('FROM rtm_ult_ledger WHERE') && text.includes('op_id=')) {
       const email = String(params[0]);
       const opId = String(params[1]);
