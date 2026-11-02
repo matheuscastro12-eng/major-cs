@@ -2319,6 +2319,10 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   // Home pill "Vire Fundador" (free user logado)
   'Apoie o projeto · selo de Fundador + cloud sync + 5 carreiras': { en: 'Support the project · Founder badge + cloud sync + 5 careers', es: 'Apoya el proyecto · insignia de Fundador + sync en nube + 5 carreras' },
   'Vire Fundador': { en: 'Become a Founder', es: 'Conviértete en Fundador' },
+  // Fundadores esgotados (500/500): copy cai pra "vitalícia" em vez de prometer o selo que já acabou
+  'Pular a demo e virar vitalícia': { en: 'Skip the demo and get the lifetime account', es: 'Saltar la demo y conseguir la cuenta vitalicia' },
+  'Pular a demo e virar Fundador': { en: 'Skip the demo and become a Founder', es: 'Saltar la demo y hacerte Fundador' },
+  'Virar conta vitalícia · {preço} · destravar o Mercado': { en: 'Get the lifetime account · {preço} · unlock the Market', es: 'Conseguir la cuenta vitalicia · {preço} · desbloquear el Mercado' },
   '· selo #001–#500, cloud sync e 5 carreiras': { en: '· badge #001–#500, cloud sync and 5 careers', es: '· insignia #001–#500, sync en nube y 5 carreras' },
   // News do consummateDeals (acordo cai sem caixa)
   'Acordos cancelados (sem caixa)': { en: 'Deals cancelled (no cash)', es: 'Acuerdos cancelados (sin caja)' },

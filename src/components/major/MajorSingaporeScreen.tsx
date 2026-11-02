@@ -344,23 +344,33 @@ function PrizePanel({ t }: { t: T }) {
   );
 }
 
-// elenco de cada time com as fotos do bo3.gg (locais) ou iniciais. O crédito
-// "Fotos: bo3.gg" é o global do GameShell: não repetir aqui.
+// elenco de cada time com as fotos do bo3.gg (locais) ou iniciais. Lista
+// oficial: os 5 da VRS da Valve (team.roster, com o link da página do time);
+// sem isso, o elenco do bo3.gg. O coach vem do bo3.gg (a VRS não lista coach).
+// O crédito "Fotos: bo3.gg" é o global do GameShell: não repetir aqui.
 function Rosters({ t }: { t: T }) {
+  const sourced = D.teams.some((x) => x.roster);
   return (
     <Panel title={t('rostersTitle')}>
+      {sourced && (
+        <p className="msg-muted">
+          <a href={D.event.sources.find((u) => u.includes('regional_standings')) ?? D.teams.find((x) => x.rosterSource)?.rosterSource} target="_blank" rel="noopener noreferrer">{t('rostersSource')}</a>
+        </p>
+      )}
       <ul className="msg-rosters">
         {[...D.teams].sort((a, b) => a.seed - b.seed).map((x) => {
           const r = x.bo3Id ? ROSTERS.get(x.bo3Id) : undefined;
+          const players = x.roster ?? (r?.players ?? []).map((p) => p.nick);
           return (
             <li key={x.id} className="msg-roster">
               <TeamChip team={x} />
               <span className="msg-roster__players">
-                {(r?.players ?? []).map((p) => (
-                  <span key={p.nick} className="msg-roster__p"><PlayerAvatar nick={p.nick} size={34} /><small>{p.nick}</small></span>
+                {players.map((nick) => (
+                  <span key={nick} className="msg-roster__p"><PlayerAvatar nick={nick} size={34} /><small>{nick}</small></span>
                 ))}
                 {r?.coach && <span className="msg-roster__p is-coach"><PlayerAvatar nick={r.coach.nick} size={28} coach /><small>{t('coach')} {r.coach.nick}</small></span>}
-                {!r && <small className="msg-muted">—</small>}
+                {x.rosterSource && <a className="msg-roster__src" href={x.rosterSource} target="_blank" rel="noopener noreferrer">{t('rosterLink')}</a>}
+                {!players.length && <small className="msg-muted">—</small>}
               </span>
             </li>
           );

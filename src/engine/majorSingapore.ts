@@ -30,6 +30,10 @@ export interface MajorTeam {
   confirmed?: boolean;
   /** id do time em data/bo3-2026.json (elenco + fotos bo3.gg) */
   bo3Id?: string;
+  /** elenco com fonte (lista oficial): os 5 da VRS da Valve; sem isso, o elenco do bo3Id */
+  roster?: string[];
+  /** link da fonte do elenco (página do time na VRS da Valve) */
+  rosterSource?: string;
 }
 
 export interface MajorData {
@@ -101,6 +105,8 @@ export function validateMajorData(d: MajorData): string[] {
     if (seeds.has(t.seed)) errs.push(`seed repetido: ${t.seed}`);
     seeds.add(t.seed);
     if (!Number.isFinite(t.rating)) errs.push(`rating inválido em ${t.id}`);
+    // elenco só com fonte: quem traz roster traz o link de onde ele veio
+    if (t.roster && (t.roster.length < 5 || !/^https:\/\//.test(t.rosterSource ?? ''))) errs.push(`elenco sem fonte ou incompleto em ${t.id}`);
   }
   return errs;
 }

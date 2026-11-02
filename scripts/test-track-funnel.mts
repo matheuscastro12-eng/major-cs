@@ -5,8 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { firstMatchPayload, onceKey, paywallTrigger } from '../src/state/track.ts';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
 const client = readFileSync(ROOT + 'src/state/track.ts', 'utf8');
 const server = readFileSync(ROOT + 'api/track.ts', 'utf8');
 
@@ -41,6 +42,7 @@ test('paywall_view: trava, dentro do checkout ou vitrine', () => {
   assert.equal(paywallTrigger('mkt-lock'), 'gate');
   assert.equal(paywallTrigger('pix-wait-longo'), 'checkout');
   assert.equal(paywallTrigger('checkout-nudge'), 'checkout');
+  assert.equal(paywallTrigger('upsell-nudge'), 'checkout'); // nudge do Pix no card de upsell (#89)
   assert.equal(paywallTrigger('landing'), 'surface');
   assert.equal(paywallTrigger('src-que-ainda-nao-existe'), 'surface');
 });

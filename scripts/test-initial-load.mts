@@ -7,8 +7,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, normalize, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // fileURLToPath: pasta com espaço (test-paths-with-spaces)
 
 // import/export com valor (import type/export type não entram no bundle).
 // A cláusula não atravessa aspas: sem isso, num arquivo sem `;` o `import './x.css'`

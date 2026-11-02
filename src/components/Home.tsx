@@ -462,7 +462,10 @@ export function Home(props: Props) {
                     <small className="home-tile__price">{`${priceLabel()} · ${ct('pagamento único, acesso vitalício — sem mensalidade')}`}</small>
                     <FounderCounter />
                     <button type="button" className="home-skip" onClick={() => { setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
-                      {ct('Já quero virar Fundador · pular a demo')} →
+                      {/* com a Edição Fundador esgotada (FounderCounter logo acima) o
+                          botão não promete virar Fundador (#91); peso de botão e o
+                          preço do servidor no texto, como os outros CTAs de venda (#109) */}
+                      <Crown size={13} aria-hidden /> {founderSoldOut ? ct('Pular a demo e virar vitalícia') : ct('Pular a demo e virar Fundador')} · {priceLabel()}
                     </button>
                   </>
                 ) : undefined}

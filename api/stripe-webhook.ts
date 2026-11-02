@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import type Stripe from 'stripe';
-import { logSettleAttention, settleOrder } from '../server/order-settle.js';
+import { expectedOrder, logSettleAttention, settleOrder, stripePaidCents } from '../server/order-settle.js';
 import {
   accountReference,
   assignFounderNumbers,
@@ -56,18 +56,19 @@ async function fetchHandler(request: Request): Promise<Response> {
     await sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`;
     // valor cobrado tem de bater com o pedido; passe já pago da temporada vira
     // 'duplicate' (O0-41) — regras em server/order-settle.ts, iguais às do Pix.
-    const cents = Number(session.amount_total ?? NaN);
+    const cents = stripePaidCents(session); // BRL obrigatório; outra moeda = -1 (value_mismatch)
     // rede de segurança: sessão paga sem pedido registrado (falha entre criar a
-    // sessão e gravar o pedido). Reconstrói pelo metadata.
+    // sessão e gravar o pedido). Reconstrói pelo tier com a TABELA do servidor
+    // (valor e coins), igual ao Woovi — não pelo valor pago nem pelo metadata.
     const tier = String(session.metadata?.tier ?? coinCorr.split(':')[1] ?? '');
-    const orphan = {
+    const exp = expectedOrder(tier);
+    const orphan = exp && {
       email: normalizeEmail(String(session.metadata?.email ?? checkoutEmail(session) ?? '')),
       tier,
-      // pedido de PASSE reconstruído tem coins=0 por definição (tier pass-s<N>).
-      coins: Number(session.metadata?.coins ?? 0),
-      cents,
+      coins: exp.coins,
+      cents: exp.cents,
     };
-    const r = await settleOrder(sql, coinCorr, cents, 'stripe', tier ? orphan : undefined);
+    const r = await settleOrder(sql, coinCorr, cents, 'stripe', orphan);
     logSettleAttention('stripe', coinCorr, cents, r);
     return Response.json({ received: true, processed: r.status === 'paid' || r.status === 'already', coins: true, status: r.status });
   }
