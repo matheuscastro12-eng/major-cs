@@ -175,7 +175,13 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
   const complete = picksComplete(picks);
   // pick'em fechado (campeão escolhido) no palpite do próprio jogador; 1x por sessão (track.ts)
   // e conta como o 1º valor do jogador (a oferta passiva só aparece depois: state/paywallPolicy.ts)
-  useEffect(() => { if (complete && !readOnly) { track('major_pickem_submit', {}); markFirstValue('pickem'); } }, [complete, readOnly]);
+  useEffect(() => {
+    if (!complete || readOnly) return;
+    track('major_pickem_submit', {});
+    markFirstValue('pickem');
+    // momento de valor: o palpite fechou (a política decide se o card abre)
+    window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'pickem' } }));
+  }, [complete, readOnly]);
   const link = complete ? shareUrl(`${MAJOR_PATH}?p=${encodePicks(D, picks)}`, 'major-pickem') : '';
   const champName = teams.get(picks.bracket[6])?.name ?? '';
   const copyLink = async () => {

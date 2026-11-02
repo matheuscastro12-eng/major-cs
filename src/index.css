@@ -6690,3 +6690,9 @@ button.t20-row {
   .style-live__hint { flex-basis: 100%; text-align: center; }
   .style-stats__table { font-size: 12px; }
 }
+
+/* lembrete leve entre os momentos de oferta: não bloqueia a tela */
+.upsell-soft { position: fixed; right: var(--sp-4); bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); z-index: 40; display: flex; align-items: center; gap: var(--sp-1); padding: var(--sp-1); border-radius: 999px; background: var(--c-surface-2); border: 1px solid var(--c-line); box-shadow: 0 6px 20px rgb(0 0 0 / .25); }
+.upsell-soft__cta { min-height: 40px; padding: 0 var(--sp-3); border: 0; border-radius: 999px; background: var(--c-achievement); color: var(--c-on-achievement); font-weight: 700; cursor: pointer; }
+.upsell-soft__x { min-width: 40px; min-height: 40px; border: 0; background: transparent; color: var(--c-ink-faint); cursor: pointer; }
+@media (max-width: 720px) { .upsell-soft { bottom: calc(72px + env(safe-area-inset-bottom)); } }

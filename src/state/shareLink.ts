@@ -13,7 +13,7 @@ export const SITE = 'https://roadtomajor.com.br';
 /** refs conhecidos (kebab-case). string livre também passa pelo saneamento. */
 export type ShareRef =
   | 'daily' | 'marathon' | 'rtp-series' | 'ult-card' | 'career-card'
-  | 'legado' | 'final' | 'weekly' | 'decision';
+  | 'legado' | 'final' | 'weekly' | 'decision' | 'dream-team';
 
 /** kebab-case seguro pra query: [a-z0-9-], até 40 chars. */
 export function cleanRef(ref: string): string {

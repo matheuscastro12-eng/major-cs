@@ -14,6 +14,7 @@ import type { PixCharge } from '../state/account';
 import {
   PIX_EXPIRY_WARN_MS, formatPixCountdown, pixCanRegenerate, pixExpiresAt, pixPanelView, type PixErrorKind,
 } from '../state/pixView';
+import { pixStep, setPixStep, trackPixCopy } from '../state/track';
 import '../styles/pix-panel.css';
 
 // Canal de contato que já existe (Legal.tsx, política de reembolso).
@@ -135,6 +136,11 @@ export function PixPanel({
   });
   const canRegenerate = pixCanRegenerate(view, !!error);
 
+  // funil: em que vista a pessoa está (vai junto do checkout_abandon de quem a usa)
+  useEffect(() => {
+    setPixStep(pixStep({ view, error: !!error, waitLong }));
+  }, [view, error, waitLong]);
+
   // código novo: some o "copiado" do código anterior
   useEffect(() => {
     setCopied(false); setCopiedOnce(false); setCopyFailed(false);
@@ -150,6 +156,7 @@ export function PixPanel({
   const copy = async () => {
     if (!brCode) return;
     const ok = await copyText(brCode, rootRef.current);
+    trackPixCopy(ok); // funil: pix_copy_click {ok}
     if (ok) {
       setCopied(true); setCopiedOnce(true); setCopyFailed(false);
       window.clearTimeout(copiedTimer.current);
