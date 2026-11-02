@@ -163,7 +163,7 @@ test('toda aplicação passa pelo advisory lock transacional', async () => {
 test('getUltState em conta vazia devolve zeros', async () => {
   const db = new FakeDb();
   const s = await getUltState(db.sql, 'novo@x.com');
-  assert.deepEqual(s, { credits: 0, cards: [], ledgerTail: [] });
+  assert.deepEqual(s, { credits: 0, cards: [], ledgerTail: [], grants: [] });
 });
 
 test('getUltState devolve saldo, coleção e cauda do ledger (mais novo primeiro)', async () => {
@@ -309,4 +309,15 @@ test('congelamento: frozen_at lido da carteira + mensagem com prazo de 7 dias', 
   assert.match(ultFrozenMessage('suporte@exemplo.com'), /7 dias/);
   assert.match(ultFrozenMessage('suporte@exemplo.com'), /suporte@exemplo\.com/);
   assert.ok(db.executed.some((q) => q.startsWith('SELECT frozen_at FROM rtm_ult_wallet')));
+});
+
+test('[UT-PULL] getUltState devolve só concessões heal:* com crédito positivo', async () => {
+  const db = new FakeDb();
+  db.ledger.push(
+    { id: 1, email: 'a@x.com', opId: 'heal:sbc-credits:1-2', kind: 'grant', delta: 20000, cards: [], meta: {}, createdAt: '', creditsAfter: 20000 },
+    { id: 2, email: 'a@x.com', opId: 'heal:sbc:9', kind: 'grant', delta: 0, cards: [], meta: {}, createdAt: '', creditsAfter: 20000 },
+    { id: 3, email: 'a@x.com', opId: 'rw:x', kind: 'grant', delta: 500, cards: [], meta: {}, createdAt: '', creditsAfter: 20500 },
+  );
+  const s = await getUltState(db.sql, 'a@x.com');
+  assert.deepEqual(s.grants, [{ opId: 'heal:sbc-credits:1-2', creditsDelta: 20000 }]);
 });

@@ -81,6 +81,8 @@ export interface UltStateSnapshot {
   credits: number;
   cards: { cardId: string; cardKey: string; meta: Record<string, unknown>; acquiredAt: string }[];
   ledgerTail: UltLedgerEntry[];
+  // [UT-PULL] créditos concedidos pelo servidor (op_id 'heal:*') — o cliente adota 1x
+  grants: { opId: string; creditsDelta: number }[];
 }
 
 // Interface mínima do tag do @neondatabase/serverless que usamos (facilita mock).
@@ -364,10 +366,11 @@ export async function isUltWalletFrozen(sql: SqlTag, email: string): Promise<boo
 // Snapshot pro bootstrap do cliente: saldo + coleção + cauda do ledger.
 export async function getUltState(sql: SqlTag, email: string, tailLimit = 20): Promise<UltStateSnapshot> {
   const limit = Math.max(1, Math.min(100, Math.trunc(tailLimit) || 20));
-  const [walletRows, cardRows, ledgerRows] = await sql.transaction([
+  const [walletRows, cardRows, ledgerRows, grantRows] = await sql.transaction([
     sql`SELECT credits FROM rtm_ult_wallet WHERE email=${email}`,
     sql`SELECT card_id, card_key, meta, acquired_at FROM rtm_ult_cards WHERE email=${email} ORDER BY acquired_at, card_id`,
     sql`SELECT id, op_id, kind, credits_delta, created_at FROM rtm_ult_ledger WHERE email=${email} ORDER BY id DESC LIMIT ${limit}`,
+    sql`SELECT op_id, credits_delta FROM rtm_ult_ledger WHERE email=${email} AND op_id LIKE 'heal:%' AND credits_delta > 0 ORDER BY id DESC LIMIT 50`,
   ]);
   return {
     credits: walletRows.length ? Number(walletRows[0].credits ?? 0) : 0,
@@ -384,5 +387,6 @@ export async function getUltState(sql: SqlTag, email: string, tailLimit = 20): P
       creditsDelta: Number(l.credits_delta ?? 0),
       createdAt: String(l.created_at ?? ''),
     })),
+    grants: (grantRows ?? []).map((g) => ({ opId: String(g.op_id ?? ''), creditsDelta: Number(g.credits_delta ?? 0) })),
   };
 }
