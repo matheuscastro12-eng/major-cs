@@ -31,7 +31,8 @@ test('aviso de convidado: só no hub e no fim de run, com ✕ por 7 dias', () =>
   assert.equal(guestBannerVisible({ guest: false, tab: 'hub', now }), false);
 });
 
-const SEM_LOGO = ['Aurora Gaming', 'GamerLegion', 'FUT Esports', 'PARIVISION', 'B8', 'BetBoom', 'magic', 'Lynn Vision', 'Wildcard', 'ENVY', 'M80', 'JiJieHao', 'THUNDER dOWNUNDER'];
+// lista oficial de 02/11: os 15 sem arquivo em public/logos (mostram a sigla)
+const SEM_LOGO = ['100 Thieves', '1win', 'Aurora Gaming', 'BC.Game', 'BetBoom', 'Chinggis Warriors', 'DENDELE', 'Eternal Fire', 'FUT Esports', 'FlyQuest', 'Lynn Vision', 'M80', 'Nemiga', 'PARIVISION', 'Wildcard'];
 
 test('Major: logos locais por nome; lista exata dos sem logo', () => {
   for (const n of ['Team Vitality', 'Natus Vincere', 'MOUZ', 'The MongolZ', 'FURIA', 'G2 Esports', 'Team Spirit', 'FaZe Clan']) {

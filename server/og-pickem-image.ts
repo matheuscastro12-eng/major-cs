@@ -41,10 +41,8 @@ export const MAJOR_LOGOS: Record<string, string> = {
   furia: 'furia.png',
   'g2-esports': 'g2.png',
   '9z': '9z.png',
-  'pain-gaming': 'pain.png',
   'faze-clan': 'faze.png',
   heroic: 'heroic.png',
-  tyloo: 'tyloo.png',
 };
 
 // ------------------------------------------------------------ árvore (pura)

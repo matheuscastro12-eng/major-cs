@@ -2,9 +2,12 @@
 export interface SeedTeam { id: string; seed: number; name?: string }
 export interface SeedData { event: { status?: string; listDate?: string }; teams: SeedTeam[] }
 
-/** PROPOSTO: início do Stage 1 (24/11/2026). PGL ainda não publicou o horário da 1ª partida;
- *  10:00 de Singapura (UTC+8) = 02:00 UTC = 23:00 de 23/11 em Brasília. Confirmar antes de rodar. */
-export const S1_LOCKS_AT_PROPOSED = '2026-11-24T02:00:00Z';
+/** Trava do Stage 1: 24/11/2026 00:00 de Singapura (UTC+8) = 23/11 16:00 UTC = 13:00 de
+ *  Brasília. É a mesma trava do navegador (PICKEM_LOCKS em data/majorLive.ts), pedida pela Central
+ *  em 02/11 até o Matheus dizer outra coisa. */
+export const S1_LOCKS_AT = '2026-11-23T16:00:00Z';
+/** @deprecated nome antigo, mesmo valor */
+export const S1_LOCKS_AT_PROPOSED = S1_LOCKS_AT;
 
 export function stage1Teams(d: SeedData): string[] {
   return [...d.teams].sort((a, b) => a.seed - b.seed).slice(16, 32).map((t) => t.id);
@@ -19,12 +22,11 @@ export function buildSeedSql(d: SeedData): string {
 -- Rodar DEPOIS de 2026-10-26-pickem.sql, no Neon SQL Editor. Idempotente (upsert por stage).
 ${proj ? `-- ATENÇÃO: times ainda são PROJEÇÃO (lista oficial sai em ${d.event.listDate}). Atualize o JSON
 -- (status='oficial'), rode \`npx tsx scripts/pickem-seed.mts\` e só então execute este arquivo.\n` : ''}--
--- locks_at PROPOSTO: ${S1_LOCKS_AT_PROPOSED} = 24/11/2026 10:00 em Singapura (23/11 23:00 em Brasília).
--- O horário da 1ª partida do Stage 1 ainda não foi publicado pela PGL: confirme e ajuste se preciso.
--- A trava vale pelo relógio do servidor (now() < locks_at).
+-- locks_at: ${S1_LOCKS_AT} = 24/11/2026 00:00 em Singapura = 23/11 13:00 em Brasília,
+-- a mesma trava do placar no navegador. A trava vale pelo relógio do servidor (now() < locks_at).
 
 INSERT INTO rtm_pickem_stages (stage, teams, locks_at)
-VALUES ('s1', '${JSON.stringify(ids)}'::jsonb, '${S1_LOCKS_AT_PROPOSED}')
+VALUES ('s1', '${JSON.stringify(ids)}'::jsonb, '${S1_LOCKS_AT}')
 ON CONFLICT (stage) DO UPDATE SET teams = EXCLUDED.teams, locks_at = EXCLUDED.locks_at, updated_at = now();
 
 -- s2, s3 e playoffs: os times dependem dos resultados (Stage 2 = seeds 9-16 + 8 classificados do
