@@ -1,5 +1,6 @@
 // só em dev: ?agora= adianta o relógio (state/devClock.ts); 1º import, antes de qualquer módulo ler Date.now
 import './state/devClock'
+import './state/offerAb' // registra a variante do A/B de oferta nos eventos do funil
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

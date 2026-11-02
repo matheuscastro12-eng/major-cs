@@ -69,7 +69,7 @@ export interface RevenueData {
   days: RevenueDay[];
   allTime: { vitByMethod: MethodCount[]; orders: RevenueAllTimeOrder[] };
   /** opcional: servidor antigo (sem o funil deployado) não devolve o campo */
-  funnel?: { available: boolean; days: FunnelEventDay[] };
+  funnel?: { available: boolean; days: FunnelEventDay[]; ab?: { type: string; src: string; variant: string; n: number }[] };
 }
 export async function getRevenue(password: string): Promise<RevenueData | null> {
   try { return (await post({ action: 'revenue', password })) as unknown as RevenueData; } catch { return null; }

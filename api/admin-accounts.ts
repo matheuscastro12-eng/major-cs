@@ -335,6 +335,8 @@ export default async function handler(
     // Janela de 28d fechada aqui — o cliente só agrega. try/catch: eventos são da
     // telemetria e podem não existir; o funil fica indisponível sem quebrar nada.
     let funnelDays: { day: string; type: string; src: string; n: number }[] = [];
+    // [A/B oferta] mesma janela, por variante (offerVariant A/B) × src
+    let funnelAb: { type: string; src: string; variant: string; n: number }[] = [];
     let funnelAvailable = true;
     try {
       const fu = await sql`
@@ -346,6 +348,16 @@ export default async function handler(
         GROUP BY 1, 2, 3 ORDER BY 1`;
       funnelDays = fu.map((r) => ({ day: isoDay(r.day), type: String(r.type), src: String(r.src).slice(0, 40), n: Number(r.n) }));
     } catch { funnelAvailable = false; }
+    try {
+      const ab = await sql`
+        SELECT type, COALESCE(NULLIF(data->>'src', ''), 'direto') AS src, data->>'offerVariant' AS variant,
+               count(DISTINCT sid)::int AS n
+        FROM events
+        WHERE type IN ('paywall_view', 'checkout_open', 'signup_done') AND data->>'offerVariant' IN ('A', 'B')
+          AND created_at > now() - interval '29 days'
+        GROUP BY 1, 2, 3`;
+      funnelAb = ab.map((r) => ({ type: String(r.type), src: String(r.src).slice(0, 40), variant: String(r.variant), n: Number(r.n) }));
+    } catch { /* sem A/B: o bloco não aparece */ }
     // agregados all-time (a série de 60d não cobre o histórico completo)
     const vitAll = await sql`
       SELECT COALESCE(a.payment_method,
@@ -376,7 +388,7 @@ export default async function handler(
         orders: ordAll.map((r) => ({ method: String(r.method), product: String(r.product), orders: Number(r.orders), cents: Number(r.cents) })),
       },
       // funil visit → paywall_view → checkout_open → venda (janela de 28d)
-      funnel: { available: funnelAvailable, days: funnelDays },
+      funnel: { available: funnelAvailable, days: funnelDays, ab: funnelAb },
     });
     return;
   }

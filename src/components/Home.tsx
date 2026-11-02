@@ -39,6 +39,8 @@ import { GameShell, Panel, Button, Segmented, Tag, LiveBadge, ProgressBar, type 
 import type { Account } from '../state/account';
 import { priceLabel, usePrice, withPrice } from '../state/price';
 import { hasFirstValue } from '../state/paywallPolicy';
+import { offerVariant } from '../state/offerAb';
+import { OfferPixCta } from './OfferPixCta';
 
 interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => void;
@@ -69,6 +71,8 @@ interface Props {
   onAccount?: () => void;
   onCreateAccount?: () => void;
   onUpgrade?: () => void;
+  /** [A/B oferta · B] abre o checkout Pix direto (AccountModal pixFirst) com a origem dada */
+  onPixCheckout?: (src: string) => void;
   onLogout?: () => void;
   onAdmin?: () => void;
   /** seções do Início (sidebar do shell) */
@@ -130,7 +134,7 @@ export function Home(props: Props) {
   usePrice(); // re-renderiza quando o preço do servidor chega
   const {
     onStart, onDonate, teamCount, onUltimate, onRoadToPro, onDaily, premiumLocked, ultimateLocked, onCareer,
-    account, accountReady, onAccount, onCreateAccount, onUpgrade, onLogout, onAdmin, savedCampaign, onResume,
+    account, accountReady, onAccount, onCreateAccount, onUpgrade, onPixCheckout, onLogout, onAdmin, savedCampaign, onResume,
     onDiscardCampaign, shellNav, onShellNav, viewReq, onAchievements, onOpenRanking, onEditor, onMajor,
   } = props;
   const { t } = useLang();
@@ -173,6 +177,8 @@ export function Home(props: Props) {
   const dayStatus = useMemo(() => dailyDayStatus(DAILY_GAMES.map((g) => g.id), dateKey), [dateKey]);
 
   const founders = useFounders();
+  // [A/B oferta] B só quando o App sabe abrir o Pix direto
+  const offerB = offerVariant() === 'B' && !!onPixCheckout;
   const founderSoldOut = !!founders && founders.founders >= founders.limit;
   const career = useMemo(() => readSlot(getActiveSlot()), []);
   const rtp = useMemo(() => rtpBrief(), []);
@@ -460,6 +466,9 @@ export function Home(props: Props) {
                 foot={premiumLocked && valueSeen ? (
                   <>
                     <small className="home-tile__price">{`${priceLabel()} · ${ct('pagamento único, acesso vitalício — sem mensalidade')}`}</small>
+                    {offerB ? (
+                      <OfferPixCta compact benefit={ct('Road to Pro completo, sem limite de semanas, com save na nuvem.')} onPix={() => { setCheckoutSrc('home-rtp'); onPixCheckout?.('home-rtp'); }} />
+                    ) : (<>
                     <FounderCounter />
                     <button type="button" className="home-skip" onClick={() => { setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
                       {/* com a Edição Fundador esgotada (FounderCounter logo acima) o
@@ -467,6 +476,7 @@ export function Home(props: Props) {
                           preço do servidor no texto, como os outros CTAs de venda (#109) */}
                       <Crown size={13} aria-hidden /> {founderSoldOut ? ct('Pular a demo e virar vitalícia') : ct('Pular a demo e virar Fundador')} · {priceLabel()}
                     </button>
+                    </>)}
                   </>
                 ) : undefined}
               />
@@ -496,9 +506,13 @@ export function Home(props: Props) {
             ) : !account ? (
               <div className="home-acct">
                 <p>{ct('Você está jogando sem conta. Crie a sua pra salvar na nuvem e jogar no PC e no celular.')}</p>
+                {offerB ? (
+                  <OfferPixCta compact benefit={ct('Save na nuvem (PC e celular), Road to Pro completo e 5 carreiras.')} onPix={() => { setCheckoutSrc('acct-chip-guest'); onPixCheckout?.('acct-chip-guest'); }} />
+                ) : (<>
                 <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · {priceLabel()}</Button>
                 <small className="ds-dim">{ct('pagamento único · sem mensalidade')}</small>
                 <FounderCounter />
+                </>)}
                 {onAccount && <button type="button" className="home-link" onClick={onAccount}>{ct('Já tenho conta · entrar')}</button>}
               </div>
             ) : (
