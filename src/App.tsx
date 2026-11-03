@@ -404,7 +404,10 @@ export default function App() {
   // vai pro Ultimate (que abre a aba Duelo com o código); sem conta abre o gate (conta × convidado).
   useEffect(() => {
     if (!accountReady || !hasDuelInvite()) return;
-    const t = window.setTimeout(() => { if (account || utGuest) setScreen('ultimate'); else setUtGateOpen(true); }, 0);
+    const t = window.setTimeout(() => {
+      if (account || utGuest) setScreen('ultimate');
+      else { setCheckoutSrc('duelo-invite'); setUtGateSrc('duelo-invite'); setUtGateOpen(true); }
+    }, 0);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountReady]);
@@ -542,6 +545,11 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(WANTS_SIGNUP); // modal de login/conta acessível do header
   const [authMode, setAuthMode] = useState<'login' | 'signup'>(WANTS_SIGNUP ? 'signup' : 'login');
   const [utGateOpen, setUtGateOpen] = useState(false); // modal de escolha (convidado × conta)
+  // funil: o UltimateGate tem 3 portas de entrada (card da Home, rail de navegação
+  // e convite de duelo) mas sempre media como 'home-ultimate' — as outras duas
+  // ficavam invisíveis no paywall_view, mesmo o checkout_open já indo correto (lia
+  // o setCheckoutSrc de cada porta). Guarda qual porta abriu pra medir as 3 à parte.
+  const [utGateSrc, setUtGateSrc] = useState('home-ultimate');
   // CHECKOUT IN-PLACE: o AccountModal abre POR CIMA da tela atual (trava do Road
   // to Pro, upsell-card, aviso de convidado do Ultimate) em vez de trocar pra
   // landing — o jogador, a proposta e o relógio continuam visíveis na hora da
@@ -1034,7 +1042,7 @@ export default function App() {
     if (account || utGuest) {
       setUltTabReq((r) => ({ tab, n: (r?.n ?? 0) + 1 }));
       setScreen('ultimate');
-    } else { setCheckoutSrc(tab === 'ranked' ? 'rail-online' : 'rail-ultimate'); setUtGateOpen(true); }
+    } else { const src = tab === 'ranked' ? 'rail-online' : 'rail-ultimate'; setCheckoutSrc(src); setUtGateSrc(src); setUtGateOpen(true); }
   };
   const openDraftMode = () => {
     if (tournament) { setScreen(tournament.phase === 'done' ? 'final' : 'hub'); return; }
@@ -1400,6 +1408,7 @@ export default function App() {
       )}
       {utGateOpen && !account && (
         <UltimateGate
+          src={utGateSrc}
           onClose={() => setUtGateOpen(false)}
           /* funil: dado real mostra home-ultimate/home-rtp com paywall_view alto
              e checkout_open baixo (~0,4-0,6%) contra ~1% do upsell-card — a
@@ -1449,7 +1458,7 @@ export default function App() {
             setDonateOpen(true);
           }}
           onHall={() => setScreen('hall')}
-          onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
+          onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onDaily={() => setScreen('daily')}
           onMajor={(tab) => { track('major_vitrine_click', { surface: 'home' }); openMajorAt(tab); }}
