@@ -206,7 +206,7 @@ export function trackPaywallView(src: string, extra: Record<string, string | num
 //   gate     → o jogador tentou usar algo travado (demo do RtP, mercado, Ultimate sem conta…)
 //   checkout → já está no pagamento (avisos dentro do QR Pix / nudge do checkout)
 //   surface  → viu uma vitrine de venda navegando (landing, Início, perfil, ranking…)
-const PAYWALL_GATES = new Set(['rtp-demo-gate', 'mkt-lock', 'home-ultimate', 'wl-guest', 'wl-free', 'rtp-demo-match2', 'major-sg-gate', 'major-pickem-gate']);
+const PAYWALL_GATES = new Set(['rtp-demo-gate', 'mkt-lock', 'home-ultimate', 'rail-ultimate', 'rail-online', 'duelo-invite', 'wl-guest', 'wl-free', 'rtp-demo-match2', 'major-sg-gate', 'major-pickem-gate']);
 const PAYWALL_IN_CHECKOUT = new Set(['pix-wait-longo', 'pix-cartao-cedo', 'upsell-pix-cartao-cedo', 'checkout-nudge', 'upsell-nudge']);
 export type PaywallTrigger = 'gate' | 'checkout' | 'surface';
 export function paywallTrigger(src: string): PaywallTrigger {

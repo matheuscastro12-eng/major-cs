@@ -15,21 +15,24 @@ import { trackPaywallView } from '../../state/track';
 import { priceLabel, usePrice } from '../../state/price';
 
 export function UltimateGate({
+  src,
   onGuest,
   onSignup,
   onLogin,
   onClose,
 }: {
+  /** Porta de entrada (App.tsx já chamou setCheckoutSrc com o mesmo valor):
+   *  'home-ultimate' (card da Home), 'rail-ultimate'/'rail-online' (rail de
+   *  navegação) ou 'duelo-invite' (convite de duelo). Antes o paywall_view
+   *  sempre media 'home-ultimate' nas 3 portas — escondia 2 das 3 origens. */
+  src: string;
   onGuest: () => void;
   onSignup: () => void;
   onLogin: () => void;
   onClose: () => void;
 }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
-  // App.tsx já chama setCheckoutSrc('home-ultimate') antes de abrir este gate
-  // (único ponto de entrada), então reusa o mesmo src aqui — é a mesma métrica
-  // que ficou órfã quando este modal substituiu o card travado da Home.
-  useEffect(() => { trackPaywallView('home-ultimate'); }, []);
+  useEffect(() => { trackPaywallView(src); }, [src]);
 
   const title = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
