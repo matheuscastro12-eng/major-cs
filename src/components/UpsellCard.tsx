@@ -49,6 +49,8 @@ const HOOKS: Record<string, string> = {
   'draft-win': 'Mandou bem no Major! Crie sua conta e leve isso pra uma carreira de verdade.',
   'founder': 'Os 500 primeiros viram FUNDADORES (selo #001–#500). Número baixo é troféu — garanta o seu.',
   'return': 'Que bom te ver de volta! Apoiadores nunca perdem progresso — a conta sincroniza tudo.',
+  // retomar o Pix (state/pixResume.ts): abriu o QR e saiu sem pagar — volta direto pro Pix, sem achar o CTA de novo.
+  'pix-resume': 'Você chegou a abrir o Pix da vitalícia e não terminou. Continue de onde parou — o acesso libera na hora.',
   'custom-builder': 'Modo Custom é exclusivo de Vitalícia: crie sua org E os 5 jogadores manualmente (nick, role, atributos) com coach próprio.',
   'academy-rename': 'Editar o nick dos prospects é exclusivo de Vitalícia. Vire apoiador pra customizar o pipeline da sua academia.',
   default: 'Leve sua carreira pro próximo nível.',
