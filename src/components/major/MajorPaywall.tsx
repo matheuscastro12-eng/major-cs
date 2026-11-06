@@ -7,6 +7,7 @@ import { Lock } from 'lucide-react';
 import { Button, Panel } from '../ds';
 import { setCheckoutSrc, trackPaywallView } from '../../state/track';
 import { priceLabel, usePrice } from '../../state/price';
+import { FounderCounter } from '../FounderCounter';
 
 export type MajorGateSrc = 'major-sg-gate' | 'major-pickem-gate';
 
@@ -36,6 +37,13 @@ export function MajorPaywall({ src }: { src: MajorGateSrc }) {
         <Button variant="primary" onClick={open}>Liberar com a vitalícia · {priceLabel()}</Button>
       </div>
       <p className="msg-muted">Pagamento único · Pix ou cartão</p>
+      {/* funil: trava nova (paywallGate ligada em 02/11) — 95 paywall_view em 5
+          dias e NENHUM clique chegou a abrir o UpsellCard (moment ausente nos
+          paywall_view de upsell-card desde então). É a única trava de venda do
+          jogo sem a prova social real do FounderCounter — todas as outras
+          (home-rtp, acct-chip-guest, mkt-lock, ultimate-guest, wl-free,
+          upsell-card) já mostram. Alinha esta ao padrão. */}
+      <FounderCounter style={{ marginTop: 2 }} />
     </Panel>
   );
 }
