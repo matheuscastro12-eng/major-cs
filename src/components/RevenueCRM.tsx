@@ -218,6 +218,7 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'pix-wait-longo': 'Pix · reassurance de espera',
   'pix-check-manual': 'Pix · "já paguei, verificar agora"',
   'upsell-pix-cartao-cedo': 'Upsell in-game · Pix→cartão (cedo)',
+  'pix-signup-form': 'Checkout · formulário de cadastro (Pix)',
   'checkout-nudge': 'Checkout · nudge anti-abandono',
   'upsell-nudge': 'Upsell in-game · nudge anti-abandono',
   profile: 'Perfil do manager',

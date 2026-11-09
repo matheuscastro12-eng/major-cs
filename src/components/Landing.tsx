@@ -763,6 +763,22 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
   // celular, o QR e o "Copiar" caíam abaixo da dobra. pixFirst + conta grátis já
   // abre direto no passo (sem piscar o preço antes do auto-Pix).
   const pixStep = !!pix || pixGenerating || (!!pixErr && !!pixEmail) || (pixFirst && mode === 'pay');
+  // funil: dado real (28d) mostra home-rtp/acct-chip-guest gerando ~50% dos
+  // paywall_view do jogo e quase nenhum checkout_open, mesmo depois do CTA "Pagar
+  // com Pix" direto (offerAb.ts, variante B) — e não existe NENHUM evento entre o
+  // clique do CTA e o checkout_open pra dizer se a queda é no cadastro (e-mail,
+  // senha, termos) ou antes dele. Fecha esse ponto-cego: marca quando o formulário
+  // de cadastro aparece já com intenção de pagar (pixFirst, qualquer trava/cartão
+  // que chamou openInlineCheckout — não só as duas superfícies do A/B). Compara
+  // com checkout_open (mesmo src, via getCheckoutSrc) pra achar onde o cadastro
+  // perde gente. Src próprio: 'pix-signup-form'.
+  const signupFormSeen = useRef(false);
+  useEffect(() => {
+    if (pixFirst && mode === 'signup' && !pixStep && !signupFormSeen.current) {
+      signupFormSeen.current = true;
+      trackPaywallView('pix-signup-form');
+    }
+  }, [pixFirst, mode, pixStep]);
   // fechar com o QR Pix aberto e sem pagamento confirmado: UM nudge leve inline
   // (1x por sessão), honesto e descartável. Depois disso, fechar fecha mesmo.
   const requestClose = () => {
@@ -830,7 +846,12 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
       {info && mode !== 'signup' && !pixStep && <p style={{ color: 'var(--c-win)', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
       {mode === 'pay' || pixStep ? null : mode !== 'reset' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
+          {/* funil: nenhum "opcional"/"obrigatório" diferencia os campos aqui — o
+              Nick é o único realmente opcional (signupBlockReason não cobra ele)
+              mas vem em 1º lugar, antes do e-mail, e pode passar a impressão de
+              obrigatório pra quem só quer pagar rápido no celular. Deixa isso
+              explícito no label, sem mudar a validação nem remover o campo. */}
+          {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')} <span style={{ textTransform: 'none', fontWeight: 400 }}>{ct('(opcional)')}</span></label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
           <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
           <div>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
