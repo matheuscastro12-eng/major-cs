@@ -19,11 +19,8 @@ test('flag: tabela ausente não derruba (OFF)', async () => {
   assert.equal(await readPaywallGate(sqlOn, undefined), true);
 });
 
-test('RtP demo trava depois da 2ª partida, só com flag', () => {
-  assert.equal(rtpDemoLocked(true, true, 1), false);
-  assert.equal(rtpDemoLocked(true, true, 2), true);
-  assert.equal(rtpDemoLocked(false, true, 9), false);
-  assert.equal(rtpDemoLocked(true, false, 9), false);
+test('RtP demo NÃO trava por partidas (paywall é o fim da semana 3), com ou sem flag', () => {
+  for (const gate of [true, false]) for (const n of [0, 1, 2, 9, 50]) assert.equal(rtpDemoLocked(gate, true, n), false);
 });
 
 test('Major: Stage 1 grátis, resto trava para não pagante', () => {
@@ -32,10 +29,8 @@ test('Major: Stage 1 grátis, resto trava para não pagante', () => {
   assert.equal(majorPhaseLocked(true, false, 4), true);
   assert.equal(majorPhaseLocked(true, true, 4), false);
   assert.equal(majorPhaseLocked(false, false, 4), false);
-  assert.equal(pickemStageLocked(true, false, 1), false);
-  assert.equal(pickemStageLocked(true, false, 2), true);
-  assert.equal(pickemStageLocked(true, false, 0), true);
-  assert.equal(pickemStageLocked(true, true, 0), false);
+  // pick'em: nunca trava, nem com flag
+  for (const st of [0, 1, 2, 3]) assert.equal(pickemStageLocked(true, false, st), false);
   assert.equal(gateTag(true), 'on');
 });
 

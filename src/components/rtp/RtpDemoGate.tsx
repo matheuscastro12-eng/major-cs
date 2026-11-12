@@ -19,6 +19,8 @@ import { TIER_NAME } from '../../engine/rtp/league';
 import { DEMO_WEEKS, activeDemoCliff, isDemoCliffExpired, openDemoCliff, expireDemoCliff, rearmDemoCliff, deliverDemoCliff, cliffRound } from '../../engine/rtp/demoCliff';
 import type { RoadToProSave } from '../../engine/rtp/types';
 import { FounderCounter } from '../FounderCounter';
+import { SocialProof } from '../SocialProof';
+import { useFounders } from '../../state/founders';
 import { RtpCliffOfferCard } from './RtpDemoCliff';
 import { goUpgradeFromCliff, useNow } from './demoCliffUi';
 import { RtpFrame } from './RtpFrame';
@@ -28,7 +30,8 @@ export { DEMO_WEEKS }; // semanas jogáveis na demo (a trava fecha na 4ª) — v
 
 export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate, src = 'rtp-demo-gate', gateTag }: {
   save: RoadToProSave;
-  /** origem do paywall_view: 'rtp-demo-gate' (fim das semanas) ou 'rtp-demo-match2' (flag do paywall, após a 2ª partida) */
+  /** origem do paywall_view sem proposta na mesa (padrão 'rtp-demo-gate'). Com a
+   *  proposta do clube ativa a trava É o paywall do cliffhanger: 'rtp-demo-cliff'. */
   src?: string;
   /** estado da flag do paywall ('on'|'off'), vai no paywall_view para comparar */
   gateTag?: 'on' | 'off';
@@ -41,12 +44,16 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate, src = '
   usePrice(); // re-renderiza quando o preço do servidor chega
   const now = useNow();
   const cliff = activeDemoCliff(save, now);
+  const founders = useFounders();
+  // [paywall v2] a proposta do clube no fim da semana 3 é O paywall: a view
+  // leva o mesmo src do checkout que nasce dela ('rtp-demo-cliff').
+  const viewSrc = cliff ? 'rtp-demo-cliff' : src;
   // 1x por montagem: telemetria da trava + relógio do cliffhanger (ou expiração).
   const armed = useRef(false);
   useEffect(() => {
     if (armed.current) return;
     armed.current = true;
-    trackPaywallView(src, gateTag ? { paywallGate: gateTag } : {});
+    trackPaywallView(viewSrc, gateTag ? { paywallGate: gateTag } : {});
     const t = Date.now();
     // SEGUNDA CHANCE: expirada há 3+ dias e ainda com rodada → o clube volta
     // com a proposta revisada. Antes de tratar expiração (senão ela seria lida
@@ -67,7 +74,7 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate, src = '
     // trava aberta, então entra na mesa agora — quem compra a vê ao sair da trava.
     if (base !== save) next = deliverDemoCliff(next, t);
     if (next !== save) onUpdate?.(next);
-  }, [save, onUpdate, src, gateTag]);
+  }, [save, onUpdate, viewSrc, gateTag]);
   // o relógio venceu com a trava aberta: vira "expirada" na hora (sem reload).
   useEffect(() => {
     const c = save.demoCliff;
@@ -119,26 +126,33 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate, src = '
           </div>
         </div>
 
-        {!cliff && (
-          <p className="rtp-demogate-pitch">
-            {ct('Você viveu a peneira, assinou contrato e treinou as primeiras semanas. A vitalícia libera a carreira INTEIRA — e o seu progresso continua exatamente daqui.')}
-          </p>
-        )}
+        {/* [paywall v2] LOSS FRAMING: o que some se ele parar agora — só o que o
+            jogo faz de verdade (proposta com relógio real, save só local na demo). */}
+        <div className="rtp-demogate-loss">
+          <b>{ct('Se parar agora, você perde:')}</b>
+          <ul>
+            {cliff && <li>✖ {ct('A proposta do')} {cliff.offer.orgName} — {ct('ela expira e não volta igual')}</li>}
+            <li>✖ {ct('A carreira do')} {p.nick} ({ct('OVR')} {p.ovr}, {save.team.teamName}) {ct('parada na semana')} {save.world.week}</li>
+            <li>✖ {ct('As')} {DEMO_WEEKS} {ct('semanas de progresso: o save da demo fica só neste navegador — limpar o cache ou trocar de aparelho apaga tudo')}</li>
+          </ul>
+        </div>
+        {/* 'VOCÊ LEVA': só o que o código trava de verdade pra quem não pagou */}
+        <b className="rtp-demogate-take">{ct('Você leva')}</b>
         <ul className="rtp-demogate-list">
-          <li>✔ {ct('Carreira completa: circuito, promoções, transferências e o MAJOR')}</li>
+          <li>✔ {ct('A carreira inteira do Road to Pro, continuando DESTE save (o mesmo jogador, o mesmo clube)')}</li>
           <li>✔ {ct('SÉRIE DO DIA — o desafio global com ranking diário')}</li>
-          <li>✔ {ct('Vida de pro: perks, moradia, investimentos e legado')}</li>
-          <li>✔ {ct('Save na nuvem (5 slots) — jogue no PC e no celular')}</li>
-          <li>✔ {ct('E TUDO do jogo: modo Carreira de manager + Ultimate Squad')}</li>
+          <li>✔ {ct('Save na nuvem — saves extras da Carreira de manager, no PC e no celular')}</li>
+          <li>✔ {ct('Mercado do Ultimate Squad')}</li>
+          <li>✔ {ct('Weekend League e rank salvo no ranking persistente do online')}</li>
+          {gateTag === 'on' && <li>✔ {ct('A campanha inteira do Major Singapura (do Stage 2 à final)')}</li>}
+          {founders && founders.founders < founders.limit && <li>✔ {ct('Selo de Fundador numerado (enquanto houver vagas)')}</li>}
         </ul>
 
-        {/* funil: a demo (lançada em 09/08) é a trava mais nova do jogo e a
-            única entre as de maior intenção (mkt-lock, Hero, Pricing, upsell-card)
-            que ainda não mostrava a prova social real dos Fundadores — mesmo
-            componente, dado real do servidor, sem número inventado. */}
-        <FounderCounter style={{ marginBottom: '2px' }} />
+        {/* prova social REAL (GET /api/account): sem dado → some */}
+        <SocialProof />
+        {founders && founders.founders < founders.limit && <FounderCounter style={{ marginBottom: '2px' }} />}
 
-        <button type="button" className="rtp-cta rtp-demogate-cta" onClick={goUpgrade}>
+        <button type="button" className="rtp-cta rtp-demogate-cta paywall-sticky-cta" onClick={goUpgrade}>
           {cliff ? ct('GARANTIR A VITALÍCIA E RESPONDER') : ct('GARANTIR A VITALÍCIA')} · {priceLabel()} <span>{ct('pagamento único, pra sempre')}</span>
         </button>
         <button type="button" className="rtp-btn-ghost" onClick={onExit}>{ct('Voltar pro menu')}</button>

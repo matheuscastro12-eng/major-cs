@@ -1,5 +1,5 @@
 // Contas (e-mail + senha) + entitlement da conta vitalícia (preço: PIX_PRICE_CENTS).
-// Ações (POST body.action): signup | login | me | checkout | claim | export | delete.
+// Ações (POST body.action): signup | emailSignup | setPassword | login | me | checkout | claim | export | delete.
 // - senha: scrypt (node:crypto), guardada como "salt:hash".
 // - token: HMAC-SHA256 stateless ("body.sig", body = email|exp), env APP_SECRET.
 // - checkout: cria uma Checkout Session (preço PIX_PRICE_CENTS) ligada à conta; fallback Payment Link.
@@ -40,6 +40,7 @@ async function safeCheckoutUrl(email: string, origin: unknown): Promise<string> 
   try { return await accountCheckoutUrl(email, origin); } catch { return checkoutUrl(email); }
 }
 import { nickProblem, nickTaken, normalizeNick } from '../server/nick.js';
+import { emailSignupDecision, isSetupHash, makeSetupHash, setupKeyMatches, setupKeyValid } from '../server/setup-password.js';
 import { clientIp, rateLimitHit, respondLimited, type RateRule, type RateSql } from '../server/rate-limit.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
@@ -60,7 +61,7 @@ let founderAuditAt = 0;
 // Cache em memória da contagem pública de Fundadores (prova social). Serve de
 // rate-limit natural: por instância, no máximo 1 query/min mesmo sob rajada;
 // o Cache-Control público (5 min) segura o resto na CDN/navegador.
-let foundersCache: { at: number; founders: number } | null = null;
+let foundersCache: { at: number; founders: number; managers: number } | null = null;
 type AccountSql = NeonQueryFunction<false, false>;
 
 async function ensureAccountSchema(sql: AccountSql): Promise<void> {
@@ -131,6 +132,8 @@ function hashPw(pw: string): string {
   return `${salt}:${scryptSync(pw, salt, 64).toString('hex')}`;
 }
 function verifyPw(pw: string, stored: string): boolean {
+  // conta sem senha ainda (Pix em 1 passo): NENHUMA senha entra
+  if (isSetupHash(stored)) return false;
   const [salt, h] = (stored ?? '').split(':');
   if (!salt || !h) return false;
   const calc = scryptSync(pw, salt, 64);
@@ -154,6 +157,7 @@ const RATE = {
   resetRequest: { ip: [10, 3600], email: [5, 3600] },
   resetConfirm: { ip: [30, 3600], email: [10, 3600] },
   setNick: { ip: [20, 3600], email: [5, 86400] },
+  setPassword: { ip: [20, 3600], email: [10, 3600] },
 } as const;
 // reconciliação com o Stripe (list de 100 sessões com expand) no máx. 1x a cada
 // 2 min por e-mail: o 'me' de um cadastro pendente não vira flood na API do Stripe.
@@ -196,11 +200,15 @@ export default async function handler(
         await ensureAccountSchema(sql);
         // números EMITIDOS (o maior founder_no): número de conta revogada fica
         // aposentado e não volta pra fila (O0-42), então "vagas" = teto − isso.
-        const r = await sql`SELECT COALESCE(MAX(founder_no), 0)::int AS founders FROM rtm_accounts`;
-        foundersCache = { at: Date.now(), founders: Number(r[0]?.founders ?? 0) };
+        // [paywall v2] managers = contas pagas de verdade (fora as liberadas pelo
+        // admin) — prova social do paywall. Mesma query, mesmo cache de 60s.
+        const r = await sql`SELECT COALESCE(MAX(founder_no), 0)::int AS founders,
+                                   COUNT(*) FILTER (WHERE paid AND COALESCE(payment_method, '') <> 'admin')::int AS managers
+                              FROM rtm_accounts`;
+        foundersCache = { at: Date.now(), founders: Number(r[0]?.founders ?? 0), managers: Number(r[0]?.managers ?? 0) };
       }
       res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
-      res.status(200).json({ founders: foundersCache.founders, limit: FOUNDER_LIMIT, priceCents: accountPriceCents() });
+      res.status(200).json({ founders: foundersCache.founders, managers: foundersCache.managers, limit: FOUNDER_LIMIT, priceCents: accountPriceCents() });
     } catch { res.status(500).json({ error: 'indisponível', priceCents: accountPriceCents() }); }
     return;
   }
@@ -344,6 +352,13 @@ export default async function handler(
     // REGRA: só pago tem conta. Se o e-mail já pagou (antes de cadastrar), cria a
     // conta direto. Senão, guarda como cadastro PENDENTE e manda pro pagamento — a
     // conta só nasce quando o pagamento confirma (claim/webhook promovem o pendente).
+    // [paywall v2] pendente SEM senha (Pix em 1 passo) recente: não deixa um
+    // cadastro com senha sobrescrever o pagamento em andamento de outra pessoa.
+    const pend = await sql`SELECT pass_hash, EXTRACT(EPOCH FROM (now() - created_at))::int AS age FROM rtm_pending_signups WHERE email=${email}`;
+    if (pend.length && emailSignupDecision({ hasAccount: false, paidEmail: false, pending: { setup: isSetupHash(pend[0].pass_hash), sameKey: false, ageSec: Number(pend[0].age ?? 0) } }) === 'busy') {
+      res.status(409).json({ error: 'Já tem um pagamento em andamento com esse e-mail. Termine por lá ou tente de novo mais tarde.' });
+      return;
+    }
     const passHash = hashPw(password);
     const alreadyPaid = await resolvePaid(email, false, true);
     if (alreadyPaid) {
@@ -363,6 +378,74 @@ export default async function handler(
       }
     } catch { /* colunas ainda não migradas: segue sem atribuição */ }
     res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, url: await safeCheckoutUrl(email, body.origin) });
+    return;
+  }
+
+  // [paywall v2] emailSignup: Pix (ou cartão) em 1 passo, só com e-mail. Cria o
+  // cadastro PENDENTE sem senha (pass_hash = chave de configuração, ver
+  // server/setup-password.ts) e devolve o token do pendente — o mesmo que o
+  // signup devolve — pra gerar a cobrança. A conta só vira paga pelo webhook
+  // (ou claim/reconciliação do Stripe), igual ao fluxo com senha. Depois de
+  // pago, a tela pede nick + senha (action setPassword).
+  if (action === 'emailSignup') {
+    if (await limited('signup')) return;
+    const setupKey = body.setupKey;
+    if (!/\S+@\S+\.\S+/.test(email)) { res.status(400).json({ error: 'E-mail inválido.' }); return; }
+    if (!setupKeyValid(setupKey)) { res.status(400).json({ error: 'Pedido inválido. Recarregue a página.' }); return; }
+    const [acc, paidEm, pend] = await Promise.all([
+      sql`SELECT 1 FROM rtm_accounts WHERE email=${email}`,
+      sql`SELECT 1 FROM rtm_paid_emails WHERE email=${email}`,
+      sql`SELECT pass_hash, EXTRACT(EPOCH FROM (now() - created_at))::int AS age FROM rtm_pending_signups WHERE email=${email}`,
+    ]);
+    const decision = emailSignupDecision({
+      hasAccount: acc.length > 0,
+      paidEmail: paidEm.length > 0,
+      pending: pend.length ? { setup: isSetupHash(pend[0].pass_hash), sameKey: setupKeyMatches(pend[0].pass_hash, setupKey, verifyPw), ageSec: Number(pend[0].age ?? 0) } : null,
+    });
+    if (decision === 'login') { res.status(409).json({ error: 'Esse e-mail já tem conta. Entre com a sua senha (ou use "Esqueci minha senha").', login: true }); return; }
+    if (decision === 'busy') { res.status(409).json({ error: 'Já tem um pagamento em andamento com esse e-mail em outro aparelho. Termine por lá ou tente de novo mais tarde.' }); return; }
+    // mesma chave (reabriu o modal): mantém o pendente como está
+    if (!pend.length || !setupKeyMatches(pend[0].pass_hash, setupKey, verifyPw)) {
+      const h = makeSetupHash(setupKey, hashPw);
+      await sql`INSERT INTO rtm_pending_signups (email, nick, pass_hash) VALUES (${email}, ${null}, ${h})
+                ON CONFLICT (email) DO UPDATE SET nick=NULL, pass_hash=EXCLUDED.pass_hash, created_at=now()`;
+    }
+    try {
+      const a = cleanAttr(body.attr);
+      if (a.ref || a.utm_source || a.utm_medium || a.utm_campaign || a.offer_variant) {
+        await sql`UPDATE rtm_pending_signups SET ref=${a.ref}, utm_source=${a.utm_source}, utm_medium=${a.utm_medium}, utm_campaign=${a.utm_campaign}, offer_variant=${a.offer_variant} WHERE email=${email}`;
+      }
+    } catch { /* colunas ainda não migradas: segue sem atribuição */ }
+    res.status(200).json({ token: sign(email), email, nick: '', paid: false, pending: true, needsPassword: true, founder: false, founderNo: null, admin: false });
+    return;
+  }
+
+  // setPassword: define nick + senha de uma conta criada pelo emailSignup. Exige
+  // o token E a chave de configuração do navegador que iniciou o pagamento; só
+  // vale enquanto a conta ainda não tem senha. Sem a chave → reset por e-mail.
+  if (action === 'setPassword') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
+    if (await limited('setPassword', em)) return;
+    if (password.length < 6) { res.status(400).json({ error: 'A senha precisa de pelo menos 6 caracteres.' }); return; }
+    if (nick) {
+      const problem = nickProblem(nick);
+      if (problem) { res.status(400).json({ error: problem, field: 'nick' }); return; }
+      if (await nickTaken(sql, nick, em)) { res.status(409).json({ error: 'Esse nick já está em uso. Escolha outro.', field: 'nick' }); return; }
+    }
+    const acc = await sql`SELECT pass_hash FROM rtm_accounts WHERE email=${em}`;
+    const row = acc.length ? acc : await sql`SELECT pass_hash FROM rtm_pending_signups WHERE email=${em}`;
+    if (!row.length || !setupKeyMatches(row[0].pass_hash, body.setupKey, verifyPw)) {
+      res.status(403).json({ error: 'Não deu pra criar a senha por aqui. Use "Esqueci minha senha" com o seu e-mail.', reset: true });
+      return;
+    }
+    const newHash = hashPw(password);
+    // compara-e-troca: só grava se ainda estiver sem senha (duas abas, corrida)
+    const upd = acc.length
+      ? await sql`UPDATE rtm_accounts SET pass_hash=${newHash}, nick=COALESCE(${nick || null}, nick) WHERE email=${em} AND pass_hash=${String(row[0].pass_hash)} RETURNING email`
+      : await sql`UPDATE rtm_pending_signups SET pass_hash=${newHash}, nick=COALESCE(${nick || null}, nick) WHERE email=${em} AND pass_hash=${String(row[0].pass_hash)} RETURNING email`;
+    if (!upd.length) { res.status(409).json({ error: 'A senha já foi criada. Entre com ela.' }); return; }
+    res.status(200).json({ ok: true, nick });
     return;
   }
 
@@ -453,12 +536,12 @@ export default async function handler(
     if (await limited('me')) return;
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
-    let r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
+    let r = await sql`SELECT nick, paid, pass_hash FROM rtm_accounts WHERE email=${em}`;
     let paid = r.length ? Boolean(r[0].paid) : false;
     if (!paid) {
       // pode ser um cadastro pendente que acabou de pagar — resolvePaid promove
       paid = await resolvePaid(em, false, true);
-      r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
+      r = await sql`SELECT nick, paid, pass_hash FROM rtm_accounts WHERE email=${em}`;
     }
     if (!r.length) {
       // Cadastro pendente (signup feito, pagamento ainda não caiu): o token é
@@ -466,14 +549,14 @@ export default async function handler(
       // e o cliente apagava o token no meio do polling do Pix (pix_confirmed
       // nunca disparava e "pagar com cartão" falhava com "Faça login antes de
       // pagar"). Agora devolve 200 com pending:true e paid:false.
-      const p = await sql`SELECT nick FROM rtm_pending_signups WHERE email=${em}`;
-      if (p.length) { res.status(200).json({ email: em, nick: p[0].nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, priceCents: accountPriceCents() }); return; }
+      const p = await sql`SELECT nick, pass_hash FROM rtm_pending_signups WHERE email=${em}`;
+      if (p.length) { res.status(200).json({ email: em, nick: p[0].nick, paid: false, pending: true, needsPassword: isSetupHash(p[0].pass_hash), founder: false, founderNo: null, admin: false, priceCents: accountPriceCents() }); return; }
       res.status(401).json({ error: 'Conta não encontrada.' }); return;
     }
     await ensureReference(em);
     // dupla chave: token antigo (reserva) válido → devolve um assinado com a APP_SECRET
     const refreshed = accountTokenNeedsRefresh(String(body.token ?? '')) ? { token: signAccountToken(em) } : {};
-    res.status(200).json({ email: em, nick: r[0].nick, paid, priceCents: accountPriceCents(), ...(await founderOf(em)), ...refreshed });
+    res.status(200).json({ email: em, nick: r[0].nick, paid, needsPassword: isSetupHash(r[0].pass_hash), priceCents: accountPriceCents(), ...(await founderOf(em)), ...refreshed });
     return;
   }
 

@@ -28,10 +28,12 @@ import type { MajorTab } from './major/majorTabs';
 import { MajorCalendarButton } from './major/MajorCalendarButton';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
+import { SocialProof } from './SocialProof';
+import { useFounders } from '../state/founders';
 import { Button, Modal } from './ds';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
-import { AccountError, login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, useAccount, type PixCharge } from '../state/account';
+import { AccountError, login, emailSignup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, useAccount, type PixCharge } from '../state/account';
 import { pixErrorKind, type PixErrorKind } from '../state/pixView';
 import { PixPanel } from './PixPanel';
 import { careerLang, ct } from '../state/career-i18n';
@@ -551,15 +553,13 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
   const [resetStep, setResetStep] = useState<'ask' | 'code'>('ask');
   const [code, setCode] = useState('');
   const [info, setInfo] = useState('');
-  const [nick, setNick] = useState('');
+  const nick = ''; // [paywall v2] nick sai do cadastro: criado depois do pagamento
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
-  // confirmação + revelar: só no cadastro (ver comentário no campo)
-  const [pw2, setPw2] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [accepted, setAccepted] = useState(false);
+  const founderStats = useFounders();
   // Pix Woovi: a cobrança na tela, o e-mail da conta e quando ela chegou (base do
   // prazo do Woovi). A tela do QR é o PixPanel (igual ao do UpsellCard).
   const [pix, setPix] = useState<{ charge: PixCharge; email: string; at: number } | null>(null);
@@ -666,34 +666,34 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
   // então não precisamos mais de inline style nos campos.
   const input: CSSProperties = { width: '100%' };
   const lbl: CSSProperties = { fontSize: '0.72rem', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: 'var(--em-muted)', display: 'block', marginBottom: '6px' };
-  const pwMismatch = mode === 'signup' && pw2.length > 0 && pw !== pw2;
-  const valid = mode === 'pay' || (/\S+@\S+\.\S+/.test(email) && pw.length >= 6
-    && (mode === 'login' || (accepted && pw === pw2)));
+  // [paywall v2] cadastro = SÓ e-mail (Pix em 1 passo). Nick e senha vêm depois
+  // do pagamento (SetPasswordPrompt). O login segue e-mail + senha.
+  const valid = mode === 'pay' || (/\S+@\S+\.\S+/.test(email) && (mode === 'signup' || pw.length >= 6));
   // funil: os botões de pagar ficavam desabilitados quando faltava algo no
   // cadastro, sem dizer o quê — quem travava aqui (ex.: esqueceu de marcar os
   // Termos) desistia em silêncio, fora do funil. Agora o clique é aceito e diz
   // o que falta (checkout_blocked mede qual motivo trava mais gente). Só no
   // CADASTRO: o login é só e-mail + senha, e o modo 'pay' não tem formulário.
-  type BlockReason = 'email' | 'senha-curta' | 'senha-diferente' | 'termos';
+  // (senha-curta/senha-diferente/termos saíram com o cadastro só de e-mail)
+  type BlockReason = 'email';
   const signupBlockReason = (): BlockReason | null => {
     if (mode !== 'signup') return null;
     if (!/\S+@\S+\.\S+/.test(email)) return 'email';
-    if (pw.length < 6) return 'senha-curta';
-    if (pw !== pw2) return 'senha-diferente';
-    if (!accepted) return 'termos';
     return null;
   };
   const blockedMessage = (reason: BlockReason): string => ({
     email: ct('Preencha um e-mail válido.'),
-    'senha-curta': ct('A senha precisa de pelo menos 6 caracteres.'),
-    'senha-diferente': ct('As senhas não são iguais — confira os dois campos.'),
-    termos: ct('Marque a caixa dos Termos acima pra continuar.'),
   })[reason];
+  // e-mail que já tem conta: o servidor manda entrar com a senha → vira login
+  const handleAccountErr = (e: unknown) => {
+    if (e instanceof AccountError && e.status === 409 && e.data.login) { setMode('login'); setPw(''); }
+    setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.'));
+  };
   // conta (nova, login ou a grátis já logada) que vai pagar
   const resolveAccount = async () => {
     if (mode === 'pay' && payAcct) return { ...payAcct, paid: false };
     if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
-    const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
+    const acct = mode === 'signup' ? await emailSignup(email.trim()) : await login(email.trim(), pw);
     if (mode === 'signup') trackSignup('done');  // funil: cadastro criado com sucesso
     return acct;
   };
@@ -708,7 +708,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
       const acct = await resolveAccount();
       if (acct.paid) { onPlay(); return; }           // já tem conta vitalícia: entra direto
       await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento (checkout_open é do App.startCheckout)
-    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
+    } catch (e) { handleAccountErr(e); setBusy(false); }
   };
   // Pix via Woovi: cria/entra na conta, gera a cobrança e mostra QR + copia-e-cola
   // INLINE. O webhook (/api/woovi-webhook) marca a conta como paga e o polling
@@ -742,7 +742,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
       if (acct.paid) { onPlay(); return; }
       setPixEmail(acct.email);
       await requestPix(acct.email);
-    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); }
+    } catch (e) { handleAccountErr(e); }
     setBusy(false);
   };
   const regenPix = () => { if (pixEmail && !pixGenerating) void requestPix(pixEmail); };
@@ -829,16 +829,17 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
                 : ct('Pix aprova na hora · seu jogador continua de onde parou')}
             </p>
           )}
-          {/* prova social REAL (servidor); fetch falhou → não renderiza nada */}
-          <FounderCounter style={{ marginTop: '8px' }} />
+          {/* prova social REAL (servidor); fetch falhou ou zero → não renderiza nada */}
+          <SocialProof style={{ marginTop: '8px' }} />
+          {founderStats && founderStats.founders < founderStats.limit && <FounderCounter style={{ marginTop: '6px' }} />}
         </div>
       )}
       {info && mode !== 'signup' && !pixStep && <p style={{ color: 'var(--c-win)', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
       {mode === 'pay' || pixStep ? null : mode !== 'reset' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
-          <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
-          <div>
+          <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" inputMode="email" onKeyDown={(e) => e.key === 'Enter' && mode === 'signup' && goPix()} /></div>
+          {mode === 'signup' && <p style={{ margin: '-6px 0 0', fontSize: '0.72rem', color: 'var(--em-muted)' }}>{ct('Só o e-mail. Nick e senha você cria depois que o Pix confirmar.')}</p>}
+          {mode === 'login' && <div>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
               <label style={lbl}>{ct('Senha')}</label>
               <button type="button" onClick={() => setShowPw((v) => !v)}
@@ -846,30 +847,10 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
                 {showPw ? ct('ocultar') : ct('mostrar')}
               </button>
             </div>
-            <input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type={showPw ? 'text' : 'password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && (mode === 'signup' ? goPix() : go())} />
-          </div>
-          {/* Confirmação só no CADASTRO: um typo aqui cria uma conta com senha que
-              ninguém conhece. O reset por e-mail existe e resolve, mas obriga quem
-              acabou de PAGAR a passar por recuperação antes de jogar — atrito no
-              pior momento possível. Confirmar + revelar mata o erro na origem. */}
-          {mode === 'signup' && (
-            <div>
-              <label style={lbl}>{ct('Confirme a senha')}</label>
-              <input
-                style={{ ...input, ...(pwMismatch ? { borderColor: '#e2574c' } : null) }}
-                value={pw2}
-                onChange={(e) => setPw2(e.target.value)}
-                placeholder={ct('digite a senha de novo')}
-                type={showPw ? 'text' : 'password'}
-                autoComplete="new-password"
-                aria-invalid={pwMismatch}
-                onKeyDown={(e) => e.key === 'Enter' && goPix()}
-              />
-              {pwMismatch && <p style={{ color: '#e2574c', fontSize: '0.74rem', margin: '6px 0 0' }}>{ct('As senhas não são iguais.')}</p>}
-            </div>
-          )}
+            <input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type={showPw ? 'text' : 'password'} autoComplete="current-password" onKeyDown={(e) => e.key === 'Enter' && go()} />
+          </div>}
           {mode === 'login' && (
-            <button type="button" onClick={() => { setMode('reset'); setResetStep('ask'); setErr(''); setInfo(''); setPw2(''); }}
+            <button type="button" onClick={() => { setMode('reset'); setResetStep('ask'); setErr(''); setInfo(''); }}
               style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, color: 'var(--em-muted)', cursor: 'pointer', fontSize: '0.76rem', textDecoration: 'underline', fontFamily: 'inherit' }}>
               {ct('Esqueci minha senha')}
             </button>
@@ -901,11 +882,12 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
           )}
         </div>
       )}
+      {/* [paywall v2] aceite por clique (sem checkbox): tocar em pagar = aceitar.
+          O texto fica ACIMA dos botões, sempre visível antes do clique. */}
       {mode === 'signup' && !pixStep && (
-        <label className="checkout-legal-accept">
-          <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
-          <span>{ct('Li e aceito os')} <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">{ct('Termos')}</a> {ct('e a')} <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">{ct('Política de Reembolso')}</a>{ct(', consultei a')} <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">{ct('Privacidade')}</a> {ct('e confirmo ser maior de 18 anos ou responsável legal pela compra.')}</span>
-        </label>
+        <p className="checkout-legal-accept" style={{ fontSize: '0.7rem', margin: '12px 0 0' }}>
+          <span>{ct('Ao pagar, você aceita os')} <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">{ct('Termos')}</a> {ct('e a')} <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">{ct('Política de Reembolso')}</a>{ct(', consultei a')} <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">{ct('Privacidade')}</a> {ct('e confirma ser maior de 18 anos ou responsável legal pela compra.')}</span>
+        </p>
       )}
       {err && !pixStep && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
       {/* funil: dado real (checkout_open x rtm_paid_emails, por método) mostra o Pix
@@ -924,9 +906,11 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
             {ct('Tenha o app do banco à mão: o código Pix aparece logo em seguida')}
           </p>
           {/* sem o !valid: o clique com cadastro incompleto diz o que falta (signupBlockReason) */}
-          <Button variant="gold" disabled={busy} style={{ width: '100%', marginTop: '8px' }} onClick={goPix}>
-            {busy ? ct('Aguarde…') : ct('Pagar com Pix')}
-          </Button>
+          <div className="paywall-sticky-wrap">
+            <Button variant="gold" disabled={busy} style={{ width: '100%', marginTop: '8px' }} onClick={goPix}>
+              {busy ? ct('Aguarde…') : `${ct('Pagar com Pix')} · ${priceLabel()}`}
+            </Button>
+          </div>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '6px 0 0' }}>{ct('Confirma na hora, sem sair desta tela')}</p>
           <Button variant="ghost" disabled={busy} style={{ width: '100%', marginTop: '10px' }} onClick={go}>
             {busy ? ct('Aguarde…') : ct('Ativar com cartão (Stripe)')}
@@ -973,7 +957,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
         ) : (
           <>
             {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
-            <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); setInfo(''); setPw2(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
+            <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); setInfo(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
           </>
         )}
       </p>}

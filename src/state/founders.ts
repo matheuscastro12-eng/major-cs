@@ -5,9 +5,11 @@
 import { useEffect, useState } from 'react';
 import { setPriceCents } from './price';
 
-export interface FounderStats { founders: number; limit: number }
+/** managers: contas pagas reais (sem as liberadas pelo admin). Opcional: cache
+ *  antigo ou servidor sem o campo → a linha de prova social some (nunca chuta). */
+export interface FounderStats { founders: number; limit: number; managers?: number }
 
-const KEY = 'rtm-founders-v1';
+const KEY = 'rtm-founders-v2'; // v2: + managers
 const TTL_MS = 5 * 60_000;
 
 let memory: { at: number; stats: FounderStats } | null = null;
@@ -18,9 +20,9 @@ function readCache(): { at: number; stats: FounderStats } | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    const p = JSON.parse(raw) as { at?: number; founders?: number; limit?: number };
+    const p = JSON.parse(raw) as { at?: number; founders?: number; limit?: number; managers?: number };
     if (typeof p.at !== 'number' || typeof p.founders !== 'number' || typeof p.limit !== 'number') return null;
-    memory = { at: p.at, stats: { founders: p.founders, limit: p.limit } };
+    memory = { at: p.at, stats: { founders: p.founders, limit: p.limit, ...(typeof p.managers === 'number' ? { managers: p.managers } : {}) } };
     return memory;
   } catch { return null; }
 }
@@ -36,12 +38,13 @@ async function fetchFounders(): Promise<FounderStats | null> {
     try {
       const r = await fetch('/api/account', { method: 'GET' });
       if (!r.ok) return null;
-      const d = (await r.json()) as { founders?: unknown; limit?: unknown; priceCents?: unknown };
+      const d = (await r.json()) as { founders?: unknown; limit?: unknown; managers?: unknown; priceCents?: unknown };
       setPriceCents(d.priceCents); // mesmo GET expõe o preço da vitalícia
       const founders = Number(d.founders);
       const limit = Number(d.limit);
       if (!Number.isFinite(founders) || !Number.isFinite(limit) || founders < 0 || limit <= 0) return null;
-      const stats = { founders: Math.floor(founders), limit: Math.floor(limit) };
+      const managers = Number(d.managers);
+      const stats: FounderStats = { founders: Math.floor(founders), limit: Math.floor(limit), ...(Number.isFinite(managers) && managers >= 0 ? { managers: Math.floor(managers) } : {}) };
       writeCache(stats);
       return stats;
     } catch { return null; } finally { inflight = null; }

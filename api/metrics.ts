@@ -111,7 +111,7 @@ export default async function handler(
               AND created_at > now() - interval '30 days'
           UNION ALL
           SELECT 'bateu na trava', 900, COUNT(DISTINCT sid)
-            FROM events WHERE type = 'paywall_view' AND data->>'src' = 'rtp-demo-gate'
+            FROM events WHERE type = 'paywall_view' AND data->>'src' IN ('rtp-demo-gate', 'rtp-demo-cliff')
               AND created_at > now() - interval '30 days'
           UNION ALL
           SELECT 'abriu o checkout', 901, COUNT(DISTINCT sid)

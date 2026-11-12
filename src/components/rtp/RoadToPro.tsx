@@ -19,7 +19,7 @@ import { acceptOffer, negotiateOffer, declineOffers } from '../../engine/rtp/tra
 import { RtpLegacy } from './RtpLegacy';
 import { RtpDailySeries } from './RtpDailySeries';
 import { RtpDemoGate, DEMO_WEEKS } from './RtpDemoGate';
-import { usePaywallGate, rtpDemoLocked, gateTag } from '../../state/paywallGate';
+import { usePaywallGate, gateTag } from '../../state/paywallGate';
 import { RtpDemoCliffBanner } from './RtpDemoCliff';
 import { ensureDemoCliff, deliverDemoCliff } from '../../engine/rtp/demoCliff';
 import { RtpEraClose } from './RtpEraClose';
@@ -208,14 +208,11 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   }
   // DEMO: a trava fecha quando a degustação acaba (ou quando o convidado
   // tenta abrir a Série do Dia — exclusiva da vitalícia).
-  // FLAG DO PAYWALL (state/paywallGate.ts, padrão OFF): com ela ligada a demo
-  // fecha logo depois da 2ª partida — a trava aparece no fim dessa série, com o
-  // upsell (src 'rtp-demo-match2'). Desligada, vale a regra antiga das semanas.
-  if (demo && rtpDemoLocked(gateOn, demo, save.history?.matchesPlayed ?? 0)) {
-    return <RtpDemoGate save={save} src="rtp-demo-match2" gateTag={gateTag(gateOn)} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(save.player.nick); }} onExit={() => { setDailyOpen(false); onExit(); }} />;
-  }
+  // [paywall v2] a trava por partidas ('rtp-demo-match2') saiu: com a flag do
+  // paywall ligada ou não, a demo vai até o fim da semana 3 e o paywall é a
+  // proposta do clube (src 'rtp-demo-cliff'; sem proposta, 'rtp-demo-gate').
   if (demo && (save.world.week > DEMO_WEEKS || dailyOpen)) {
-    return <RtpDemoGate save={save} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(save.player.nick); }} onExit={() => { setDailyOpen(false); onExit(); }} onBack={save.world.week > DEMO_WEEKS ? undefined : () => setDailyOpen(false)} />;
+    return <RtpDemoGate save={save} gateTag={gateTag(gateOn)} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(save.player.nick); }} onExit={() => { setDailyOpen(false); onExit(); }} onBack={save.world.week > DEMO_WEEKS ? undefined : () => setDailyOpen(false)} />;
   }
   // SÉRIE DO DIA: desafio global diário — fixture próprio, não toca no seu save.
   if (dailyOpen) {

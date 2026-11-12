@@ -18,7 +18,11 @@ import { setPriceCents } from './price';
 const TOKEN_KEY = 'rtm-acct-token-v1';
 const CACHE_KEY = 'rtm-acct-cache-v1';
 const ME_TIMEOUT_MS = 10_000;
-export interface Account { email: string; nick: string; paid: boolean; founder: boolean; founderNo: number | null; admin: boolean; }
+export interface Account {
+  email: string; nick: string; paid: boolean; founder: boolean; founderNo: number | null; admin: boolean;
+  /** [paywall v2] conta criada no Pix em 1 passo (só e-mail) e ainda sem senha */
+  needsPassword?: boolean;
+}
 
 export function getToken(): string | null { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } }
 function setToken(t: string) { try { localStorage.setItem(TOKEN_KEY, t); } catch { /* sem storage */ } }
@@ -28,10 +32,13 @@ export function clearToken() { try { localStorage.removeItem(TOKEN_KEY); } catch
 // (offline, troca de rede, timeout). Quem chama decide o que fazer com cada um.
 export class AccountError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) {
+  /** corpo da resposta de erro (ex.: { login: true } no 409 do emailSignup) */
+  readonly data: Record<string, unknown>;
+  constructor(message: string, status: number, data: Record<string, unknown> = {}) {
     super(message);
     this.name = 'AccountError';
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -47,13 +54,13 @@ async function post(body: Record<string, unknown>, timeoutMs = 0): Promise<Recor
     if (timer) clearTimeout(timer);
   }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new AccountError(typeof data?.error === 'string' ? data.error : ct('Erro de conexão. Tente de novo.'), r.status);
+  if (!r.ok) throw new AccountError(typeof data?.error === 'string' ? data.error : ct('Erro de conexão. Tente de novo.'), r.status, data && typeof data === 'object' ? data as Record<string, unknown> : {});
   // [paywall] o servidor manda o preço cobrado (PIX_PRICE_CENTS) junto: a home e
   // o paywall mostram o mesmo valor que o checkout cobra.
   if (data && typeof data === 'object' && 'priceCents' in data) setPriceCents((data as Record<string, unknown>).priceCents);
   return data as Record<string, unknown>;
 }
-const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid, founder: !!d.founder, founderNo: d.founderNo != null ? Number(d.founderNo) : null, admin: !!d.admin });
+const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid, founder: !!d.founder, founderNo: d.founderNo != null ? Number(d.founderNo) : null, admin: !!d.admin, ...(d.needsPassword ? { needsPassword: true } : {}) });
 
 // Só um 401 prova que o token morreu. Qualquer outra falha (0 = rede, 429,
 // 5xx, 4xx inesperado) é "não sei agora": mantém o token e o cache.
@@ -172,6 +179,44 @@ export async function signup(email: string, password: string, nick: string): Pro
   setToken(String(d.token));
   const a = toAcct(d); setAccount(a); return a;
 }
+// ── [paywall v2] Pix em 1 passo: cadastro só com e-mail ─────────────────────
+// O servidor cria o cadastro PENDENTE sem senha, preso a uma chave aleatória
+// gerada AQUI (fica no localStorage deste navegador). Depois do pagamento, a
+// senha é criada com essa chave (setInitialPassword). Sem a chave (outro
+// aparelho, cache limpo): "Esqueci minha senha" cria a senha pelo e-mail.
+const SETUP_KEY = 'rtm-setup-key-v1';
+function readSetup(): { email: string; key: string } | null {
+  try {
+    const p = JSON.parse(localStorage.getItem(SETUP_KEY) || 'null') as { email?: unknown; key?: unknown } | null;
+    return p && typeof p.email === 'string' && typeof p.key === 'string' ? { email: p.email, key: p.key } : null;
+  } catch { return null; }
+}
+function setupKeyFor(email: string): string {
+  const cur = readSetup();
+  if (cur && cur.email === email) return cur.key;
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const key = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  try { localStorage.setItem(SETUP_KEY, JSON.stringify({ email, key })); } catch { /* sem storage: a senha sai pelo reset por e-mail */ }
+  return key;
+}
+/** este navegador tem a chave pra criar a senha desta conta? */
+export function hasSetupKey(email: string): boolean { return readSetup()?.email === email.trim().toLowerCase(); }
+
+export async function emailSignup(email: string): Promise<Account> {
+  const em = email.trim().toLowerCase();
+  const d = await post({ action: 'emailSignup', email: em, setupKey: setupKeyFor(em), origin: window.location.origin, attr: { ...sessionAttribution(), offerVariant: offerVariant() } });
+  setToken(String(d.token));
+  const a = toAcct(d); setAccount(a); return a;
+}
+export async function setInitialPassword(password: string, nick: string): Promise<void> {
+  const token = getToken(); const s = readSetup();
+  if (!token || !s) throw new AccountError(ct('Use "Esqueci minha senha" com o seu e-mail.'), 403, { reset: true });
+  await post({ action: 'setPassword', token, setupKey: s.key, password, nick });
+  try { localStorage.removeItem(SETUP_KEY); } catch { /* sem storage */ }
+  await refreshAccount();
+}
+
 // Reset de senha em 2 passos: pede o código por e-mail e confirma com a nova
 // senha. As duas lançam Error com mensagem amigável do servidor.
 export async function requestPasswordReset(email: string): Promise<void> {

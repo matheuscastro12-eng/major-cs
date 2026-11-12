@@ -2124,3 +2124,9 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
 .rtp .rtp-era-close-ev em { font-style: normal; color: var(--rtp-ink-dim); font-size: .74rem; }
 .rtp .rtp-era-close-next { margin: 6px 0 0; color: var(--rtp-ink-dim); font-size: .86rem; }
 .rtp .rtp-era-close-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+
+/* [paywall v2] loss framing + "Você leva" da trava/cliffhanger */
+.rtp-demogate-loss { border: 1px solid rgba(226, 87, 76, 0.35); background: rgba(226, 87, 76, 0.07); border-radius: 10px; padding: 10px 12px; font-size: 0.82rem; color: var(--rtp-ink); }
+.rtp-demogate-loss b { display: block; margin-bottom: 4px; color: #e2574c; font-size: 0.78rem; letter-spacing: 0.3px; }
+.rtp-demogate-loss ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; color: var(--rtp-ink-dim); }
+.rtp-demogate-take { font-size: 0.74rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--rtp-gold); }
