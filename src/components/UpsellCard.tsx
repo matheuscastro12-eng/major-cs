@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AccountError, useAccount, beginPix, fetchMe, type PixCharge } from '../state/account';
 import { sessionId, setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView } from '../state/track';
 import { track } from '../state/track'; // pix_confirmed
@@ -150,6 +150,12 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
 
   // polling do Pix: mesmo padrão do modal de checkout da Landing (pausa em aba
   // oculta, teto de 15min, re-checa ao voltar pra aba).
+  // onPixPaid em ref: callback instável do pai (arrow inline) + re-render
+  // síncrono do store da conta quando o fetchMe() resolve trocavam a identidade
+  // e o cleanup (alive=false) descartava o 'me?.paid' — o polling nunca
+  // confirmava. O efeito depende só de [pix].
+  const onPixPaidRef = useRef(onPixPaid);
+  useLayoutEffect(() => { onPixPaidRef.current = onPixPaid; });
   useEffect(() => {
     if (!pix) return;
     let alive = true;
@@ -157,7 +163,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     const CAP_MS = 15 * 60_000;
     setPollPaused(false);
     const check = async () => {
-      try { const me = await fetchMe(); if (alive && me?.paid) { if (!pixConfirmed.current) track('pix_confirmed', { where: 'upsell-poll' }); pixConfirmed.current = true; setPix(null); setOpen(false); onPixPaid(); } } catch { /* ignora */ }
+      try { const me = await fetchMe(); if (alive && me?.paid) { if (!pixConfirmed.current) track('pix_confirmed', { where: 'upsell-poll' }); pixConfirmed.current = true; setPix(null); setOpen(false); onPixPaidRef.current(); } } catch { /* ignora */ }
     };
     const t = window.setInterval(() => {
       if (Date.now() - startedAt > CAP_MS) { window.clearInterval(t); if (alive) setPollPaused(true); return; }
@@ -167,7 +173,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     const onVis = () => { if (alive && !document.hidden) void check(); };
     document.addEventListener('visibilitychange', onVis);
     return () => { alive = false; window.clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
-  }, [pix, onPixPaid]);
+  }, [pix]);
 
   // "Já paguei, verificar agora": o mesmo /me do polling, na hora que a pessoa
   // pede (igual ao modal da Landing; aqui sem paywall_view, que não tem src desta

@@ -12,7 +12,7 @@
 // Qual hero, quais portas e os favoritos: data/majorLanding.ts (puro e sem o
 // JSON dos 32 times, que não pode entrar no chunk inicial).
 // Estilos em src/styles/landing.css (só tokens).
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, Crosshair, Gift, Globe, Play, Star, Swords, Target, Trophy } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutBlocked, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
 import { track } from '../state/track'; // pix_confirmed (linha própria: evita conflito com o PR #181)
@@ -637,6 +637,13 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
   // aba re-checa na hora; (2) 6s em vez de 4s (imperceptível ao esperar pagamento);
   // (3) teto de 15min (o Pix expira) pra não bater /api/account pra sempre numa aba
   // esquecida. Antes: 4s sem guarda nenhuma = ~900 req/h de invocação à toa.
+  // callbacks do pai em ref: o App passa onPlay como arrow inline, e o fetchMe()
+  // do próprio poll atualiza o store da conta → re-render síncrono do App → onPlay
+  // novo. Com onPlay nas deps, o cleanup (alive=false) rodava ANTES do await do
+  // fetchMe voltar e o 'me?.paid' nunca era tratado — o modal ficava eterno em
+  // "Aguardando o pagamento" com a conta já paga. O efeito agora depende só de [pix].
+  const onPaidRef = useRef(() => { notePixPaid('modal-poll'); setPix(null); onPlay(); });
+  useLayoutEffect(() => { onPaidRef.current = () => { notePixPaid('modal-poll'); setPix(null); onPlay(); }; });
   useEffect(() => {
     if (!pix) return;
     let alive = true;
@@ -644,7 +651,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
     const CAP_MS = 15 * 60_000;
     setPollPaused(false);
     const check = async () => {
-      try { const me = await fetchMe(); if (alive && me?.paid) { notePixPaid('modal-poll'); setPix(null); onPlay(); } } catch { /* ignora */ }
+      try { const me = await fetchMe(); if (alive && me?.paid) onPaidRef.current(); } catch { /* ignora */ }
     };
     const t = setInterval(() => {
       if (Date.now() - startedAt > CAP_MS) { clearInterval(t); if (alive) setPollPaused(true); return; } // Pix expirou: a tela oferece o "verificar agora"
@@ -654,8 +661,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, onPixPaid, initialMo
     const onVis = () => { if (alive && !document.hidden) void check(); }; // voltou à aba: re-checa já
     document.addEventListener('visibilitychange', onVis);
     return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- notePixPaid só lê refs e o callback do pai
-  }, [pix, onPlay]);
+  }, [pix]);
   // Input/label nativos puxam os overrides em-* via body.career-dash (Fase 0/1),
   // então não precisamos mais de inline style nos campos.
   const input: CSSProperties = { width: '100%' };
