@@ -6696,3 +6696,23 @@ button.t20-row {
 .upsell-soft__cta { min-height: 40px; padding: 0 var(--sp-3); border: 0; border-radius: 999px; background: var(--c-achievement); color: var(--c-on-achievement); font-weight: 700; cursor: pointer; }
 .upsell-soft__x { min-width: 40px; min-height: 40px; border: 0; background: transparent; color: var(--c-ink-faint); cursor: pointer; }
 @media (max-width: 720px) { .upsell-soft { bottom: calc(72px + env(safe-area-inset-bottom)); } }
+
+/* [paywall v2] CTA do Pix grudado no rodapé no celular: visível sem rolar,
+   respeitando a área segura (notch / barra de gestos do iOS). */
+@media (max-width: 640px) {
+  .paywall-sticky-cta {
+    position: sticky;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    z-index: 5;
+    box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.45);
+  }
+  .paywall-sticky-wrap {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin: 0 -4px;
+    padding: 8px 4px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: var(--em-panel, #12141a);
+    box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.35);
+  }
+}

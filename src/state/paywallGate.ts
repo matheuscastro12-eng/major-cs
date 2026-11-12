@@ -4,12 +4,14 @@
 // sessão do navegador (sessionStorage), sem tocar no servidor.
 //
 // Regras (puras, testadas em scripts/test-paywall-gate.mts):
-//   - Road to Pro demo: trava DEPOIS da 2ª partida (série) concluída;
+//   - Road to Pro demo: NÃO trava mais na 2ª partida ('rtp-demo-match2' teve 61
+//     sessões e 0 checkouts). A demo vai grátis até o fim da semana 3 e o
+//     paywall é a proposta do clube (cliffhanger, src 'rtp-demo-cliff'), com a
+//     flag ligada ou desligada — regra das semanas em RoadToPro/DEMO_WEEKS;
 //   - Major Singapura (campanha jogada): Stage 1 grátis, trava do Stage 2 em diante;
-//   - Pick'em: vitrine + palpite do Stage 1 grátis; Stage 2, 3, playoffs e envio travam.
+//   - Pick'em: NÃO trava mais (201 sessões, 0 checkouts no 'major-pickem-gate').
 import { useSyncExternalStore } from 'react';
 
-export const RTP_DEMO_FREE_MATCHES = 2;
 export const MAJOR_FREE_STAGE = 1;
 
 const OVERRIDE_KEY = 'rtm-pwgate';
@@ -57,9 +59,10 @@ export function usePaywallGate(): boolean {
 /** valor pra registrar nos eventos (variante do experimento) */
 export function gateTag(on: boolean): 'on' | 'off' { return on ? 'on' : 'off'; }
 
-/** A demo do RtP trava agora? (depois da 2ª partida concluída) */
-export function rtpDemoLocked(gate: boolean, demo: boolean, matchesPlayed: number): boolean {
-  return gate && demo && matchesPlayed >= RTP_DEMO_FREE_MATCHES;
+/** A demo do RtP trava por partidas? Nunca mais: a trava é o fim da semana 3
+ *  (proposta do clube). Mantida pura e neutra pra documentar a regra nos testes. */
+export function rtpDemoLocked(_gate: boolean, _demo: boolean, _matchesPlayed: number): boolean {
+  return false;
 }
 
 /** A próxima série da campanha do Major trava? phase 1..3 = Stage, 4 = playoffs */
@@ -67,7 +70,7 @@ export function majorPhaseLocked(gate: boolean, paid: boolean, phase: number): b
   return gate && !paid && phase > MAJOR_FREE_STAGE;
 }
 
-/** O palpite deste Stage do pick'em trava? (0 = chave dos playoffs) */
-export function pickemStageLocked(gate: boolean, paid: boolean, stage: number): boolean {
-  return gate && !paid && (stage === 0 || stage > MAJOR_FREE_STAGE);
+/** O palpite deste Stage do pick'em trava? Nunca: o pick'em é todo grátis. */
+export function pickemStageLocked(_gate: boolean, _paid: boolean, _stage: number): boolean {
+  return false;
 }

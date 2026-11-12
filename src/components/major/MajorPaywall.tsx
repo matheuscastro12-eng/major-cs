@@ -8,16 +8,12 @@ import { Button, Panel } from '../ds';
 import { setCheckoutSrc, trackPaywallView } from '../../state/track';
 import { priceLabel, usePrice } from '../../state/price';
 
-export type MajorGateSrc = 'major-sg-gate' | 'major-pickem-gate';
+export type MajorGateSrc = 'major-sg-gate';
 
 const COPY: Record<MajorGateSrc, { title: string; body: string }> = {
   'major-sg-gate': {
     title: 'Libere o resto do Major',
     body: 'Continue a campanha até a final com o seu time, com o save na nuvem e sem limite de Majors.',
-  },
-  'major-pickem-gate': {
-    title: 'Libere o pick\'em completo',
-    body: 'Stage 2, Stage 3, a chave dos playoffs e o envio pro ranking do pick\'em ficam liberados pra sempre.',
   },
 };
 

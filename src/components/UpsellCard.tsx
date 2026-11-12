@@ -34,7 +34,6 @@ const LAST_KEY = 'rtm_upsell_last';
 const HOOKS: Record<string, string> = {
   // trava do Major (flag do paywall, MajorPaywall.tsx)
   'major-sg-gate': 'Seu time passou do Stage 1. Libere o resto do Major com a conta vitalícia.',
-  'major-pickem-gate': 'Stage 1 palpitado! Feche Stage 2, Stage 3 e os playoffs com a conta vitalícia.',
   'pickem': 'Palpite do Major fechado! Com a conta vitalícia ele fica salvo na nuvem e vale no ranking.',
   'split-win': 'Você acabou de conquistar um título. Que tal guardar essa campanha pra sempre?',
   'major': 'Campanha histórica! Não perca esse progresso.',

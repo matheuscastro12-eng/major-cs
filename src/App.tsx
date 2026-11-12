@@ -141,6 +141,7 @@ import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { ct, setCareerLang } from './state/career-i18n';
 import { Landing, AccountModal } from './components/Landing';
+import { SetPasswordPrompt } from './components/SetPasswordPrompt';
 import type { LandingDoor } from './data/majorLanding';
 import { LegalPage } from './components/Legal';
 import { beginCheckout, claim as claimAccount, useAccount } from './state/account';
@@ -1380,6 +1381,8 @@ export default function App() {
       {/* !account?.paid (antes !account): o signup/login grava a conta no store
           ANTES do QR Pix aparecer — com !account o modal desmontava no meio do
           pagamento. Conta grátis já logada abre direto no passo de pagamento. */}
+      {/* [paywall v2] pagou pelo Pix em 1 passo (só e-mail): pede nick + senha */}
+      {account?.paid && account.needsPassword && !authOpen && <SetPasswordPrompt account={account} />}
       {authOpen && !account?.paid && (
         <AccountModal
           initialMode={authMode}

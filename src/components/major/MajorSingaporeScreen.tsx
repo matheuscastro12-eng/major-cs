@@ -34,9 +34,8 @@ import { MajorScoreboard } from './MajorScoreboard';
 import { PickemInvite } from './MajorShareInvite';
 import { initialMajorTab, type MajorTab } from './majorTabs';
 import { ensurePickSnapshots } from '../../state/pickSnapshots';
-import { MajorPaywall } from './MajorPaywall';
 import { useAccount } from '../../state/account';
-import { usePaywallGate, majorPhaseLocked, pickemStageLocked } from '../../state/paywallGate';
+import { usePaywallGate, majorPhaseLocked } from '../../state/paywallGate';
 import '../../styles/major.css';
 
 const D = data as unknown as MajorData;
@@ -260,16 +259,16 @@ export function MajorSingaporeScreen({ onLogin, tab: tabProp, onTab }: { onLogin
               <Button size="sm" variant="ghost" icon={<Eraser size={16} aria-hidden />} onClick={() => commit(emptyPicks())}>{t('clear')}</Button>
             </div>
           )}
-          {([1, 2, 3] as StageNo[]).filter((st) => readOnly || !pickemStageLocked(gateOn, paid, st)).map((st) => (
+          {/* [paywall v2] pick'em todo grátis: a trava 'major-pickem-gate' saiu (201 sessões, 0 checkouts) */}
+          {([1, 2, 3] as StageNo[]).map((st) => (
             <StagePicker key={st} stage={st} picks={picks} readOnly={readOnly} t={t} onToggle={(id) => toggle(st, id)} onExtreme={(k, id) => toggleExtreme(k, st, id)} />
           ))}
-          {!readOnly && pickemStageLocked(gateOn, paid, 0) && <MajorPaywall src="major-pickem-gate" />}
-          {(readOnly || !pickemStageLocked(gateOn, paid, 0)) && <BracketPicker picks={picks} readOnly={readOnly} t={t} onPick={pickWinner} />}
+          <BracketPicker picks={picks} readOnly={readOnly} t={t} onPick={pickWinner} />
           {!readOnly && complete && (
             <PickemInvite t={t} picks={mine} ch={challenge} reveal={revealInvite} onRevealed={() => setRevealInvite(false)} onVisibleChange={setInviteOnScreen} />
           )}
           <ChallengeVs ch={challenge} />
-          {!readOnly && !pickemStageLocked(gateOn, paid, 0) && <PickemSubmit picks={mine} onLogin={onLogin} />}
+          {!readOnly && <PickemSubmit picks={mine} onLogin={onLogin} />}
           {/* o palpite próprio completo compartilha pelo convite acima; aqui fica o
               aviso de palpite incompleto e o palpite recebido (só leitura) */}
           {(readOnly || !complete) && <Panel title={t('share')} accent="gold">
