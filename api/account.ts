@@ -27,6 +27,7 @@ import {
   PASS_PRICE_CENTS,
   retrieveCheckout,
   stripeClient,
+  stripeBrlPresentation,
 } from '../server/payments.js';
 import { claimPaidOrders } from '../server/paid-credit.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
@@ -673,6 +674,7 @@ export default async function handler(
     } catch { /* colunas ainda não migradas: segue sem atribuição */ }
     try {
       const session = await stripeClient().checkout.sessions.create({
+        ...stripeBrlPresentation, // [paywall] BRL sem conversão, pt-BR, "ROAD TO MAJOR" na fatura
         mode: 'payment',
         customer_email: em,
         client_reference_id: corr,
@@ -829,6 +831,7 @@ export default async function handler(
     await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, method) VALUES (${corr}, ${em}, ${tier}, 0, ${PASS_PRICE_CENTS}, 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
     try {
       const session = await stripeClient().checkout.sessions.create({
+        ...stripeBrlPresentation, // [paywall] BRL sem conversão, pt-BR, "ROAD TO MAJOR" na fatura
         mode: 'payment',
         customer_email: em,
         client_reference_id: corr,

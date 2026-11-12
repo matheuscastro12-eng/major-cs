@@ -183,6 +183,21 @@ export function accountPixChargeUse(charge: Record<string, unknown> | null | und
 
 export const ACCOUNT_CHECKOUT_KIND = 'account';
 
+// [paywall] Apresentação comum de TODO checkout do Stripe (vitalícia, coins, passe):
+// - adaptive_pricing desligado: com ele ligado na conta, o Stripe converte o
+//   price_data em BRL pra moeda do cartão/IP (aparecia "$6.46" em USD) e a
+//   sessão pode vir com currency != 'brl' (o webhook só aceita 'brl').
+// - locale pt-BR: a página do Checkout em português.
+// - statement_descriptor_suffix: "ROAD TO MAJOR" na fatura do cartão (máx. 22
+//   chars, sem < > \ ' " *). O nome no TOPO do Checkout ("PreceptorAPG") é o
+//   nome público da conta Stripe — config do dashboard, não dá por código (ver NOTES-PR.md).
+export const STRIPE_STATEMENT_SUFFIX = 'ROAD TO MAJOR';
+export const stripeBrlPresentation = {
+  adaptive_pricing: { enabled: false },
+  locale: 'pt-BR',
+  payment_intent_data: { statement_descriptor_suffix: STRIPE_STATEMENT_SUFFIX },
+} satisfies Pick<Stripe.Checkout.SessionCreateParams, 'adaptive_pricing' | 'locale' | 'payment_intent_data'>;
+
 // Checkout de cartão da vitalícia com o preço configurado (price_data em BRL,
 // igual coins/passe). Sem chave do Stripe, cai no Payment Link legado.
 export async function accountCheckoutUrl(email: string, origin?: unknown): Promise<string> {
@@ -191,6 +206,7 @@ export async function accountCheckoutUrl(email: string, origin?: unknown): Promi
   const em = normalizeEmail(email);
   const base = checkoutBase(origin);
   const session = await stripe.checkout.sessions.create({
+    ...stripeBrlPresentation,
     mode: 'payment',
     customer_email: em,
     client_reference_id: accountReference(em),
