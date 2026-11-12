@@ -100,3 +100,51 @@ test('me: flood do mesmo IP leva 429', async () => {
     assert.equal(last, 429);
   } finally { uninstall(); }
 });
+
+// [paywall] cadastro pendente pagando via Pix: o 'me' não pode dar 401 (o
+// cliente apaga o token num 401 e o polling morre). Token de e-mail sem conta
+// nem cadastro pendente continua 401; token inválido continua 401.
+test('me: cadastro pendente devolve 200 pending (não 401); sem cadastro e token lixo seguem 401', async () => {
+  const { uninstall } = setup((text, params) => {
+    if (/FROM rtm_pending_signups/i.test(text) && params.includes('pend@example.com')) return [{ nick: 'Pend' }];
+    return undefined;
+  });
+  const prevStripe = process.env.STRIPE_SECRET_KEY;
+  delete process.env.STRIPE_SECRET_KEY;
+  const origError = console.error; console.error = () => {};
+  try {
+    const ok = await call({ action: 'me', token: signAccountToken('pend@example.com') });
+    assert.equal(ok.code, 200);
+    assert.equal(ok.body.pending, true);
+    assert.equal(ok.body.paid, false);
+    assert.equal(ok.body.email, 'pend@example.com');
+    assert.equal((await call({ action: 'me', token: signAccountToken('ninguem@example.com') })).code, 401);
+    assert.equal((await call({ action: 'me', token: 'lixo' })).code, 401);
+  } finally {
+    console.error = origError;
+    if (prevStripe !== undefined) process.env.STRIPE_SECRET_KEY = prevStripe;
+    uninstall();
+  }
+});
+
+// [paywall] a home lê o preço de GET ?price=1: mesma fonte do checkout
+// (PIX_PRICE_CENTS) e sem passar pelo banco (Neon frio não deixa a home no padrão).
+test('GET ?price=1 devolve o preço cobrado sem tocar no banco', async () => {
+  const prev = process.env.PIX_PRICE_CENTS;
+  process.env.PIX_PRICE_CENTS = '3500';
+  let queries = 0;
+  __resetRateLimitForTests();
+  const db = new FakeNeonHttp(() => { queries++; return []; });
+  const uninstall = db.install();
+  try {
+    const out = { code: 0, body: undefined as unknown as Record<string, unknown> };
+    const res = { status: (code: number) => ({ json: (b: unknown) => { out.code = code; out.body = b as Record<string, unknown>; } }), setHeader: () => {} };
+    await account({ method: 'GET', url: '/api/account?price=1', headers: {} }, res);
+    assert.equal(out.code, 200);
+    assert.equal(out.body.priceCents, 3500);
+    assert.equal(queries, 0);
+  } finally {
+    uninstall();
+    if (prev === undefined) delete process.env.PIX_PRICE_CENTS; else process.env.PIX_PRICE_CENTS = prev;
+  }
+});
