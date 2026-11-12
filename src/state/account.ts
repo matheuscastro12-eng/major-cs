@@ -13,6 +13,7 @@ import { trackUltFunnel } from './track';
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import { ct } from './career-i18n';
+import { setPriceCents } from './price';
 
 const TOKEN_KEY = 'rtm-acct-token-v1';
 const CACHE_KEY = 'rtm-acct-cache-v1';
@@ -47,6 +48,9 @@ async function post(body: Record<string, unknown>, timeoutMs = 0): Promise<Recor
   }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new AccountError(typeof data?.error === 'string' ? data.error : ct('Erro de conexão. Tente de novo.'), r.status);
+  // [paywall] o servidor manda o preço cobrado (PIX_PRICE_CENTS) junto: a home e
+  // o paywall mostram o mesmo valor que o checkout cobra.
+  if (data && typeof data === 'object' && 'priceCents' in data) setPriceCents((data as Record<string, unknown>).priceCents);
   return data as Record<string, unknown>;
 }
 const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid, founder: !!d.founder, founderNo: d.founderNo != null ? Number(d.founderNo) : null, admin: !!d.admin });
