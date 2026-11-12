@@ -83,3 +83,20 @@ export function markAutoOfferShown(moment: string): void {
   memoryShown = next;
   try { sessionStorage.setItem(AUTO_KEY, JSON.stringify(next)); } catch { /* sem storage: fica em memória */ }
 }
+
+// [paywall] Vitrines da vitalícia visíveis no Início, em ordem de prioridade (a
+// 1ª vira o src do ÚNICO paywall_view da visita — ver trackHomePaywallView).
+export interface HomePaywallInput {
+  rtpLocked: boolean;      // card do Road to Pro com preço/cadeado (só depois do 1º valor)
+  ultimateLocked: boolean; // card do Ultimate com cadeado
+  freeAccount: boolean;    // logado sem vitalícia: pill "Vire Fundador"
+  guest: boolean;          // convidado: chip de conta (só depois do 1º valor)
+}
+export function homePaywallSurfaces(i: HomePaywallInput): string[] {
+  const out: string[] = [];
+  if (i.rtpLocked) out.push('home-rtp'); // 1º: mantém o src que o funil do A/B já consulta
+  if (i.ultimateLocked) out.push('home-ultimate');
+  if (i.freeAccount) out.push('home-pill');
+  if (i.guest) out.push('acct-chip-guest');
+  return out;
+}

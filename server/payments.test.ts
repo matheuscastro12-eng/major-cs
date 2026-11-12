@@ -204,3 +204,15 @@ test('account checkout falls back to the legacy Payment Link without Stripe key'
     if (prev[1] !== undefined) process.env.STRIPE = prev[1];
   }
 });
+
+// [paywall] todo checkout do Stripe sai em BRL (sem Adaptive Pricing → USD),
+// em pt-BR e com "ROAD TO MAJOR" na fatura (sufixo válido: ≤ 22, sem < > \ ' " *).
+test('checkout do Stripe: BRL sem adaptive pricing, pt-BR e sufixo de fatura válido', async () => {
+  const { stripeBrlPresentation, STRIPE_STATEMENT_SUFFIX } = await import('./payments.js');
+  assert.deepEqual(stripeBrlPresentation.adaptive_pricing, { enabled: false });
+  assert.equal(stripeBrlPresentation.locale, 'pt-BR');
+  assert.equal(stripeBrlPresentation.payment_intent_data.statement_descriptor_suffix, STRIPE_STATEMENT_SUFFIX);
+  assert.ok(STRIPE_STATEMENT_SUFFIX.length <= 22);
+  assert.ok(!/[<>\\'"*]/.test(STRIPE_STATEMENT_SUFFIX));
+  assert.ok(/[a-z]/i.test(STRIPE_STATEMENT_SUFFIX));
+});

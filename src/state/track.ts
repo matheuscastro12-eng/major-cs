@@ -202,6 +202,19 @@ export function trackPaywallView(src: string, extra: Record<string, string | num
   track('paywall_view', { src, surface: src, trigger: paywallTrigger(src), ...extra });
 }
 
+// [paywall] Início: o portal mostra várias vitrines ao mesmo tempo (card RtP com
+// preço, card Ultimate com cadeado, pill "Vire Fundador", chip do convidado) e
+// cada uma virava um paywall_view com src próprio — o convidado que já jogou
+// gerava home-rtp + acct-chip-guest (2 views) na MESMA visita. Agora a visita ao
+// Início conta 1 paywall_view: src = a vitrine principal (ordem de
+// homePaywallSurfaces) e `surfaces` lista todas as que estavam na tela.
+export function trackHomePaywallView(surfaces: readonly string[]): void {
+  if (!surfaces.length) return;
+  if (seenOnce('paywall_view:home')) return;
+  const src = surfaces[0];
+  track('paywall_view', { src, surface: src, trigger: paywallTrigger(src), surfaces: surfaces.join(',') });
+}
+
 // O que fez a oferta aparecer:
 //   gate     → o jogador tentou usar algo travado (demo do RtP, mercado, Ultimate sem conta…)
 //   checkout → já está no pagamento (avisos dentro do QR Pix / nudge do checkout)

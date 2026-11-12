@@ -16,7 +16,7 @@ import {
   Shuffle, Star, Swords, Trophy, UserRound, Crown, Lock, Medal, PencilRuler, type LucideIcon,
 } from 'lucide-react';
 import { type Difficulty, type TournamentPool } from '../types';
-import { setCheckoutSrc, trackPaywallView, trackUltFunnel } from '../state/track';
+import { setCheckoutSrc, trackHomePaywallView, trackUltFunnel } from '../state/track';
 import { useSectionHistory } from '../state/app-history';
 import { loadStreakState } from '../state/dailyStreak'; // [URG-4]
 import { streakStatus } from '../engine/daily/streak'; // [URG-4]
@@ -38,7 +38,7 @@ import { useFounders } from '../state/founders';
 import { GameShell, Panel, Button, Segmented, Tag, LiveBadge, ProgressBar, type ShellNavGroup, type ShellNext, type ShellPending } from './ds/index';
 import type { Account } from '../state/account';
 import { priceLabel, usePrice, withPrice } from '../state/price';
-import { hasFirstValue } from '../state/paywallPolicy';
+import { hasFirstValue, homePaywallSurfaces } from '../state/paywallPolicy';
 import { offerVariant } from '../state/offerAb';
 import { OfferPixCta } from './OfferPixCta';
 
@@ -161,10 +161,14 @@ export function Home(props: Props) {
     // [O0-11] premiumLocked é true enquanto o /me carrega: sem accountReady o
     // 1º frame do pagante contava como paywall_view (dedupe grava esse frame).
     if (!accountReady) return;
-    if (premiumLocked && onRoadToPro && valueSeen) trackPaywallView('home-rtp'); // preço no card RtP com cadeado
-    if (ultimateLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
-    if (account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
-    if (!account && valueSeen) trackPaywallView('acct-chip-guest'); // chip de conta do convidado no Início
+    // [paywall] 1 visita ao Início = 1 paywall_view (antes cada vitrine contava
+    // a sua: home-rtp + acct-chip-guest/home-pill na mesma visita).
+    trackHomePaywallView(homePaywallSurfaces({
+      rtpLocked: !!(premiumLocked && onRoadToPro && valueSeen), // preço no card RtP com cadeado
+      ultimateLocked: !!(ultimateLocked && onUltimate),         // card Ultimate com cadeado
+      freeAccount: !!(account && !account.paid),                // pill "Vire Fundador"
+      guest: !account && valueSeen,                             // chip de conta do convidado
+    }));
   }, [view, premiumLocked, ultimateLocked, onRoadToPro, onUltimate, accountReady, account, valueSeen]);
 
   // [URG-4] streak do Diário: "N dias" e, se ainda não jogou hoje, o aviso de perda

@@ -25,13 +25,20 @@ export function setPriceCents(n: unknown): void {
   subs.forEach((f) => f());
 }
 
+// [paywall] GET ?price=1 não passa pelo banco (responde mesmo com o Neon frio).
+// Falhou? libera nova tentativa no próximo subscribe — antes era 1x por sessão e
+// a home ficava no padrão (R$ 20) enquanto o checkout cobrava o do servidor.
+// O /me, o checkout e o Pix também devolvem priceCents (state/account.ts adota).
 export function loadPrice(): void {
   if (started || typeof fetch !== 'function') return;
   started = true;
-  void fetch('/api/account', { method: 'GET' })
+  void fetch('/api/account?price=1', { method: 'GET' })
     .then((r) => r.json())
-    .then((d: { priceCents?: unknown }) => setPriceCents(d?.priceCents))
-    .catch(() => { /* fica no cache/padrão */ });
+    .then((d: { priceCents?: unknown }) => {
+      if (Number(d?.priceCents) >= 100) setPriceCents(d.priceCents);
+      else started = false;
+    })
+    .catch(() => { started = false; /* fica no cache/padrão até a próxima tentativa */ });
 }
 
 export function priceCents(): number { return cents; }

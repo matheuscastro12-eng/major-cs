@@ -27,6 +27,7 @@ import {
   PASS_PRICE_CENTS,
   retrieveCheckout,
   stripeClient,
+  stripeBrlPresentation,
 } from '../server/payments.js';
 import { claimPaidOrders } from '../server/paid-credit.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
@@ -171,13 +172,22 @@ function cleanAttr(raw: unknown): { ref: string | null; utm_source: string | nul
 }
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
+  req: { method?: string; url?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   // GET público: contagem agregada de Fundadores (prova social honesta). Sem
   // auth — é um único número agregado, sem dado pessoal. Cacheável (5 min) e
   // protegido por cache em memória (60s por instância) contra rajadas.
   if (req.method === 'GET') {
+    // [paywall] GET ?price=1: só o preço (PIX_PRICE_CENTS), sem tocar no banco.
+    // A home lia o preço do mesmo GET dos Fundadores, que passa pelo Neon: cold
+    // start/timeout → o front ficava no padrão (R$ 20) enquanto o checkout cobra
+    // o valor do servidor. Aqui responde na hora e com a mesma fonte do checkout.
+    if (/[?&]price=1(&|$)/.test(String(req.url ?? ''))) {
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=300');
+      res.status(200).json({ priceCents: accountPriceCents() });
+      return;
+    }
     const dbUrl = cleanEnv(process.env.DATABASE_URL);
     if (!dbUrl) { res.status(500).json({ error: 'indisponível', priceCents: accountPriceCents() }); return; }
     try {
@@ -450,11 +460,20 @@ export default async function handler(
       paid = await resolvePaid(em, false, true);
       r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
     }
-    if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
+    if (!r.length) {
+      // Cadastro pendente (signup feito, pagamento ainda não caiu): o token é
+      // legítimo, só não existe linha em rtm_accounts ainda. Antes isso dava 401
+      // e o cliente apagava o token no meio do polling do Pix (pix_confirmed
+      // nunca disparava e "pagar com cartão" falhava com "Faça login antes de
+      // pagar"). Agora devolve 200 com pending:true e paid:false.
+      const p = await sql`SELECT nick FROM rtm_pending_signups WHERE email=${em}`;
+      if (p.length) { res.status(200).json({ email: em, nick: p[0].nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, priceCents: accountPriceCents() }); return; }
+      res.status(401).json({ error: 'Conta não encontrada.' }); return;
+    }
     await ensureReference(em);
     // dupla chave: token antigo (reserva) válido → devolve um assinado com a APP_SECRET
     const refreshed = accountTokenNeedsRefresh(String(body.token ?? '')) ? { token: signAccountToken(em) } : {};
-    res.status(200).json({ email: em, nick: r[0].nick, paid, ...(await founderOf(em)), ...refreshed });
+    res.status(200).json({ email: em, nick: r[0].nick, paid, priceCents: accountPriceCents(), ...(await founderOf(em)), ...refreshed });
     return;
   }
 
@@ -499,7 +518,7 @@ export default async function handler(
       return;
     }
     // [preço] sessão dinâmica com PIX_PRICE_CENTS; falha no Stripe → Payment Link legado.
-    res.status(200).json({ paid: false, url: await safeCheckoutUrl(em, body.origin) });
+    res.status(200).json({ paid: false, priceCents: accountPriceCents(), url: await safeCheckoutUrl(em, body.origin) });
     return;
   }
 
@@ -519,6 +538,7 @@ export default async function handler(
     const value = accountPriceCents();
     const chargeOut = (c: Record<string, unknown>, expiresIn: unknown, extra: Record<string, unknown> = {}) => ({
       paid: false,
+      priceCents: value,
       qrCodeImage: c.qrCodeImage ?? null,
       brCode: c.brCode ?? null,
       paymentLinkUrl: c.paymentLinkUrl ?? null,
@@ -654,6 +674,7 @@ export default async function handler(
     } catch { /* colunas ainda não migradas: segue sem atribuição */ }
     try {
       const session = await stripeClient().checkout.sessions.create({
+        ...stripeBrlPresentation, // [paywall] BRL sem conversão, pt-BR, "ROAD TO MAJOR" na fatura
         mode: 'payment',
         customer_email: em,
         client_reference_id: corr,
@@ -810,6 +831,7 @@ export default async function handler(
     await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, method) VALUES (${corr}, ${em}, ${tier}, 0, ${PASS_PRICE_CENTS}, 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
     try {
       const session = await stripeClient().checkout.sessions.create({
+        ...stripeBrlPresentation, // [paywall] BRL sem conversão, pt-BR, "ROAD TO MAJOR" na fatura
         mode: 'payment',
         customer_email: em,
         client_reference_id: corr,

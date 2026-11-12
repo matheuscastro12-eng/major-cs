@@ -84,3 +84,23 @@ test('paywall_view: cada superfície 1x por sessão, mantendo {src, surface, tri
   // a sessão guarda o dedupe (F5 não conta de novo)
   assert.ok((g.sessionStorage.getItem('rtm-once') ?? '').includes('paywall_view:home-rtp'));
 });
+
+// [paywall] o Início mostrava várias vitrines e cada uma contava um paywall_view
+// (convidado que já jogou: home-rtp + acct-chip-guest na mesma visita).
+test('Início: 1 visita = 1 paywall_view (src = vitrine principal, surfaces = todas)', async () => {
+  const { trackHomePaywallView } = await import('../src/state/track.ts');
+  const { homePaywallSurfaces } = await import('../src/state/paywallPolicy.ts');
+  const guest = homePaywallSurfaces({ rtpLocked: true, ultimateLocked: false, freeAccount: false, guest: true });
+  assert.deepEqual(guest, ['home-rtp', 'acct-chip-guest']);
+  assert.deepEqual(homePaywallSurfaces({ rtpLocked: false, ultimateLocked: false, freeAccount: false, guest: false }), []);
+  sent.length = 0;
+  trackHomePaywallView([]); // nada na tela: não conta nem queima o dedupe
+  trackHomePaywallView(guest);
+  trackHomePaywallView(guest); // re-render / StrictMode
+  trackHomePaywallView(['home-pill']); // conta carregou no meio da visita
+  await new Promise((r) => setTimeout(r, 0));
+  const views = sent.filter((e) => e.type === 'paywall_view');
+  assert.equal(views.length, 1);
+  assert.equal(views[0].data.src, 'home-rtp');
+  assert.equal(views[0].data.surfaces, 'home-rtp,acct-chip-guest');
+});
