@@ -78,6 +78,8 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       // [URG-3] preferência: e-mail quando um rival me passa no ranking (padrão ligado; NULL = ligado).
       sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
       sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
+      // valor pago por venda (centavos). NULL = venda antiga, antes de gravar o preço: conta R$ 20.
+      sql`ALTER TABLE rtm_paid_emails ADD COLUMN IF NOT EXISTS price_cents INT`,
       sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
       sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
       sql`CREATE TABLE IF NOT EXISTS rtm_saves (email TEXT, slot TEXT, data TEXT, updated_at BIGINT DEFAULT 0, PRIMARY KEY (email, slot))`,
@@ -299,7 +301,7 @@ export default async function handler(
   // em conta paga (se houver) e marca a conta existente como paga.
   const markPaid = async (em: string, sessionId?: string): Promise<void> => {
     const stmts = [
-      sql`INSERT INTO rtm_paid_emails (email) VALUES (${em}) ON CONFLICT DO NOTHING`,
+      sql`INSERT INTO rtm_paid_emails (email, price_cents) VALUES (${em}, ${accountPriceCents()}) ON CONFLICT DO NOTHING`,
       sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
           SELECT email, nick, pass_hash, true, ${accountReference(em)} FROM rtm_pending_signups WHERE email=${em}
           ON CONFLICT (email) DO UPDATE SET paid=true`,
