@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 import { Button, Modal } from '../ds';
 import { BrandMark } from '../brand';
 import { FounderCounter } from '../FounderCounter';
+import { OfferPixCta } from '../OfferPixCta';
 import { ct } from '../../state/career-i18n';
 import { trackPaywallView } from '../../state/track';
 import { priceLabel, usePrice } from '../../state/price';
@@ -19,11 +20,19 @@ export function UltimateGate({
   onSignup,
   onLogin,
   onClose,
+  onPixCheckout,
 }: {
   onGuest: () => void;
   onSignup: () => void;
   onLogin: () => void;
   onClose: () => void;
+  /** [conv 13/11] dado real: 161 sessões/28d viram esta trava e NENHUMA abriu
+   *  checkout (0%) — pior que o resto do funil. As outras vitrines (home-rtp,
+   *  acct-chip-guest, upsell-card) já trocaram "Criar conta" por um botão de
+   *  Pix direto (state/offerAb.ts) e esta nunca recebeu o mesmo tratamento.
+   *  Reusa o atalho pixFirst que já existe (onPixCheckout -> openInlineCheckout
+   *  em App.tsx): mesmo preço, mesmo checkout, só sem o formulário no meio. */
+  onPixCheckout?: () => void;
 }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
   // App.tsx já chama setCheckoutSrc('home-ultimate') antes de abrir este gate
@@ -57,9 +66,24 @@ export function UltimateGate({
         <FounderCounter style={{ marginTop: 10 }} />
       </div>
 
-      <Button variant="gold" style={{ width: '100%' }} onClick={onSignup}>
-        {ct('Criar conta vitalícia')}
-      </Button>
+      {onPixCheckout ? (
+        <>
+          <OfferPixCta
+            showFounders={false}
+            benefit={ct('Jogue no PC e no celular com o mesmo squad, sem perder o progresso.')}
+            onPix={onPixCheckout}
+          />
+          <p style={{ fontSize: '0.78rem', color: 'var(--em-muted)', textAlign: 'center', margin: '10px 0 0' }}>
+            <button type="button" onClick={onSignup} style={{ background: 'none', border: 'none', color: 'var(--em-muted)', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.78rem' }}>
+              {ct('Prefiro cadastrar com e-mail e senha primeiro')}
+            </button>
+          </p>
+        </>
+      ) : (
+        <Button variant="gold" style={{ width: '100%' }} onClick={onSignup}>
+          {ct('Criar conta vitalícia')}
+        </Button>
+      )}
       <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '12px 0' }}>
         {ct('Já tem conta? ')}
         <button type="button" onClick={onLogin} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>

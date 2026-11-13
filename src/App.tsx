@@ -1412,6 +1412,9 @@ export default function App() {
           onSignup={() => { setUtGateOpen(false); setAuthMode('signup'); setAuthOpen(true); }}
           onLogin={() => { setUtGateOpen(false); setAuthMode('login'); setAuthOpen(true); }}
           onGuest={() => { setUtGateOpen(false); enableUtGuest(); setScreen('ultimate'); }}
+          /* [conv 13/11] mesmo atalho pixFirst do home-rtp/acct-chip-guest: abre
+             o QR Pix na hora, sem o formulário de cadastro no meio. */
+          onPixCheckout={() => { setUtGateOpen(false); openInlineCheckout('home-ultimate'); }}
         />
       )}
       {showOnboarding && screen === 'home' && (
