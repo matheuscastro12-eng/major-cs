@@ -157,6 +157,7 @@ import { SaveHealthBanner } from './components/SaveHealthBanner';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
 import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackFirstMatchDone, trackPaywallView, trackVisit } from './state/track';
+import { getPixResume } from './state/pixResume';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -614,6 +615,19 @@ export default function App() {
         window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'return' } }));
       }
     } catch { /* sem storage */ }
+  }, [accountReady, account?.paid]);
+
+  // retomar o Pix: quem abriu o QR e saiu sem pagar (trackCheckoutAbandon,
+  // state/pixResume.ts) ganha, na volta, o MESMO upsell card de sempre — só
+  // com o gancho certo — em vez de ter que achar o CTA de novo do zero.
+  // Dado real (28d): 26 checkout_abandon de método pix, a maioria dos QRs
+  // abertos; volume baixo pra apontar a causa exata (heurística, não
+  // conclusão estatística). Respeita o mesmo teto/cooldown dos outros
+  // gatilhos automáticos (sem force) — não força a tela de quem já viu outro
+  // upsell agora; some sozinho quando a conta fica paga ou passam 7 dias.
+  useEffect(() => {
+    if (!accountReady || account?.paid) return;
+    if (getPixResume()) window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'pix-resume' } }));
   }, [accountReady, account?.paid]);
 
   const resumeSession = () => {
