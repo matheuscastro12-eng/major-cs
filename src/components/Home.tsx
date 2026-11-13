@@ -488,7 +488,20 @@ export function Home(props: Props) {
             {onUltimate && (
               <Tile mode="ultimate" icon={Star} title="Ultimate" time={ct('online')}
                 status={ultimateLocked ? withPrice(ct('Desbloquear · {preço}')) : ct('pacotes e ranqueada')}
-                onGo={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())} />
+                onGo={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())}
+                // funil: 'home-ultimate' tinha 166 sessões/28d vendo este card e
+                // NENHUM checkout — era o único card travado sem o CTA de Pix direto
+                // (home-rtp e acct-chip-guest já têm via offerB). O corpo do card
+                // continua indo pro cadastro de sempre; o rodapé só soma a saída
+                // rápida de quem já decidiu pagar.
+                foot={ultimateLocked && valueSeen ? (
+                  <>
+                    <small className="home-tile__price">{`${priceLabel()} · ${ct('pagamento único, acesso vitalício — sem mensalidade')}`}</small>
+                    {offerB ? (
+                      <OfferPixCta compact benefit={ct('Ranqueada, pacotes e squad salvo na nuvem — sem perder o progresso.')} onPix={() => { setCheckoutSrc('home-ultimate'); onPixCheckout?.('home-ultimate'); }} />
+                    ) : (<FounderCounter />)}
+                  </>
+                ) : undefined} />
             )}
             {onEditor && (
               <Tile mode="carreira" icon={PencilRuler} title={ct('Editor de base')} status={ct('jogadores, times e elencos')} onGo={onEditor} />
