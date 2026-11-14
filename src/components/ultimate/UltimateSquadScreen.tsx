@@ -622,6 +622,16 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // [U05] 1ª partida concluída = 'training'; a seguinte, depois do ajuste, = 'second'
     if (journeyNext === 'training') journeyDone('training');
     else if (journeyNext === 'second') journeyDone('second');
+    // funil: a única oferta do convidado/grátis aqui dentro era o ut-guest-warn
+    // (faixa fixa no topo) — dado real (45d): 154 paywall_view, ZERO
+    // checkout_open/signup_start, mesmo já tendo ganho preço no botão e prova
+    // social (iter42). Uma faixa é fácil de ignorar ou fechar (✕ some por 7
+    // dias). O upsell-card (overlay full-screen, Pix direto) é a superfície que
+    // mais abre checkout_open do funil inteiro — CareerScreen e OnlineScreen já
+    // disparam esse mesmo card ao fim de partida pro grátis ('online-done'/
+    // 'ranked-free'), mas o Ultimate nunca disparava. Replica o mesmo padrão
+    // (mesmo gancho 'save-risk' do card: progresso só neste navegador).
+    if (!account?.paid) window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'save-risk' } }));
   };
 
   // Major da Semana: status/ranking pro banner + ranking do hub (best-effort)
