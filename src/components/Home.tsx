@@ -34,6 +34,7 @@ import type { MajorTab } from './major/majorTabs';
 import { openPatchNotes } from './PatchNotesModal';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
+import { SocialProof } from './SocialProof';
 import { useFounders } from '../state/founders';
 import { GameShell, Panel, Button, Segmented, Tag, LiveBadge, ProgressBar, type ShellNavGroup, type ShellNext, type ShellPending } from './ds/index';
 import type { Account } from '../state/account';
@@ -473,9 +474,15 @@ export function Home(props: Props) {
                     {offerB ? (
                       <OfferPixCta compact benefit={ct('Road to Pro completo, sem limite de semanas, com save na nuvem.')} onPix={() => { setCheckoutSrc('home-rtp'); onPixCheckout?.('home-rtp'); }} />
                     ) : (<>
-                    <FounderCounter />
+                    {/* funil: com a Edição Fundador esgotada (500/500), o FounderCounter
+                        só dizia "esgotou" sem nenhum número — zero prova social numa
+                        trava com 976 sessões/28d e ~0,2% de checkout. A SocialProof já
+                        existe (checkout da Landing e demo do RtP) e mostra o "esgotou"
+                        JUNTO com os managers reais que já pagaram; aqui ela só passa a
+                        aparecer também. Enquanto sobrar vaga de Fundador, nada muda. */}
+                    {founderSoldOut ? <SocialProof /> : <FounderCounter />}
                     <button type="button" className="home-skip" onClick={() => { setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
-                      {/* com a Edição Fundador esgotada (FounderCounter logo acima) o
+                      {/* com a Edição Fundador esgotada (prova social logo acima) o
                           botão não promete virar Fundador (#91); peso de botão e o
                           preço do servidor no texto, como os outros CTAs de venda (#109) */}
                       <Crown size={13} aria-hidden /> {founderSoldOut ? ct('Pular a demo e virar vitalícia') : ct('Pular a demo e virar Fundador')} · {priceLabel()}
@@ -515,7 +522,7 @@ export function Home(props: Props) {
                 ) : (<>
                 <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · {priceLabel()}</Button>
                 <small className="ds-dim">{ct('pagamento único · sem mensalidade')}</small>
-                <FounderCounter />
+                {founderSoldOut ? <SocialProof /> : <FounderCounter />}
                 </>)}
                 {onAccount && <button type="button" className="home-link" onClick={onAccount}>{ct('Já tenho conta · entrar')}</button>}
               </div>
@@ -534,7 +541,7 @@ export function Home(props: Props) {
                       <Crown size={16} aria-hidden /> {founderSoldOut ? ct('Conta vitalícia') : ct('Vire Fundador')} · {priceLabel()}
                     </Button>
                     <small className="ds-dim">{founderSoldOut ? ct('cloud sync, 5 carreiras e ranking real') : ct('selo #001–#500, cloud sync e 5 carreiras')}</small>
-                    <FounderCounter />
+                    {founderSoldOut ? <SocialProof /> : <FounderCounter />}
                   </>
                 )}
                 <div className="home-acct__links">
