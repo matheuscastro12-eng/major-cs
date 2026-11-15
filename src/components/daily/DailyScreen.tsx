@@ -520,7 +520,7 @@ function LinesGame({ dateKey, streakNow, onDone, streakDays }: { dateKey: string
                 ref={inputRef}
                 value={guess}
                 onChange={(e) => setGuess(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+                onKeyDown={(e) => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; if (e.key === 'Enter') submit(); }}
                 placeholder={ct('digite um nick (ex.: fallen)')}
                 autoFocus
                 autoCapitalize="none"
@@ -632,7 +632,7 @@ function WhoisGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone: (
                 ref={inputRef}
                 value={guess}
                 onChange={(e) => setGuess(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+                onKeyDown={(e) => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; if (e.key === 'Enter') submit(); }}
                 placeholder={ct('digite um nick do cenário 2026')}
                 autoFocus
                 autoCapitalize="none"

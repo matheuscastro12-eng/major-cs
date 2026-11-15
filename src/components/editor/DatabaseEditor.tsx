@@ -538,7 +538,7 @@ export function DatabaseEditor({ onExit, onPlayCareer }: { onExit: () => void; o
                       {renaming?.id === db.id ? (
                         <input className="edb-input edb-grow" autoFocus value={renaming.name} maxLength={DB_LIMITS.dbNameLen} aria-label={ct('Nome da base')}
                           onChange={(e) => setRenaming({ id: db.id, name: e.target.value })}
-                          onKeyDown={(e) => { if (e.key === 'Enter') renameDb(); if (e.key === 'Escape') setRenaming(null); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !(e.nativeEvent.isComposing || e.keyCode === 229)) renameDb(); if (e.key === 'Escape') setRenaming(null); }}
                           onBlur={renameDb} />
                       ) : <b title={db.name}>{db.name}</b>}
                       {v.ok ? <Tag tone="win">{ct('Válida')}</Tag> : <Tag tone="loss">{v.errors.length} {v.errors.length === 1 ? ct('erro') : ct('erros')}</Tag>}
