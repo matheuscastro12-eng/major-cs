@@ -76,6 +76,21 @@ function useReveal() {
   return ref;
 }
 
+// funil: dispara UM paywall_view (src próprio, já esperado pelo admin/AB) quando
+// a seção entra na tela — não só no clique. trackPaywallView já dedupe 1x por
+// sessão por src, então best-effort aqui (sem guard próprio) não duplica nada.
+function useSectionSeen(src: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { trackPaywallView(src); io.disconnect(); } }, { threshold: 0.4 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [src]);
+  return ref;
+}
+
 function SectionHead({ kicker, title, sub, center = false, id }: { kicker?: string; title: ReactNode; sub?: string; center?: boolean; id?: string }) {
   return (
     <div className={`lp-head lp-reveal${center ? ' lp-head--center' : ''}`}>
@@ -405,13 +420,21 @@ function Modes({ hero, onPlay }: { hero: LandingHero; onPlay: () => void }) {
 
 function Pricing({ onAccount, onPix, onPlay }: { onAccount: () => void; onPix: () => void; onPlay: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
+  // funil: landing-pricing e landing-final já têm src próprio (offerAb.ts
+  // AB_SRCS, FUNNEL_SRC_LABEL do admin) mas SÓ o clique (signup_start/
+  // checkout_open) usava esses srcs — e em todo o histórico isso nunca disparou
+  // nem 1 vez pras duas seções, contra 1.608 sids/28d que veem a landing como um
+  // todo. Sem saber se é "não rola até aqui" ou "rola e não clica", a próxima
+  // iteração não sabe o que atacar. paywall_view já dedupe 1x/sessão por src —
+  // só faltava disparar na seção aparecendo na tela, não só no clique.
+  const plansRef = useSectionSeen('landing-pricing');
   const FREE = ['Carreira, Ultimate, Draft, Diário e Online completos', 'Ranqueada online do Ultimate', 'Road to Pro: demo com a peneira e 3 semanas', 'Save neste navegador'];
   const PAID = ['Road to Pro completo, com a Série do Dia', 'Save na nuvem: joga no PC e no celular', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil'];
   return (
     <section id="conta" className="lp-section" aria-labelledby="lp-conta-title">
       <div className="lp-wrap">
         <SectionHead id="lp-conta-title" center kicker={ct('Conta e save')} title={ct('Grátis pra jogar, conta pra ir além')} sub={ct('Sem conta você joga de graça com save no navegador, incluindo a ranqueada online. A conta vitalícia guarda tudo na nuvem e libera o Road to Pro completo.')} />
-        <div className="lp-plans lp-reveal">
+        <div ref={plansRef} className="lp-plans lp-reveal">
           <article className="lp-plan" aria-labelledby="lp-plan-free">
             <h3 className="lp-plan__name" id="lp-plan-free">{ct('Sem conta')}</h3>
             <div className="lp-plan__price"><strong>R$0</strong><span>{ct('pra sempre')}</span></div>
@@ -488,6 +511,7 @@ function Faq({ hero }: { hero: LandingHero }) {
 
 function FinalCta({ hero, cta, onMajor, onAccount, onPlay }: { hero: LandingHero; cta: LandingMajorCta; onMajor: () => void; onAccount: () => void; onPlay: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
+  const ctaRef = useSectionSeen('landing-final'); // funil: mesmo ponto-cego do Pricing (ver comentário lá)
   const major = hero === 'major';
   return (
     <section className="lp-section lp-section--last" aria-labelledby="lp-final-title">
@@ -503,7 +527,7 @@ function FinalCta({ hero, cta, onMajor, onAccount, onPlay }: { hero: LandingHero
                 ? ct('Jogue o Major agora, de graça. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')
                 : ct('Comece de graça agora. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')}
           </p>
-          <div className="lp-final__cta">
+          <div ref={ctaRef} className="lp-final__cta">
             {major
               ? <Button size="big" onClick={onMajor}>{majorCtaLabel(cta)} <ArrowRight size={18} aria-hidden /></Button>
               : <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>}
