@@ -3030,14 +3030,14 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                       <input
                         value={mktQuery}
                         onChange={(e) => setMktQuery(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') void refreshBrowse(); }}
+                        onKeyDown={(e) => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; if (e.key === 'Enter') void refreshBrowse(); }}
                         placeholder={ct('Buscar jogador…')}
                         style={{ flex: '1 1 160px', minWidth: 140, padding: '7px 12px', borderRadius: 8, border: '1px solid var(--em-border,#2a3340)', background: 'var(--em-panel,#fff)', color: 'var(--em-text,inherit)', fontFamily: 'inherit', fontSize: '0.82rem' }}
                       />
                       <input
                         value={mktMaxPrice}
                         onChange={(e) => setMktMaxPrice(e.target.value.replace(/\D/g, ''))}
-                        onKeyDown={(e) => { if (e.key === 'Enter') void refreshBrowse(); }}
+                        onKeyDown={(e) => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; if (e.key === 'Enter') void refreshBrowse(); }}
                         placeholder={ct('Preço máx.')}
                         inputMode="numeric"
                         style={{ width: 110, padding: '7px 12px', borderRadius: 8, border: '1px solid var(--em-border,#2a3340)', background: 'var(--em-panel,#fff)', color: 'var(--em-text,inherit)', fontFamily: 'inherit', fontSize: '0.82rem' }}

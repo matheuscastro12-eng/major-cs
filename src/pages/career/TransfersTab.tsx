@@ -150,7 +150,7 @@ export function TransfersTab(p: Props) {
             <input
               className="mk-ask" inputMode="numeric" aria-label={ct('Contraproposta em milhares')} placeholder={ct('outro (k)')}
               value={v} onChange={(e) => setAsk((a) => ({ ...a, [o.offer.id]: e.target.value.replace(/[^0-9]/g, '') }))}
-              onKeyDown={(e) => { if (e.key === 'Enter' && v) doCounter(o, Number(v) * 1000); }}
+              onKeyDown={(e) => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; if (e.key === 'Enter' && v) doCounter(o, Number(v) * 1000); }}
             />
             <Button size="sm" iconOnly icon={<ArrowRight size={14} aria-hidden />} aria-label={ct('Contrapropor')} title={ct('Contrapropor')} disabled={!v} onClick={() => doCounter(o, Number(v) * 1000)} />
           </span>
