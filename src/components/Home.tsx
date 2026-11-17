@@ -16,7 +16,7 @@ import {
   Shuffle, Star, Swords, Trophy, UserRound, Crown, Lock, Medal, PencilRuler, type LucideIcon,
 } from 'lucide-react';
 import { type Difficulty, type TournamentPool } from '../types';
-import { setCheckoutSrc, trackHomePaywallView, trackUltFunnel } from '../state/track';
+import { setCheckoutSrc, trackCheckoutCtaClick, trackHomePaywallView, trackUltFunnel } from '../state/track';
 import { useSectionHistory } from '../state/app-history';
 import { loadStreakState } from '../state/dailyStreak'; // [URG-4]
 import { streakStatus } from '../engine/daily/streak'; // [URG-4]
@@ -471,10 +471,10 @@ export function Home(props: Props) {
                   <>
                     <small className="home-tile__price">{`${priceLabel()} · ${ct('pagamento único, acesso vitalício — sem mensalidade')}`}</small>
                     {offerB ? (
-                      <OfferPixCta compact benefit={ct('Road to Pro completo, sem limite de semanas, com save na nuvem.')} onPix={() => { setCheckoutSrc('home-rtp'); onPixCheckout?.('home-rtp'); }} />
+                      <OfferPixCta compact benefit={ct('Road to Pro completo, sem limite de semanas, com save na nuvem.')} onPix={() => { trackCheckoutCtaClick('home-rtp'); setCheckoutSrc('home-rtp'); onPixCheckout?.('home-rtp'); }} />
                     ) : (<>
                     <FounderCounter />
-                    <button type="button" className="home-skip" onClick={() => { setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
+                    <button type="button" className="home-skip" onClick={() => { trackCheckoutCtaClick('home-rtp-direto'); setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
                       {/* com a Edição Fundador esgotada (FounderCounter logo acima) o
                           botão não promete virar Fundador (#91); peso de botão e o
                           preço do servidor no texto, como os outros CTAs de venda (#109) */}
@@ -511,9 +511,9 @@ export function Home(props: Props) {
               <div className="home-acct">
                 <p>{ct('Você está jogando sem conta. Crie a sua pra salvar na nuvem e jogar no PC e no celular.')}</p>
                 {offerB ? (
-                  <OfferPixCta compact benefit={ct('Save na nuvem (PC e celular), Road to Pro completo e 5 carreiras.')} onPix={() => { setCheckoutSrc('acct-chip-guest'); onPixCheckout?.('acct-chip-guest'); }} />
+                  <OfferPixCta compact benefit={ct('Save na nuvem (PC e celular), Road to Pro completo e 5 carreiras.')} onPix={() => { trackCheckoutCtaClick('acct-chip-guest'); setCheckoutSrc('acct-chip-guest'); onPixCheckout?.('acct-chip-guest'); }} />
                 ) : (<>
-                <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · {priceLabel()}</Button>
+                <Button variant="primary" block onClick={() => { trackCheckoutCtaClick('acct-chip-guest'); setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · {priceLabel()}</Button>
                 <small className="ds-dim">{ct('pagamento único · sem mensalidade')}</small>
                 <FounderCounter />
                 </>)}

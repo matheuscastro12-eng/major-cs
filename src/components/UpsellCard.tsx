@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AccountError, useAccount, beginPix, fetchMe, type PixCharge } from '../state/account';
-import { sessionId, setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView } from '../state/track';
+import { sessionId, setCheckoutSrc, trackCheckoutAbandon, trackCheckoutCtaClick, trackCheckoutError, trackCheckoutOpen, trackPaywallView } from '../state/track';
 import { track } from '../state/track'; // pix_confirmed
 import { offerVariant } from '../state/offerAb';
 import { OfferPixCta } from './OfferPixCta';
@@ -224,6 +224,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
   // pixOpenedAt (base do abandono) fica nessa 1ª vez.
   const payPix = async () => {
     if (pixBusy) return;
+    trackCheckoutCtaClick('upsell-card'); // funil: clique no CTA, antes de saber se o Pix vai abrir
     setCheckoutSrc('upsell-card');
     setPixBusy(true); setPixErr(null);
     try {
@@ -236,7 +237,12 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
       }
     } catch (e) {
       // sem token o beginPix nem chega no servidor: é sessão (como o 401)
-      setPixErr(pixErrorKind(e instanceof AccountError ? e.status : 401));
+      const kind = pixErrorKind(e instanceof AccountError ? e.status : 401);
+      setPixErr(kind);
+      // funil: até aqui essa falha ficava muda (checkout_cta_click sem
+      // checkout_open seguinte não dizia SE foi erro ou desistência) — mesmo
+      // padrão do startCheckout() em App.tsx.
+      trackCheckoutError('pix', kind);
     }
     setPixBusy(false);
   };
@@ -300,7 +306,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
                   <button className="btn gold big" disabled={pixBusy} onClick={payPix}>
                     {pixBusy ? ct('Aguarde…') : `${ct('Pagar com Pix')} · ${priceLabel()}`}
                   </button>
-                  <button className="upsell-card-btn" disabled={pixBusy} onClick={() => { setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}>
+                  <button className="upsell-card-btn" disabled={pixBusy} onClick={() => { trackCheckoutCtaClick('upsell-card'); setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}>
                     {ct('Ativar com cartão (Stripe)')}
                   </button>
                 </>
@@ -312,9 +318,9 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
                    nem tinha conta). Manda pro fluxo de cadastro+pagamento da landing,
                    que já lida com convidado do início ao fim. */
                 offerVariant() === 'B' ? (
-                  <OfferPixCta showFounders={false} onPix={() => { setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }} />
+                  <OfferPixCta showFounders={false} onPix={() => { trackCheckoutCtaClick('upsell-card'); setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }} />
                 ) : (
-                <button className="btn gold big" onClick={() => { setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }}>
+                <button className="btn gold big" onClick={() => { trackCheckoutCtaClick('upsell-card'); setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }}>
                   {ct('Criar conta e ativar')} · {priceLabel()}
                 </button>
                 )
