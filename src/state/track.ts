@@ -30,7 +30,7 @@ export function sessionId(): string {
 // share_card {kind, channel} entra aqui: 1 evento por clique em compartilhar —
 // volume ínfimo e é o numerador do K-factor (quanto compartilhamento vira visita).
 const FUNNEL_TYPES = new Set([
-  'paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'checkout_blocked', 'pix_copy_click', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card',
+  'paywall_view', 'checkout_cta_click', 'checkout_open', 'checkout_abandon', 'checkout_error', 'checkout_blocked', 'pix_copy_click', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel', 'share_card',
   // [medição do Major e da ativação] marcos raros, sem dado pessoal (só sid, ref e o modo/superfície)
   'major_sg_view', 'major_vitrine_click', 'major_pickem_submit', 'major_sg_campaign_done', 'first_match_done',
   // game_start/game_end (modo clássico): o corte de custo 3bf5f3f transformou
@@ -67,7 +67,7 @@ function seenOnce(key: string): boolean {
   return false;
 }
 // eventos de VENDA que carregam o ref de compartilhamento da sessão (first-touch)
-const REF_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'pix_copy_click', 'signup_start', 'signup_done']);
+const REF_TYPES = new Set(['paywall_view', 'checkout_cta_click', 'checkout_open', 'checkout_abandon', 'checkout_error', 'pix_copy_click', 'signup_start', 'signup_done']);
 
 // ─── ATRIBUIÇÃO DE COMPARTILHAMENTO ──────────────────────────────────────────
 // Links gerados por state/shareLink.ts chegam com ?ref=daily&utm_source=share…
@@ -104,7 +104,7 @@ export function sessionAttribution(): Record<string, string> {
 }
 
 // variante do A/B dos cards de oferta (state/offerAb.ts registra o getter — evita import circular)
-const OFFER_AB_TYPES = new Set(['paywall_view', 'checkout_open', 'signup_done']);
+const OFFER_AB_TYPES = new Set(['paywall_view', 'checkout_cta_click', 'checkout_open', 'signup_done']);
 let offerVariantGetter: (() => string) | null = null;
 export function registerOfferVariant(get: () => string): void { offerVariantGetter = get; }
 function withOfferVariant(type: string, data: Record<string, unknown>): Record<string, unknown> {
@@ -237,6 +237,17 @@ export function setCheckoutSrc(src: string): void {
 
 function getCheckoutSrc(): string {
   try { return sessionStorage.getItem(SRC_KEY) || memorySrc; } catch { return memorySrc; }
+}
+
+// funil: home-rtp, acct-chip-guest e upsell-card somam ~2.300 paywall_view/28d
+// (3 das maiores superfícies do funil) e, juntas, ZERO checkout_open no mesmo
+// período — mesmo depois do teste A/B do CTA direto de Pix (state/offerAb.ts).
+// Sem saber se ninguém toca no CTA ou se toca e o passo seguinte falha/some, a
+// próxima iteração não sabe o que atacar. 1x por sessão por src, igual ao
+// paywall_view; dispara no clique, ANTES de qualquer navegação/modal abrir.
+export function trackCheckoutCtaClick(src: string): void {
+  if (seenOnce(`checkout_cta_click:${src}`)) return;
+  track('checkout_cta_click', { src });
 }
 
 /** A UI de pagamento da vitalícia abriu de verdade (redirect Stripe ou QR Pix). */

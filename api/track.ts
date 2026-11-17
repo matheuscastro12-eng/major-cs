@@ -24,6 +24,10 @@ const ALLOWED_TYPES = new Set([
   'presence',
   // funil de conversão da vitalícia (iter39): visão de paywall → checkout → abandono
   'paywall_view',     // {src} — superfície de venda vista (1x/sessão/src no cliente)
+  // home-rtp/acct-chip-guest/upsell-card têm visão alta e checkout_open zero —
+  // este evento mede o CLIQUE no CTA, entre a visão e o checkout, pra separar
+  // "não clica" de "clica e o passo seguinte falha/some" (src/state/track.ts)
+  'checkout_cta_click', // {src} — tocou no CTA de pagar/criar conta (1x/sessão/src)
   'checkout_open',    // {src, method} — Stripe redirect ou QR Pix aberto (substitui o antigo checkout_start)
   'checkout_abandon', // {src, method, secondsOpen, step?, copied?, copyFailed?} — QR Pix fechado sem pagar; step = vista na hora ('gerando'|'qr'|'espera'|'expirou'|'erro')
   'pix_copy_click',   // {src, ok} — tocou em "Copiar código Pix" (ok=false: o navegador bloqueou); 1 de cada por abertura do QR
