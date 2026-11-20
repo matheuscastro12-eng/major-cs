@@ -81,6 +81,21 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
         <p className="muted small" style={{ margin: 0, color: 'var(--em-gold)' }}>🎯 {ct('Calibrando: faltam')} {mine.placementLeft} {mine.placementLeft === 1 ? ct('partida') : ct('partidas')} {ct('de colocação pra cravar sua divisão.')}</p>
       )}
 
+      {/* funil: dado real (90d) — 72 sids viram 'leaderboard' e 0 abriram
+          checkout. O CTA sempre existiu, mas vinha DEPOIS da ladder (até 50
+          linhas de tabela) no rail, que só fica ao lado no desktop e cai pra
+          DEPOIS de tudo no mobile (grid de 2 colunas colapsa pra 1). Subir o
+          CTA pra cima da ladder, visível assim que a tela abre, é o mesmo
+          padrão já usado em outras travas do funil (CTA antes do conteúdo
+          pesado, não depois). */}
+      {!paid && (
+        <Panel title={ct('Entre no ranking')} accent="gold">
+          <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{withPrice(ct('Você joga ranqueada de graça. A conta de {preço} cobre a infraestrutura que mantém MMR e histórico entre sessões.'))}</p>
+          <FounderCounter style={{ marginBottom: '10px', display: 'block' }} />
+          <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{withPrice(ct('Ativar ranking persistente ({preço})'))}</Button>
+        </Panel>
+      )}
+
       <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '16px', alignItems: 'start' }}>
         {/* ladder */}
         <Panel title={`${ct('Ladder · Temporada')} ${data?.season ?? ''}`} accent="blue" flush>
@@ -115,7 +130,7 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
           )}
         </Panel>
 
-        {/* rail: campeões + CTA */}
+        {/* rail: campeões (o CTA de vitalícia subiu pra cima da ladder, ver acima) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <Panel title={champs && champs.season >= 0 ? `${ct('Campeões · Temporada')} ${champs.season}` : ct('Campeões')} accent="gold">
             {!champs || champs.champions.length === 0 ? (
@@ -132,14 +147,6 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
               </div>
             )}
           </Panel>
-
-          {!paid && (
-            <Panel title={ct('Entre no ranking')} accent="gold">
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{withPrice(ct('Você joga ranqueada de graça. A conta de {preço} cobre a infraestrutura que mantém MMR e histórico entre sessões.'))}</p>
-              <FounderCounter style={{ marginBottom: '10px', display: 'block' }} />
-              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{withPrice(ct('Ativar ranking persistente ({preço})'))}</Button>
-            </Panel>
-          )}
 
           <Panel title={ct('Como funciona')}>
             <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12.5px', color: 'var(--em-muted)', lineHeight: 1.7 }}>
