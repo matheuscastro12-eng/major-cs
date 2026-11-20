@@ -1,4 +1,5 @@
 // Telemetria leve do client: fire-and-forget, nunca atrapalha o jogo.
+import { markPixResume } from './pixResume';
 
 const SID_KEY = 'rtm-sid';
 // presença a cada 90s (era 30s): corta ~3x as invocações de /api/track sem
@@ -250,6 +251,9 @@ export function trackCheckoutOpen(method: 'stripe' | 'pix'): void {
 /** QR Pix da vitalícia fechado sem pagamento confirmado (best-effort). */
 export function trackCheckoutAbandon(method: 'stripe' | 'pix', secondsOpen: number): void {
   const base = { src: getCheckoutSrc() || 'direto', method, secondsOpen: Math.round(secondsOpen) };
+  // lembrete de "retomar o Pix" na volta (state/pixResume.ts) — só o Pix fica
+  // pendente de pagamento de verdade; o Stripe falho já mostra erro na hora.
+  if (method === 'pix') markPixResume(base.src);
   track('checkout_abandon', method === 'pix' ? { ...base, ...pixAbandonData() } : base);
 }
 
