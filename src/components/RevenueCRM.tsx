@@ -227,7 +227,8 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
 const funnelSrcLabel = (s: string) => ct(FUNNEL_SRC_LABEL[s] ?? s);
 
 // [A/B oferta] A = card atual · B = "Pagar com Pix" direto no card (state/offerAb.ts)
-const AB_SRCS = ['landing-pricing', 'home-rtp', 'acct-chip-guest', 'upsell-card'];
+// home-ultimate entrou no conv/loop-20261108 (166 views/28d, 0 checkout em A).
+const AB_SRCS = ['landing-pricing', 'home-rtp', 'acct-chip-guest', 'upsell-card', 'home-ultimate'];
 function AbBlock({ rows }: { rows: { type: string; src: string; variant: string; n: number }[] }) {
   if (!rows.length) return null;
   const get = (type: string, src: string | null, v: string) => rows.filter((r) => r.type === type && r.variant === v && (src === null || r.src === src)).reduce((a, r) => a + r.n, 0);

@@ -12,8 +12,10 @@ import { registerOfferVariant, sessionId } from './track';
 
 export type OfferVariant = 'A' | 'B';
 
-/** Superfícies do teste. As demais não mudam de cara (mas o evento leva a variante igual). */
-export const OFFER_AB_SURFACES = ['landing-pricing', 'home-rtp', 'acct-chip-guest', 'upsell-card'] as const;
+/** Superfícies do teste. As demais não mudam de cara (mas o evento leva a variante igual).
+ *  home-ultimate entrou no conv/loop-20261108: 166 views/28d sem nenhum checkout
+ *  (o card do Ultimate era o único travado sem o CTA de Pix direto). */
+export const OFFER_AB_SURFACES = ['landing-pricing', 'home-rtp', 'acct-chip-guest', 'upsell-card', 'home-ultimate'] as const;
 
 /** FNV-1a 32 bits. Puro, testado em scripts/test-offer-ab.mts */
 export function fnv1a(s: string): number {
