@@ -89,6 +89,8 @@ async function fetchHandler(request: Request): Promise<Response> {
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
     sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
     sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
+    // valor pago por venda (centavos). NULL = venda antiga, antes de gravar o preço: conta R$ 20.
+    sql`ALTER TABLE rtm_paid_emails ADD COLUMN IF NOT EXISTS price_cents INT`,
     sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
   ]);
@@ -105,7 +107,7 @@ async function fetchHandler(request: Request): Promise<Response> {
 
   const [newSession] = await sql.transaction([
     sql`INSERT INTO rtm_payment_sessions (session_id, email, stripe_event_id) VALUES (${session.id}, ${email}, ${event.id}) ON CONFLICT (session_id) DO NOTHING RETURNING session_id`,
-    sql`INSERT INTO rtm_paid_emails (email) VALUES (${email}) ON CONFLICT DO NOTHING`,
+    sql`INSERT INTO rtm_paid_emails (email, price_cents) VALUES (${email}, ${accountPriceCents()}) ON CONFLICT DO NOTHING`,
     // promove o cadastro pendente em conta paga (só pago tem conta)
     sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
         SELECT email, nick, pass_hash, true, ${accountReference(email)} FROM rtm_pending_signups WHERE email=${email}

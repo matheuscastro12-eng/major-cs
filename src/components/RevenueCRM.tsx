@@ -76,7 +76,7 @@ function MethodBars({ rows, total }: { rows: BarRow[]; total: number }) {
 }
 
 // ── derivação por dia: contagens cruas → receita em centavos ────────────────
-// Regra de receita da vitalícia: preço configurado (vitPriceCents = PIX_PRICE_CENTS). Contas
+// Regra de receita da vitalícia: valor gravado em cada venda (antigas sem registro: R$ 20). Contas
 // 'admin' (concedidas) contam como conta mas NÃO geram receita. Método
 // 'desconhecido' (legado sem trilha de método) conta como PIX no split —
 // decisão do dono (2026-07-05): as vendas legadas sem sessão Stripe foram Pix.
@@ -91,12 +91,11 @@ interface DayRow {
   orders: number; visitors: number;
 }
 function deriveDays(data: RevenueData): DayRow[] {
-  const p = data.vitPriceCents;
   return data.days.map((d: RevenueDay) => {
-    const vitCents = (d.vitPix + d.vitStripe + d.vitOther) * p;
+    const vitCents = d.vitPixCents + d.vitStripeCents + d.vitOtherCents;
     // vitOther ('desconhecido') dobra no Pix — ver comentário acima.
-    const pixCents = (d.vitPix + d.vitOther) * p + d.ordPixCents;
-    const stripeCents = d.vitStripe * p + d.ordStripeCents;
+    const pixCents = d.vitPixCents + d.vitOtherCents + d.ordPixCents;
+    const stripeCents = d.vitStripeCents + d.ordStripeCents;
     return {
       day: d.day,
       sold: d.vitPix + d.vitStripe + d.vitOther,
@@ -344,15 +343,14 @@ function RevenueSection({ data }: { data: RevenueData }) {
   const today = days[days.length - 1];
   const win = (n: number, f: (d: DayRow) => number) => sum(days.slice(-n).map(f));
   // all-time: série de 60d + agregados históricos da API
-  const p = data.vitPriceCents;
-  const vitAllSold = data.allTime.vitByMethod.filter((m) => m.method !== 'admin').reduce((a, m) => a + m.n, 0);
-  const allTimeCents = vitAllSold * p + data.allTime.orders.reduce((a, o) => a + o.cents, 0);
+  const vitAllCents = data.allTime.vitByMethod.filter((m) => m.method !== 'admin').reduce((a, m) => a + m.cents, 0);
+  const allTimeCents = vitAllCents + data.allTime.orders.reduce((a, o) => a + o.cents, 0);
   // 'desconhecido' dobra no Pix também no all-time (mesma regra do por-dia).
   const allPix = data.allTime.vitByMethod
     .filter((m) => m.method === 'pix' || m.method === 'desconhecido')
-    .reduce((a, m) => a + m.n, 0) * p
+    .reduce((a, m) => a + m.cents, 0)
     + data.allTime.orders.filter((o) => o.method === 'pix').reduce((a, o) => a + o.cents, 0);
-  const allStripe = (data.allTime.vitByMethod.find((m) => m.method === 'stripe')?.n ?? 0) * p
+  const allStripe = (data.allTime.vitByMethod.find((m) => m.method === 'stripe')?.cents ?? 0)
     + data.allTime.orders.filter((o) => o.method !== 'pix').reduce((a, o) => a + o.cents, 0);
   const rows30 = days.slice(-30).slice().reverse();
   const max30 = Math.max(1, ...rows30.map((d) => d.totalCents));
