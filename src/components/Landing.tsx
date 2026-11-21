@@ -284,8 +284,13 @@ function HeroGeneral({ onAccount, onPlay }: { onAccount: () => void; onPlay: () 
           <div className="lp-hero__cta">
             <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
             <HeroOffer onAccount={onAccount} />
-            {/* prova social REAL: contador de Fundadores do servidor (falhou? não mostra nada) */}
-            <FounderCounter />
+            {/* [conv] Fundador esgotou em ago/26 (500/500): aqui era sempre "esgotado"
+                sem alternativa, no hero de maior alcance da landing (dado real: 'landing'
+                sozinho já é ~90% das sessões que veem alguma vitrine de venda em 9d, e
+                nenhuma delas abriu checkout). A SocialProof já faz isso certo no modal de
+                conta (linha ~834): mostra os managers reais e só desce pro "esgotou" se
+                não houver contagem de managers. */}
+            <SocialProof />
           </div>
         </div>
         <div className="lp-hero__stage">
@@ -425,8 +430,11 @@ function Pricing({ onAccount, onPix, onPlay }: { onAccount: () => void; onPix: (
             <h3 className="lp-plan__name" id="lp-plan-paid">{ct('Conta vitalícia')}</h3>
             <div className="lp-plan__price"><strong>{priceLabel()}</strong><span>{ct('uma vez, sem assinatura')}</span></div>
             <p className="lp-plan__note">{ct('Pix ou cartão · acesso imediato')}</p>
-            {/* prova social REAL: contagem de Fundadores do servidor (falhou? não mostra nada) */}
-            <FounderCounter />
+            {/* [conv] mesma troca do hero acima: o card pago mostrava só "Edição
+                Fundador esgotada" (sold out desde ago/26) bem acima do botão de
+                comprar — prova social real (managers) no lugar de uma mensagem de
+                esgotado sem saída. */}
+            <SocialProof />
             <ul className="lp-checks">
               {PAID.map((f) => <li key={f}><Check size={16} aria-hidden /><b>{ct(f)}</b></li>)}
             </ul>
