@@ -53,6 +53,8 @@
 .pix-panel__expiry b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--c-ink); }
 .pix-panel__expiry--soon,
 .pix-panel__expiry--soon b { color: var(--c-warn); }
+/* "nada foi cobrado ainda": 1ª linha visível quando o QR chega */
+.pix-panel__reassure { font-size: var(--fs-3); line-height: var(--lh-body); color: var(--c-ink-dim); }
 
 /* gerando a cobrança */
 .pix-panel__loading {
