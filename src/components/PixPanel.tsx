@@ -191,6 +191,16 @@ export function PixPanel({
             )}
           </p>
         )}
+        {/* funil: mesmo com o aviso ANTES do clique (df8bbed), parte do abandono
+            do QR continua caindo em 1-13s (checkout_abandon.step='qr') — rápido
+            demais pra ser espera de pagamento, e cedo demais pra qualquer nudge
+            existente (todos entram só aos 25s ou no fechar). A 1ª coisa que a
+            tela diz, assim que o QR chega, é que nada foi cobrado ainda — a
+            dúvida mais provável de quem vê um código de pagamento desconhecido
+            e fecha na hora. */}
+        {view === 'ready' && (
+          <p className="pix-panel__reassure">{ct('Nada foi cobrado ainda — o Pix só confirma quando você escanear ou colar o código.')}</p>
+        )}
       </div>
 
       {interrupt}
