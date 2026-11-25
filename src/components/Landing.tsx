@@ -92,7 +92,13 @@ function Wordmark() {
 
 // Nav fixa: fica sólida quando o topo sai da tela (sentinela observada, sem
 // listener de scroll). "Criar conta · {preço}" é o único CTA de cadastro com preço
-// no próprio texto (src landing-nav); some no celular pra caber o essencial.
+// no próprio texto (src landing-nav).
+// conv/loop-20261125: esse botão só aparecia a partir de 720px — abaixo disso
+// (~26% das visitas em 28d, 881 de 3342 sessões) a nav fica só com "Entrar" e
+// "Jogar agora", sem NENHUM toque de monetização fixo na tela. Agora ele some
+// só a palavra "Criar conta" nas telas estreitas (css), e o preço real continua
+// sempre visível — mede o efeito pelo mesmo checkout_open{src:'landing-nav'}
+// que já existia pro desktop (0 conversões em 28d, então a amostra é nova).
 function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: () => void; onPlay: () => void }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
   const [solid, setSolid] = useState(false);
@@ -119,7 +125,9 @@ function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: (
           </nav>
           <span className="lp-nav__actions">
             <Button variant="ghost" size="sm" onClick={onLogin}>{ct('Entrar')}</Button>
-            <Button variant="gold" size="sm" className="lp-nav__acct" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</Button>
+            <Button variant="gold" size="sm" className="lp-nav__acct" onClick={onAccount}>
+              <span className="lp-nav__acct-label">{ct('Criar conta')} · </span>{priceLabel()}
+            </Button>
             <Button size="sm" onClick={onPlay}>{ct('Jogar agora')}</Button>
           </span>
         </div>

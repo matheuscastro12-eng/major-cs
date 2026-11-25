@@ -133,15 +133,21 @@
 }
 .lp-nav__links a:hover { color: var(--c-ink); background: var(--c-hover); }
 .lp-nav__actions { display: inline-flex; align-items: center; gap: var(--sp-2); margin-inline-start: auto; }
-.lp-nav__acct { display: none; }
+/* conv/loop-20261125: antes só aparecia a partir de 720px (ficava sem CTA de
+   preço fixo pra ~26% das visitas, todas no celular). Agora sempre aparece;
+   abaixo de 480px esconde só a palavra "Criar conta" (.lp-nav__acct-label) e
+   deixa o preço, que é o essencial pra caber ao lado de Entrar/Jogar agora. */
+.lp-nav__acct { display: inline-flex; }
+@media (max-width: 479px) { .lp-nav__acct-label { display: none; } }
 @media (max-width: 379px) {
   .lp-wordmark { font-size: var(--fs-3); }
+  .lp-nav__actions { gap: var(--sp-1); }
   .lp-nav__actions .ds-btn--ghost { --btn-px: var(--sp-2); }
+  .lp-nav__acct { --btn-px: var(--sp-2); }
 }
 /* até 359px o escudo sozinho é a marca (o link mantém o nome acessível) */
 @media (max-width: 359px) { .lp-wordmark { display: none; } }
 @media (min-width: 560px) { .lp-wordmark { font-size: var(--fs-5); } }
-@media (min-width: 720px) { .lp-nav__acct { display: inline-flex; } }
 @media (min-width: 1024px) { .lp-nav__links { display: flex; } }
 
 /* ── faixas de aviso (convite, evento, desafio, meta) ── */
