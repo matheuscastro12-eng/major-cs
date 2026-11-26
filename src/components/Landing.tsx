@@ -407,8 +407,24 @@ function Pricing({ onAccount, onPix, onPlay }: { onAccount: () => void; onPix: (
   usePrice(); // re-renderiza quando o preço do servidor chega
   const FREE = ['Carreira, Ultimate, Draft, Diário e Online completos', 'Ranqueada online do Ultimate', 'Road to Pro: demo com a peneira e 3 semanas', 'Save neste navegador'];
   const PAID = ['Road to Pro completo, com a Série do Dia', 'Save na nuvem: joga no PC e no celular', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil'];
+  // funil: 'landing-pricing' é 1 dos 4 braços do teste A/B (state/offerAb.ts,
+  // RevenueCRM.tsx AB_SRCS) mas NUNCA tinha um paywall_view próprio — só o
+  // clique setava o src. Resultado: o painel do Growth lia 0 views pra esta
+  // seção (a que mais converteu no histórico do teste) sempre, mesmo com
+  // tráfego real rolando até ela. Mede quando a seção entra na tela, 1x.
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return;
+      trackPaywallView('landing-pricing');
+      io.disconnect();
+    }, { threshold: 0.3 });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, []);
   return (
-    <section id="conta" className="lp-section" aria-labelledby="lp-conta-title">
+    <section id="conta" className="lp-section" aria-labelledby="lp-conta-title" ref={ref}>
       <div className="lp-wrap">
         <SectionHead id="lp-conta-title" center kicker={ct('Conta e save')} title={ct('Grátis pra jogar, conta pra ir além')} sub={ct('Sem conta você joga de graça com save no navegador, incluindo a ranqueada online. A conta vitalícia guarda tudo na nuvem e libera o Road to Pro completo.')} />
         <div className="lp-plans lp-reveal">
