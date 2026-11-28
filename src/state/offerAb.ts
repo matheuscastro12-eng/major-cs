@@ -12,8 +12,11 @@ import { registerOfferVariant, sessionId } from './track';
 
 export type OfferVariant = 'A' | 'B';
 
-/** Superfícies do teste. As demais não mudam de cara (mas o evento leva a variante igual). */
-export const OFFER_AB_SURFACES = ['landing-pricing', 'home-rtp', 'acct-chip-guest', 'upsell-card'] as const;
+/** Superfícies do teste. As demais não mudam de cara (mas o evento leva a variante igual).
+ *  landing-hero entrou depois (iter conv/loop): é a PRIMEIRA oferta que o
+ *  visitante vê na Landing e tinha ficado de fora — só um link de texto, sem
+ *  CTA de Pix nem prova social, nas duas variantes do hero (Major e geral). */
+export const OFFER_AB_SURFACES = ['landing-pricing', 'home-rtp', 'acct-chip-guest', 'upsell-card', 'landing-hero'] as const;
 
 /** FNV-1a 32 bits. Puro, testado em scripts/test-offer-ab.mts */
 export function fnv1a(s: string): number {

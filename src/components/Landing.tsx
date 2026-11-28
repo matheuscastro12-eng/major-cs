@@ -144,11 +144,18 @@ function CommunityGoalBar({ onPlay }: { onPlay: () => void }) {
   );
 }
 
-// "Criar conta · {preço}" do hero: link, não disputa com o jogar (src landing-hero).
-// Preço + "pagamento único" no próprio texto, a reassurance que já ajudou nas
-// outras superfícies.
-function HeroOffer({ onAccount }: { onAccount: () => void }) {
+// Oferta do hero (src landing-hero): variante A é só um link discreto, que não
+// disputa com o jogar — preço + "pagamento único" no próprio texto, a
+// reassurance que já ajudou nas outras superfícies.
+// [A/B oferta] landing-hero é a PRIMEIRA oferta que o visitante vê na Landing e
+// tinha ficado de fora do teste do Growth (que ia só até o card de Pricing e
+// as travas do Início). Reusa a mesma variante B já validada lá — card com CTA
+// de Pix direto (ver offer-pix) — em vez de inventar uma nova.
+function HeroOffer({ onAccount, onPix, showFounders = true }: { onAccount: () => void; onPix: () => void; showFounders?: boolean }) {
   usePrice(); // re-renderiza quando o preço do servidor chega
+  if (offerVariant() === 'B') {
+    return <OfferPixCta compact showFounders={showFounders} onPix={onPix} benefit={ct('Pagou, libera na hora: Road to Pro completo, save na nuvem e 5 carreiras.')} />;
+  }
   return (
     <div className="lp-offer">
       <button type="button" className="lp-textlink" onClick={onAccount}>{ct('Criar conta')} · {priceLabel()}</button>
@@ -229,8 +236,8 @@ function MajorDesk({ now, stage }: { now: number; stage: LiveStage }) {
   );
 }
 
-function HeroMajor({ now, stage, cta, onMajor, onPlay, onAccount }: {
-  now: number; stage: LiveStage; cta: LandingMajorCta; onMajor: () => void; onPlay: () => void; onAccount: () => void;
+function HeroMajor({ now, stage, cta, onMajor, onPlay, onAccount, onPix }: {
+  now: number; stage: LiveStage; cta: LandingMajorCta; onMajor: () => void; onPlay: () => void; onAccount: () => void; onPix: () => void;
 }) {
   return (
     <section id="topo" className="lp-hero lp-hero--major" aria-labelledby="lp-hero-title">
@@ -257,7 +264,7 @@ function HeroMajor({ now, stage, cta, onMajor, onPlay, onAccount }: {
               <Button size="big" variant="secondary" onClick={onPlay}>{ct('Jogar grátis')}</Button>
             </div>
             <p className="lp-hero__assure"><Check size={16} aria-hidden /> {ct('Grátis, sem cadastro, no navegador e no celular.')}</p>
-            <HeroOffer onAccount={onAccount} />
+            <HeroOffer onAccount={onAccount} onPix={onPix} />
           </div>
         </div>
         <div className="lp-hero__stage lp-hero__stage--desk">
@@ -269,7 +276,7 @@ function HeroMajor({ now, stage, cta, onMajor, onPlay, onAccount }: {
 }
 
 // ── hero geral (depois da janela do Major) ───────────────────────────────────
-function HeroGeneral({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+function HeroGeneral({ onAccount, onPlay, onPix }: { onAccount: () => void; onPlay: () => void; onPix: () => void }) {
   return (
     <section id="topo" className="lp-hero" aria-labelledby="lp-hero-title">
       <div className="lp-wrap lp-hero__grid">
@@ -283,7 +290,7 @@ function HeroGeneral({ onAccount, onPlay }: { onAccount: () => void; onPlay: () 
           </p>
           <div className="lp-hero__cta">
             <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
-            <HeroOffer onAccount={onAccount} />
+            <HeroOffer onAccount={onAccount} onPix={onPix} showFounders={false} />
             {/* prova social REAL: contador de Fundadores do servidor (falhou? não mostra nada) */}
             <FounderCounter />
           </div>
@@ -1075,8 +1082,8 @@ export function Landing({ onPlay, onCheckout, openSignup, onMajor, onDoor }: {
           <CommunityGoalBar onPlay={onPlay} />
         </div>
         {hero === 'major'
-          ? <HeroMajor now={now} stage={live.stage} cta={live.cta} onMajor={openMajor} onPlay={onPlay} onAccount={() => openAcct('signup', 'landing-hero')} />
-          : <HeroGeneral onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />}
+          ? <HeroMajor now={now} stage={live.stage} cta={live.cta} onMajor={openMajor} onPlay={onPlay} onAccount={() => openAcct('signup', 'landing-hero')} onPix={() => { setAcctPix(true); openAcct('signup', 'landing-hero'); }} />
+          : <HeroGeneral onAccount={() => openAcct('signup', 'landing-hero')} onPix={() => { setAcctPix(true); openAcct('signup', 'landing-hero'); }} onPlay={onPlay} />}
         <QuickStart hero={hero} cta={live.cta} onMajor={openMajor} onDoor={openDoor} />
         <Modes hero={hero} onPlay={onPlay} />
         <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPix={() => { setAcctPix(true); openAcct('signup', 'landing-pricing'); }} onPlay={onPlay} />
